@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
 import shlex
+import sqlite3
 from typing import Any
 
 
@@ -762,6 +764,99 @@ def validate_context_agent_index_consistency(
     return {"status": "passed", "worker_count": len(context_worker_ids)}
 
 
+def validate_context_ledger_contract(
+    context_payload: dict[str, Any],
+    agent_payload: dict[str, Any],
+    *,
+    context_path_text: str,
+    agent_path_text: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    contract = require_object(context_payload.get("context_management_contract"), "context_management_contract")
+    resume_protocol = require_object(contract.get("resume_protocol"), "context_management_contract.resume_protocol")
+    ledger_path_text = require_string(resume_protocol.get("ledger_path"), "context_management_contract.resume_protocol.ledger_path")
+    assert_repo_relative_posix(ledger_path_text)
+    ledger_path = repo_path(ledger_path_text, repo_root=repo_root)
+    if not ledger_path.is_file():
+        raise ValueError(f"context_management_contract.resume_protocol.ledger_path does not exist: {ledger_path_text}")
+
+    context_sha = sha256_file(repo_path(context_path_text, repo_root=repo_root))
+    agent_sha = sha256_file(repo_path(agent_path_text, repo_root=repo_root))
+    try:
+        with closing(sqlite3.connect(ledger_path)) as connection:
+            context_row = connection.execute(
+                """
+                select context_pack_id, run_id, artifact_sha256, payload_json
+                from context_packs
+                where artifact_path=?
+                """,
+                (context_path_text,),
+            ).fetchone()
+            if context_row is None:
+                raise ValueError("context ledger missing context_packs row for context_pack")
+            if context_row[2] != context_sha:
+                raise ValueError("context ledger context_packs artifact_sha256 must match context_pack")
+            try:
+                ledger_payload = json.loads(context_row[3])
+            except json.JSONDecodeError as error:
+                raise ValueError("context ledger context_packs payload_json must be valid JSON") from error
+            if ledger_payload != context_payload:
+                raise ValueError("context ledger context_packs payload_json must match context_pack")
+
+            agent_row = connection.execute(
+                """
+                select sha256, status, semantic_role
+                from artifacts
+                where kind='agent-index' and repo_rel_path=?
+                """,
+                (agent_path_text,),
+            ).fetchone()
+            if agent_row is None:
+                raise ValueError("context ledger missing artifacts row for agent_index")
+            if agent_row[0] != agent_sha:
+                raise ValueError("context ledger agent-index artifact sha256 must match agent_index")
+            if agent_row[1] not in {"present", "completed"} or agent_row[2] != "agent-index":
+                raise ValueError("context ledger agent-index artifact row must be present/completed with semantic_role=agent-index")
+
+            summary_count = 0
+            agents_by_worker_id = require_object(agent_payload.get("agents_by_worker_id"), "agents_by_worker_id")
+            for worker_id, agent in sorted(agents_by_worker_id.items()):
+                agent_entry = require_object(agent, f"agents_by_worker_id.{worker_id}")
+                summary_path_text = require_string(agent_entry.get("summary_path"), f"agents_by_worker_id.{worker_id}.summary_path")
+                assert_repo_relative_posix(summary_path_text)
+                summary_path = repo_path(summary_path_text, repo_root=repo_root)
+                if not summary_path.is_file():
+                    raise ValueError(f"context ledger worker summary does not exist: {summary_path_text}")
+                summary_sha = sha256_file(summary_path)
+                summary_row = connection.execute(
+                    """
+                    select sha256, status, semantic_role
+                    from artifacts
+                    where kind='competition-run-summary' and repo_rel_path=?
+                    """,
+                    (summary_path_text,),
+                ).fetchone()
+                if summary_row is None:
+                    raise ValueError(f"context ledger missing artifacts row for worker summary: {worker_id}")
+                if summary_row[0] != summary_sha:
+                    raise ValueError(f"context ledger worker summary sha256 must match file: {worker_id}")
+                if summary_row[1] != "passed" or summary_row[2] != "run-summary":
+                    raise ValueError(f"context ledger worker summary row must be passed run-summary: {worker_id}")
+                summary_count += 1
+    except sqlite3.DatabaseError as error:
+        raise ValueError(f"context ledger sqlite validation failed: {ledger_path_text}: {error}") from error
+
+    return {
+        "path": ledger_path_text,
+        "context_pack_id": context_row[0],
+        "run_id": context_row[1],
+        "context_pack": context_path_text,
+        "agent_index": agent_path_text,
+        "worker_summary_count": summary_count,
+        "status": "passed",
+    }
+
+
 def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[str, Any]:
     policy = context_payload.get("attempt_evidence_policy")
     if policy is None:
@@ -893,6 +988,13 @@ def validate_harness_artifact_contracts(
         result["context_agent_consistency"] = validate_context_agent_index_consistency(
             context_payload,
             agent_payload,
+        )
+        result["ledger_context_index"] = validate_context_ledger_contract(
+            context_payload,
+            agent_payload,
+            context_path_text=str(artifacts["context_pack"]),
+            agent_path_text=str(artifacts["agent_index"]),
+            repo_root=repo_root,
         )
     if context_payload is not None:
         repair_contract = validate_repair_self_heal_contract(context_payload)

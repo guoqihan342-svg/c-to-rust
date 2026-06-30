@@ -1,4 +1,6 @@
+from contextlib import closing
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,6 +36,109 @@ def write_json(path: Path, payload: dict) -> None:
 def temp_json_ref(path: Path, payload: dict) -> dict:
     write_json(path, payload)
     return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
+def write_minimal_context_ledger(
+    path: Path,
+    *,
+    run_id: str,
+    context_pack_path: Path,
+    context_pack_payload: dict,
+    agent_index_path: Path,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            """
+            create table context_packs(
+              context_pack_id text primary key,
+              run_id text not null,
+              target_id text,
+              slice_id text,
+              depth integer not null,
+              max_tokens integer not null,
+              artifact_path text not null,
+              artifact_sha256 text not null,
+              payload_json text not null
+            );
+            create table artifacts(
+              artifact_id integer primary key autoincrement,
+              run_id text not null,
+              agent_id text,
+              target_id text,
+              slice_id text,
+              kind text not null,
+              repo_rel_path text not null unique,
+              sha256 text not null,
+              status text not null,
+              semantic_role text not null,
+              schema_name text,
+              payload_status text,
+              payload_json text not null,
+              created_at text not null
+            );
+            """
+        )
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"{run_id}-context-pack",
+                run_id,
+                "flashdb",
+                None,
+                1,
+                20000,
+                repo_relative(context_pack_path),
+                validator.sha256_file(context_pack_path),
+                json.dumps(context_pack_payload, sort_keys=True),
+            ),
+        )
+        connection.execute(
+            """
+            insert into artifacts(
+              run_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                "agent-index",
+                repo_relative(agent_index_path),
+                validator.sha256_file(agent_index_path),
+                "present",
+                "agent-index",
+                "{}",
+                "2026-07-01T00:00:00Z",
+            ),
+        )
+        for worker in context_pack_payload.get("workers", []):
+            if not isinstance(worker, dict) or not isinstance(worker.get("summary_path"), str):
+                continue
+            summary_path = REPO_ROOT / worker["summary_path"]
+            if not summary_path.is_file():
+                continue
+            connection.execute(
+                """
+                insert into artifacts(
+                  run_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    "competition-run-summary",
+                    worker["summary_path"],
+                    validator.sha256_file(summary_path),
+                    "passed",
+                    "run-summary",
+                    "{}",
+                    "2026-07-01T00:00:00Z",
+                ),
+            )
+        connection.commit()
 
 
 def bind_entrypoint_to_out_root(config: dict, temp_config: Path, *, entry_index: int, out_root: Path) -> Path:
@@ -116,7 +221,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         summary = worker_root / "summary" / "competition-run-summary.json"
         report = worker_root / "harness" / "run-worker-report.json"
 
-        for artifact in [competition_summary, workflow_metrics, assignment, request, summary, report, ledger]:
+        for artifact in [competition_summary, workflow_metrics, assignment, request, summary, report]:
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text("{}\n", encoding="utf-8")
 
@@ -256,6 +361,13 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 },
             },
         )
+        write_minimal_context_ledger(
+            ledger,
+            run_id="competition-flashdb-before-after-exhibit",
+            context_pack_path=context_pack,
+            context_pack_payload=json.loads(context_pack.read_text(encoding="utf-8")),
+            agent_index_path=agent_index,
+        )
 
         result = validator.validate_config(temp_config, require_local_artifacts=True, repo_root=REPO_ROOT)
 
@@ -264,7 +376,87 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(contracts["context_pack"]["repair_round_cap"], 5)
         self.assertEqual(contracts["agent_index"]["worker_count"], 1)
         self.assertEqual(contracts["context_agent_consistency"]["worker_count"], 1)
+        self.assertEqual(contracts["ledger_context_index"]["status"], "passed")
         self.assertEqual(contracts["repair_self_heal"]["checked_workers"], 1)
+
+    def test_context_pack_ledger_path_must_exist(self) -> None:
+        temp_config = write_temp_config(load_default_config())
+        temp_dir = temp_config.parent
+        context_pack = temp_dir / "out" / "harness" / "context-pack.json"
+        agent_index = temp_dir / "out" / "harness" / "agent-index.json"
+        missing_ledger = temp_dir / "out" / "state" / "missing.sqlite3"
+        write_json(
+            context_pack,
+            {
+                "context_management_contract": {
+                    "resume_protocol": {
+                        "checkpoint_backend": "sqlite",
+                        "ledger_path": repo_relative(missing_ledger),
+                    },
+                }
+            },
+        )
+        write_json(agent_index, {"report_kind": "agent-index"})
+
+        with self.assertRaisesRegex(ValueError, "ledger_path does not exist"):
+            validator.validate_context_ledger_contract(
+                json.loads(context_pack.read_text(encoding="utf-8")),
+                {},
+                context_path_text=repo_relative(context_pack),
+                agent_path_text=repo_relative(agent_index),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_context_ledger_worker_summary_hash_drift_fails(self) -> None:
+        temp_config = write_temp_config(load_default_config())
+        temp_dir = temp_config.parent
+        context_pack = temp_dir / "out" / "harness" / "context-pack.json"
+        agent_index = temp_dir / "out" / "harness" / "agent-index.json"
+        ledger = temp_dir / "out" / "state" / "opencode-agent-harness.sqlite3"
+        summary = temp_dir / "out" / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
+        summary.parent.mkdir(parents=True, exist_ok=True)
+        summary.write_text('{"status":"passed"}\n', encoding="utf-8")
+        context_payload = {
+            "context_management_contract": {
+                "resume_protocol": {
+                    "checkpoint_backend": "sqlite",
+                    "ledger_path": repo_relative(ledger),
+                },
+            },
+            "workers": [
+                {
+                    "worker_id": "worker-001",
+                    "summary_path": repo_relative(summary),
+                }
+            ],
+        }
+        agent_payload = {
+            "agents_by_worker_id": {
+                "worker-001": {
+                    "worker_id": "worker-001",
+                    "summary_path": repo_relative(summary),
+                }
+            }
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        write_minimal_context_ledger(
+            ledger,
+            run_id="competition-flashdb-before-after-exhibit",
+            context_pack_path=context_pack,
+            context_pack_payload=context_payload,
+            agent_index_path=agent_index,
+        )
+        summary.write_text('{"status":"tampered"}\n', encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "worker summary sha256 must match"):
+            validator.validate_context_ledger_contract(
+                context_payload,
+                agent_payload,
+                context_path_text=repo_relative(context_pack),
+                agent_path_text=repo_relative(agent_index),
+                repo_root=REPO_ROOT,
+            )
 
     def test_context_pack_workers_must_match_agent_index_workers(self) -> None:
         config = load_default_config()
