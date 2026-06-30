@@ -137,12 +137,145 @@ def run_judge_demo(
         repo_root=repo_root,
     )
     report_path = summary_dir / "judge-demo-report.json"
+    judge_index_path = harness_dir / "judge-evidence-index.json"
     report["artifacts"]["judge_demo_report"] = {
         "path": harness.repo_relative(report_path, repo_root=repo_root),
         "status": "present",
     }
+    report["sidecar_reports"] = {
+        "judge_evidence_index": {
+            "path": harness.repo_relative(judge_index_path, repo_root=repo_root),
+            "report_kind": "judge-evidence-index",
+            "status": str(report["status"]),
+        }
+    }
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_judge_demo_evidence_index(
+        report=report,
+        report_path=report_path,
+        profile_path=profile_path,
+        batch_profile_report_path=batch_profile_report_path,
+        milestone_report_path=milestone_output,
+        run_id=run_id,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
     return report
+
+
+def write_judge_demo_evidence_index(
+    *,
+    report: dict[str, Any],
+    report_path: Path,
+    profile_path: Path,
+    batch_profile_report_path: Path,
+    milestone_report_path: Path,
+    run_id: str,
+    out_root: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    profile = load_json_if_exists(profile_path)
+    batch_profile_report = load_json_if_exists(batch_profile_report_path)
+    report_architecture = (
+        report.get("harness_architecture")
+        if isinstance(report.get("harness_architecture"), dict)
+        else {}
+    )
+    delegated_architecture = (
+        report_architecture.get("delegated_harness")
+        if isinstance(report_architecture.get("delegated_harness"), dict)
+        else {}
+    )
+    architecture = json.loads(json.dumps(delegated_architecture or report_architecture))
+    architecture["entrypoint"] = "judge_demo"
+    if delegated_architecture.get("entrypoint"):
+        architecture["delegated_entrypoint"] = delegated_architecture["entrypoint"]
+    for key in ("context_pack", "agent_index"):
+        binding = report_architecture.get(key)
+        if isinstance(binding, dict):
+            architecture[key] = binding
+
+    core_quality = (
+        json.loads(json.dumps(report["core_translation_quality"]))
+        if isinstance(report.get("core_translation_quality"), dict)
+        else {}
+    )
+    acceptance_boundary = (
+        profile.get("acceptance_boundary")
+        if isinstance(profile.get("acceptance_boundary"), dict)
+        else {}
+    )
+    if "semantic_claim_source" not in core_quality and isinstance(acceptance_boundary, dict):
+        core_quality["semantic_claim_source"] = acceptance_boundary.get("semantic_claim_source", "accepted_evidence_binding")
+
+    artifacts = report.get("artifacts") if isinstance(report.get("artifacts"), dict) else {}
+    competition_summary = artifacts.get("competition_summary") if isinstance(artifacts.get("competition_summary"), dict) else {}
+    summary_path_text = competition_summary.get("path") if isinstance(competition_summary.get("path"), str) else ""
+    profile_rel = harness.repo_relative(profile_path, repo_root=repo_root)
+    out_root_rel = harness.repo_relative(out_root, repo_root=repo_root)
+    batch_profile_report_rel = harness.repo_relative(batch_profile_report_path, repo_root=repo_root)
+    milestone_report_rel = harness.repo_relative(milestone_report_path, repo_root=repo_root)
+    reproduction_commands = {
+        "judge_demo": (
+            "python -B -m validation.tools.judge_demo "
+            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+        ),
+        "run_batch_profile": (
+            "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+        ),
+        "milestone_release_report": (
+            "python -B validation/tools/milestone_release_report.py "
+            f"--competition-summary {summary_path_text} "
+            f"--batch-profile-report {batch_profile_report_rel} "
+            f"--output {milestone_report_rel}"
+        ),
+    }
+    if summary_path_text:
+        reproduction_commands["summary_validation"] = (
+            "python -B validation/tools/validate_competition_run_summary.py "
+            f"--summary {summary_path_text}"
+        )
+
+    index_source_report: dict[str, Any] = {
+        "status": report.get("status", "unknown"),
+        "exit_code": 0 if report.get("status") == "passed" else 1,
+        "profile_id": report.get("profile_id"),
+        "proof_class": report.get("proof_class"),
+        "mode": profile.get("mode", batch_profile_report.get("mode", "deterministic")),
+        "batch_profile_report": artifacts.get("batch_profile_report"),
+        "context_pack": report_architecture.get("context_pack"),
+        "agent_index": report_architecture.get("agent_index"),
+        "summary_validation": {"summary": summary_path_text} if summary_path_text else {},
+        "judge_summary": {
+            "harness_architecture": architecture,
+            "core_translation_quality": core_quality,
+        },
+        "acceptance_boundary": acceptance_boundary,
+    }
+    if isinstance(batch_profile_report.get("route_governance_metrics_report"), dict):
+        index_source_report["route_governance_metrics_report"] = batch_profile_report["route_governance_metrics_report"]
+    if isinstance(batch_profile_report.get("context_pack"), dict):
+        index_source_report["context_pack"] = batch_profile_report["context_pack"]
+    if isinstance(batch_profile_report.get("agent_index"), dict):
+        index_source_report["agent_index"] = batch_profile_report["agent_index"]
+
+    return harness.write_judge_evidence_index(
+        evaluate_report=index_source_report,
+        evaluate_report_path=report_path,
+        batch_result=batch_profile_report,
+        profile_path=profile_path,
+        run_id=run_id,
+        out_root=out_root,
+        entrypoint_name="judge_demo",
+        primary_report_ref_name="judge_demo_report",
+        reproduction_commands=reproduction_commands,
+        extra_artifact_refs={
+            "before_after_exhibit": artifacts.get("before_after_exhibit"),
+            "milestone_release_report": artifacts.get("milestone_release_report"),
+        },
+        repo_root=repo_root,
+    )
 
 
 def run_stage(

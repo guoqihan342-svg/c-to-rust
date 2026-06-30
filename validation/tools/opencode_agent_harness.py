@@ -1535,6 +1535,10 @@ def write_judge_evidence_index(
     profile_path: Path,
     run_id: str,
     out_root: Path,
+    entrypoint_name: str = "evaluate --profile",
+    primary_report_ref_name: str = "evaluate_report",
+    reproduction_commands: dict[str, str] | None = None,
+    extra_artifact_refs: dict[str, Any] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     out_root = repo_path(out_root, repo_root=repo_root)
@@ -1573,7 +1577,9 @@ def write_judge_evidence_index(
             else {"path": value, "sha256": ""}
         )
 
-    artifact_refs["evaluate_report"] = artifact_ref(evaluate_report_path, repo_root=repo_root)
+    if not primary_report_ref_name or primary_report_ref_name == "judge_evidence_index":
+        raise ValueError("primary_report_ref_name must be a non-self evidence ref name")
+    artifact_refs[primary_report_ref_name] = artifact_ref(evaluate_report_path, repo_root=repo_root)
     artifact_refs["profile"] = artifact_ref(profile_path, repo_root=repo_root)
     add_binding("batch_profile_report", evaluate_report.get("batch_profile_report"))
     add_binding("context_pack", evaluate_report.get("context_pack"))
@@ -1592,7 +1598,19 @@ def write_judge_evidence_index(
         summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
         if summary_path.is_file():
             summary = load_json(summary_path)
-            add_binding("workflow_metrics", summary.get("workflow_metrics"))
+            workflow_metrics_ref = summary.get("workflow_metrics")
+            if isinstance(workflow_metrics_ref, dict) and isinstance(workflow_metrics_ref.get("path"), str):
+                workflow_metrics_path = validate_competition_run_summary.resolve_summary_artifact(
+                    workflow_metrics_ref["path"],
+                    summary_path=summary_path,
+                    repo_root=repo_root,
+                )
+                if workflow_metrics_path is not None and workflow_metrics_path.is_file():
+                    artifact_refs["workflow_metrics"] = artifact_ref(workflow_metrics_path, repo_root=repo_root)
+                else:
+                    add_binding("workflow_metrics", workflow_metrics_ref)
+            else:
+                add_binding("workflow_metrics", workflow_metrics_ref)
 
     run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
     add_path("run_plan_report", run_plan.get("report_path"))
@@ -1602,24 +1620,37 @@ def write_judge_evidence_index(
     merge_plan = run_plan.get("merge_plan") if isinstance(run_plan.get("merge_plan"), dict) else {}
     add_path("merge_plan", merge_plan.get("path"))
     add_path("worker_plan", batch_result.get("plan_path"))
+    if isinstance(extra_artifact_refs, dict):
+        for name, value in sorted(extra_artifact_refs.items()):
+            if name == "judge_evidence_index":
+                raise ValueError("judge_evidence_index must not be listed as an evidence artifact ref")
+            if isinstance(value, dict):
+                binding = artifact_binding_from_value(value, repo_root=repo_root)
+                if binding is not None:
+                    artifact_refs[name] = binding
+            elif isinstance(value, str) and value:
+                add_path(name, value)
 
     profile_rel = repo_relative(profile_path, repo_root=repo_root)
     out_root_rel = repo_relative(out_root, repo_root=repo_root)
-    reproduction_commands = {
-        "evaluate_profile": (
-            "python -B -m validation.tools.opencode_agent_harness evaluate "
-            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
-        ),
-        "run_batch_profile": (
-            "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
-            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
-        ),
-    }
-    if isinstance(summary_path_text, str) and summary_path_text:
-        reproduction_commands["summary_validation"] = (
-            "python -B validation/tools/validate_competition_run_summary.py "
-            f"--summary {summary_path_text}"
-        )
+    if reproduction_commands is None:
+        reproduction_commands = {
+            "evaluate_profile": (
+                "python -B -m validation.tools.opencode_agent_harness evaluate "
+                f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+            ),
+            "run_batch_profile": (
+                "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+            ),
+        }
+        if isinstance(summary_path_text, str) and summary_path_text:
+            reproduction_commands["summary_validation"] = (
+                "python -B validation/tools/validate_competition_run_summary.py "
+                f"--summary {summary_path_text}"
+            )
+    else:
+        reproduction_commands = dict(reproduction_commands)
 
     acceptance_boundary = (
         evaluate_report.get("acceptance_boundary")
@@ -1647,7 +1678,7 @@ def write_judge_evidence_index(
     payload = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "judge-evidence-index",
-        "entrypoint": "evaluate --profile",
+        "entrypoint": entrypoint_name,
         "status": str(evaluate_report.get("status", "unknown")),
         "exit_code": int(evaluate_report.get("exit_code", 1)),
         "run_id": run_id,

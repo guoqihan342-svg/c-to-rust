@@ -1141,7 +1141,13 @@ def validate_worker_plan_contract(
         raise ValueError("worker_plan.schema_version must be 1")
     if worker_plan_payload.get("status") != "planned":
         raise ValueError("worker_plan.status must be planned")
-    planning_mode = require_string(worker_plan_payload.get("planning_mode"), "worker_plan.planning_mode")
+    raw_planning_mode = worker_plan_payload.get("planning_mode")
+    if isinstance(raw_planning_mode, str) and raw_planning_mode:
+        planning_mode = raw_planning_mode
+    elif isinstance(worker_plan_payload.get("source_file"), str) and worker_plan_payload.get("source_file"):
+        planning_mode = "source_file"
+    else:
+        raise ValueError("worker_plan.planning_mode must be a non-empty string")
     plan_path = require_string(worker_plan_payload.get("plan_path"), "worker_plan.plan_path")
     assert_repo_relative_posix(plan_path)
     if plan_path != path_text:

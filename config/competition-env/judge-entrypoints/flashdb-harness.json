@@ -95,10 +95,16 @@
         "competition_summary": "target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json",
         "workflow_metrics": "target/competition-out-flashdb-before-after-exhibit/summary/workflow-metrics.json",
         "judge_demo_report": "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
+        "judge_evidence_index": "target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json",
         "before_after_exhibit": "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
         "milestone_release_report": "target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json",
+        "route_governance_metrics_report": "target/competition-out-flashdb-before-after-exhibit/summary/route-governance-metrics-report.json",
+        "batch_profile_report": "target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json",
         "context_pack": "target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json",
-        "agent_index": "target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json"
+        "agent_index": "target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json",
+        "run_plan_report": "target/competition-out-flashdb-before-after-exhibit/harness/run-plan-report.json",
+        "merge_plan": "target/competition-out-flashdb-before-after-exhibit/harness/merge-plan.json",
+        "worker_plan": "target/competition-out-flashdb-before-after-exhibit/harness/plans/flashdb-fdb-utils-workers.json"
       },
       "judge_focus": [
         "unsafe baseline to final safe Rust",

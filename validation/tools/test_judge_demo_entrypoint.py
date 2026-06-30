@@ -129,10 +129,14 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         )
 
         report_path = out_root / "summary" / "judge-demo-report.json"
+        judge_index_path = out_root / "harness" / "judge-evidence-index.json"
         self.assertEqual(report["status"], "passed")
         self.assertTrue(report_path.exists())
+        self.assertTrue(judge_index_path.exists())
         persisted = json.loads(report_path.read_text(encoding="utf-8"))
+        judge_index = json.loads(judge_index_path.read_text(encoding="utf-8"))
         self.assertEqual(persisted["report_kind"], "judge-demo-run-report")
+        self.assertEqual(persisted["sidecar_reports"]["judge_evidence_index"]["path"], "target/judge-demo-unit/harness/judge-evidence-index.json")
         self.assertEqual(persisted["artifacts"]["judge_demo_report"]["path"], "target/judge-demo-unit/summary/judge-demo-report.json")
         self.assertEqual(persisted["artifacts"]["judge_demo_report"]["status"], "present")
         self.assertRegex(persisted["artifacts"]["competition_summary"]["sha256"], r"^[0-9a-f]{64}$")
@@ -184,6 +188,25 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         ])
         self.assertEqual(persisted["commands"][0]["argv"][0], "python")
         self.assertIn("translator-generated semantic pass", persisted["claim_boundary"]["must_not_claim"][1])
+        self.assertEqual(judge_index["report_kind"], "judge-evidence-index")
+        self.assertEqual(judge_index["entrypoint"], "judge_demo")
+        self.assertFalse(judge_index["claim_boundary"]["index_is_semantic_gate"])
+        self.assertEqual(judge_index["claim_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertFalse(judge_index["claim_boundary"]["generated_draft_semantic_pass"])
+        self.assertEqual(judge_index["claim_boundary"]["translation_coverage_numerator"], 0)
+        refs = judge_index["evidence_artifact_refs"]
+        self.assertNotIn("judge_evidence_index", refs)
+        self.assertNotIn("before_after_exhibit_report", refs)
+        self.assertEqual(refs["judge_demo_report"]["path"], "target/judge-demo-unit/summary/judge-demo-report.json")
+        self.assertEqual(refs["judge_demo_report"]["sha256"], judge_demo_sha256(report_path))
+        self.assertEqual(refs["before_after_exhibit"]["path"], "target/judge-demo-unit/summary/before-after-exhibit.json")
+        self.assertEqual(refs["milestone_release_report"]["path"], "target/judge-demo-unit/summary/milestone-release-report.json")
+        self.assertEqual(refs["competition_run_summary"]["path"], "target/judge-demo-unit/summary/competition-run-summary.json")
+        self.assertEqual(refs["workflow_metrics"]["path"], "target/judge-demo-unit/summary/workflow-metrics.json")
+        self.assertEqual(
+            judge_index["reproduction_commands"]["judge_demo"],
+            "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id judge-demo-unit --out-root target/judge-demo-unit",
+        )
 
     def test_repair_summary_falls_back_to_workflow_metrics(self) -> None:
         from validation.tools import judge_demo

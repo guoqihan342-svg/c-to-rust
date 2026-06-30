@@ -162,6 +162,7 @@ python -m validation.tools.opencode_agent_harness run-worker --db target/competi
 # 评委 before/after demo（首选真实 FlashDB 路径）
 python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
 # 输出: target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json
+# 证据索引: target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json
 # 保底 demo 输出: target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json
 
 # 全量回归

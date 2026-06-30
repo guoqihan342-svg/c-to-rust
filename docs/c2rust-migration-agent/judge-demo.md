@@ -27,6 +27,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json`
+- `target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json`
 - H5 上下文包：`target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
 - agent 索引：`target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json`
@@ -64,6 +65,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json`
+- `target/competition-out-demo-before-after-exhibit/harness/judge-evidence-index.json`
 - H5 上下文包：`target/competition-out-demo-before-after-exhibit/harness/context-pack.json`
 - agent 索引：`target/competition-out-demo-before-after-exhibit/harness/agent-index.json`
 - `target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json`
@@ -80,6 +82,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 ## Claim 边界
 
 - `judge-demo-report.json` 是一条命令入口的总报告，绑定 `competition-run-summary.json`、`workflow-metrics.json`、`before-after-exhibit.json` 和 `milestone-release-report.json` 的路径与 sha256。
+- `harness/judge-evidence-index.json` 是同形状评委证据索引，绑定 `judge-demo-report.json`、summary、workflow metrics、before/after exhibit、milestone、context pack、agent index、run/merge/worker plan 的路径与 sha256；它不是 semantic gate，也不自引用。
 - `judge-demo-report.json.repair_summary` 汇总 repair/retry/rollback 展示字段，包括 repair round cap、auto recovery、root cause counts、repair history 和 rollback ids；它只来自已绑定的 workflow metrics / before-after exhibit，不替代 validator 或 oracle。
 - `before-after-exhibit.json` 是评委展示入口，证明 artifact binding、unsafe delta 和 harness contract；它不替代 `competition-run-summary.json`、`workflow-metrics.json` 或 evidence validator。
 - `harness/context-pack.json` 和 `harness/agent-index.json` 是 `run-batch-profile` 生成的 H5 harness 审计索引与多 agent 续跑入口，展示 planner/worker/merge/report 拓扑和 worker assignment；它们不替代 summary、validator 或 oracle，也不扩大 semantic pass claim。

@@ -129,6 +129,14 @@ def valid_opencode_judge_index_payload() -> dict:
     }
 
 
+def valid_deterministic_judge_index_payload() -> dict:
+    payload = valid_opencode_judge_index_payload()
+    payload["mode"] = "deterministic"
+    payload.pop("opencode_agent_runtime", None)
+    payload["evidence_artifact_refs"].pop("opencode_preflight_report", None)
+    return payload
+
+
 def write_minimal_context_ledger(
     path: Path,
     *,
@@ -405,6 +413,47 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "opencode_agent_runtime is required when judge_evidence_index.mode is opencode"):
             validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+    def test_deterministic_judge_evidence_index_claim_boundary_fails_closed(self) -> None:
+        mutations = [
+            ("semantic_claim_source", "competition-run-summary.final_gate", "semantic_claim_source must be accepted_evidence_binding"),
+            ("generated_draft_semantic_pass", True, "generated_draft_semantic_pass must be false"),
+            ("translation_coverage_numerator", 1, "translation_coverage_numerator must be 0"),
+            ("index_is_semantic_gate", True, "index_is_semantic_gate must be false"),
+        ]
+
+        for field, value, expected_error in mutations:
+            with self.subTest(field=field):
+                payload = valid_deterministic_judge_index_payload()
+                payload["claim_boundary"][field] = value
+
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_judge_evidence_index_contract(
+                        payload,
+                        path_text="target/out/harness/judge-evidence-index.json",
+                    )
+
+    def test_judge_evidence_index_general_artifact_ref_hash_drift_fails(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-ref-drift-", dir=target_dir))
+        workflow_metrics = temp_dir / "summary" / "workflow-metrics.json"
+        workflow_metrics.parent.mkdir(parents=True)
+        workflow_metrics.write_text("{}\n", encoding="utf-8")
+        payload = valid_deterministic_judge_index_payload()
+        payload["evidence_artifact_refs"] = {
+            "workflow_metrics": {
+                "path": repo_relative(workflow_metrics),
+                "sha256": "0" * 64,
+            }
+        }
+
+        with self.assertRaisesRegex(ValueError, "sha256 mismatch"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+                repo_root=REPO_ROOT,
+            )
 
     def test_judge_evidence_index_requires_opencode_graph_contract(self) -> None:
         payload = valid_opencode_judge_index_payload()
@@ -815,6 +864,59 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 require_local_artifacts=True,
                 repo_root=REPO_ROOT,
             )
+
+    def test_source_file_worker_plan_infers_planning_mode(self) -> None:
+        worker_plan_path = "target/out/harness/plans/source-workers.json"
+        common_worker = {
+            "assignment_path": "target/out/harness/assignments/worker-001.json",
+            "function": "demo_unit",
+            "request_path": "target/out/harness/assignments/worker-001-request.json",
+            "slice_id": "demo-unit",
+            "source_commit": "abc123",
+            "source_file": "src/demo.c",
+            "source_repo_root": "sources/Demo",
+            "source_sha256": "f" * 64,
+            "worker_id": "worker-001",
+        }
+        result = validator.validate_worker_plan_contract(
+            {
+                "schema_version": 1,
+                "status": "planned",
+                "target_id": "demo",
+                "run_id": "source-plan",
+                "plan_path": worker_plan_path,
+                "source_file": "src/demo.c",
+                "units": [
+                    {
+                        **common_worker,
+                        "out_root": "target/out/workers/worker-001",
+                        "slice_spec": "validation/slice-specs/demo.json",
+                    }
+                ],
+            },
+            {
+                "entrypoints": {"worker_plan": worker_plan_path},
+                "workers": [common_worker],
+            },
+            {
+                "agents": [common_worker],
+                "agents_by_worker_id": {
+                    "worker-001": {
+                        **common_worker,
+                        "isolated_out_root": "target/out/workers/worker-001",
+                    }
+                },
+                "planner": {
+                    "plan_path": worker_plan_path,
+                    "worker_count": 1,
+                },
+            },
+            path_text=worker_plan_path,
+        )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["planning_mode"], "source_file")
+        self.assertEqual(result["worker_count"], 1)
 
     def test_context_pack_ledger_path_must_exist(self) -> None:
         temp_config = write_temp_config(load_default_config())
