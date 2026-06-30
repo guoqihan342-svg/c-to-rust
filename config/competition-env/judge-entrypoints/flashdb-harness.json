@@ -143,6 +143,14 @@
   "test_contract": {
     "paths_must_be_repo_relative_posix": true,
     "commands_must_use_python_b": true,
+    "required_harness_features": [
+      "h1_evaluate_one_click",
+      "h2_multi_worker_fanout",
+      "h3_precise_repair_self_heal",
+      "h4_before_after_exhibit",
+      "h5_context_management",
+      "h6_judge_reports"
+    ],
     "required_entrypoint_ids": [
       "before_after_judge_demo",
       "multi_worker_evaluate_profile"
@@ -153,6 +161,33 @@
       "context_pack",
       "agent_index"
     ],
+    "required_context_pipeline_stages": [
+      "plan",
+      "translate",
+      "verify",
+      "repair"
+    ],
+    "required_agent_roles": [
+      "planner",
+      "worker",
+      "repairer",
+      "verifier",
+      "reporter"
+    ],
+    "repair_round_cap": 5,
+    "context_pack_contract": {
+      "chat_output_is_evidence": false,
+      "semantic_gate": false,
+      "evidence_policy": "on-disk-artifacts-only",
+      "checkpoint_backend": "sqlite",
+      "worker_state_source": "agent-index.agents_by_worker_id"
+    },
+    "agent_index_contract": {
+      "chat_output_is_evidence": false,
+      "semantic_gate": false,
+      "checkpoint_backend": "sqlite",
+      "worker_isolation": "per-worker out_root"
+    },
     "semantic_claim_source": "accepted_evidence_binding",
     "generated_draft_semantic_pass": false,
     "translation_coverage_numerator": 0

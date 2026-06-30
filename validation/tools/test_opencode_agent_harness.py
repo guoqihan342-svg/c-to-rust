@@ -1609,6 +1609,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            handoff_contract = {"path": "target/opencode/handoff-contract.json", "sha256": "a" * 64}
+            session_evidence = {"path": "target/opencode/session-evidence.json", "sha256": "b" * 64}
+            contract_verification = {"status": "executed", "matched_command": "python -B scripts/c2rust-migrator.py"}
+            preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": harness.sha256_file(preflight_report),
+                "status": "passed",
+            }
             with patch.object(
                 harness,
                 "run_worker",
@@ -1618,6 +1626,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "summary_path": "",
                     "report_path": "target/report.json",
                     "recorded": False,
+                    "handoff_contract": handoff_contract,
+                    "opencode_session_evidence": session_evidence,
+                    "opencode_contract_verification": contract_verification,
+                    "opencode_preflight_report": preflight_binding,
                 },
             ) as runner:
                 result = harness.run_batch_profile(
@@ -1631,6 +1643,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             runner.assert_called_once()
             self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
             self.assertEqual(runner.call_args.kwargs["opencode_preflight_report"], Path(repo_rel(preflight_report)))
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            context_worker = context_pack["workers"][0]
+            indexed_agent = agent_index["agents_by_worker_id"][context_worker["worker_id"]]
+            for indexed in (context_worker, indexed_agent):
+                self.assertEqual(indexed["handoff_contract"], handoff_contract)
+                self.assertEqual(indexed["opencode_session_evidence"], session_evidence)
+                self.assertEqual(indexed["opencode_contract_verification"], contract_verification)
+                self.assertEqual(indexed["opencode_preflight_report"], preflight_binding)
 
     def test_evaluate_runs_planning_workers_and_merge_as_one_command(self) -> None:
         with temp_repo_dir() as tmp:

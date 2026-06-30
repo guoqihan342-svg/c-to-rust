@@ -36,6 +36,12 @@ SCHEMA_VERSION = 1
 PROFILE_ID = "huawei-competition-ubuntu-24.04"
 REPAIR_ROUND_CAP = 5
 REPAIR_LOG_TAIL_CHARS = 4096
+OPENCODE_WORKER_EVIDENCE_FIELDS = (
+    "handoff_contract",
+    "opencode_session_evidence",
+    "opencode_contract_verification",
+    "opencode_preflight_report",
+)
 
 
 def main() -> int:
@@ -2400,6 +2406,7 @@ def write_context_pack_and_agent_index(
             worker_entry["attempts"] = worker_result["attempts"]
         if isinstance(worker_result.get("final_decision"), dict):
             worker_entry["final_decision"] = worker_result["final_decision"]
+        copy_opencode_worker_evidence(worker_result, worker_entry)
         agent_entry = {
             "worker_id": worker_id,
             "role": "slice-worker",
@@ -2426,6 +2433,7 @@ def write_context_pack_and_agent_index(
             agent_entry["attempts"] = worker_result["attempts"]
         if isinstance(worker_result.get("final_decision"), dict):
             agent_entry["final_decision"] = worker_result["final_decision"]
+        copy_opencode_worker_evidence(worker_result, agent_entry)
         if isinstance(worker_result.get("auto_retry"), dict):
             worker_entry["auto_retry"] = worker_result["auto_retry"]
             agent_entry["auto_retry"] = worker_result["auto_retry"]
@@ -3026,6 +3034,13 @@ def run_plan_attempt_from_worker_result(result: dict[str, Any]) -> dict[str, Any
     return attempt
 
 
+def copy_opencode_worker_evidence(source: dict[str, Any], target: dict[str, Any]) -> None:
+    for field in OPENCODE_WORKER_EVIDENCE_FIELDS:
+        value = source.get(field)
+        if value is not None:
+            target[field] = value
+
+
 def run_plan_worker_final_decision(worker_result: dict[str, Any]) -> dict[str, str]:
     if int(worker_result.get("exit_code", 1)) == 0 and worker_result.get("summary_status") == "passed":
         return {"status": "accepted", "reason": "worker_summary_passed"}
@@ -3105,6 +3120,7 @@ def run_plan(
             "report_path": result.get("report_path"),
             "recorded": bool(result.get("recorded")),
         }
+        copy_opencode_worker_evidence(result, worker_result)
         attempt_timeline = [run_plan_attempt_from_worker_result(result)]
         retry_results = []
         if auto_retry and worker_result["exit_code"] != 0:
@@ -3156,6 +3172,7 @@ def run_plan(
                             "recorded": bool(retry_result.get("recorded")),
                         }
                     )
+                    copy_opencode_worker_evidence(retry_result, worker_result)
                     break
                 if retry_result.get("status") == "retry_limit_exceeded":
                     break

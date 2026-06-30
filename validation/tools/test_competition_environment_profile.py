@@ -381,6 +381,32 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(set(contract["required_entrypoint_ids"]), set(entrypoints))
         self.assertTrue(contract["paths_must_be_repo_relative_posix"])
         self.assertTrue(contract["commands_must_use_python_b"])
+        self.assertEqual(
+            set(contract["required_harness_features"]),
+            {
+                "h1_evaluate_one_click",
+                "h2_multi_worker_fanout",
+                "h3_precise_repair_self_heal",
+                "h4_before_after_exhibit",
+                "h5_context_management",
+                "h6_judge_reports",
+            },
+        )
+        self.assertEqual(
+            contract["required_context_pipeline_stages"],
+            ["plan", "translate", "verify", "repair"],
+        )
+        self.assertEqual(
+            set(contract["required_agent_roles"]),
+            {"planner", "worker", "repairer", "verifier", "reporter"},
+        )
+        self.assertEqual(contract["repair_round_cap"], 5)
+        self.assertFalse(contract["context_pack_contract"]["chat_output_is_evidence"])
+        self.assertFalse(contract["context_pack_contract"]["semantic_gate"])
+        self.assertEqual(contract["context_pack_contract"]["checkpoint_backend"], "sqlite")
+        self.assertFalse(contract["agent_index_contract"]["chat_output_is_evidence"])
+        self.assertFalse(contract["agent_index_contract"]["semantic_gate"])
+        self.assertEqual(contract["agent_index_contract"]["worker_isolation"], "per-worker out_root")
         self.assertEqual(contract["semantic_claim_source"], "accepted_evidence_binding")
         self.assertFalse(contract["generated_draft_semantic_pass"])
         self.assertEqual(contract["translation_coverage_numerator"], 0)
