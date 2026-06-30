@@ -1,0 +1,4 @@
+interface:
+  display_name: "C2Rust Migration Harness"
+  short_description: "Harness-first C-to-Rust migration workflow"
+  default_prompt: "Use $c2rust-migration to run a harness-first C-to-Rust migration slice with verified evidence."
