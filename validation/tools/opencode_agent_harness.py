@@ -14,6 +14,7 @@ from contextlib import closing
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -21,8 +22,12 @@ import sys
 import time
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools.extract_source_slice import find_matching, mask_comments_and_strings
+
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 DB_REL_PATH = Path("state") / "opencode-agent-harness.sqlite3"
 SCHEMA_VERSION = 1
@@ -63,6 +68,27 @@ def main() -> int:
     assign_parser.add_argument("--slice-spec")
     assign_parser.add_argument("--out-root", type=Path, required=True)
     assign_parser.add_argument("--lease-ttl-seconds", type=int, default=3600)
+
+    plan_parser = subcommands.add_parser("plan-source-file")
+    plan_parser.add_argument("--db", type=Path, required=True)
+    plan_parser.add_argument("--run-id", required=True)
+    plan_parser.add_argument("--target-id", required=True)
+    plan_parser.add_argument("--source-repo-root", type=Path, required=True)
+    plan_parser.add_argument("--source-repository")
+    plan_parser.add_argument("--source-branch")
+    plan_parser.add_argument("--source-file", required=True)
+    plan_parser.add_argument("--source-commit", required=True)
+    plan_parser.add_argument("--require-source-commit")
+    plan_parser.add_argument("--compiler-command-source")
+    plan_parser.add_argument("--include-path", action="append", default=[])
+    plan_parser.add_argument("--define", action="append", default=[])
+    plan_parser.add_argument("--reuse-accepted-evidence", action="store_true")
+    plan_parser.add_argument("--accepted-evidence-root")
+    plan_parser.add_argument("--out-root", type=Path, required=True)
+    plan_parser.add_argument("--slice-id-prefix", required=True)
+    plan_parser.add_argument("--worker-prefix", default="worker")
+    plan_parser.add_argument("--limit", type=int)
+    plan_parser.add_argument("--lease-ttl-seconds", type=int, default=3600)
 
     run_parser = subcommands.add_parser("run-worker")
     run_parser.add_argument("--db", type=Path, required=True)
@@ -134,6 +160,28 @@ def main() -> int:
             accepted_evidence_root=args.accepted_evidence_root,
             slice_spec=args.slice_spec,
             out_root=args.out_root,
+            lease_ttl_seconds=args.lease_ttl_seconds,
+        )
+    elif args.command == "plan-source-file":
+        result = plan_source_file(
+            db_path=args.db,
+            run_id=args.run_id,
+            target_id=args.target_id,
+            source_repo_root=args.source_repo_root,
+            source_repository=args.source_repository,
+            source_branch=args.source_branch,
+            source_file=args.source_file,
+            source_commit=args.source_commit,
+            require_source_commit=args.require_source_commit,
+            compiler_command_source=args.compiler_command_source,
+            include_paths=args.include_path,
+            defines=args.define,
+            reuse_accepted_evidence=args.reuse_accepted_evidence,
+            accepted_evidence_root=args.accepted_evidence_root,
+            out_root=args.out_root,
+            slice_id_prefix=args.slice_id_prefix,
+            worker_prefix=args.worker_prefix,
+            limit=args.limit,
             lease_ttl_seconds=args.lease_ttl_seconds,
         )
     elif args.command == "run-worker":
@@ -473,6 +521,122 @@ def assign_slice(
         record_event(connection, run_id=run_id, event_type="assignment_created", payload=assignment)
         connection.commit()
     return assignment
+
+
+def plan_source_file(
+    *,
+    db_path: Path,
+    run_id: str,
+    target_id: str,
+    source_repo_root: Path,
+    source_file: str,
+    source_commit: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    require_source_commit: str | None = None,
+    compiler_command_source: str | None = None,
+    include_paths: list[str] | None = None,
+    defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    out_root: Path,
+    slice_id_prefix: str,
+    worker_prefix: str = "worker",
+    limit: int | None = None,
+    lease_ttl_seconds: int = 3600,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    source_repo_root_path = repo_path(source_repo_root, repo_root=repo_root)
+    source_repo_root_rel = repo_relative(source_repo_root_path, repo_root=repo_root)
+    source_file_rel = checked_relative_path(source_file).as_posix()
+    source_path = repo_path(source_repo_root_path / source_file_rel, repo_root=repo_root)
+    functions = discover_top_level_function_names(source_path.read_text(encoding="utf-8"))
+    if limit is not None:
+        if limit < 1:
+            raise SystemExit("plan-source-file --limit must be positive")
+        functions = functions[:limit]
+    if not functions:
+        raise SystemExit(f"no top-level function definitions discovered in {source_file_rel}")
+
+    units: list[dict[str, str]] = []
+    for index, function in enumerate(functions, start=1):
+        function_slug = slug_id(function)
+        worker_id = f"{worker_prefix}-{index:03d}-{function_slug}"
+        slice_id = f"{slice_id_prefix}-{function_slug}"
+        worker_out_root = out_root / "workers" / worker_id
+        assign_slice(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            target_id=target_id,
+            slice_id=slice_id,
+            source_repo_root=Path(source_repo_root_rel),
+            source_repository=source_repository,
+            source_branch=source_branch,
+            source_file=source_file_rel,
+            function=function,
+            source_commit=source_commit,
+            require_source_commit=require_source_commit,
+            compiler_command_source=compiler_command_source,
+            include_paths=include_paths,
+            defines=defines,
+            reuse_accepted_evidence=reuse_accepted_evidence,
+            accepted_evidence_root=accepted_evidence_root,
+            out_root=worker_out_root,
+            lease_ttl_seconds=lease_ttl_seconds,
+            repo_root=repo_root,
+        )
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        units.append(
+            {
+                "worker_id": worker_id,
+                "slice_id": slice_id,
+                "function": function,
+                "out_root": repo_relative(worker_out_root, repo_root=repo_root),
+                "assignment_path": repo_relative(assignment_file_path(db_path, worker_id), repo_root=repo_root),
+                "request_path": repo_relative(request_path, repo_root=repo_root),
+            }
+        )
+
+    plan_path = out_root / "harness" / "plans" / f"{target_id}-{slug_id(Path(source_file_rel).stem)}-workers.json"
+    plan = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "planned",
+        "run_id": run_id,
+        "target_id": target_id,
+        "source_repo_root": source_repo_root_rel,
+        "source_file": source_file_rel,
+        "source_sha256": sha256_file(source_path),
+        "source_commit": source_commit,
+        "slice_id_prefix": slice_id_prefix,
+        "worker_prefix": worker_prefix,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "units": units,
+    }
+    if source_repository:
+        plan["source_repository"] = source_repository
+    if source_branch:
+        plan["source_branch"] = source_branch
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="source-file-worker-plan",
+            path=plan_path,
+            status="planned",
+            semantic_role="worker-plan",
+            payload=plan,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
+        connection.commit()
+    return plan
 
 
 def record_worker_summary(
@@ -1885,6 +2049,61 @@ def assigned_worker_summary_path(
     return repo_path(Path(out_root_rel), repo_root=repo_root) / "summary" / "competition-run-summary.json"
 
 
+def discover_top_level_function_names(text: str) -> list[str]:
+    masked = mask_comments_and_strings(text)
+    names: list[str] = []
+    seen: set[str] = set()
+    index = 0
+    while index < len(masked):
+        if masked[index] != "{":
+            index += 1
+            continue
+        prefix = masked[:index].rstrip()
+        if not prefix.endswith(")"):
+            match_end = find_matching(masked, index, "{", "}")
+            index = match_end + 1 if match_end is not None else index + 1
+            continue
+        close_paren = len(prefix) - 1
+        open_paren = find_matching_reverse(masked, close_paren, "(", ")")
+        if open_paren is None:
+            index += 1
+            continue
+        name_match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*$", masked[:open_paren].rstrip())
+        if name_match is None:
+            index += 1
+            continue
+        name = name_match.group(1)
+        if name not in C_STATEMENT_KEYWORDS and name not in seen:
+            names.append(name)
+            seen.add(name)
+        match_end = find_matching(masked, index, "{", "}")
+        index = match_end + 1 if match_end is not None else index + 1
+    return names
+
+
+C_STATEMENT_KEYWORDS = {
+    "do",
+    "else",
+    "for",
+    "if",
+    "switch",
+    "while",
+}
+
+
+def find_matching_reverse(text: str, close_index: int, open_char: str, close_char: str) -> int | None:
+    depth = 0
+    for index in range(close_index, -1, -1):
+        char = text[index]
+        if char == close_char:
+            depth += 1
+        elif char == open_char:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(db_path)
     connection.execute("pragma foreign_keys = on")
@@ -1926,6 +2145,13 @@ def checked_relative_path(value: str) -> PurePosixPath:
 
 def path_text(path: Path) -> str:
     return PurePosixPath(*path.parts).as_posix()
+
+
+def slug_id(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").lower()
+    if not slug:
+        raise SystemExit(f"cannot build id slug from empty value: {value!r}")
+    return slug
 
 
 def repo_relative(path: Path, *, repo_root: Path = REPO_ROOT) -> str:

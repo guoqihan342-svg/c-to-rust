@@ -178,7 +178,7 @@ P0 内部按以下顺序执行，不能因为手写 emitter 覆盖、拆文件�
 - [ ] S1 verifier：复用现有 C oracle/Rust replay/diff gate，把该 c2rust baseline 升级为 `verified-unsafe-baseline`；失败时 fail-closed 记录 fixture、observable diff 和下一步。
 - [ ] S2 安全化回路：在同一单元上接入 OpenCode/LLM worker，要求每轮只输出一个 unified diff、安全化理由和目标 unsafe site；compile/diff/unsafe delta 全绿且 unsafe 严格下降才接受。
 - [ ] S2 repair/retry：把 compile error stack、oracle diff、unsafe delta 结构化为 repair hint，`retry-worker` 消费 hint 重新执行，默认最多 5 轮；每次失败都回退到 last-good。
-- [ ] S3 planner + 多 worker：给一个真实 C 文件自动拆成有序 units，生成 assignment/request，隔离 worker out-root，并通过 `run_competition.py --worker-summary ...` 聚合。
+- [ ] S3 planner + 多 worker：给一个真实 C 文件自动拆成有序 units，生成 assignment/request，隔离 worker out-root，并通过 `run_competition.py --worker-summary ...` 聚合。进展：`opencode_agent_harness.py plan-source-file` 已能扫描单个 repo 内 C 源文件的 top-level function definitions，按源码顺序生成稳定 `worker_id`/`slice_id`、隔离 `workers/<worker-id>` out-root、assignment/request JSON 和 planner artifact，并复用现有 `assign-slice` / `scripts/c2rust-migrator.py --phase migrate --input ...` direct extraction request 合同；边界是它只做 unit discovery 与 worker planning，不执行 worker、不生成 slice semantic evidence、不证明并行收敛，也不替代 `run_competition.py --worker-summary ...` 聚合和最终 validator。
 - [ ] S4 workflow metrics artifact：每次 harness run 生成 machine-readable 指标，取代 `33.7%` 这类 transpiler checklist 百分比；milestone/release 只引用该指标和落盘 evidence。
 - [ ] S4 演示里程碑：优先选择 zlib-ng `adler32` 或 FlashDB 一个真实文件，产出可复现命令、workflow trace、verified unsafe baseline、安全化 step log、unsafe reduction、repair 记录和最终 evidence manifest。
 

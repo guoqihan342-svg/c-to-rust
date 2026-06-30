@@ -213,6 +213,193 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         )
 
+    def test_plan_source_file_creates_ordered_worker_assignments_from_c_functions(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    if (value > 0) {
+                        return value + 1;
+                    }
+                    return value;
+                }
+
+                static int second_unit(void)
+                {
+                    return first_unit(1);
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                source_repository="https://gitcode.com/xwxf/FlashDB.git",
+                source_branch="competition",
+                require_source_commit="abc123",
+                compiler_command_source="compile_commands.json",
+                include_paths=["inc"],
+                defines=["FDB_USING_KVDB"],
+                out_root=out_root,
+                slice_id_prefix="real-demo",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(plan["status"], "planned")
+            self.assertEqual([unit["function"] for unit in plan["units"]], ["first_unit", "second_unit"])
+            self.assertEqual([unit["slice_id"] for unit in plan["units"]], ["real-demo-first-unit", "real-demo-second-unit"])
+            self.assertEqual([unit["worker_id"] for unit in plan["units"]], ["worker-001-first-unit", "worker-002-second-unit"])
+            plan_path = REPO_ROOT / plan["plan_path"]
+            self.assertTrue(plan_path.exists())
+
+            first_request = out_root / "harness" / "assignments" / "worker-001-first-unit-request.json"
+            second_request = out_root / "harness" / "assignments" / "worker-002-second-unit-request.json"
+            self.assertTrue(first_request.exists())
+            self.assertTrue(second_request.exists())
+            first_payload = json.loads(first_request.read_text(encoding="utf-8"))
+            self.assertEqual(first_payload["function"], "first_unit")
+            self.assertEqual(first_payload["slice_id"], "real-demo-first-unit")
+            self.assertEqual(first_payload["out_root"], repo_rel(out_root / "workers" / "worker-001-first-unit"))
+            self.assertEqual(first_payload["source_repository"], "https://gitcode.com/xwxf/FlashDB.git")
+            self.assertEqual(first_payload["source_branch"], "competition")
+            self.assertEqual(first_payload["require_source_commit"], "abc123")
+            self.assertEqual(first_payload["compiler_command_source"], "compile_commands.json")
+            self.assertEqual(first_payload["include_paths"], ["inc"])
+            self.assertEqual(first_payload["defines"], ["FDB_USING_KVDB"])
+
+            rows = fetch_rows(db_path, "select agent_id, isolated_out_root from agents order by agent_id")
+            self.assertEqual(
+                rows,
+                [
+                    ("worker-001-first-unit", repo_rel(out_root / "workers" / "worker-001-first-unit")),
+                    ("worker-002-second-unit", repo_rel(out_root / "workers" / "worker-002-second-unit")),
+                ],
+            )
+
+    def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "plan-source-file",
+            "--db",
+            "target/competition-out/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-test",
+            "--target-id",
+            "flashdb",
+            "--source-repo-root",
+            "sources/FlashDB",
+            "--source-repository",
+            "https://gitcode.com/xwxf/FlashDB.git",
+            "--source-branch",
+            "competition",
+            "--source-file",
+            "src/fdb_utils.c",
+            "--source-commit",
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+            "--require-source-commit",
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+            "--compiler-command-source",
+            "compile_commands.json",
+            "--include-path",
+            "inc",
+            "--define",
+            "FDB_USING_KVDB",
+            "--out-root",
+            "target/competition-out",
+            "--slice-id-prefix",
+            "real-fdb-utils",
+            "--worker-prefix",
+            "flashdb-worker",
+            "--limit",
+            "2",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()), patch.object(
+            harness,
+            "plan_source_file",
+            return_value={"status": "planned"},
+        ) as planner:
+            self.assertEqual(harness.main(), 0)
+
+        planner.assert_called_once()
+        self.assertEqual(planner.call_args.kwargs["target_id"], "flashdb")
+        self.assertEqual(planner.call_args.kwargs["source_repository"], "https://gitcode.com/xwxf/FlashDB.git")
+        self.assertEqual(planner.call_args.kwargs["source_branch"], "competition")
+        self.assertEqual(
+            planner.call_args.kwargs["require_source_commit"],
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        )
+        self.assertEqual(planner.call_args.kwargs["include_paths"], ["inc"])
+        self.assertEqual(planner.call_args.kwargs["defines"], ["FDB_USING_KVDB"])
+        self.assertEqual(planner.call_args.kwargs["slice_id_prefix"], "real-fdb-utils")
+        self.assertEqual(planner.call_args.kwargs["worker_prefix"], "flashdb-worker")
+        self.assertEqual(planner.call_args.kwargs["limit"], 2)
+
+    def test_plan_source_file_direct_script_cli_runs_from_repo_root(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "source"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int add_one(int value) { return value + 1; }\n", encoding="utf-8")
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "validation/tools/opencode_agent_harness.py",
+                    "plan-source-file",
+                    "--db",
+                    repo_rel(db_path),
+                    "--run-id",
+                    "run-test",
+                    "--target-id",
+                    "demo",
+                    "--source-repo-root",
+                    repo_rel(source_root),
+                    "--source-file",
+                    "src/demo.c",
+                    "--source-commit",
+                    "abc123",
+                    "--out-root",
+                    repo_rel(out_root),
+                    "--slice-id-prefix",
+                    "demo",
+                    "--limit",
+                    "1",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(payload["status"], "planned")
+            self.assertEqual(payload["units"][0]["function"], "add_one")
+
     def test_record_worker_summary_indexes_artifact_and_merge_plan(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
