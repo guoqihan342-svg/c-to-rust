@@ -90,6 +90,23 @@ def main() -> int:
     plan_parser.add_argument("--limit", type=int)
     plan_parser.add_argument("--lease-ttl-seconds", type=int, default=3600)
 
+    run_plan_parser = subcommands.add_parser("run-plan")
+    run_plan_parser.add_argument("--db", type=Path, required=True)
+    run_plan_parser.add_argument("--run-id", required=True)
+    run_plan_parser.add_argument("--plan", type=Path, required=True)
+    run_plan_parser.add_argument("--out-root", type=Path, default=Path("target/competition-out"))
+    run_plan_parser.add_argument(
+        "--proof-class",
+        required=True,
+        choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
+    )
+    run_plan_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    run_plan_parser.add_argument("--opencode-command", default="opencode")
+    run_plan_parser.add_argument("--opencode-model")
+    run_plan_parser.add_argument("--opencode-agent")
+    run_plan_parser.add_argument("--opencode-variant", default="max")
+    run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
+
     run_parser = subcommands.add_parser("run-worker")
     run_parser.add_argument("--db", type=Path, required=True)
     run_parser.add_argument("--run-id", required=True)
@@ -184,6 +201,20 @@ def main() -> int:
             limit=args.limit,
             lease_ttl_seconds=args.lease_ttl_seconds,
         )
+    elif args.command == "run-plan":
+        result = run_plan(
+            db_path=args.db,
+            run_id=args.run_id,
+            plan_path=args.plan,
+            out_root=args.out_root,
+            proof_class=args.proof_class,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+        )
     elif args.command == "run-worker":
         result = run_worker(
             db_path=args.db,
@@ -233,7 +264,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker"} else 0
+    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan"} else 0
 
 
 def init_run(
@@ -637,6 +668,112 @@ def plan_source_file(
         record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
         connection.commit()
     return plan
+
+
+def run_plan(
+    *,
+    db_path: Path,
+    run_id: str,
+    plan_path: Path,
+    out_root: Path,
+    proof_class: str,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    plan_path = repo_path(plan_path, repo_root=repo_root)
+    plan = load_json(plan_path)
+    if plan.get("run_id") != run_id:
+        raise SystemExit(f"plan run_id {plan.get('run_id')} does not match requested run_id {run_id}")
+    units = plan.get("units")
+    if not isinstance(units, list) or not units:
+        raise SystemExit("run-plan requires a planner artifact with at least one unit")
+
+    started = time.monotonic()
+    worker_results = []
+    ordered_summary_paths: list[str] = []
+    failed_workers = 0
+    for index, unit in enumerate(units, start=1):
+        if not isinstance(unit, dict) or not isinstance(unit.get("worker_id"), str) or not unit["worker_id"]:
+            raise SystemExit(f"run-plan unit {index} missing worker_id")
+        result = run_worker(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=unit["worker_id"],
+            mode=mode,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            command_runner=command_runner,
+            repo_root=repo_root,
+        )
+        worker_result = {
+            "worker_id": unit["worker_id"],
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "exit_code": int(result.get("exit_code", 1)),
+            "summary_status": result.get("summary_status"),
+            "summary_path": result.get("summary_path"),
+            "report_path": result.get("report_path"),
+            "recorded": bool(result.get("recorded")),
+        }
+        if worker_result["exit_code"] != 0:
+            failed_workers += 1
+        if worker_result["recorded"] and worker_result["summary_path"]:
+            ordered_summary_paths.append(str(worker_result["summary_path"]))
+        worker_results.append(worker_result)
+
+    merge_plan = write_merge_plan(
+        db_path=db_path,
+        run_id=run_id,
+        out_root=out_root,
+        proof_class=proof_class,
+        worker_summary_paths=ordered_summary_paths,
+        repo_root=repo_root,
+    )
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "completed" if failed_workers == 0 else "failed",
+        "run_id": run_id,
+        "mode": mode,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "worker_count": len(worker_results),
+        "failed_workers": failed_workers,
+        "exit_code": 0 if failed_workers == 0 else 1,
+        "elapsed_seconds": int(time.monotonic() - started),
+        "workers": worker_results,
+        "merge_plan": merge_plan,
+    }
+    report_path = out_root / "harness" / "run-plan-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="planned-worker-batch-report",
+            path=report_path,
+            status=report["status"],
+            semantic_role="worker-batch-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="planned_workers_executed", payload=report)
+        connection.commit()
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    return result
 
 
 def record_worker_summary(
@@ -1850,21 +1987,28 @@ def write_merge_plan(
     run_id: str,
     out_root: Path,
     proof_class: str,
+    worker_summary_paths: list[str] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     out_root = repo_path(out_root, repo_root=repo_root)
-    with closing(connect(db_path)) as connection:
-        ensure_schema(connection)
-        rows = connection.execute(
-            """
-            select repo_rel_path from artifacts
-            where run_id=? and kind='competition-run-summary'
-            order by repo_rel_path
-            """,
-            (run_id,),
-        ).fetchall()
-    summaries = [row[0] for row in rows]
+    if worker_summary_paths is None:
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            rows = connection.execute(
+                """
+                select repo_rel_path from artifacts
+                where run_id=? and kind='competition-run-summary'
+                order by repo_rel_path
+                """,
+                (run_id,),
+            ).fetchall()
+        summaries = [row[0] for row in rows]
+    else:
+        summaries = [
+            repo_relative(repo_path(Path(summary), repo_root=repo_root), repo_root=repo_root)
+            for summary in worker_summary_paths
+        ]
     argv = [sys.executable, "validation/tools/run_competition.py"]
     for summary in summaries:
         argv.extend(["--worker-summary", summary])

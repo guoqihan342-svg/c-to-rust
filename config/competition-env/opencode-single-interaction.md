@@ -54,7 +54,7 @@
 
 对 FlashDB crc32（已通过的案例）：typed IR 候选生成到 validation profile 生成约 5-8 分钟。
 
-**多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。
+**多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。文件级批量优先用 `plan-source-file` 生成 plan，再用 `run-plan --mode deterministic` 顺序执行已规划 worker 并生成 merge plan；这只是确定性 batch 调度，不替代最终 runner/validator。
 
 ## OpenCode Harness 多 Agent + SQLite 流程
 
@@ -68,6 +68,27 @@ python -m validation.tools.opencode_agent_harness init-run \
   --proof-class <proof-class> \
   --out-root target/competition-out
 
+# 优先的文件级批量路径：
+python -m validation.tools.opencode_agent_harness plan-source-file \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --target-id <target> \
+  --source-repo-root <repo-relative-c-source-root> \
+  --source-file <repo-relative-c-file> \
+  --source-commit <commit> \
+  --slice-id-prefix <slice-prefix> \
+  --worker-prefix worker \
+  --out-root target/competition-out
+
+python -m validation.tools.opencode_agent_harness run-plan \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --plan target/competition-out/harness/plans/<target>-<source-stem>-workers.json \
+  --proof-class <proof-class> \
+  --mode deterministic \
+  --out-root target/competition-out
+
+# 手工展开的单 worker 路径：
 python -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
@@ -145,7 +166,7 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
-9. 如需多 agent 并行，先用 `python -m validation.tools.opencode_agent_harness init-run` 建立 SQLite ledger，再用 `assign-slice` 给每个 worker 生成 assignment。worker 只写自己的 `target/competition-out/workers/<worker-id>/`；随后用 `run-worker --mode deterministic` 走可复现 runner，或用 `run-worker --mode opencode --opencode-variant max` 让 OpenCode 包装执行同一个 request。`run-worker` 会在 summary 存在时自动入库，最后用 `write-merge-plan` 生成统一汇总命令。
+9. 如需多 agent 并行，先用 `python -m validation.tools.opencode_agent_harness init-run` 建立 SQLite ledger。文件级批量优先用 `plan-source-file` 生成有序 assignment，再用 `run-plan --mode deterministic` 顺序执行这些 planned workers 并写出 `harness/run-plan-report.json`；手工 `assign-slice` 加重复 `run-worker --mode deterministic` 仍是展开版。只有让 OpenCode 在 exact-command contract 下包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-variant max`。worker summary 仍必须通过 `write-merge-plan`、final runner 和 common summary validator 收敛。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。运行前先用 read 工具看 CONTEXT.md 了解当前状态。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。
@@ -157,7 +178,7 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 - **不修改项目 Rust/Python 源码**（除非证据目录中已存在 `blocked_repairs` 且原文案明确允许修复）。
 - **不生成手写 `c_source` 字符串**（必须从真实 C 源文件通过 `extract_source_slice.py` 抽取）。
 - **不启动 LLM code generation**（本项目翻译只走 clang-lowered typed IR + generic emitter，不走 AI/LLM 候选生成）。
-- **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。
+- **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。planned batch 可以保留 planner 顺序写 report/merge input，但不能替代最终 validator。
 - **SQLite 只是 harness ledger**，用于 assignment、lease、artifact index 和 merge plan；不能用 SQLite 中的状态替代 evidence validator。
 - **优先使用 `run_competition.py` 直接 source 参数或 `--extract-spec` 做真实 C slice 抽取、迁移和汇总**；`--slice-spec` 仍可用于已经抽取好的 spec，多个隔离 worker 的结果通过重复 `--worker-summary` 进入同一 summary validator。
 - **C2Rust baseline 如果生成失败/不存在，记录 `skipped` 或 `blocked`**，不伪造 `generated`。

@@ -292,6 +292,87 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ],
             )
 
+    def test_run_plan_executes_planned_workers_and_writes_merge_plan(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+
+                int second_unit(int value) {
+                    return value + 2;
+                }
+                """,
+                encoding="utf-8",
+            )
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="real-demo",
+                worker_prefix="worker",
+                repo_root=REPO_ROOT,
+            )
+            calls: list[str] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                worker_id = Path(request["out_root"]).name
+                calls.append(worker_id)
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout=f"{worker_id} ok\n", stderr="")
+
+            result = harness.run_plan(
+                db_path=db_path,
+                run_id="run-test",
+                plan_path=REPO_ROOT / plan["plan_path"],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(calls, ["worker-001-first-unit", "worker-002-second-unit"])
+            self.assertEqual([worker["exit_code"] for worker in result["workers"]], [0, 0])
+            self.assertEqual(
+                [worker["summary_status"] for worker in result["workers"]],
+                ["passed", "passed"],
+            )
+            report_path = REPO_ROOT / result["report_path"]
+            self.assertTrue(report_path.exists())
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["plan_path"], plan["plan_path"])
+            self.assertEqual(report["worker_count"], 2)
+            self.assertEqual(report["failed_workers"], 0)
+            merge_plan_path = out_root / "harness" / "merge-plan.json"
+            self.assertTrue(merge_plan_path.exists())
+            merge_plan = json.loads(merge_plan_path.read_text(encoding="utf-8"))
+            first_summary = out_root / "workers" / "worker-001-first-unit" / "summary" / "competition-run-summary.json"
+            second_summary = out_root / "workers" / "worker-002-second-unit" / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                merge_plan["worker_summaries"],
+                [repo_rel(first_summary), repo_rel(second_summary)],
+            )
+
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -350,6 +431,55 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(planner.call_args.kwargs["slice_id_prefix"], "real-fdb-utils")
         self.assertEqual(planner.call_args.kwargs["worker_prefix"], "flashdb-worker")
         self.assertEqual(planner.call_args.kwargs["limit"], 2)
+
+    def test_run_plan_cli_dispatches_batch_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "run-plan",
+            "--db",
+            "target/competition-out/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-test",
+            "--plan",
+            "target/competition-out/harness/plans/flashdb-fdb-utils-workers.json",
+            "--out-root",
+            "target/competition-out",
+            "--proof-class",
+            "local-simulation",
+            "--mode",
+            "opencode",
+            "--opencode-command",
+            "opencode",
+            "--opencode-model",
+            "gpt-5.4",
+            "--opencode-agent",
+            "c2rust-worker",
+            "--opencode-variant",
+            "max",
+            "--opencode-skip-permissions",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_plan",
+            return_value={"status": "failed", "exit_code": 1},
+        ) as runner:
+            exit_code = harness.main()
+
+        self.assertEqual(exit_code, 1)
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "failed")
+        runner.assert_called_once()
+        self.assertEqual(runner.call_args.kwargs["run_id"], "run-test")
+        self.assertEqual(
+            runner.call_args.kwargs["plan_path"],
+            Path("target/competition-out/harness/plans/flashdb-fdb-utils-workers.json"),
+        )
+        self.assertEqual(runner.call_args.kwargs["proof_class"], "local-simulation")
+        self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
+        self.assertEqual(runner.call_args.kwargs["opencode_model"], "gpt-5.4")
+        self.assertEqual(runner.call_args.kwargs["opencode_agent"], "c2rust-worker")
+        self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
 
     def test_plan_source_file_direct_script_cli_runs_from_repo_root(self) -> None:
         with temp_repo_dir() as tmp:
