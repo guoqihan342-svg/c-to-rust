@@ -17,26 +17,27 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-      "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+      "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-cfg.json",
-      "sha256": "dd451025fe214eebb456d36cd70a3c9c63238f5f025903f67ba88f0673c21368",
+      "sha256": "02056812fb99ff10399a01b4e928496de1411dc110f6953d46f8b4d318ea20a1",
       "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
-      "sha256": "7f9fd18b0d448eb424e7e28ac2a62970044038dbe3d8285ba9d202a491a96a92",
+      "sha256": "afb5709cac87d4390d2adfea62d912b09b60e5bcda3b12858a1b2b45569cb225",
       "status": "not_applicable"
     },
     "translation_plan": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-translation-plan.json",
+      "sha256": "2f102e6818e2e4aa9a7d94b8865361c817bd08d8d3ed18cc805de9ca164022dc",
       "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-type-map.json",
-      "sha256": "454e7528472a9811ba40743dafd2c783a7ee00efb17985cb2a8b4c25cd2324c8",
+      "sha256": "592ca298ec4088988420570a08b3a8eb72435e6fbf2976070bd2f1dcbfc3dc94",
       "status": "recorded"
     }
   },

@@ -1,7 +1,7 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
+    "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
@@ -37,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -60,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -83,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     }
   ],
   "inputs": {
@@ -106,7 +106,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "status": "not_applicable"
+      "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
@@ -119,22 +119,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
+  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
   "route_decision": {
-    "level": "L4",
+    "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "9cd273636a745c8f362a4e5188b1b0ab51d6185cc9f7ef36502eb410cbe93c6c",
-    "status": "refused"
+    "sha256": "5a23dba437bb2d6f1ec8db6c7418e28138d7b7136bb5b79a2ae10c77b3343d7d",
+    "status": "recorded"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "status": "blocked",
+  "status": "draft_generated",
   "target_id": "flashdb",
   "translation_source": {
-    "fallback_from": "clang-lowered-typed-ir",
-    "fallback_reason": "clang_lowered_typed_ir_unavailable",
-    "selected": "legacy-string-translator"
+    "selected": "clang-lowered-typed-ir"
   },
   "translation_summary": {
     "alias_gate": {
@@ -144,7 +142,65 @@
       "requires_noalias": false,
       "risk_level": "none"
     },
-    "call_expressions": [],
+    "call_expressions": [
+      {
+        "arguments": [
+          "db",
+          "key",
+          "fdb_blob_make(&blob, value, strlen(value))"
+        ],
+        "callee": "fdb_kv_set_blob",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-kv-set-blob",
+        "callee_source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
+        "definition_status": "real_source_bound",
+        "source_expression": "fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))",
+        "statement_context": "return",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "&blob",
+          "value",
+          "strlen(value)"
+        ],
+        "callee": "fdb_blob_make",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-blob-make",
+        "callee_source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "definition_status": "real_source_bound",
+        "source_expression": "fdb_blob_make(&blob, value, strlen(value))",
+        "statement_context": "return",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "value"
+        ],
+        "callee": "strlen",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-stdlib-strlen",
+        "callee_source_ref": "stdlib:string.h#strlen",
+        "definition_status": "stdlib_model_pending_named_slice_evidence",
+        "source_expression": "strlen(value)",
+        "statement_context": "return",
+        "stub_status": "compile_only"
+      },
+      {
+        "arguments": [
+          "db",
+          "key"
+        ],
+        "callee": "fdb_kv_del",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-kv-del",
+        "callee_source_ref": "src/fdb_kvdb.c#fdb_kv_del",
+        "definition_status": "real_source_bound",
+        "source_expression": "fdb_kv_del(db, key)",
+        "statement_context": "return",
+        "stub_status": "compile_only"
+      }
+    ],
     "external_direct_callee_blocks": [],
     "external_direct_callee_declarations": [
       {
@@ -445,16 +501,19 @@
     "lvalue_decision_counts": {},
     "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
-    "translation_rule_ids": [],
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "bounded-call-expression"
+    ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
-    "unsupported_node_count": 2
+    "unsupported_node_count": 0
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
-    "profile": "L4-dev",
-    "sha256": "b9a662c318bdc2c291aeca50f99e33f6275e4c278c28bee982cbe5cdf5bfba10",
-    "status": "blocked"
+    "profile": "L1-dev",
+    "sha256": "12231c9462ce9d4b116a8b22348eac46fb226427e55670353704e9a6b3b0824a",
+    "status": "incomplete"
   },
   "verification_plan": [
     {

@@ -22,8 +22,8 @@
   ],
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "status": "blocked"
+    "sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
+    "status": "candidate"
   },
   "generated_draft_replay_pass": false,
   "generated_draft_semantic_pass": false,
@@ -56,7 +56,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-        "status": "blocked"
+        "status": "candidate"
       }
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
@@ -65,7 +65,7 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
+    "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",

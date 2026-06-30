@@ -28,7 +28,8 @@
     "alias_gate_identity",
     "c2rust_baseline_identity",
     "route_decision_identity",
-    "validation_profile_identity"
+    "validation_profile_identity",
+    "oracle_boundary_contract_identity"
   ],
   "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
   "command_arguments": [
@@ -40,19 +41,19 @@
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-      "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+      "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L0",
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-      "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+      "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
       "status": "recorded"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
       "profile": "L0-dev",
-      "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+      "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
       "status": "passed"
     }
   },
@@ -76,8 +77,12 @@
     "route_decision",
     "validation_profile"
   ],
+  "oracle_boundary_contract_identity": {
+    "sha256": "0133b374b54804132d37f74551ea8f7a0ec664d6a96e8fd77e3bc83262785137",
+    "status": "sufficient_for_semantic_pass"
+  },
   "route_decision_identity": {
-    "sha256": "1df2950cbd889366b97221e1193d65a8712c994e91db1cd783d5c2d45f4e22be",
+    "sha256": "2aada5efb6e9ba55c68d44ea1af23deea2d818c42092fa193460c143a130807b",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -106,7 +111,7 @@
   "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "84fb71ee120d1a8d2bff7a7b9b7822eb53f73cff529a3674efc2ed3cac7fc91f",
+    "sha256": "4d5ba0999446d8e4e190705af47f1ee4213d41fc3c9a0445eb47ef2fa526be6f",
     "status": "passed"
   }
 }

@@ -1048,6 +1048,8 @@
         "ArrayToPointerDecay unary deref of direct fixed array DeclRef lowers to index zero",
         "ArrayToPointerDecay pointer-add deref of direct fixed array DeclRef lowers to indexed read",
         "ordinary ArrayToPointerDecay lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
+        "nullable readonly pointer parameter truthiness condition lowers to Option::is_some before nonnull-branch reads",
+        "nullable readonly pointer value position remains fail-closed outside condition/non-null branch use",
         "readonly pointer parameter without read-access evidence fail-closed",
         "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
         "restrict-qualified pointer parameters from clang AST no-clang fixture replay",
@@ -1111,6 +1113,10 @@
             {
               "name": "typed_ir_emits_readonly_deref_and_mutable_output_assignment_with_restrict_noalias_proof",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1138,6 +1144,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_rejects_readonly_pointer_truthiness_value_position",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -1160,6 +1170,10 @@
             },
             {
               "name": "readonly input plus mutable output restrict/noalias emitted Rust compile check from clang AST replay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1239,6 +1253,10 @@
         {
           "name": "typed_ir_emits_readonly_deref_and_mutable_output_assignment_with_restrict_noalias_proof",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -1261,6 +1279,11 @@
           "name": "typed_ir_rejects_pointer_lvalue_to_rvalue_without_lowering_evidence",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "LValueToRValue of an ordinary pointer value still lacks ownership, lifetime, ABI, and slice-lowering evidence"
+        },
+        {
+          "name": "typed_ir_rejects_readonly_pointer_truthiness_value_position",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "nullable readonly pointer truthiness is only admitted as an if-condition guard; value-position pointer use remains fail-closed"
         },
         {
           "name": "clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang",
@@ -1841,6 +1864,7 @@
         "readonly 8-bit pointer argument cast to const void pointer inside record-pointer constructor call arguments",
         "const char pointer BitCast to const void pointer inside record-pointer constructor call arguments",
         "modeled C strlen(const char *) as the only admitted deeper leaf inside record-pointer constructor call arguments",
+        "nullable readonly pointer truthiness can guard record-pointer constructor arguments that unwrap value and strlen leaves in the nonnull branch",
         "modeled C strlen(const char *) leaf with size_t or __size_t result spelling inside record-pointer constructor call arguments",
         "route candidate evidence"
       ],
@@ -2000,6 +2024,10 @@
             {
               "name": "typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2149,6 +2177,10 @@
             },
             {
               "name": "typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -2309,6 +2341,10 @@
         },
         {
           "name": "typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],

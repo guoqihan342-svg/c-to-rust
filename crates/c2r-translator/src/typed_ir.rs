@@ -3276,7 +3276,7 @@ fn emit_record_pointer_return_call_inner_arg_expr(
 ) -> Result<String, String> {
     match arg {
         IrExpr::Var { name, ty, .. } if is_readonly_8_bit_pointer_type(ty) => {
-            emit_readonly_byte_pointer_const_void_call_arg_var(name, symbols)
+            emit_readonly_byte_pointer_const_void_call_arg_var(name, symbols, context)
         }
         IrExpr::Call {
             callee, args, ty, ..
@@ -3334,6 +3334,7 @@ fn emit_opaque_pointer_call_arg_var(
 fn emit_readonly_byte_pointer_const_void_call_arg_var(
     name: &str,
     symbols: &HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     if !symbols.contains(name) {
         return Err(format!(
@@ -3341,7 +3342,12 @@ fn emit_readonly_byte_pointer_const_void_call_arg_var(
         ));
     }
     let name = emit_identifier(name, "readonly byte pointer call argument")?;
-    Ok(format!("{name}.as_ptr() as *const core::ffi::c_void"))
+    let receiver = if context.is_nullable_pointer_param(&name) {
+        format!("{name}.unwrap()")
+    } else {
+        name
+    };
+    Ok(format!("{receiver}.as_ptr() as *const core::ffi::c_void"))
 }
 
 fn emit_function_pointer_decay_call_arg(target: &IrType, expr: &IrExpr) -> Result<String, String> {
@@ -3460,7 +3466,7 @@ fn emit_c_strlen_call_expr(
     args: &[IrExpr],
     ty: &IrType,
     symbols: &HashSet<String>,
-    _context: &EmitContext,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let name = validate_c_strlen_call_shape(args, ty)?;
     let name = emit_identifier(name, "C strlen argument")?;
@@ -3469,8 +3475,13 @@ fn emit_c_strlen_call_expr(
             "C strlen argument {name} is not a function parameter or local binding"
         ));
     }
+    let receiver = if context.is_nullable_pointer_param(&name) {
+        format!("{name}.unwrap()")
+    } else {
+        name
+    };
     Ok(format!(
-        "{name}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
+        "{receiver}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
     ))
 }
 
@@ -5023,10 +5034,32 @@ fn emit_condition_expr(
     if let Some(condition) = emit_comparison_condition_expr(expr, symbols, context)? {
         return Ok(condition);
     }
+    if let Some(condition) = emit_nullable_pointer_truthiness_condition(expr, symbols, context)? {
+        return Ok(condition);
+    }
     let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
     let zero = zero_literal_for_type(ty)?;
     let expr = emit_expr(expr, symbols, context)?;
     Ok(format!("{expr} != {zero}"))
+}
+
+fn emit_nullable_pointer_truthiness_condition(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Var { name, ty, .. } = expr else {
+        return Ok(None);
+    };
+    if !context.is_nullable_pointer_param(name) {
+        return Ok(None);
+    }
+    if !symbols.contains(name) {
+        return Err(format!("nullable pointer param {name} is not declared"));
+    }
+    validate_nullable_pointer_type(name, ty)?;
+    let name = emit_identifier(name, "nullable pointer condition")?;
+    Ok(Some(format!("{name}.is_some()")))
 }
 
 fn emit_comparison_condition_expr(
@@ -6718,6 +6751,11 @@ fn collect_nullable_pointer_params_from_body(
                 else_body,
                 ..
             } => {
+                collect_nullable_pointer_condition_param(
+                    condition,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
                 collect_nullable_pointer_params_from_expr(
                     condition,
                     readonly_pointer_params,
@@ -6813,6 +6851,22 @@ fn collect_nullable_pointer_params_from_body(
             }
             IrStmt::Unsupported { .. } => {}
         }
+    }
+}
+
+fn collect_nullable_pointer_condition_param(
+    condition: &IrExpr,
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    nullable_params: &mut HashSet<String>,
+) {
+    let IrExpr::Var { name, ty, .. } = condition else {
+        return;
+    };
+    if readonly_pointer_params
+        .get(name.as_str())
+        .is_some_and(|param_ty| *param_ty == ty)
+    {
+        nullable_params.insert(name.to_string());
     }
 }
 
@@ -8297,7 +8351,7 @@ fn validate_nullable_pointer_param_uses_in_stmt(
             else_body,
             ..
         } => {
-            validate_nullable_pointer_param_uses_in_expr(
+            validate_nullable_pointer_param_uses_in_condition(
                 condition,
                 nullable_params,
                 proven_nonnull_params,
@@ -8410,6 +8464,17 @@ fn validate_nullable_pointer_param_uses_in_stmt(
     Ok(())
 }
 
+fn validate_nullable_pointer_param_uses_in_condition(
+    condition: &IrExpr,
+    nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
+) -> Result<(), String> {
+    if nullable_pointer_truthiness_var(condition, nullable_params).is_some() {
+        return Ok(());
+    }
+    validate_nullable_pointer_param_uses_in_expr(condition, nullable_params, proven_nonnull_params)
+}
+
 fn validate_nullable_pointer_param_uses_in_expr(
     expr: &IrExpr,
     nullable_params: &HashSet<String>,
@@ -8436,9 +8501,16 @@ fn validate_nullable_pointer_param_uses_in_expr(
         return Ok(());
     }
     match expr {
-        IrExpr::Var { name, .. } if nullable_params.contains(name) => Err(format!(
-            "nullable pointer param {name} is only supported in null comparisons"
-        )),
+        IrExpr::Var { name, ty, .. } if nullable_params.contains(name) => {
+            if proven_nonnull_params.contains(name)
+                && readonly_pointer_slice_element_type(ty).is_some()
+            {
+                return Ok(());
+            }
+            Err(format!(
+                "nullable pointer param {name} is only supported in null comparisons"
+            ))
+        }
         IrExpr::Binary { lhs, rhs, .. } => {
             validate_nullable_pointer_param_uses_in_expr(
                 lhs,
@@ -8577,6 +8649,9 @@ fn null_comparison_nonnull_branch<'a>(
     condition: &'a IrExpr,
     nullable_params: &HashSet<String>,
 ) -> Option<NullComparisonNonnullBranch<'a>> {
+    if let Some(name) = nullable_pointer_truthiness_var(condition, nullable_params) {
+        return Some(NullComparisonNonnullBranch::Then { param: name });
+    }
     let IrExpr::Binary { op, lhs, rhs, .. } = condition else {
         return None;
     };
@@ -8591,6 +8666,16 @@ fn null_comparison_nonnull_branch<'a>(
         IrBinOp::Eq => Some(NullComparisonNonnullBranch::Else { param: name }),
         _ => None,
     }
+}
+
+fn nullable_pointer_truthiness_var<'a>(
+    condition: &'a IrExpr,
+    nullable_params: &HashSet<String>,
+) -> Option<&'a str> {
+    let IrExpr::Var { name, .. } = condition else {
+        return None;
+    };
+    nullable_params.contains(name).then_some(name.as_str())
 }
 
 fn nullable_record_pointer_arrow_read_is_proven_nonnull(
@@ -9016,7 +9101,11 @@ fn is_const_void_pointer(ty: &IrType) -> bool {
 }
 
 fn is_size_t_type(ty: &IrType) -> bool {
-    ty.spelled == "size_t" || ty.canonical == "size_t"
+    is_size_t_type_name(&ty.spelled) || is_size_t_type_name(&ty.canonical)
+}
+
+fn is_size_t_type_name(name: &str) -> bool {
+    matches!(name, "size_t" | "__size_t" | "usize")
 }
 
 fn type_label(ty: &IrType) -> String {
@@ -9182,8 +9271,7 @@ fn is_8_bit_integer_type(ty: &IrType) -> bool {
 }
 
 fn is_usize(ty: &IrType) -> bool {
-    ty.spelled == "size_t"
-        || ty.canonical == "size_t"
+    is_size_t_type(ty)
         || matches!(
             ty.kind,
             IrTypeKind::Integer {
@@ -9198,10 +9286,7 @@ fn is_c_strlen_result_type(ty: &IrType) -> bool {
 }
 
 fn is_c_size_argument_type(ty: &IrType) -> bool {
-    ty.spelled == "size_t"
-        || ty.canonical == "size_t"
-        || ty.spelled == "usize"
-        || ty.canonical == "usize"
+    is_size_t_type(ty)
 }
 
 fn is_u8_pointer(ty: &IrType) -> bool {

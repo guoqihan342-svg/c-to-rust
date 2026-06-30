@@ -17,7 +17,7 @@
     },
     "frontend": "clang_ast_dump_json",
     "hash_algorithm": "sha256",
-    "rust_draft_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rust_draft_sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
     "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f"
   },
   "errors": [],
@@ -989,31 +989,31 @@
   "target_id": "flashdb",
   "typed_ir_candidate": {
     "candidate_route": {
-      "candidate_generator": "None",
+      "candidate_generator": "GenericTypedIrEmitter",
       "delete_when": [],
       "deprecated": false,
       "fallback": null,
       "reasons": [
         {
-          "code": "outside_typed_ir_emitter_subset",
-          "detail": "fdb_kv_set is outside the current typed IR emitter subset: stmt[1].if condition pointer type const char * is unsupported"
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
         }
       ],
       "replacement": null,
-      "route": "Unsupported",
-      "route_id": "unsupported",
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
       "suggested_required_gates": [
-        "manual_review"
+        "rustc_smoke",
+        "typed_ir_contract_tests"
       ],
       "token_cost": 0
     },
     "readonly_globals": [],
     "runtime_preconditions": [],
-    "rust_draft_generated": false,
-    "rust_draft_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
     "semantic_pass": false,
-    "status": "unsupported",
-    "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f",
-    "unsupported_reason": "fdb_kv_set is outside the current typed IR emitter subset: stmt[1].if condition pointer type const char * is unsupported"
+    "status": "generated",
+    "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f"
   }
 }

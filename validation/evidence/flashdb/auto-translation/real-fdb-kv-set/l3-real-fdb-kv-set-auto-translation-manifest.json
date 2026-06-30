@@ -2,7 +2,7 @@
   "accepted_evidence_binding": null,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
+    "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
     "status": "skipped"
   },
   "cache": {
@@ -17,7 +17,7 @@
     },
     "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "c2rust_baseline_identity": {
-      "sha256": "56d62b34304f1579251fb39ae487e992af7b409edfd1a799190fe38de059e2e0",
+      "sha256": "3681717c1a2ec335e9eb27f1b4e2051e75fe6a47afa41159d5de9f1b9e1468ce",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -68,6 +68,8 @@
           "value": ""
         }
       },
+      "lane": "competition-clang-lane",
+      "required": true,
       "requires_env": [
         "CLANG_PATH"
       ]
@@ -76,7 +78,8 @@
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "--emit-clang-lowering-report"
+      "--emit-clang-lowering-report",
+      "--competition-clang-lane"
     ],
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
@@ -86,20 +89,20 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "c742eb8c55522c8760ec5a5ce40145f266481af7476259fee17f532036c3f8b7",
+        "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
         "status": "skipped"
       },
       "route_decision": {
-        "level": "L4",
+        "level": "L1",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "9cd273636a745c8f362a4e5188b1b0ab51d6185cc9f7ef36502eb410cbe93c6c",
-        "status": "refused"
+        "sha256": "5a23dba437bb2d6f1ec8db6c7418e28138d7b7136bb5b79a2ae10c77b3343d7d",
+        "status": "recorded"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
-        "profile": "L4-dev",
-        "sha256": "b9a662c318bdc2c291aeca50f99e33f6275e4c278c28bee982cbe5cdf5bfba10",
-        "status": "blocked"
+        "profile": "L1-dev",
+        "sha256": "12231c9462ce9d4b116a8b22348eac46fb226427e55670353704e9a6b3b0824a",
+        "status": "incomplete"
       }
     },
     "effect_graph_identity": {
@@ -143,8 +146,8 @@
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "3c54063337c995c62589725b3d417588d4776329b299b23b0392230ac819fc1e",
-      "status": "refused"
+      "sha256": "8d05b173a1e64c21463fe114ffee41359f659efa29037c023f4321d528f420a9",
+      "status": "recorded"
     },
     "scalar_ub_contract_identity": {
       "sha256": "a27cd8b42c32ef7bb5812879ef8e3c714f997d1ea323a863e241e73786019929",
@@ -178,8 +181,8 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "65c3567961862407d101826b6d52bbd842591b5f3a62d000d9e5bbc71a9b5dc8",
-      "status": "blocked"
+      "sha256": "d6b86f45623135132413c865575c45375dab72f0f713e97e3201de3fc8d496ea",
+      "status": "incomplete"
     }
   },
   "claim_boundary": {
@@ -221,7 +224,7 @@
       "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
       "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
     ],
-    "scope": "refused translation route; no generated candidate can claim semantics",
+    "scope": "generated Rust candidate only; semantic acceptance requires independent L3 gates",
     "semantic_pass": false
   },
   "fixture": {
@@ -429,64 +432,11 @@
   },
   "patch": {
     "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-self-healing-blocked-repairs.json",
-    "blocked_repairs_items": [
-      {
-        "blocked_reason": "Route decision refused candidate generation for unsupported C semantics.",
-        "candidate_patch_id": "patch-route-refused-1",
-        "candidate_routes": [
-          {
-            "next_action": "extend_typed_ir_lowering_or_emitter",
-            "route": "typed_ir",
-            "status": "blocked"
-          },
-          {
-            "next_action": "generate_or_attach_baseline_output_then_run_common_validation",
-            "route": "c2rust",
-            "status": "candidate_context_only"
-          },
-          {
-            "next_action": "generate_candidate_from_bound_inputs_then_run_common_validation",
-            "route": "llm",
-            "status": "candidate_only"
-          },
-          {
-            "next_action": "write_reviewed_candidate_and_bind_it_to_oracle_diff_gates",
-            "route": "manual",
-            "status": "allowed_with_review"
-          }
-        ],
-        "forbidden_change": "unsupported_control_flow",
-        "human_action_required": true,
-        "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
-        "ir_feature_gap": {
-          "evidence_refs": [
-            "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json"
-          ],
-          "kind": "blocked_artifact",
-          "source": "route_decision.rationale"
-        },
-        "oracle_fixture_gap": {
-          "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
-          "status": "not_blocking"
-        },
-        "repair_id": "repair-route-refused-1",
-        "route_decision": "L4",
-        "smallest_next_test": {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
-          "expected_gate": "self-healing-blocked-repairs records repair playbook fields",
-          "kind": "route_refusal_regression"
-        },
-        "source_span": {
-          "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-          "line_end": 1,
-          "line_start": 1
-        }
-      }
-    ],
-    "blocked_repairs_status": "recorded",
+    "blocked_repairs_items": [],
+    "blocked_repairs_status": "none",
     "patch_events": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-patch-events.jsonl",
     "self_heal_applied": false,
-    "status": "blocked"
+    "status": "none"
   },
   "replay": {
     "behavior_fields": [
@@ -516,7 +466,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-        "status": "blocked"
+        "status": "candidate"
       }
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
@@ -525,7 +475,7 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
+    "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
@@ -579,10 +529,10 @@
     ]
   },
   "route_decision": {
-    "level": "L4",
+    "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "9cd273636a745c8f362a4e5188b1b0ab51d6185cc9f7ef36502eb410cbe93c6c",
-    "status": "refused"
+    "sha256": "5a23dba437bb2d6f1ec8db6c7418e28138d7b7136bb5b79a2ae10c77b3343d7d",
+    "status": "recorded"
   },
   "rust_check": {
     "command": null,
@@ -633,7 +583,7 @@
   "semantic_pass": false,
   "slice_id": "real-fdb-kv-set",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "status": "candidate_refused",
+  "status": "candidate_generated",
   "target_id": "flashdb",
   "translator": {
     "artifact_paths": [
@@ -649,13 +599,13 @@
       "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json"
     ],
     "slice_id": "real-fdb-kv-set",
-    "status": "blocked",
+    "status": "generated",
     "target_id": "flashdb"
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
-    "profile": "L4-dev",
-    "sha256": "b9a662c318bdc2c291aeca50f99e33f6275e4c278c28bee982cbe5cdf5bfba10",
-    "status": "blocked"
+    "profile": "L1-dev",
+    "sha256": "12231c9462ce9d4b116a8b22348eac46fb226427e55670353704e9a6b3b0824a",
+    "status": "incomplete"
   }
 }

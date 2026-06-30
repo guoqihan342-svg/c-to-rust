@@ -3,18 +3,18 @@
   "capability_delta": [
     {
       "blocked_callees": [],
-      "construct_id": "blocked_artifact",
-      "delta_id": "cap-real-fdb-kv-set-blocked_artifact",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "cap-real-fdb-kv-set-typed_ir_candidate_generated",
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
       ],
-      "generated_candidate_status": "refused",
-      "kind": "refusal_classification",
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
       "negative_coverage": [
         {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
-          "kind": "route_refusal_regression"
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
         }
       ],
       "real_c_slice": "real-fdb-kv-set",
@@ -24,8 +24,8 @@
   "governance_delta": [
     {
       "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-      "construct_id": "blocked_artifact",
-      "delta_id": "gov-real-fdb-kv-set-blocked_artifact-evidence",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "gov-real-fdb-kv-set-typed_ir_candidate_generated-evidence",
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
@@ -33,8 +33,8 @@
       "kind": "evidence_contract"
     }
   ],
-  "route_level": "L4",
-  "route_status": "refused",
+  "route_level": "L1",
+  "route_status": "recorded",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
@@ -56,6 +56,6 @@
   "status": "recorded",
   "target_id": "flashdb",
   "verification_commands": [
-    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation"
+    "python -B validation/tools/validate_auto_translation_evidence.py"
   ]
 }

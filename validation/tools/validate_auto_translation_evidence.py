@@ -3020,9 +3020,10 @@ def validate_external_callee_call_site_bindings(
                     f"external callee call-site binding signature mismatch for {callee} in {label}"
                 )
             if label == "context pack call_edge_to_callee_binding":
-                if edge.get("stub_kind") != "compile_only":
+                expected_stub_kind = str(contract.get("stub_kind") or "compile_only")
+                if edge.get("stub_kind") != expected_stub_kind:
                     raise SystemExit(
-                        f"external callee call-site binding for {callee} must record stub_kind=compile_only"
+                        f"external callee call-site binding for {callee} must record stub_kind={expected_stub_kind}"
                     )
                 if edge.get("semantics_verified"):
                     raise SystemExit(

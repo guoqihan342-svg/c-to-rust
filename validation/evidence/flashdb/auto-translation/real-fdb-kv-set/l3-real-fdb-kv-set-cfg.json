@@ -14,21 +14,19 @@
           "id": "entry",
           "kind": "entry",
           "lvalue_decisions": [],
-          "lvalue_kinds": [
-            "none"
-          ],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
             "line_start": 1
           },
           "statement_kinds": [
-            "expression",
+            "primitive_declaration",
             "if"
           ],
           "statements": [
-            "struct fdb_blob blob",
-            "if (value) {\n        return fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)));\n    } else {\n        return fdb_kv_del(db, key);\n    }"
+            "decl blob",
+            "if"
           ],
           "terminator": "fallthrough"
         }
@@ -82,7 +80,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
+  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "slice_spec_ref": {

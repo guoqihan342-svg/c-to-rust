@@ -7,7 +7,40 @@
     "translator_version=0.1.0",
     "schema_version=1"
   ],
-  "call_edge_to_callee_binding": [],
+  "call_edge_to_callee_binding": [
+    {
+      "callee": "fdb_kv_set_blob",
+      "semantics_verified": false,
+      "signature_ref": "sig-fdb-kv-set-blob",
+      "source_expression": "fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))",
+      "statement_context": "return",
+      "stub_kind": "compile_only"
+    },
+    {
+      "callee": "fdb_blob_make",
+      "semantics_verified": false,
+      "signature_ref": "sig-fdb-blob-make",
+      "source_expression": "fdb_blob_make(&blob, value, strlen(value))",
+      "statement_context": "return",
+      "stub_kind": "accepted_named_slice_evidence"
+    },
+    {
+      "callee": "strlen",
+      "semantics_verified": false,
+      "signature_ref": "sig-stdlib-strlen",
+      "source_expression": "strlen(value)",
+      "statement_context": "return",
+      "stub_kind": "compile_only"
+    },
+    {
+      "callee": "fdb_kv_del",
+      "semantics_verified": false,
+      "signature_ref": "sig-fdb-kv-del",
+      "source_expression": "fdb_kv_del(db, key)",
+      "statement_context": "return",
+      "stub_kind": "compile_only"
+    }
+  ],
   "call_edges": [
     {
       "kind": "type",
@@ -70,7 +103,65 @@
   "direct_c_files": [
     "src/fdb_kvdb.c"
   ],
-  "direct_call_edges": [],
+  "direct_call_edges": [
+    {
+      "arguments": [
+        "db",
+        "key",
+        "fdb_blob_make(&blob, value, strlen(value))"
+      ],
+      "callee": "fdb_kv_set_blob",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-fdb-kv-set-blob",
+      "callee_source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
+      "definition_status": "real_source_bound",
+      "source_expression": "fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))",
+      "statement_context": "return",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "&blob",
+        "value",
+        "strlen(value)"
+      ],
+      "callee": "fdb_blob_make",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-fdb-blob-make",
+      "callee_source_ref": "src/fdb_utils.c#fdb_blob_make",
+      "definition_status": "real_source_bound",
+      "source_expression": "fdb_blob_make(&blob, value, strlen(value))",
+      "statement_context": "return",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "value"
+      ],
+      "callee": "strlen",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-stdlib-strlen",
+      "callee_source_ref": "stdlib:string.h#strlen",
+      "definition_status": "stdlib_model_pending_named_slice_evidence",
+      "source_expression": "strlen(value)",
+      "statement_context": "return",
+      "stub_status": "compile_only"
+    },
+    {
+      "arguments": [
+        "db",
+        "key"
+      ],
+      "callee": "fdb_kv_del",
+      "callee_scope": "external_direct_callee",
+      "callee_signature_id": "sig-fdb-kv-del",
+      "callee_source_ref": "src/fdb_kvdb.c#fdb_kv_del",
+      "definition_status": "real_source_bound",
+      "source_expression": "fdb_kv_del(db, key)",
+      "statement_context": "return",
+      "stub_status": "compile_only"
+    }
+  ],
   "direct_rust_files": [
     "validation/l2_slices/src/fdb_kv_set.rs"
   ],
@@ -374,7 +465,7 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
+  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
   "schema_version": 1,
   "signature_bindings": [
     {

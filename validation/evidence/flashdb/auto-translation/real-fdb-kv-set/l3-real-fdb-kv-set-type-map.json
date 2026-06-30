@@ -14,8 +14,59 @@
   ],
   "global_dependencies": [],
   "level": "L3",
-  "mappings": [],
-  "repo_commit": "d6a8b5088097122b1860dfd6229dc9a5a060dbae",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "enum fdb_err_t",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "db",
+      "c_type": "struct fdb_kvdb *",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "pointer",
+      "rust_type": "&mut FdbKvdb",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "key",
+      "c_type": "const char *",
+      "confidence": "proven",
+      "id": "type-3",
+      "kind": "pointer",
+      "rust_type": "*const i8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "const char *",
+      "confidence": "proven",
+      "id": "type-4",
+      "kind": "pointer",
+      "rust_type": "*const i8",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "blob",
+      "c_type": "struct fdb_blob",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "struct",
+      "rust_type": "FdbBlob",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
   "slice_spec_ref": {

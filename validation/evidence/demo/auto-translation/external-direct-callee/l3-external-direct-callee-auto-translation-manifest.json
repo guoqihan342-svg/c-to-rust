@@ -34,7 +34,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-    "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+    "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
     "status": "skipped"
   },
   "cache": {
@@ -79,19 +79,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-        "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+        "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L0",
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-        "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+        "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
         "status": "recorded"
       },
       "validation_profile": {
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
         "profile": "L0-dev",
-        "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+        "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
         "status": "passed"
       }
     },
@@ -178,11 +178,13 @@
   },
   "fixture": {
     "hash": "external-direct-callee-fixture",
-    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6"
   },
   "l3_evidence_manifest": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-evidence-manifest.json",
     "semantic_pass": true,
+    "sha256": "648c5d9cd5a7d1f4847a57e7377d17ba25a8dbb904b901b66fbe39ddae64762e",
     "status": "passed"
   },
   "level": "L3",
@@ -259,6 +261,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs",
+        "sha256": "386205c2cd49ded5890e9701f10ae608c0adf03746934ba61149229563a8c08e",
         "status": "candidate"
       },
       "rust_report": {
@@ -308,6 +311,7 @@
           "hash": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
           "operation_count": 3,
           "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+          "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
           "source_kind": "fixture"
         }
       ],
@@ -386,7 +390,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-    "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+    "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
     "status": "recorded"
   },
   "rust_check": {
@@ -438,7 +442,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+    "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
     "status": "passed"
   }
 }

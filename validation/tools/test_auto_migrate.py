@@ -3548,6 +3548,46 @@ class AutoMigrateTests(unittest.TestCase):
             )
             self.assertNotIn("accepted_named_slice_evidence", declared[name])
 
+    def test_call_edge_binding_includes_accepted_named_slice_external_callee(self) -> None:
+        module = load_auto_migrate_module()
+        context = {
+            "declared": [
+                {
+                    "name": "fdb_blob_make",
+                    "signature_ref": "sig-fdb-blob-make",
+                    "stub_kind": "accepted_named_slice_evidence",
+                },
+                {
+                    "name": "fdb_kv_del",
+                    "signature_ref": "sig-fdb-kv-del",
+                    "stub_kind": "compile_only",
+                },
+            ]
+        }
+        call_expressions = [
+            {
+                "callee": "fdb_blob_make",
+                "source_expression": "fdb_blob_make(&blob, value, strlen(value))",
+                "statement_context": "return:arg2",
+            },
+            {
+                "callee": "fdb_kv_del",
+                "source_expression": "fdb_kv_del(db, key)",
+                "statement_context": "return:value",
+            },
+        ]
+
+        bindings = module.call_edge_to_callee_binding(call_expressions, context)
+
+        self.assertEqual(
+            [(item["callee"], item["stub_kind"]) for item in bindings],
+            [
+                ("fdb_blob_make", "accepted_named_slice_evidence"),
+                ("fdb_kv_del", "compile_only"),
+            ],
+        )
+        self.assertFalse(any(item["semantics_verified"] for item in bindings))
+
     def test_real_fdb_kv_set_oracle_harness_includes_flashdb_public_header_before_typedefs(self) -> None:
         module = load_auto_migrate_module()
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"

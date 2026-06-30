@@ -2744,6 +2744,53 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             self.assertIn("external callee call-site binding", str(raised.exception))
 
+    def test_external_direct_callee_context_accepts_accepted_named_slice_call_site_binding(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            final_path = evidence_dir / "accepted-helper-final-verification.json"
+            self._write_json(
+                final_path,
+                {
+                    "target_id": "demo",
+                    "slice_id": "helper-add-one",
+                    "semantic_pass": True,
+                    "accepted_evidence_authoritative": True,
+                    "generated_draft_semantic_pass": False,
+                },
+            )
+            accepted_binding = {
+                "target_id": "demo",
+                "slice_id": "helper-add-one",
+                "semantic_pass": True,
+                "accepted_evidence_authoritative": True,
+                "generated_draft_semantic_pass": False,
+                "final_verification_path": str(final_path),
+                "final_verification_sha256": self._sha256(final_path),
+            }
+            for callee in (
+                plan["translation_summary"]["external_direct_callees"][0],
+                context["external_direct_callees"][0],
+            ):
+                callee["stub_kind"] = "accepted_named_slice_evidence"
+                callee["accepted_named_slice_evidence"] = accepted_binding
+            context["signature_bindings"][0]["stub_kind"] = "accepted_named_slice_evidence"
+            for binding in context["call_edge_to_callee_binding"]:
+                binding["stub_kind"] = "accepted_named_slice_evidence"
+            scope = self._external_callee_manifest_scope_with_stub_kind("accepted_named_slice_evidence")
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            module.validate_external_direct_callee_context(
+                slice_spec,
+                evidence_dir,
+                prefix,
+                scope,
+                scope,
+            )
+
     def test_external_direct_callee_context_rejects_context_direct_call_edge_drift(self) -> None:
         module = load_validator_module()
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -3794,15 +3841,18 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         return slice_spec, plan, context
 
     def _external_callee_manifest_scope(self) -> dict:
+        return self._external_callee_manifest_scope_with_stub_kind("compile_only")
+
+    def _external_callee_manifest_scope_with_stub_kind(self, stub_kind: str) -> dict:
         return {
             "claim_boundary": {
                 "external_callee_scope": {
-                    "stub_kind": "compile_only",
+                    "stub_kind": stub_kind,
                     "semantics_verified": False,
                 }
             },
             "external_callee_scope": {
-                "stub_kind": "compile_only",
+                "stub_kind": stub_kind,
                 "semantics_verified": False,
             },
         }

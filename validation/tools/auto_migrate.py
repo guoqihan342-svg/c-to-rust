@@ -706,7 +706,8 @@ def call_edge_to_callee_binding(
         if callee not in declared:
             continue
         descriptor = declared[callee]
-        if descriptor.get("stub_kind") != "compile_only":
+        stub_kind = str(descriptor.get("stub_kind") or "compile_only")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
             continue
         bindings.append(
             {
@@ -714,7 +715,7 @@ def call_edge_to_callee_binding(
                 "signature_ref": descriptor["signature_ref"],
                 "source_expression": call.get("source_expression", ""),
                 "statement_context": call.get("statement_context", ""),
-                "stub_kind": descriptor["stub_kind"],
+                "stub_kind": stub_kind,
                 "semantics_verified": False,
             }
         )
