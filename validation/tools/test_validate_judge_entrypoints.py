@@ -38,6 +38,95 @@ def temp_json_ref(path: Path, payload: dict) -> dict:
     return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
 
 
+def artifact_ref(path: str, sha_char: str) -> dict:
+    return {"path": path, "sha256": sha_char * 64}
+
+
+def valid_opencode_judge_index_payload() -> dict:
+    preflight = {
+        "path": "target/out/harness/opencode-preflight-report.json",
+        "sha256": "a" * 64,
+        "status": "passed",
+        "contract_status": "executed",
+    }
+    worker = {
+        "worker_id": "worker-a",
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "summary": artifact_ref("target/out/workers/worker-a/summary/competition-run-summary.json", "b"),
+        "worker_report": artifact_ref("target/out/workers/worker-a/harness/run-worker-report.json", "c"),
+        "logs": {
+            "stdout": artifact_ref("target/out/workers/worker-a/logs/stdout.log", "d"),
+            "stderr": artifact_ref("target/out/workers/worker-a/logs/stderr.log", "e"),
+        },
+        "handoff_contract": artifact_ref("target/out/workers/worker-a/harness/opencode-handoff-contract.json", "f"),
+        "opencode_session_evidence": artifact_ref("target/out/workers/worker-a/logs/opencode-session-evidence.json", "1"),
+        "opencode_preflight_report": dict(preflight),
+        "contract_verification_status": "executed",
+        "opencode_contract_verification": {
+            "status": "executed",
+            "first_shell_command_matches_worker_command": True,
+            "worker_command_seen": True,
+            "summary_exists": True,
+            "tools_before_first_shell": [],
+            "executed_shell_command_count": 1,
+            "executed_shell_commands": [
+                "python -B scripts/c2rust-migrator.py --phase migrate --input target/out/workers/worker-a/harness/request.json"
+            ],
+        },
+    }
+    return {
+        "schema_version": 1,
+        "report_kind": "judge-evidence-index",
+        "status": "completed",
+        "mode": "opencode",
+        "claim_boundary": {
+            "semantic_claim_source": "accepted_evidence_binding",
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "index_is_semantic_gate": False,
+        },
+        "harness_architecture": {
+            "graph_runtime": "opencode-harness-langgraph-inspired",
+            "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+            "worker_count": 1,
+            "parallelism": {"max_workers": 1, "effective_workers": 1},
+            "retry_policy": {"checkpoint": "repair_hints", "enabled": False, "round_cap": 5},
+            "architecture_contracts": {
+                "context_management": {
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "resume_protocol": {"checkpoint_backend": "sqlite"},
+                },
+                "agent_coordination": {
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "checkpoint_backend": "sqlite",
+                    "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                },
+            },
+        },
+        "evidence_artifact_refs": {
+            "competition_run_summary": artifact_ref("target/out/summary/competition-run-summary.json", "2"),
+            "workflow_metrics": artifact_ref("target/out/summary/workflow-metrics.json", "3"),
+            "worker_plan": artifact_ref("target/out/harness/plans/workers.json", "4"),
+            "profile": artifact_ref("config/competition-env/planned-batches/opencode.json", "5"),
+            "opencode_preflight_report": dict(preflight),
+        },
+        "opencode_agent_runtime": {
+            "runtime": "opencode",
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+            "worker_count": 1,
+            "contract_status_counts": {"executed": 1},
+            "all_contracts_executed": True,
+            "failed_or_missing_contract_workers": [],
+            "opencode_preflight_report": preflight,
+            "workers": [worker],
+        },
+    }
+
+
 def write_minimal_context_ledger(
     path: Path,
     *,
@@ -281,6 +370,92 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "opencode_agent_runtime is required when judge_evidence_index.mode is opencode"):
             validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+    def test_judge_evidence_index_requires_opencode_graph_contract(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["harness_architecture"]["graph_runtime"] = "plain-runtime"
+
+        with self.assertRaisesRegex(ValueError, "judge_evidence_index.harness_architecture.graph_runtime must be opencode-harness-langgraph-inspired"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+    def test_judge_evidence_index_requires_all_graph_nodes(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["harness_architecture"]["graph_nodes"].remove("repair_retry")
+
+        with self.assertRaisesRegex(ValueError, "graph_nodes missing required nodes: \\['repair_retry'\\]"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+    def test_judge_evidence_index_requires_retry_checkpoint_and_round_cap(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["harness_architecture"]["retry_policy"]["checkpoint"] = "sqlite"
+
+        with self.assertRaisesRegex(ValueError, "retry_policy.checkpoint must be repair_hints"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+        payload = valid_opencode_judge_index_payload()
+        payload["harness_architecture"]["retry_policy"]["round_cap"] = 4
+
+        with self.assertRaisesRegex(ValueError, "retry_policy.round_cap must be 5"):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
+    def test_judge_evidence_index_refs_must_cover_expected_artifacts(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        del payload["evidence_artifact_refs"]["worker_plan"]
+        expected_artifacts = {
+            "competition_summary": "target/out/summary/competition-run-summary.json",
+            "workflow_metrics": "target/out/summary/workflow-metrics.json",
+            "worker_plan": "target/out/harness/plans/workers.json",
+        }
+
+        with self.assertRaisesRegex(ValueError, "judge_evidence_index.evidence_artifact_refs missing expected artifacts: \\['worker_plan'\\]"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+                expected_artifacts=expected_artifacts,
+            )
+
+    def test_judge_evidence_index_requires_opencode_preflight_ref(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        del payload["evidence_artifact_refs"]["opencode_preflight_report"]
+
+        with self.assertRaisesRegex(ValueError, "missing required OpenCode ref: opencode_preflight_report"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_preflight_ref_must_match_runtime(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["evidence_artifact_refs"]["opencode_preflight_report"]["sha256"] = "7" * 64
+
+        with self.assertRaisesRegex(ValueError, "evidence_artifact_refs.opencode_preflight_report must match path and sha256"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_refs_must_be_repo_relative(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["evidence_artifact_refs"]["workflow_metrics"]["path"] = "C:/tmp/workflow-metrics.json"
+
+        with self.assertRaisesRegex(ValueError, "path must not use a drive prefix"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_refs_reject_self_reference(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["evidence_artifact_refs"]["judge_evidence_index"] = artifact_ref(
+            "target/out/harness/judge-evidence-index.json",
+            "6",
+        )
+
+        with self.assertRaisesRegex(ValueError, "must not include judge_evidence_index"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
 
     def test_require_local_artifacts_checks_expected_artifact_presence(self) -> None:
         config = load_default_config()

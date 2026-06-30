@@ -27,6 +27,10 @@ REQUIRED_HARNESS_FEATURES = (
 )
 REQUIRED_AGENT_ROLES = ("planner", "worker", "repairer", "verifier", "reporter")
 REQUIRED_CONTEXT_STAGES = ("plan", "translate", "verify", "repair")
+REQUIRED_JUDGE_GRAPH_NODES = ("load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report")
+EXPECTED_ARTIFACT_REF_ALIASES = {
+    "competition_summary": "competition_run_summary",
+}
 
 
 def main() -> int:
@@ -838,11 +842,131 @@ def validate_opencode_agent_runtime_contract(
     }
 
 
+def artifact_ref_key_for_expected_artifact(name: str) -> str:
+    return EXPECTED_ARTIFACT_REF_ALIASES.get(name, name)
+
+
+def compare_artifact_binding(actual: dict[str, Any], expected: dict[str, Any], label: str) -> None:
+    if actual.get("path") != expected.get("path") or actual.get("sha256") != expected.get("sha256"):
+        raise ValueError(f"{label} must match path and sha256")
+
+
+def validate_judge_graph_contract(
+    architecture: dict[str, Any],
+    *,
+    opencode_runtime_result: dict[str, Any] | None,
+) -> dict[str, Any]:
+    graph_runtime = architecture.get("graph_runtime")
+    graph_nodes = architecture.get("graph_nodes")
+    if graph_runtime is None and graph_nodes is None and opencode_runtime_result is None:
+        return {"status": "skipped", "reason": "graph contract not declared"}
+    if graph_runtime != "opencode-harness-langgraph-inspired":
+        raise ValueError(
+            "judge_evidence_index.harness_architecture.graph_runtime must be opencode-harness-langgraph-inspired"
+        )
+    if not isinstance(graph_nodes, list):
+        raise ValueError("judge_evidence_index.harness_architecture.graph_nodes must be a list")
+    missing_nodes = [node for node in REQUIRED_JUDGE_GRAPH_NODES if node not in graph_nodes]
+    if missing_nodes:
+        raise ValueError(f"judge_evidence_index.harness_architecture.graph_nodes missing required nodes: {missing_nodes}")
+
+    retry_policy = require_object(architecture.get("retry_policy"), "judge_evidence_index.harness_architecture.retry_policy")
+    if retry_policy.get("checkpoint") != "repair_hints":
+        raise ValueError("judge_evidence_index.harness_architecture.retry_policy.checkpoint must be repair_hints")
+    if retry_policy.get("round_cap") != 5:
+        raise ValueError("judge_evidence_index.harness_architecture.retry_policy.round_cap must be 5")
+
+    parallelism = require_object(architecture.get("parallelism"), "judge_evidence_index.harness_architecture.parallelism")
+    worker_count = architecture.get("worker_count")
+    if not isinstance(worker_count, int) or worker_count < 1:
+        raise ValueError("judge_evidence_index.harness_architecture.worker_count must be a positive integer")
+    for field in ("max_workers", "effective_workers"):
+        value = parallelism.get(field)
+        if not isinstance(value, int) or value < worker_count:
+            raise ValueError(f"judge_evidence_index.harness_architecture.parallelism.{field} must be >= worker_count")
+    if opencode_runtime_result is not None and opencode_runtime_result["worker_count"] != worker_count:
+        raise ValueError("judge_evidence_index.harness_architecture.worker_count must match opencode_agent_runtime.worker_count")
+
+    return {
+        "status": "passed",
+        "graph_runtime": graph_runtime,
+        "graph_nodes": list(graph_nodes),
+        "worker_count": worker_count,
+        "retry_round_cap": 5,
+    }
+
+
+def validate_judge_evidence_artifact_refs(
+    payload: dict[str, Any],
+    *,
+    expected_artifacts: dict[str, Any] | None = None,
+    repo_root: Path | None = None,
+    opencode_runtime_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    refs = payload.get("evidence_artifact_refs")
+    if refs is None:
+        if expected_artifacts or opencode_runtime_result is not None:
+            raise ValueError("judge_evidence_index.evidence_artifact_refs must be an object")
+        return {"status": "skipped", "reason": "evidence_artifact_refs not declared"}
+    refs_payload = require_object(refs, "judge_evidence_index.evidence_artifact_refs")
+    if "judge_evidence_index" in refs_payload:
+        raise ValueError("judge_evidence_index.evidence_artifact_refs must not include judge_evidence_index")
+
+    validated_refs = {
+        name: validate_artifact_binding_shape(ref, f"judge_evidence_index.evidence_artifact_refs.{name}", repo_root=repo_root)
+        for name, ref in sorted(refs_payload.items())
+    }
+    if expected_artifacts is not None:
+        missing: list[str] = []
+        for artifact_name in sorted(expected_artifacts):
+            if artifact_name == "judge_evidence_index":
+                continue
+            ref_name = artifact_ref_key_for_expected_artifact(artifact_name)
+            if ref_name not in validated_refs:
+                missing.append(artifact_name)
+                continue
+            expected_path = require_string(expected_artifacts[artifact_name], f"expected_artifacts.{artifact_name}")
+            if validated_refs[ref_name]["path"] != expected_path:
+                raise ValueError(f"judge_evidence_index.evidence_artifact_refs.{ref_name}.path must match expected_artifacts.{artifact_name}")
+        if missing:
+            raise ValueError(f"judge_evidence_index.evidence_artifact_refs missing expected artifacts: {missing}")
+    if opencode_runtime_result is not None:
+        if "opencode_preflight_report" not in validated_refs:
+            raise ValueError("judge_evidence_index.evidence_artifact_refs missing required OpenCode ref: opencode_preflight_report")
+        compare_artifact_binding(
+            validated_refs["opencode_preflight_report"],
+            opencode_runtime_result["opencode_preflight_report"],
+            "judge_evidence_index.evidence_artifact_refs.opencode_preflight_report",
+        )
+
+    profile_ref = payload.get("profile")
+    if isinstance(profile_ref, dict) and "profile" in validated_refs:
+        profile_binding = validate_artifact_binding_shape(profile_ref, "judge_evidence_index.profile", repo_root=repo_root)
+        compare_artifact_binding(validated_refs["profile"], profile_binding, "judge_evidence_index.evidence_artifact_refs.profile")
+    architecture = require_object(payload.get("harness_architecture"), "judge_evidence_index.harness_architecture")
+    for name in ("context_pack", "agent_index"):
+        ref = architecture.get(name)
+        if isinstance(ref, dict) and name in validated_refs:
+            architecture_binding = validate_artifact_binding_shape(
+                ref,
+                f"judge_evidence_index.harness_architecture.{name}",
+                repo_root=repo_root,
+            )
+            compare_artifact_binding(validated_refs[name], architecture_binding, f"judge_evidence_index.evidence_artifact_refs.{name}")
+
+    return {
+        "status": "passed",
+        "ref_count": len(validated_refs),
+        "refs": sorted(validated_refs),
+    }
+
+
 def validate_judge_evidence_index_contract(
     payload: dict[str, Any],
     *,
     path_text: str,
     repo_root: Path | None = None,
+    expected_artifacts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if payload.get("report_kind") != "judge-evidence-index":
         raise ValueError(f"judge_evidence_index report_kind must be judge-evidence-index: {path_text}")
@@ -880,12 +1004,24 @@ def validate_judge_evidence_index_contract(
             payload.get("opencode_agent_runtime"),
             repo_root=repo_root,
         )
+    graph_contract = validate_judge_graph_contract(
+        architecture,
+        opencode_runtime_result=opencode_runtime_result,
+    )
+    artifact_refs = validate_judge_evidence_artifact_refs(
+        payload,
+        expected_artifacts=expected_artifacts,
+        repo_root=repo_root,
+        opencode_runtime_result=opencode_runtime_result,
+    )
     local_path_scan = validate_local_absolute_path_policy(payload, label=f"judge_evidence_index {path_text}")
 
     result = {
         "path": path_text,
         "status": "passed",
         "architecture_contracts": "passed",
+        "graph_contract": graph_contract,
+        "evidence_artifact_refs": artifact_refs,
         "local_absolute_path_scan": local_path_scan,
     }
     if opencode_runtime_result is not None:
@@ -1197,6 +1333,7 @@ def validate_harness_artifact_contracts(
             load_json(judge_index_path),
             path_text=str(artifacts["judge_evidence_index"]),
             repo_root=repo_root,
+            expected_artifacts=artifacts,
         )
     return result
 
