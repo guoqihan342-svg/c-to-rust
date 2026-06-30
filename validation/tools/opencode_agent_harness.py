@@ -554,6 +554,8 @@ def run_worker(
     opencode_skip_permissions: bool = False,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
+    attempt_number: int = 1,
+    retry_of: str | None = None,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     assignment_path = assignment_file_path(db_path, worker_id)
@@ -578,7 +580,17 @@ def run_worker(
     logs_dir.mkdir(parents=True, exist_ok=True)
     report_dir = worker_out_root / "harness"
     report_dir.mkdir(parents=True, exist_ok=True)
+    rollback_evidence = None
     if summary_path.exists():
+        if retry_of:
+            rollback_evidence = write_worker_rollback_evidence(
+                hint_id=retry_of,
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                repo_root=repo_root,
+            )
         summary_path.unlink()
 
     worker_command = [
@@ -666,11 +678,16 @@ def run_worker(
             stdout_path=stdout_path,
             stderr_path=stderr_path,
             repo_root=repo_root,
+            exit_code=effective_exit_code,
+            attempt_number=attempt_number,
+            retry_of=retry_of,
+            rollback_evidence=rollback_evidence,
         )
     report = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "worker_id": worker_id,
+        "attempt": attempt_number,
         "mode": mode,
         "runner_kind": runner_kind,
         "request_path": repo_relative(request_path, repo_root=repo_root),
@@ -685,6 +702,10 @@ def run_worker(
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
     }
+    if retry_of:
+        report["retry_of"] = retry_of
+    if rollback_evidence is not None:
+        report["rollback_evidence"] = rollback_evidence
     if repair_hint is not None:
         report["repair_hint"] = {
             "hint_id": repair_hint["hint_id"],
@@ -700,22 +721,23 @@ def run_worker(
             "update leases set status=?, heartbeat_at=? where run_id=? and lease_owner=?",
             (task_status, now_text(), run_id, worker_id),
         )
-        record_event(
-            connection,
-            run_id=run_id,
-            event_type="worker_executed",
-            payload={
-                "worker_id": worker_id,
-                "mode": mode,
-                "runner_kind": runner_kind,
-                "exit_code": effective_exit_code,
-                "process_returncode": int(completed.returncode),
-                "summary_path": repo_relative(summary_path, repo_root=repo_root),
-                "summary_status": summary_status,
-                "recorded": recorded is not None,
-                "report_path": repo_relative(report_path, repo_root=repo_root),
-            },
-        )
+        event_payload = {
+            "worker_id": worker_id,
+            "attempt": attempt_number,
+            "mode": mode,
+            "runner_kind": runner_kind,
+            "exit_code": effective_exit_code,
+            "process_returncode": int(completed.returncode),
+            "summary_path": repo_relative(summary_path, repo_root=repo_root),
+            "summary_status": summary_status,
+            "recorded": recorded is not None,
+            "report_path": repo_relative(report_path, repo_root=repo_root),
+        }
+        if retry_of:
+            event_payload["retry_of"] = retry_of
+        if rollback_evidence is not None:
+            event_payload["rollback_evidence"] = rollback_evidence
+        record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
         if repair_hint is not None:
             record_repair_hint(connection, hint=repair_hint)
         connection.commit()
@@ -746,6 +768,8 @@ def retry_worker(
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         hint = load_open_repair_hint(connection, run_id=run_id, worker_id=worker_id, hint_id=hint_id)
+        attempts = hint.get("attempts")
+        attempt_number = len(attempts) + 1 if isinstance(attempts, list) else 2
 
     result = run_worker(
         db_path=db_path,
@@ -759,6 +783,8 @@ def retry_worker(
         opencode_skip_permissions=opencode_skip_permissions,
         command_runner=command_runner,
         repo_root=repo_root,
+        attempt_number=attempt_number,
+        retry_of=str(hint["hint_id"]),
     )
     hint_status = (
         "revalidated_passed"
@@ -805,6 +831,10 @@ def worker_repair_hint_payload(
     stdout_path: Path,
     stderr_path: Path,
     repo_root: Path,
+    exit_code: int,
+    attempt_number: int,
+    retry_of: str | None = None,
+    rollback_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     target_id = str(request.get("target_id", "unknown"))
     slice_id = str(request.get("slice_id", "unknown"))
@@ -839,13 +869,127 @@ def worker_repair_hint_payload(
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
+        "attempts": [
+            repair_attempt_payload(
+                attempt_number=attempt_number,
+                summary_status=summary_status,
+                process_returncode=process_returncode,
+                exit_code=exit_code,
+                summary_path=repo_relative(summary_path, repo_root=repo_root),
+                report_path=repo_relative(report_path, repo_root=repo_root),
+                logs={
+                    "stdout": repo_relative(stdout_path, repo_root=repo_root),
+                    "stderr": repo_relative(stderr_path, repo_root=repo_root),
+                },
+                root_cause_key=root_cause_key,
+                retry_of=retry_of,
+                rollback_evidence=rollback_evidence,
+            )
+        ],
         "retry_command": retry_command,
         "revalidate_gate": "competition-run-summary.final_gate.status == passed",
     }
 
 
+def repair_attempt_payload(
+    *,
+    attempt_number: int,
+    summary_status: str,
+    process_returncode: int,
+    exit_code: int,
+    summary_path: str,
+    report_path: str,
+    logs: dict[str, str],
+    root_cause_key: str | None = None,
+    retry_of: str | None = None,
+    rollback_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    attempt = {
+        "attempt": attempt_number,
+        "summary_status": summary_status,
+        "process_returncode": process_returncode,
+        "exit_code": exit_code,
+        "summary_path": summary_path,
+        "worker_report_path": report_path,
+        "logs": logs,
+    }
+    if root_cause_key:
+        attempt["root_cause_key"] = root_cause_key
+    if retry_of:
+        attempt["retry_of"] = retry_of
+    if rollback_evidence is not None:
+        attempt["rollback_evidence"] = rollback_evidence
+    return attempt
+
+
+def repair_attempt_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    repair_hint = result.get("repair_hint")
+    root_cause_key = repair_hint.get("root_cause_key") if isinstance(repair_hint, dict) else None
+    return repair_attempt_payload(
+        attempt_number=int(result.get("attempt", 1)),
+        summary_status=str(result.get("summary_status", "unknown")),
+        process_returncode=int(result.get("process_returncode", 1)),
+        exit_code=int(result.get("exit_code", 1)),
+        summary_path=str(result.get("summary_path", "")),
+        report_path=str(result.get("report_path", "")),
+        logs=dict(result.get("logs", {})),
+        root_cause_key=str(root_cause_key) if root_cause_key else None,
+        retry_of=str(result.get("retry_of")) if result.get("retry_of") else None,
+        rollback_evidence=result.get("rollback_evidence") if isinstance(result.get("rollback_evidence"), dict) else None,
+    )
+
+
+def append_repair_attempt(payload: dict[str, Any], attempt: dict[str, Any]) -> None:
+    attempts = payload.get("attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+    attempt_number = attempt.get("attempt")
+    if not any(isinstance(item, dict) and item.get("attempt") == attempt_number for item in attempts):
+        attempts.append(attempt)
+    attempts.sort(key=lambda item: int(item.get("attempt", 0)) if isinstance(item, dict) else 0)
+    payload["attempts"] = attempts
+
+
+def write_worker_rollback_evidence(
+    *,
+    hint_id: str,
+    run_id: str,
+    worker_id: str,
+    summary_path: Path,
+    report_dir: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    safe_hint_id = "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in hint_id)
+    evidence_path = report_dir / f"rollback-before-retry-{safe_hint_id}.json"
+    evidence = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "hint_id": hint_id,
+        "action": "removed_stale_summary_before_retry",
+        "removed_summary": {
+            "path": repo_relative(summary_path, repo_root=repo_root),
+            "sha256": sha256_file(summary_path),
+        },
+        "last_good": {
+            "status": "not_available",
+            "reason": "opencode harness has no accepted last-good worker summary for this failed retry",
+        },
+    }
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
+
+
 def record_repair_hint(connection: sqlite3.Connection, *, hint: dict[str, Any]) -> None:
     now = now_text()
+    existing = connection.execute("select payload_json from repair_hints where hint_id=?", (hint["hint_id"],)).fetchone()
+    if existing is not None:
+        existing_payload = json.loads(existing[0])
+        existing_attempts = existing_payload.get("attempts")
+        if isinstance(existing_attempts, list):
+            for attempt in existing_attempts:
+                if isinstance(attempt, dict):
+                    append_repair_attempt(hint, attempt)
     connection.execute(
         """
         insert into repair_hints(hint_id, run_id, target_id, slice_id, root_cause_key, status, payload_json, created_at)
@@ -877,6 +1021,8 @@ def record_repair_hint(connection: sqlite3.Connection, *, hint: dict[str, Any]) 
             "hint_id": hint["hint_id"],
             "worker_id": hint["worker_id"],
             "root_cause_key": hint["root_cause_key"],
+            "attempt": hint["attempts"][-1]["attempt"] if isinstance(hint.get("attempts"), list) else None,
+            "attempt_count": len(hint["attempts"]) if isinstance(hint.get("attempts"), list) else 0,
         },
     )
 
@@ -920,6 +1066,7 @@ def mark_repair_hint_revalidated(
         raise SystemExit(f"unknown repair hint: {hint_id}")
     run_id, payload_json = row
     payload = json.loads(payload_json)
+    append_repair_attempt(payload, repair_attempt_from_result(result))
     payload["status"] = status
     payload["revalidation"] = {
         "exit_code": result.get("exit_code"),
@@ -930,6 +1077,7 @@ def mark_repair_hint_revalidated(
         "update repair_hints set status=?, payload_json=? where hint_id=?",
         (status, json.dumps(payload, sort_keys=True), hint_id),
     )
+    attempt = repair_attempt_from_result(result)
     record_event(
         connection,
         run_id=str(run_id),
@@ -937,8 +1085,11 @@ def mark_repair_hint_revalidated(
         payload={
             "hint_id": hint_id,
             "status": status,
+            "attempt": attempt["attempt"],
             "exit_code": result.get("exit_code"),
             "summary_status": result.get("summary_status"),
+            "retry_of": attempt.get("retry_of"),
+            "rollback_evidence": attempt.get("rollback_evidence"),
         },
     )
 

@@ -548,7 +548,7 @@ def is_safe_posix_relative(value: str) -> bool:
 def workflow_unit_status_from_worker(worker: dict[str, Any]) -> dict[str, Any]:
     slices = worker["slices"]
     attempted = int(slices["attempted"])
-    return {
+    status = {
         "unit_id": worker["path"],
         "source": "worker-summary",
         "status": "converged" if worker["status"] == "passed" else worker["status"],
@@ -558,6 +558,15 @@ def workflow_unit_status_from_worker(worker: dict[str, Any]) -> dict[str, Any]:
         "blocked": int(slices["blocked"]) > 0,
         "failed": worker["status"] != "passed" or int(slices["failed"]) > 0,
     }
+    metrics = worker.get("workflow_metrics")
+    per_unit_statuses = metrics.get("per_unit_statuses") if isinstance(metrics, dict) else None
+    if attempted == 1 and isinstance(per_unit_statuses, list) and len(per_unit_statuses) == 1:
+        worker_unit = per_unit_statuses[0]
+        if isinstance(worker_unit, dict):
+            for key in ["repair_rounds", "auto_recovered", "repair_history", "llm_calls"]:
+                if key in worker_unit:
+                    status[key] = worker_unit[key]
+    return status
 
 
 def workflow_unit_status(

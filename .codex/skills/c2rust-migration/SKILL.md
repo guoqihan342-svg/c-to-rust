@@ -38,6 +38,8 @@ Do not spend a development round on docs, schemas, refactors, or route metadata 
 - After each patch, rerun the narrow compile/test/oracle checks that cover the changed behavior.
 - Accept a patch only when the candidate still passes the relevant oracle/diff gate and the unsafe delta or compile status improves.
 - On failure, roll back to the last-good candidate, write a repair hint from the concrete error stack or diff, and continue until the cap is reached.
+- Each failed or retried worker attempt must leave machine-readable audit evidence: attempt id, worker id, hint id, previous summary/final gate, selected last-good summary or candidate reference when available, rollback action/status, new summary/final gate, and artifact hashes.
+- Attempt history and rollback evidence prove repair auditability only; they do not prove S2 convergence, accepted unsafe reduction, semantic acceptance, or OpenCode runtime compliance by themselves.
 - Never repair by weakening fixtures, accepted-difference policy, public API boundaries, slice boundaries, unsafe budgets, or oracle expectations.
 
 ## Worker Handoff
@@ -58,6 +60,7 @@ Do not spend a development round on docs, schemas, refactors, or route metadata 
 - `record-worker-summary` must reject summaries outside that assigned expected summary path, even when the path stays inside the repository.
 - If an OpenCode process exits 0 but does not write the expected summary, record `missing-summary` repair evidence; do not treat process success or chat text as acceptance.
 - `retry-worker` must reuse the same worker, ledger assignment, out-root, and repair hint; the revalidation result comes only from the newly written final gate.
+- `retry-worker` may count a retry as revalidated only from the newly written final gate; repair history, rollback ids, or an OpenCode process exit code are audit signals, not semantic acceptance.
 - The SQLite ledger is scheduling, lease, recovery, and artifact index state. Semantic evidence still comes only from on-disk summaries, evidence, workflow metrics, and validators.
 
 ## Handoff Checklist

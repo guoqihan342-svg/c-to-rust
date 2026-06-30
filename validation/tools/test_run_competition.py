@@ -907,6 +907,86 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["human_interventions"], 1)
             self.assertEqual(metrics["llm_calls"], 4)
 
+    def test_runner_preserves_worker_repair_history_in_parent_workflow_metrics(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            repair_history_path = worker_root / "worker-a" / "logs" / "repair-history.jsonl"
+            repair_history_path.parent.mkdir(parents=True, exist_ok=True)
+            repair_history_path.write_text(
+                json.dumps({"round": 1, "status": "failed", "rollback_id": "rollback-1"}) + "\n"
+                + json.dumps({"round": 2, "status": "verified"}) + "\n",
+                encoding="utf-8",
+            )
+            worker = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 2.0,
+                    "auto_recovery_rate": 1.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 4,
+                    "llm_calls": 2,
+                    "per_unit_statuses": [
+                        {
+                            "unit_id": "demo/demo-add-one",
+                            "source": "worker-summary",
+                            "status": "converged",
+                            "compiled": True,
+                            "semantic_pass": True,
+                            "refused": False,
+                            "blocked": False,
+                            "failed": False,
+                            "repair_rounds": 2,
+                            "auto_recovered": True,
+                            "llm_calls": 2,
+                            "repair_history": {
+                                "patch_events_path": "workers/worker-a/logs/repair-history.jsonl",
+                                "patch_events_sha256": hashlib.sha256(repair_history_path.read_bytes()).hexdigest(),
+                                "statuses": ["failed", "verified"],
+                                "rollback_ids": ["rollback-1"],
+                                "verified": True,
+                            },
+                        }
+                    ],
+                },
+            )
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"], "passed")
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["per_unit_statuses"][0]["repair_rounds"], 2)
+            self.assertTrue(metrics["per_unit_statuses"][0]["auto_recovered"])
+            self.assertEqual(metrics["per_unit_statuses"][0]["llm_calls"], 2)
+            self.assertEqual(metrics["per_unit_statuses"][0]["repair_history"]["rollback_ids"], ["rollback-1"])
+
     def test_runner_rejects_worker_summary_outside_out_root_workers(self) -> None:
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:

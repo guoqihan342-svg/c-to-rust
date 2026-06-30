@@ -738,6 +738,88 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             hint_rows = fetch_rows(db_path, "select status from repair_hints where hint_id=?", (hint_id,))
             self.assertEqual(hint_rows, [("revalidated_passed",)])
 
+    def test_retry_worker_records_attempt_history_and_rollback_evidence(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            call_count = 0
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal call_count
+                call_count += 1
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                if call_count == 1:
+                    write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                else:
+                    write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {call_count}\n", stderr="")
+
+            first = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+            self.assertEqual(first["exit_code"], 1)
+            hint_id = fetch_rows(db_path, "select hint_id from repair_hints")[0][0]
+
+            retry = harness.retry_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                hint_id=hint_id,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(retry["exit_code"], 0)
+            payload = json.loads(fetch_rows(db_path, "select payload_json from repair_hints where hint_id=?", (hint_id,))[0][0])
+            self.assertEqual(payload["status"], "revalidated_passed")
+            self.assertEqual([attempt["attempt"] for attempt in payload["attempts"]], [1, 2])
+            self.assertEqual([attempt["summary_status"] for attempt in payload["attempts"]], ["failed", "passed"])
+            self.assertEqual(payload["attempts"][0]["root_cause_key"], "final_gate_failed")
+            self.assertEqual(payload["attempts"][1]["retry_of"], hint_id)
+            rollback_path = REPO_ROOT / payload["attempts"][1]["rollback_evidence"]["path"]
+            self.assertTrue(rollback_path.exists())
+            rollback = json.loads(rollback_path.read_text(encoding="utf-8"))
+            self.assertEqual(rollback["hint_id"], hint_id)
+            self.assertEqual(rollback["worker_id"], "worker-a")
+            self.assertEqual(rollback["action"], "removed_stale_summary_before_retry")
+            self.assertEqual(rollback["removed_summary"]["path"], first["summary_path"])
+            self.assertRegex(rollback["removed_summary"]["sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(rollback["last_good"]["status"], "not_available")
+            events = [
+                (event_type, json.loads(payload_json))
+                for event_type, payload_json in fetch_rows(
+                    db_path,
+                    "select event_type, payload_json from events where event_type='worker_executed' order by event_id",
+                )
+            ]
+            self.assertEqual([event[1]["attempt"] for event in events], [1, 2])
+            self.assertEqual(events[1][1]["retry_of"], hint_id)
+            self.assertEqual(events[1][1]["rollback_evidence"]["path"], payload["attempts"][1]["rollback_evidence"]["path"])
+
     def test_retry_worker_cli_dispatches_and_returns_retry_exit_code(self) -> None:
         argv = [
             "opencode_agent_harness.py",
