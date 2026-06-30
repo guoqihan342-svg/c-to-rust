@@ -1338,6 +1338,8 @@ def write_evaluate_profile_report(
     profile_path = repo_path(profile_path, repo_root=repo_root)
     out_root = repo_path(out_root, repo_root=repo_root)
     report_path = out_root / "harness" / "evaluate-report.json"
+    judge_index_path = out_root / "harness" / "judge-evidence-index.json"
+    judge_index_rel = repo_relative(judge_index_path, repo_root=repo_root)
     batch_report_path_text = batch_result.get("report_path")
     batch_report_path: Path | None = None
     batch_report_ref = {"path": str(batch_report_path_text or ""), "sha256": ""}
@@ -1376,6 +1378,13 @@ def write_evaluate_profile_report(
         "agent_index": batch_result.get("agent_index"),
         "summary_validation": summary_validation,
         "judge_summary": evaluate_profile_judge_summary(batch_result.get("judge_summary")),
+        "sidecar_reports": {
+            "judge_evidence_index": {
+                "path": judge_index_rel,
+                "report_kind": "judge-evidence-index",
+                "status": str(batch_result.get("status", "unknown")),
+            },
+        },
         "claim_boundary": (
             "This evaluate wrapper is the judge-facing entrypoint for a full batch-profile run. "
             "It indexes verified reports only; semantic acceptance remains owned by the final "
@@ -1403,6 +1412,7 @@ def write_evaluate_profile_report(
             out_root=out_root,
             evaluate_report_path=report_path,
             batch_profile_report_path=batch_report_ref["path"],
+            judge_evidence_index_path=judge_index_path,
             status=str(payload["status"]),
             repo_root=repo_root,
         )
@@ -1650,12 +1660,14 @@ def update_evaluate_profile_context_refs(
     out_root: Path,
     evaluate_report_path: Path,
     batch_profile_report_path: str,
+    judge_evidence_index_path: Path,
     status: str,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
     context_pack_path = out_root / "harness" / "context-pack.json"
     agent_index_path = out_root / "harness" / "agent-index.json"
     evaluate_report_rel = repo_relative(evaluate_report_path, repo_root=repo_root)
+    judge_index_rel = repo_relative(judge_evidence_index_path, repo_root=repo_root)
 
     if context_pack_path.exists():
         context_pack = load_json(context_pack_path)
@@ -1663,6 +1675,7 @@ def update_evaluate_profile_context_refs(
         if isinstance(entrypoints, dict):
             entrypoints["primary_report"] = evaluate_report_rel
             entrypoints["evaluate_report"] = evaluate_report_rel
+            entrypoints["judge_evidence_index"] = judge_index_rel
             if batch_profile_report_path:
                 entrypoints["batch_profile_report"] = batch_profile_report_path
         context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1674,6 +1687,11 @@ def update_evaluate_profile_context_refs(
             reports["evaluate_report"] = {
                 "path": evaluate_report_rel,
                 "report_kind": "evaluate-report",
+                "status": status,
+            }
+            reports["judge_evidence_index"] = {
+                "path": judge_index_rel,
+                "report_kind": "judge-evidence-index",
                 "status": status,
             }
             if batch_profile_report_path:

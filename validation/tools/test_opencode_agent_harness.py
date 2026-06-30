@@ -2598,6 +2598,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
 
             report_path = out_root / "harness" / "evaluate-report.json"
+            index_path = out_root / "harness" / "judge-evidence-index.json"
             self.assertTrue(report_path.exists())
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(result["report_path"], repo_rel(report_path))
@@ -2608,14 +2609,19 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["judge_summary"]["harness_architecture"]["context_pack"], report["context_pack"])
             self.assertEqual(report["judge_summary"]["harness_architecture"]["agent_index"], report["agent_index"])
             self.assertEqual(report["summary_validation"]["semantic_pass"], 1)
+            self.assertEqual(report["sidecar_reports"]["judge_evidence_index"]["path"], repo_rel(index_path))
+            self.assertNotIn("sha256", report["sidecar_reports"]["judge_evidence_index"])
 
             context_pack = json.loads(context_pack_path.read_text(encoding="utf-8"))
             self.assertEqual(context_pack["entrypoints"]["primary_report"], repo_rel(report_path))
             self.assertEqual(context_pack["entrypoints"]["evaluate_report"], repo_rel(report_path))
             self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], repo_rel(batch_report_path))
+            self.assertEqual(context_pack["entrypoints"]["judge_evidence_index"], repo_rel(index_path))
             agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
             self.assertEqual(agent_index["reports"]["evaluate_report"]["path"], repo_rel(report_path))
             self.assertEqual(agent_index["reports"]["batch_profile_report"]["path"], repo_rel(batch_report_path))
+            self.assertEqual(agent_index["reports"]["judge_evidence_index"]["path"], repo_rel(index_path))
+            self.assertNotIn("sha256", agent_index["reports"]["judge_evidence_index"])
             batch_report = json.loads(batch_report_path.read_text(encoding="utf-8"))
             self.assertEqual(batch_report["context_pack"], report["context_pack"])
             self.assertEqual(batch_report["agent_index"], report["agent_index"])
@@ -2623,7 +2629,6 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 batch_report["judge_summary"]["harness_architecture"]["context_pack"],
                 report["context_pack"],
             )
-            index_path = out_root / "harness" / "judge-evidence-index.json"
             self.assertTrue(index_path.exists())
             index = json.loads(index_path.read_text(encoding="utf-8"))
             self.assertEqual(index["report_kind"], "judge-evidence-index")
@@ -2641,7 +2646,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(artifact_refs["evaluate_report"]["sha256"], harness.sha256_file(report_path))
             self.assertEqual(artifact_refs["batch_profile_report"]["path"], repo_rel(batch_report_path))
             self.assertEqual(artifact_refs["context_pack"]["path"], report["context_pack"]["path"])
+            self.assertEqual(artifact_refs["context_pack"]["sha256"], harness.sha256_file(context_pack_path))
             self.assertEqual(artifact_refs["agent_index"]["path"], report["agent_index"]["path"])
+            self.assertEqual(artifact_refs["agent_index"]["sha256"], harness.sha256_file(agent_index_path))
             self.assertEqual(artifact_refs["competition_run_summary"]["path"], repo_rel(summary_path))
             self.assertEqual(artifact_refs["workflow_metrics"]["path"], repo_rel(workflow_metrics_path))
             self.assertEqual(

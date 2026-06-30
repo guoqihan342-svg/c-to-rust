@@ -157,23 +157,23 @@
       },
       "context_pack": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
-        "sha256": "2bbe797061d555907c1186d27b0b29660428a9a61711886b7c680805ecb04dda"
+        "sha256": "2bd14f37c1e37ce890f4ec1b24c00dc1d68ac368b8ffd73a5f2f436e994fd3e4"
       },
       "agent_index": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
-        "sha256": "e7908e351a35be12bf688e2a48a29936c7f6ad6c94c5752aa3b39094ba382667"
+        "sha256": "11637250527b7402b3ccd530efe257db75913f2ce2b5beb49066afa23905524e"
       },
       "batch_profile_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
-        "sha256": "c1402073b29fb2615b97f55a85c51b261fa33c5baaa7c2f912d9a348c6165455"
+        "sha256": "3e4ace37f82a78200ee85577e1284493fff619892a361e382d706b0a7f282938"
       },
       "evaluate_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
-        "sha256": "7ca6f03b525a7cac72f390a10434b11b3ee936ea4435f47fad308b41a12f1f3d"
+        "sha256": "e5672e354f4664d7770399c43b043acfe45a2c61e8300fd0357b6b59ffecd611"
       },
       "judge_evidence_index": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
-        "sha256": "8f00a3e132e6714ec322b0e64325428e5e603154cdf505cb60342898e48451ed"
+        "sha256": "ea2771a28ef0bcf3955eb9217ea0674983c74dd1321f10ca998de6c013355b6e"
       },
       "run_plan_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
