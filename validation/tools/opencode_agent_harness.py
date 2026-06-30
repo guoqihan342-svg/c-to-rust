@@ -1397,6 +1397,10 @@ def write_evaluate_profile_report(
         payload["route_governance_metrics_report"] = batch_result["route_governance_metrics_report"]
     if "before_after_exhibit_report" in batch_result:
         payload["before_after_exhibit_report"] = batch_result["before_after_exhibit_report"]
+    architecture = payload.get("judge_summary", {}).get("harness_architecture")
+    if isinstance(architecture, dict):
+        graph = run_plan.get("graph") if isinstance(run_plan.get("graph"), dict) else {}
+        architecture.setdefault("architecture_contracts", build_architecture_contracts(graph))
 
     payload["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1514,6 +1518,10 @@ def write_judge_evidence_index(
         if isinstance(judge_summary.get("core_translation_quality"), dict)
         else {}
     )
+    if "architecture_contracts" not in architecture:
+        run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
+        graph = run_plan.get("graph") if isinstance(run_plan.get("graph"), dict) else {}
+        architecture["architecture_contracts"] = build_architecture_contracts(graph)
     artifact_refs: dict[str, dict[str, Any]] = {}
 
     def add_binding(name: str, value: Any) -> None:
@@ -1668,9 +1676,11 @@ def update_evaluate_profile_context_refs(
     agent_index_path = out_root / "harness" / "agent-index.json"
     evaluate_report_rel = repo_relative(evaluate_report_path, repo_root=repo_root)
     judge_index_rel = repo_relative(judge_evidence_index_path, repo_root=repo_root)
+    context_graph: dict[str, Any] = {}
 
     if context_pack_path.exists():
         context_pack = load_json(context_pack_path)
+        context_graph = context_pack.get("graph") if isinstance(context_pack.get("graph"), dict) else {}
         entrypoints = context_pack.setdefault("entrypoints", {})
         if isinstance(entrypoints, dict):
             entrypoints["primary_report"] = evaluate_report_rel
@@ -1678,6 +1688,15 @@ def update_evaluate_profile_context_refs(
             entrypoints["judge_evidence_index"] = judge_index_rel
             if batch_profile_report_path:
                 entrypoints["batch_profile_report"] = batch_profile_report_path
+        context_pack["context_management_contract"] = build_context_management_contract(
+            graph=context_graph,
+            db_path=db_path,
+            primary_report_path=evaluate_report_path,
+            context_pack_path=context_pack_path,
+            agent_index_path=agent_index_path,
+            report_entrypoint="evaluate_report",
+            repo_root=repo_root,
+        )
         context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     if agent_index_path.exists():
@@ -1700,6 +1719,14 @@ def update_evaluate_profile_context_refs(
                     "report_kind": "batch-profile-report",
                     "status": status,
                 }
+        agents = agent_index.get("agents") if isinstance(agent_index.get("agents"), list) else []
+        agent_index["agent_coordination_contract"] = build_agent_coordination_contract(
+            graph=context_graph,
+            db_path=db_path,
+            worker_count=len(agents),
+            mode=str(agent_index.get("mode")) if isinstance(agent_index.get("mode"), str) else None,
+            repo_root=repo_root,
+        )
         agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     context_pack_ref = artifact_ref(context_pack_path, repo_root=repo_root)
@@ -1940,6 +1967,191 @@ def evaluate(
     return result
 
 
+def graph_checkpoint_backend(graph: dict[str, Any]) -> str:
+    backend = graph.get("checkpoint_backend")
+    return str(backend) if isinstance(backend, str) and backend else "sqlite"
+
+
+def graph_retry_round_cap(graph: dict[str, Any]) -> int:
+    retry_policy = graph.get("retry_policy") if isinstance(graph.get("retry_policy"), dict) else {}
+    try:
+        return int(retry_policy.get("round_cap", REPAIR_ROUND_CAP))
+    except (TypeError, ValueError):
+        return REPAIR_ROUND_CAP
+
+
+def build_context_management_contract(
+    *,
+    graph: dict[str, Any],
+    db_path: Path | None = None,
+    primary_report_path: Path | None = None,
+    context_pack_path: Path | None = None,
+    agent_index_path: Path | None = None,
+    report_entrypoint: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    contract: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_kind": "context-management",
+        "role": "context-index-and-resume-map",
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "evidence_policy": "on-disk-artifacts-only",
+        "managed_state": [
+            "entrypoints",
+            "source pins",
+            "worker handoffs",
+            "graph",
+            "retry policy",
+            "artifact refs",
+        ],
+        "pipeline": [
+            {
+                "stage": "plan",
+                "role": "planner",
+                "evidence": "entrypoints.worker_plan",
+            },
+            {
+                "stage": "translate",
+                "role": "worker",
+                "evidence": "workers[*].summary_path",
+                "fanout": True,
+            },
+            {
+                "stage": "verify",
+                "role": "verifier",
+                "evidence": "entrypoints.merge_summary",
+                "reduce": "merge",
+                "on_failure": "repair",
+            },
+            {
+                "stage": "repair",
+                "role": "repairer",
+                "trigger": "exit_code != 0",
+                "loopback_to": "translate",
+                "max_rounds": graph_retry_round_cap(graph),
+            },
+        ],
+        "update_rules": [
+            "all reusable paths are repo-relative",
+            "semantic acceptance remains owned by validators and final summaries",
+            "judge sidecars are path-only in context indexes to avoid hash cycles",
+        ],
+        "resume_protocol": {
+            "checkpoint_backend": graph_checkpoint_backend(graph),
+            "worker_state_source": "agent-index.agents_by_worker_id",
+            "open_repair_hint_source": "sqlite repair_hints plus worker auto_retry records",
+            "merge_precondition": "required worker summaries recorded or final summary fails closed",
+        },
+    }
+    if db_path is not None:
+        contract["resume_protocol"]["ledger_path"] = repo_relative(db_path, repo_root=repo_root)
+    if primary_report_path is not None:
+        contract["primary_report"] = repo_relative(primary_report_path, repo_root=repo_root)
+    if context_pack_path is not None:
+        contract["context_pack"] = repo_relative(context_pack_path, repo_root=repo_root)
+    if agent_index_path is not None:
+        contract["agent_index"] = repo_relative(agent_index_path, repo_root=repo_root)
+    if report_entrypoint:
+        contract["report_entrypoint"] = report_entrypoint
+    return contract
+
+
+def build_agent_coordination_contract(
+    *,
+    graph: dict[str, Any],
+    db_path: Path | None = None,
+    worker_count: int = 0,
+    mode: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    contract: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_kind": "agent-coordination",
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "coordination_state": "sqlite-ledger-and-on-disk-reports",
+        "checkpoint_backend": graph_checkpoint_backend(graph),
+        "runtime": graph.get("runtime"),
+        "mode": mode,
+        "worker_count": int(worker_count),
+        "roles": {
+            "planner": {
+                "stage": "plan",
+                "inputs": ["batch profile", "source pins", "slice specs"],
+                "outputs": ["worker plan", "assignments", "context pack", "agent index"],
+                "status_source": "planner artifacts and SQLite ledger",
+                "acceptance_authority": "none",
+            },
+            "worker": {
+                "stage": "fanout-worker",
+                "inputs": ["assignment_path", "request_path"],
+                "outputs": ["summary_path", "report_path", "attempts", "final_decision"],
+                "isolation": "per-worker out_root",
+                "status_source": "worker summary and run-worker-report",
+                "acceptance_authority": "none",
+            },
+            "repairer": {
+                "stage": "repair-retry",
+                "inputs": ["repair_hints", "failed worker summary", "stderr tail"],
+                "outputs": ["retry attempt", "auto_retry", "attempts"],
+                "status_source": "repair_hints ledger and worker attempts",
+                "acceptance_authority": "none",
+                "round_cap": graph_retry_round_cap(graph),
+            },
+            "verifier": {
+                "stage": "merge-verify",
+                "inputs": ["worker summaries", "workflow metrics", "oracle evidence"],
+                "outputs": ["competition-run-summary", "workflow-metrics"],
+                "status_source": "validate_competition_run_summary",
+                "acceptance_authority": "competition-run-summary validator",
+            },
+            "reporter": {
+                "stage": "report",
+                "inputs": ["evaluate report", "context pack", "agent index", "judge evidence index"],
+                "outputs": ["judge-facing indexes"],
+                "status_source": "on-disk artifacts with sha256 where hash-stable",
+                "acceptance_authority": "none",
+            },
+        },
+        "resume_protocol": {
+            "checkpoint_backend": graph_checkpoint_backend(graph),
+            "worker_state_source": "agent-index.agents_by_worker_id",
+            "open_repair_hint_source": "sqlite repair_hints",
+            "merge_precondition": "all required worker summaries recorded before merge",
+            "resume_entrypoints": ["run-plan --plan", "run-worker --assignment", "evaluate --profile"],
+        },
+    }
+    if db_path is not None:
+        contract["resume_protocol"]["ledger_path"] = repo_relative(db_path, repo_root=repo_root)
+    return contract
+
+
+def build_architecture_contracts(graph: dict[str, Any]) -> dict[str, Any]:
+    context_contract = build_context_management_contract(graph=graph)
+    agent_contract = build_agent_coordination_contract(graph=graph)
+    return {
+        "context_management": {
+            "contract_kind": context_contract["contract_kind"],
+            "role": context_contract["role"],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "evidence_policy": context_contract["evidence_policy"],
+            "pipeline": context_contract["pipeline"],
+            "resume_protocol": context_contract["resume_protocol"],
+        },
+        "agent_coordination": {
+            "contract_kind": agent_contract["contract_kind"],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "coordination_state": agent_contract["coordination_state"],
+            "checkpoint_backend": agent_contract["checkpoint_backend"],
+            "roles": list(agent_contract["roles"]),
+            "resume_protocol": agent_contract["resume_protocol"],
+        },
+    }
+
+
 def build_judge_summary(
     *,
     entrypoint: str,
@@ -2037,6 +2249,7 @@ def build_judge_summary(
             "retry_policy": graph.get("retry_policy"),
             "context_pack": context_refs.get("context_pack"),
             "agent_index": context_refs.get("agent_index"),
+            "architecture_contracts": build_architecture_contracts(graph),
             "worker_count": len(plan.get("units", [])) if isinstance(plan.get("units"), list) else 0,
         },
         "core_translation_quality": core_translation_quality,
@@ -2226,6 +2439,15 @@ def write_context_pack_and_agent_index(
         for name, artifact in report_artifacts.items()
         if isinstance(artifact, dict) and isinstance(artifact.get("path"), str)
     }
+    context_management_contract = build_context_management_contract(
+        graph=graph,
+        db_path=db_path,
+        primary_report_path=primary_report_path,
+        context_pack_path=context_pack_path,
+        agent_index_path=agent_index_path,
+        report_entrypoint=report_entrypoint,
+        repo_root=repo_root,
+    )
     context_pack = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "context-pack",
@@ -2281,6 +2503,7 @@ def write_context_pack_and_agent_index(
         "parallelism": run_result.get("parallelism"),
         "retry_policy": graph.get("retry_policy"),
         "workers": workers,
+        "context_management_contract": context_management_contract,
         "acceptance_boundary": {
             "semantic_acceptance": "final verification and worker summaries decide acceptance; this pack is an index only",
             "candidate_sources": ["c2rust-baseline", "deterministic-worker", "opencode-worker"],
@@ -2304,6 +2527,13 @@ def write_context_pack_and_agent_index(
         "target_id": target_id,
         "proof_class": proof_class,
         "checkpoint_backend": graph.get("checkpoint_backend", "sqlite"),
+        "agent_coordination_contract": build_agent_coordination_contract(
+            graph=graph,
+            db_path=db_path,
+            worker_count=len(workers),
+            mode=mode,
+            repo_root=repo_root,
+        ),
         "planner": {
             "plan_path": plan.get("plan_path"),
             "worker_count": len(workers),

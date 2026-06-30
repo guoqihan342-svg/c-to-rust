@@ -98,6 +98,15 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
             self.assertEqual(evaluate_report["entrypoint"], "evaluate --profile")
             self.assertIn("not a new semantic gate", evaluate_report["claim_boundary"])
             self.assertFalse(evaluate_report["acceptance_boundary"]["generated_draft_semantic_pass"])
+            contracts = evaluate_report["judge_summary"]["harness_architecture"]["architecture_contracts"]
+            self.assertFalse(contracts["context_management"]["chat_output_is_evidence"])
+            self.assertFalse(contracts["context_management"]["semantic_gate"])
+            self.assertEqual(
+                [stage["stage"] for stage in contracts["context_management"]["pipeline"]],
+                ["plan", "translate", "verify", "repair"],
+            )
+            self.assertFalse(contracts["agent_coordination"]["chat_output_is_evidence"])
+            self.assertFalse(contracts["agent_coordination"]["semantic_gate"])
         judge_index_path = repo_path(
             self.manifest["evaluate_profile_artifacts"]["artifacts"]["judge_evidence_index"]["path"]
         )
@@ -109,6 +118,10 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
             self.assertFalse(judge_index["claim_boundary"]["generated_draft_semantic_pass"])
             self.assertEqual(judge_index["claim_boundary"]["translation_coverage_numerator"], 0)
             self.assertIn("does not add a semantic acceptance gate", judge_index["claim_boundary"]["boundary"])
+            contracts = judge_index["harness_architecture"]["architecture_contracts"]
+            self.assertEqual(set(contracts["agent_coordination"]["roles"]), {"planner", "worker", "repairer", "verifier", "reporter"})
+            self.assertFalse(contracts["context_management"]["chat_output_is_evidence"])
+            self.assertFalse(contracts["agent_coordination"]["chat_output_is_evidence"])
             self.assertEqual(
                 judge_index["evidence_artifact_refs"]["evaluate_report"]["path"],
                 self.manifest["evaluate_profile_artifacts"]["artifacts"]["evaluate_report"]["path"],
@@ -118,6 +131,8 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
                 self.manifest["evaluate_profile_artifacts"]["artifacts"]["competition_summary"]["path"],
             )
             self.assertNotIn("judge_evidence_index", judge_index["evidence_artifact_refs"])
+            self.assertNotIn("context_management_contract", judge_index["evidence_artifact_refs"])
+            self.assertNotIn("agent_coordination_contract", judge_index["evidence_artifact_refs"])
         if repo_path(target_root["path"]).exists():
             self.assertGreater(existing_refs, 0)
 

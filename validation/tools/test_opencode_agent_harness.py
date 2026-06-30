@@ -29,6 +29,63 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertFalse(len(value) >= 2 and value[1] == ":")
         self.assertNotIn("..", Path(value).parts)
 
+    def assert_context_management_contract(self, contract: dict) -> None:
+        self.assertEqual(contract["contract_kind"], "context-management")
+        self.assertEqual(contract["role"], "context-index-and-resume-map")
+        self.assertEqual(contract["evidence_policy"], "on-disk-artifacts-only")
+        self.assertFalse(contract["semantic_gate"])
+        self.assertFalse(contract["chat_output_is_evidence"])
+        self.assertIn("entrypoints", contract["managed_state"])
+        self.assertIn("worker handoffs", contract["managed_state"])
+        pipeline = contract["pipeline"]
+        self.assertEqual([stage["stage"] for stage in pipeline], ["plan", "translate", "verify", "repair"])
+        self.assertEqual([stage["role"] for stage in pipeline], ["planner", "worker", "verifier", "repairer"])
+        self.assertEqual(pipeline[0]["evidence"], "entrypoints.worker_plan")
+        self.assertEqual(pipeline[1]["evidence"], "workers[*].summary_path")
+        self.assertTrue(pipeline[1]["fanout"])
+        self.assertEqual(pipeline[2]["reduce"], "merge")
+        self.assertEqual(pipeline[3]["loopback_to"], "translate")
+        self.assertEqual(pipeline[3]["max_rounds"], 5)
+        resume_protocol = contract["resume_protocol"]
+        self.assertEqual(resume_protocol["checkpoint_backend"], "sqlite")
+        self.assertEqual(resume_protocol["worker_state_source"], "agent-index.agents_by_worker_id")
+        self.assertIn("repair_hints", resume_protocol["open_repair_hint_source"])
+        self.assertIn("worker summaries", resume_protocol["merge_precondition"])
+
+    def assert_agent_coordination_contract(self, contract: dict, *, expected_worker_count: int | None = None) -> None:
+        self.assertEqual(contract["contract_kind"], "agent-coordination")
+        self.assertEqual(contract["coordination_state"], "sqlite-ledger-and-on-disk-reports")
+        self.assertEqual(contract["checkpoint_backend"], "sqlite")
+        self.assertFalse(contract["semantic_gate"])
+        self.assertFalse(contract["chat_output_is_evidence"])
+        if expected_worker_count is not None:
+            self.assertEqual(contract["worker_count"], expected_worker_count)
+        roles = contract["roles"]
+        self.assertEqual(set(roles), {"planner", "worker", "repairer", "verifier", "reporter"})
+        self.assertEqual(roles["worker"]["isolation"], "per-worker out_root")
+        self.assertEqual(roles["repairer"]["round_cap"], 5)
+        self.assertEqual(roles["verifier"]["acceptance_authority"], "competition-run-summary validator")
+        self.assertEqual(roles["reporter"]["acceptance_authority"], "none")
+        resume_protocol = contract["resume_protocol"]
+        self.assertIn("evaluate --profile", resume_protocol["resume_entrypoints"])
+        self.assertEqual(resume_protocol["worker_state_source"], "agent-index.agents_by_worker_id")
+
+    def assert_architecture_contracts(self, contracts: dict) -> None:
+        context_contract = contracts["context_management"]
+        self.assertEqual(context_contract["contract_kind"], "context-management")
+        self.assertEqual(context_contract["evidence_policy"], "on-disk-artifacts-only")
+        self.assertFalse(context_contract["semantic_gate"])
+        self.assertFalse(context_contract["chat_output_is_evidence"])
+        self.assertEqual(
+            [stage["stage"] for stage in context_contract["pipeline"]],
+            ["plan", "translate", "verify", "repair"],
+        )
+        agent_contract = contracts["agent_coordination"]
+        self.assertEqual(agent_contract["contract_kind"], "agent-coordination")
+        self.assertEqual(set(agent_contract["roles"]), {"planner", "worker", "repairer", "verifier", "reporter"})
+        self.assertFalse(agent_contract["semantic_gate"])
+        self.assertFalse(agent_contract["chat_output_is_evidence"])
+
     def test_init_run_creates_sqlite_ledger_with_run_and_profile(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -1174,8 +1231,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["entrypoints"]["route_governance_metrics_report"], route_report_ref["path"])
             self.assertEqual(context_pack["entrypoints"]["merge_plan"], result["run_plan"]["merge_plan"]["path"])
             self.assertEqual(context_pack["source"]["require_source_commit"], "abc123")
+            self.assert_context_management_contract(context_pack["context_management_contract"])
             self.assertEqual(context_pack["acceptance_boundary"]["profile"], result["acceptance_boundary"])
             self.assertEqual(context_pack["report_artifacts"]["route_governance_metrics_report"], route_report_ref)
+            self.assert_agent_coordination_contract(agent_index["agent_coordination_contract"], expected_worker_count=2)
             self.assertEqual(agent_index["reports"]["route_governance_metrics_report"], route_report_ref)
             self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], [unit["worker_id"] for unit in result["plan"]["units"]])
             self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], [unit["worker_id"] for unit in result["plan"]["units"]])
@@ -1643,6 +1702,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(judge_summary["harness_architecture"]["parallelism"], {"max_workers": 2, "effective_workers": 2})
             self.assertEqual(judge_summary["harness_architecture"]["context_pack"]["path"], result["context_pack"]["path"])
             self.assertEqual(judge_summary["harness_architecture"]["agent_index"]["path"], result["agent_index"]["path"])
+            self.assert_architecture_contracts(judge_summary["harness_architecture"]["architecture_contracts"])
             self.assertEqual(judge_summary["core_translation_quality"]["final_gate_status"], "passed")
             self.assertEqual(judge_summary["core_translation_quality"]["semantic_pass_count"], 2)
             self.assertEqual(judge_summary["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 3)
@@ -1663,11 +1723,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
             self.assertEqual(context_pack["run_id"], "run-evaluate")
             self.assertEqual(context_pack["graph"]["runtime"], "opencode-harness-langgraph-inspired")
+            self.assert_context_management_contract(context_pack["context_management_contract"])
             self.assertEqual(context_pack["entrypoints"]["evaluate_report"], result["report_path"])
             self.assertEqual(context_pack["entrypoints"]["merge_plan"], result["run_plan"]["merge_plan"]["path"])
             self.assertEqual(context_pack["entrypoints"]["merge_summary"], result["run_plan"]["merge_execution"]["summary_path"])
             self.assertEqual(len(context_pack["workers"]), 2)
             self.assertEqual(agent_index["run_id"], "run-evaluate")
+            self.assert_agent_coordination_contract(agent_index["agent_coordination_contract"], expected_worker_count=2)
             planned_worker_ids = [unit["worker_id"] for unit in result["plan"]["units"]]
             self.assertEqual([worker["worker_id"] for worker in context_pack["workers"]], planned_worker_ids)
             self.assertEqual([agent["worker_id"] for agent in agent_index["agents"]], planned_worker_ids)
@@ -2608,6 +2670,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["batch_profile_report"]["path"], repo_rel(batch_report_path))
             self.assertEqual(report["judge_summary"]["harness_architecture"]["context_pack"], report["context_pack"])
             self.assertEqual(report["judge_summary"]["harness_architecture"]["agent_index"], report["agent_index"])
+            self.assert_architecture_contracts(report["judge_summary"]["harness_architecture"]["architecture_contracts"])
             self.assertEqual(report["summary_validation"]["semantic_pass"], 1)
             self.assertEqual(report["sidecar_reports"]["judge_evidence_index"]["path"], repo_rel(index_path))
             self.assertNotIn("sha256", report["sidecar_reports"]["judge_evidence_index"])
@@ -2617,11 +2680,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["entrypoints"]["evaluate_report"], repo_rel(report_path))
             self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], repo_rel(batch_report_path))
             self.assertEqual(context_pack["entrypoints"]["judge_evidence_index"], repo_rel(index_path))
+            self.assert_context_management_contract(context_pack["context_management_contract"])
             agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
             self.assertEqual(agent_index["reports"]["evaluate_report"]["path"], repo_rel(report_path))
             self.assertEqual(agent_index["reports"]["batch_profile_report"]["path"], repo_rel(batch_report_path))
             self.assertEqual(agent_index["reports"]["judge_evidence_index"]["path"], repo_rel(index_path))
             self.assertNotIn("sha256", agent_index["reports"]["judge_evidence_index"])
+            self.assert_agent_coordination_contract(agent_index["agent_coordination_contract"], expected_worker_count=0)
             batch_report = json.loads(batch_report_path.read_text(encoding="utf-8"))
             self.assertEqual(batch_report["context_pack"], report["context_pack"])
             self.assertEqual(batch_report["agent_index"], report["agent_index"])
@@ -2639,9 +2704,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(index["claim_boundary"]["translation_coverage_numerator"], 0)
             self.assertIn("does not add a semantic acceptance gate", index["claim_boundary"]["boundary"])
             self.assertEqual(index["harness_architecture"]["entrypoint"], "evaluate")
+            self.assert_architecture_contracts(index["harness_architecture"]["architecture_contracts"])
             self.assertEqual(index["core_translation_quality"]["semantic_pass_count"], 1)
             artifact_refs = index["evidence_artifact_refs"]
             self.assertNotIn("judge_evidence_index", artifact_refs)
+            self.assertNotIn("context_management_contract", artifact_refs)
+            self.assertNotIn("agent_coordination_contract", artifact_refs)
             self.assertEqual(artifact_refs["evaluate_report"]["path"], repo_rel(report_path))
             self.assertEqual(artifact_refs["evaluate_report"]["sha256"], harness.sha256_file(report_path))
             self.assertEqual(artifact_refs["batch_profile_report"]["path"], repo_rel(batch_report_path))

@@ -106,7 +106,7 @@
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
-        "sha256": "555109c41a1af0ff85ae7d49a83449324e6d44d46f73012d02be6c9a75d5f8af"
+        "sha256": "c60a82719ae90a5bb89457b3734cb71cfd580481251a1e6f9f21ee80a80f6106"
       },
       "command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
       "verification_commands": [

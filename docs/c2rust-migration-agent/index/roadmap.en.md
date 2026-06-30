@@ -55,7 +55,7 @@ python -B -m validation.tools.opencode_agent_harness evaluate --profile config/c
 
 This path reuses the full batch-profile pipeline and additionally emits a `harness/evaluate-report.json` wrapper plus `harness/judge-evidence-index.json`. These only index verified batch artifacts, summary validation, and context/index entrypoints; they are not a new semantic acceptance gate.
 
-This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation.
+This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation; `context_management_contract` / `agent_coordination_contract` make the plan -> worker fan-out -> verify/merge -> repair loop -> report roles, resume protocol, and `chat_output_is_evidence=false` boundary machine-readable.
 
 Fallback repo-local demo:
 
