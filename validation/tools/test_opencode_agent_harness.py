@@ -1364,7 +1364,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(contract["worker_command"][1:4], ["scripts/c2rust-migrator.py", "--phase", "migrate"])
             self.assertEqual(contract["opencode_argv"], result["argv"])
-            self.assertIn("Read the handoff contract before running the command.", contract["prompt"])
+            self.assertNotIn("Read the handoff contract before running the command.", contract["prompt"])
+            self.assertIn("Handoff contract is audit metadata; do not inspect it before the first command.", contract["prompt"])
+            self.assertIn("Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.", contract["prompt"])
             self.assertIn(contract_binding["path"], contract["prompt"])
             session_binding = report["opencode_session_evidence"]
             session_path = REPO_ROOT / session_binding["path"]
@@ -1655,14 +1657,45 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         )
 
         prompt = argv[-1]
+        self.assertNotIn("\n", prompt)
         self.assertIn("Use the shell/bash tool to run exactly the Command line string below.", prompt)
         self.assertIn("The first shell/bash/powershell/cmd tool call must be exactly the Command line string.", prompt)
         self.assertIn("Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.", prompt)
         self.assertIn("Do not inspect an existing summary before running the command.", prompt)
         self.assertIn("Delete the expected summary file if it already exists, then execute the command exactly once.", prompt)
+        self.assertIn("Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.", prompt)
         self.assertIn("Do not explore files, spawn subagents, or infer a different slice before executing the command.", prompt)
         self.assertIn("Do not run substitute diagnostics instead of the command.", prompt)
         self.assertIn("scripts/c2rust-migrator.py", prompt)
+
+    def test_opencode_preflight_prompt_is_single_cli_argument_without_newlines(self) -> None:
+        marker_command = [
+            sys.executable,
+            "validation/tools/opencode_agent_harness.py",
+            "write-preflight-marker",
+            "--marker",
+            "target/out/harness/opencode-preflight-marker.json",
+            "--run-id",
+            "preflight-run",
+        ]
+
+        argv = harness.build_opencode_preflight_argv(
+            opencode_command="opencode",
+            opencode_model=None,
+            opencode_agent=None,
+            opencode_variant="max",
+            opencode_skip_permissions=True,
+            marker_command=marker_command,
+            marker_path=REPO_ROOT / "target/out/harness/opencode-preflight-marker.json",
+            contract_path=REPO_ROOT / "target/out/harness/opencode-preflight-contract.json",
+            repo_root=REPO_ROOT,
+        )
+
+        prompt = argv[-1]
+        self.assertNotIn("\n", prompt)
+        self.assertIn("Execute this OpenCode preflight command exactly once.", prompt)
+        self.assertIn("Command line:", prompt)
+        self.assertIn("write-preflight-marker", prompt)
 
     def test_opencode_contract_requires_first_shell_command_to_match_worker_command(self) -> None:
         worker_command = [
@@ -1699,6 +1732,45 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertTrue(verification["worker_command_seen"])
         self.assertEqual(verification["first_shell_command"], wrong_command)
         self.assertFalse(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["first_tool_name"], "bash")
+        self.assertEqual(verification["tools_before_first_shell"], [])
+        self.assertEqual(verification["contract_failure_reason"], "first_shell_command_mismatch_worker_command_seen_later")
+
+    def test_opencode_contract_records_tools_before_first_shell_command(self) -> None:
+        worker_command = [
+            sys.executable,
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/harness/assignments/worker-a-request.json",
+        ]
+        expected_command = subprocess.list2cmdline(worker_command)
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "read", "state": {"input": {"file": "README.md"}}},
+                },
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "bash", "state": {"input": {"command": expected_command}}},
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "executed")
+        self.assertEqual(verification["first_tool_name"], "read")
+        self.assertEqual(verification["first_shell_tool_name"], "bash")
+        self.assertEqual(verification["tools_before_first_shell"], ["read"])
+        self.assertEqual(verification["contract_failure_reason"], "")
 
     def test_opencode_worker_argv_resolves_path_command_before_launch(self) -> None:
         with tempfile.TemporaryDirectory(prefix="opencode-command-shim-") as tmp:
@@ -1732,6 +1804,120 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 os.environ["PATH"] = old_path
 
             self.assertEqual(Path(argv[0]).resolve(), shim_path.resolve())
+
+    def test_opencode_preflight_requires_exact_first_shell_command_and_marker(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                marker_path.parent.mkdir(parents=True, exist_ok=True)
+                marker_path.write_text(
+                    json.dumps({"schema_version": 1, "run_id": "preflight-run"}, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"]},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["contract_verification"]["status"], "executed")
+            self.assertTrue(result["marker_exists"])
+            self.assertTrue((REPO_ROOT / result["marker_path"]).exists())
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["contract_verification"]["status"], "executed")
+
+    def test_opencode_preflight_rejects_marker_when_first_shell_command_differs(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                marker_path.parent.mkdir(parents=True, exist_ok=True)
+                marker_path.write_text(
+                    json.dumps({"schema_version": 1, "run_id": "preflight-run"}, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": "python -m validation.tools.opencode_agent_harness init-run --run-id wrong"},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["root_cause_key"], "opencode_contract_not_executed")
+            self.assertTrue(result["marker_exists"])
+            self.assertEqual(result["contract_verification"]["status"], "not-executed")
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["root_cause_key"], "opencode_contract_not_executed")
+
+    def test_opencode_preflight_cli_dispatches_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "opencode-preflight",
+            "--run-id",
+            "preflight-run",
+            "--out-root",
+            "target/opencode-preflight",
+            "--opencode-variant",
+            "max",
+            "--opencode-skip-permissions",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_opencode_preflight",
+            return_value={"status": "passed", "exit_code": 0},
+        ) as runner:
+            self.assertEqual(harness.main(), 0)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "passed")
+        runner.assert_called_once()
+        self.assertEqual(runner.call_args.kwargs["run_id"], "preflight-run")
+        self.assertEqual(runner.call_args.kwargs["out_root"], Path("target/opencode-preflight"))
+        self.assertEqual(runner.call_args.kwargs["opencode_variant"], "max")
+        self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
 
     def test_run_worker_ignores_stale_summary_from_before_execution(self) -> None:
         with temp_repo_dir() as tmp:

@@ -115,6 +115,19 @@ def main() -> int:
     batch_profile_parser.add_argument("--run-id", required=True)
     batch_profile_parser.add_argument("--out-root", type=Path, required=True)
 
+    preflight_parser = subcommands.add_parser("opencode-preflight")
+    preflight_parser.add_argument("--run-id", required=True)
+    preflight_parser.add_argument("--out-root", type=Path, required=True)
+    preflight_parser.add_argument("--opencode-command", default="opencode")
+    preflight_parser.add_argument("--opencode-model")
+    preflight_parser.add_argument("--opencode-agent")
+    preflight_parser.add_argument("--opencode-variant", default="max")
+    preflight_parser.add_argument("--opencode-skip-permissions", action="store_true")
+
+    preflight_marker_parser = subcommands.add_parser("write-preflight-marker")
+    preflight_marker_parser.add_argument("--marker", type=Path, required=True)
+    preflight_marker_parser.add_argument("--run-id", required=True)
+
     run_parser = subcommands.add_parser("run-worker")
     run_parser.add_argument("--db", type=Path, required=True)
     run_parser.add_argument("--run-id", required=True)
@@ -232,6 +245,21 @@ def main() -> int:
             run_id=args.run_id,
             out_root=args.out_root,
         )
+    elif args.command == "opencode-preflight":
+        result = run_opencode_preflight(
+            out_root=args.out_root,
+            run_id=args.run_id,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+        )
+    elif args.command == "write-preflight-marker":
+        result = write_opencode_preflight_marker(
+            marker_path=args.marker,
+            run_id=args.run_id,
+        )
     elif args.command == "run-worker":
         result = run_worker(
             db_path=args.db,
@@ -281,7 +309,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan", "run-batch-profile"} else 0
+    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan", "run-batch-profile", "opencode-preflight"} else 0
 
 
 def init_run(
@@ -1603,6 +1631,155 @@ def retry_worker(
     return retry_result
 
 
+def run_opencode_preflight(
+    *,
+    out_root: Path,
+    run_id: str,
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    harness_dir = out_root / "harness"
+    logs_dir = out_root / "logs"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = harness_dir / "opencode-preflight-marker.json"
+    contract_path = harness_dir / "opencode-preflight-contract.json"
+    if marker_path.exists():
+        marker_path.unlink()
+
+    marker_command = [
+        sys.executable,
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_relative(marker_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+    ]
+    argv = build_opencode_preflight_argv(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        marker_command=marker_command,
+        marker_path=marker_path,
+        contract_path=contract_path,
+        repo_root=repo_root,
+    )
+    contract_binding = write_opencode_preflight_contract(
+        run_id=run_id,
+        contract_path=contract_path,
+        marker_path=marker_path,
+        marker_command=marker_command,
+        opencode_argv=argv,
+        repo_root=repo_root,
+    )
+    started = time.monotonic()
+    try:
+        completed = command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+    stdout_path = logs_dir / "opencode-preflight.stdout.log"
+    stderr_path = logs_dir / "opencode-preflight.stderr.log"
+    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    session_binding = write_opencode_session_evidence(
+        completed=completed,
+        evidence_path=logs_dir / "opencode-preflight-session-evidence.json",
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+        repo_root=repo_root,
+    )
+    session_evidence = load_json(repo_path(Path(session_binding["path"]), repo_root=repo_root))
+    contract_verification = verify_opencode_contract_execution(
+        session_evidence=session_evidence,
+        worker_command=marker_command,
+        summary_path=marker_path,
+        repo_root=repo_root,
+    )
+    marker_exists = marker_path.exists()
+    preflight_passed = (
+        int(completed.returncode) == 0
+        and contract_verification.get("status") == "executed"
+        and marker_exists
+    )
+    root_cause_key = None
+    if not preflight_passed:
+        if int(completed.returncode) != 0:
+            root_cause_key = "opencode_process_failed"
+        elif contract_verification.get("status") != "executed":
+            root_cause_key = "opencode_contract_not_executed"
+        else:
+            root_cause_key = "missing_preflight_marker"
+
+    report_path = harness_dir / "opencode-preflight-report.json"
+    report: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "passed" if preflight_passed else "failed",
+        "exit_code": 0 if preflight_passed else 1,
+        "process_returncode": int(completed.returncode),
+        "elapsed_seconds": int(time.monotonic() - started),
+        "argv": argv,
+        "marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "marker_exists": marker_exists,
+        "handoff_contract": contract_binding,
+        "opencode_session_evidence": session_binding,
+        "contract_verification": contract_verification,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "report_path": repo_relative(report_path, repo_root=repo_root),
+        "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
+    }
+    if root_cause_key is not None:
+        report["root_cause_key"] = root_cause_key
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return report
+
+
+def write_opencode_preflight_marker(
+    *,
+    marker_path: Path,
+    run_id: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    marker_path = repo_path(marker_path, repo_root=repo_root)
+    marker = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "written",
+        "created_at": now_text(),
+    }
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "status": "written",
+        "marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "sha256": sha256_file(marker_path),
+    }
+
+
 def worker_failure_root_cause(
     *,
     process_returncode: int,
@@ -1968,6 +2145,7 @@ def build_opencode_run_argv(
         "Do not inspect an existing summary before running the command.",
         "Delete the expected summary file if it already exists, then execute the command exactly once.",
         "Run the repo-local deterministic command below, then stop.",
+        "Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.",
         "Do not explore files, spawn subagents, or infer a different slice before executing the command.",
         "Do not run substitute diagnostics instead of the command.",
         "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
@@ -1979,11 +2157,63 @@ def build_opencode_run_argv(
     if handoff_contract_path is not None:
         prompt_lines.extend(
             [
-                "Read the handoff contract before running the command.",
+                "Handoff contract is audit metadata; do not inspect it before the first command.",
                 f"Handoff contract: {repo_relative(handoff_contract_path, repo_root=repo_root)}",
             ]
         )
-    prompt = "\n".join(prompt_lines)
+    prompt = build_opencode_prompt(prompt_lines)
+    resolved_opencode_command = resolve_subprocess_command(opencode_command)
+    argv = [
+        resolved_opencode_command,
+        "run",
+        "--dir",
+        str(repo_root),
+        "--format",
+        "json",
+        "--variant",
+        opencode_variant,
+    ]
+    if opencode_model:
+        argv.extend(["--model", opencode_model])
+    if opencode_agent:
+        argv.extend(["--agent", opencode_agent])
+    if opencode_skip_permissions:
+        argv.append("--dangerously-skip-permissions")
+    argv.append(prompt)
+    return argv
+
+
+def build_opencode_preflight_argv(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+    marker_command: list[str],
+    marker_path: Path,
+    contract_path: Path,
+    repo_root: Path,
+) -> list[str]:
+    if not opencode_command:
+        raise SystemExit("opencode command must not be empty")
+    command_line = subprocess.list2cmdline(marker_command)
+    prompt = build_opencode_prompt(
+        [
+            "Execute this OpenCode preflight command exactly once.",
+            "Use the shell/bash tool to run exactly the Command line string below.",
+            "The first shell/bash/powershell/cmd tool call must be exactly the Command line string.",
+            "Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.",
+            "Do not inspect repository files or infer a different task before executing the command.",
+            "Do not run init-run, assign-slice, run-worker, retry-worker, or any substitute harness command.",
+            "The required artifact is the preflight marker JSON, not chat output.",
+            f"Command: {json.dumps(marker_command)}",
+            f"Command line: {command_line}",
+            f"Expected marker: {repo_relative(marker_path, repo_root=repo_root)}",
+            "Handoff contract is audit metadata; do not inspect it before the first command.",
+            f"Handoff contract: {repo_relative(contract_path, repo_root=repo_root)}",
+        ]
+    )
     resolved_opencode_command = resolve_subprocess_command(opencode_command)
     argv = [
         resolved_opencode_command,
@@ -2013,6 +2243,10 @@ def resolve_subprocess_command(command: str) -> str:
     return shutil.which(command) or command
 
 
+def build_opencode_prompt(prompt_lines: list[str]) -> str:
+    return " ".join(line.strip() for line in prompt_lines if line.strip())
+
+
 def verify_opencode_contract_execution(
     *,
     session_evidence: dict[str, Any],
@@ -2021,30 +2255,83 @@ def verify_opencode_contract_execution(
     repo_root: Path,
 ) -> dict[str, Any]:
     expected_worker_command_line = subprocess.list2cmdline(worker_command)
+    tool_trace = extract_opencode_tool_trace(session_evidence)
     executed_shell_commands = extract_opencode_shell_commands(session_evidence)
     normalized_expected = normalize_command_for_contract(expected_worker_command_line)
     exact_worker_command_seen = any(
         normalize_command_for_contract(command) == normalized_expected for command in executed_shell_commands
     )
     first_shell_command = executed_shell_commands[0] if executed_shell_commands else ""
+    first_tool_name = str(tool_trace[0]["tool"]) if tool_trace else ""
+    first_shell_index = next(
+        (index for index, item in enumerate(tool_trace) if item.get("is_shell_command")),
+        None,
+    )
+    first_shell_tool_name = str(tool_trace[first_shell_index]["tool"]) if first_shell_index is not None else ""
+    tools_before_first_shell = [
+        str(item["tool"]) for item in tool_trace[:first_shell_index]
+    ] if first_shell_index is not None else [str(item["tool"]) for item in tool_trace[:20]]
     first_shell_command_matches_worker_command = (
         bool(first_shell_command) and normalize_command_for_contract(first_shell_command) == normalized_expected
     )
     status = "not-observed"
     if executed_shell_commands:
         status = "executed" if first_shell_command_matches_worker_command else "not-executed"
+    contract_failure_reason = ""
+    if status == "not-observed":
+        contract_failure_reason = "no_shell_command_observed"
+    elif status == "not-executed":
+        contract_failure_reason = (
+            "first_shell_command_mismatch_worker_command_seen_later"
+            if exact_worker_command_seen
+            else "first_shell_command_mismatch"
+        )
     return {
         "expected_worker_command_line": expected_worker_command_line,
         "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
         "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
         "executed_shell_command_count": len(executed_shell_commands),
         "executed_shell_commands": executed_shell_commands[:20],
+        "first_tool_name": first_tool_name,
         "first_shell_command": first_shell_command,
+        "first_shell_tool_name": first_shell_tool_name,
         "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
+        "tools_before_first_shell": tools_before_first_shell[:20],
+        "contract_failure_reason": contract_failure_reason,
         "worker_command_seen": exact_worker_command_seen,
         "summary_exists": summary_path.exists(),
         "status": status,
     }
+
+
+def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    events = opencode_session_events(session_evidence)
+    tools: list[dict[str, Any]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        tool = str(part.get("tool", "")).lower().strip()
+        if not tool:
+            continue
+        command = ""
+        state = part.get("state")
+        if isinstance(state, dict):
+            tool_input = state.get("input")
+            if isinstance(tool_input, dict):
+                raw_command = tool_input.get("command") or tool_input.get("cmd")
+                if isinstance(raw_command, str):
+                    command = raw_command.strip()
+        tools.append(
+            {
+                "tool": tool,
+                "command": command,
+                "is_shell_command": tool in {"bash", "shell", "cmd", "powershell"} and bool(command),
+            }
+        )
+    return tools
 
 
 def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[str]:
@@ -2238,6 +2525,35 @@ def write_opencode_handoff_contract(
         "opencode_command_line": subprocess.list2cmdline(opencode_argv),
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
+    }
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
+
+
+def write_opencode_preflight_contract(
+    *,
+    run_id: str,
+    contract_path: Path,
+    marker_path: Path,
+    marker_command: list[str],
+    opencode_argv: list[str],
+    repo_root: Path,
+) -> dict[str, str]:
+    if not opencode_argv:
+        raise SystemExit("opencode argv must not be empty")
+    contract = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "runner_kind": "opencode-preflight",
+        "expected_marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "worker_command": marker_command,
+        "worker_command_line": subprocess.list2cmdline(marker_command),
+        "worker_command_sha256": sha256_text(subprocess.list2cmdline(marker_command)),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "prompt": str(opencode_argv[-1]),
+        "evidence_boundary": "preflight proves exact-command compliance only; semantic acceptance requires worker summary and validators",
     }
     contract_path.parent.mkdir(parents=True, exist_ok=True)
     contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
