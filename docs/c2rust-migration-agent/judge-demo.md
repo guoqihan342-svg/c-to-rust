@@ -27,6 +27,8 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json`
+- H5 上下文包：`target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
+- agent 索引：`target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/workflow-metrics.json`
 - baseline unsafe Rust：`validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs`
@@ -59,6 +61,8 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json`
+- H5 上下文包：`target/competition-out-demo-before-after-exhibit/harness/context-pack.json`
+- agent 索引：`target/competition-out-demo-before-after-exhibit/harness/agent-index.json`
 - `target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json`
 - `target/competition-out-demo-before-after-exhibit/summary/workflow-metrics.json`
 - baseline unsafe Rust：`validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs`
@@ -75,5 +79,6 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `judge-demo-report.json` 是一条命令入口的总报告，绑定 `competition-run-summary.json`、`workflow-metrics.json`、`before-after-exhibit.json` 和 `milestone-release-report.json` 的路径与 sha256。
 - `judge-demo-report.json.repair_summary` 汇总 repair/retry/rollback 展示字段，包括 repair round cap、auto recovery、root cause counts、repair history 和 rollback ids；它只来自已绑定的 workflow metrics / before-after exhibit，不替代 validator 或 oracle。
 - `before-after-exhibit.json` 是评委展示入口，证明 artifact binding、unsafe delta 和 harness contract；它不替代 `competition-run-summary.json`、`workflow-metrics.json` 或 evidence validator。
+- `harness/context-pack.json` 和 `harness/agent-index.json` 是 `run-batch-profile` 生成的 H5 harness 审计索引与多 agent 续跑入口，展示 planner/worker/merge/report 拓扑和 worker assignment；它们不替代 summary、validator 或 oracle，也不扩大 semantic pass claim。
 - `translation_coverage_numerator` 不会因为这些 exhibit 增加；coverage numerator 只能统计通过对应 gate 的 translator-generated named slice。
 - 所有公开路径必须保持 repo-relative；不要把本机绝对路径或 WSL host path 写进公开 claim。

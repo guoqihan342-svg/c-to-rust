@@ -1228,26 +1228,26 @@ def write_context_pack_and_agent_index(
             "exit_code": int(worker_result.get("exit_code", 1)),
             "recorded": bool(worker_result.get("recorded")),
         }
+        agent_entry = {
+            "worker_id": worker_id,
+            "role": "slice-worker",
+            "runtime": mode,
+            "status": worker_entry["summary_status"] or "missing-summary",
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "isolated_out_root": unit.get("out_root"),
+            "assignment_path": unit.get("assignment_path"),
+            "request_path": unit.get("request_path"),
+            "summary_path": worker_result.get("summary_path"),
+            "report_path": worker_result.get("report_path"),
+            "exit_code": worker_entry["exit_code"],
+            "recorded": worker_entry["recorded"],
+        }
         if isinstance(worker_result.get("auto_retry"), dict):
             worker_entry["auto_retry"] = worker_result["auto_retry"]
+            agent_entry["auto_retry"] = worker_result["auto_retry"]
         workers.append(worker_entry)
-        agents.append(
-            {
-                "worker_id": worker_id,
-                "role": "slice-worker",
-                "runtime": mode,
-                "status": worker_entry["summary_status"] or "missing-summary",
-                "slice_id": unit.get("slice_id"),
-                "function": unit.get("function"),
-                "isolated_out_root": unit.get("out_root"),
-                "assignment_path": unit.get("assignment_path"),
-                "request_path": unit.get("request_path"),
-                "summary_path": worker_result.get("summary_path"),
-                "report_path": worker_result.get("report_path"),
-                "exit_code": worker_entry["exit_code"],
-                "recorded": worker_entry["recorded"],
-            }
-        )
+        agents.append(agent_entry)
     graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
     context_pack_id = f"{run_id}-context-pack"
     context_pack = {
@@ -1822,15 +1822,17 @@ def run_plan(
                     repo_root=repo_root,
                     keep_open_on_failure=True,
                 )
-                retry_results.append(
-                    {
-                        "exit_code": int(retry_result.get("exit_code", 1)),
-                        "summary_status": retry_result.get("summary_status"),
-                        "hint_id": retry_result.get("hint_id", hint_id),
-                        "hint_status": retry_result.get("hint_status"),
-                        "report_path": retry_result.get("report_path"),
-                    }
-                )
+                retry_entry = {
+                    "exit_code": int(retry_result.get("exit_code", 1)),
+                    "summary_status": retry_result.get("summary_status"),
+                    "hint_id": retry_result.get("hint_id", hint_id),
+                    "hint_status": retry_result.get("hint_status"),
+                    "report_path": retry_result.get("report_path"),
+                }
+                for field in ("repair_round_cap", "repair_rounds", "retry_limit"):
+                    if field in retry_result:
+                        retry_entry[field] = retry_result[field]
+                retry_results.append(retry_entry)
                 if retry_result.get("hint_id"):
                     hint_id = str(retry_result["hint_id"])
                 if int(retry_result.get("exit_code", 1)) == 0:

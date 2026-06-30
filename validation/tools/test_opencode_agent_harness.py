@@ -584,6 +584,147 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             hint_rows = fetch_rows(db_path, "select status from repair_hints")
             self.assertEqual(hint_rows, [("revalidated_passed",)])
 
+    def test_evaluate_context_pack_records_auto_retry_success(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int repairable_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            worker_attempts = 0
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal worker_attempts
+                if "scripts/c2rust-migrator.py" in argv:
+                    worker_attempts += 1
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    if worker_attempts < 3:
+                        write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                    else:
+                        write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                    return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {worker_attempts}\n", stderr="")
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, "run-evaluate-retry", status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="merge ok\n", stderr="")
+
+            result = harness.evaluate(
+                run_id="run-evaluate-retry",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=["repairable_unit"],
+                source_commit="abc123",
+                out_root=out_root,
+                proof_class="local-simulation",
+                slice_id_prefix="eval-retry",
+                worker_prefix="eval-worker",
+                execute_merge=True,
+                auto_retry=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(worker_attempts, 3)
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            worker = context_pack["workers"][0]
+            agent = agent_index["agents"][0]
+            self.assertTrue(worker["recorded"])
+            self.assertEqual(worker["summary_status"], "passed")
+            self.assertEqual(worker["auto_retry"]["attempt_count"], 2)
+            self.assertEqual(worker["auto_retry"]["final_hint_status"], "revalidated_passed")
+            self.assertEqual([attempt["hint_status"] for attempt in worker["auto_retry"]["attempts"]], ["revalidated_failed", "revalidated_passed"])
+            self.assertEqual(agent["status"], "passed")
+            self.assertTrue(agent["recorded"])
+            hint_rows = fetch_rows(Path(REPO_ROOT / result["db_path"]), "select status from repair_hints")
+            self.assertEqual(hint_rows, [("revalidated_passed",)])
+
+    def test_evaluate_context_pack_records_retry_limit_exceeded(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int never_recovers(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            worker_attempts = 0
+            merge_called = False
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal worker_attempts, merge_called
+                if "scripts/c2rust-migrator.py" in argv:
+                    worker_attempts += 1
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                    return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {worker_attempts}\n", stderr="")
+                if "validation/tools/run_competition.py" in argv:
+                    merge_called = True
+                return subprocess.CompletedProcess(argv, 0, stdout="merge should not run\n", stderr="")
+
+            result = harness.evaluate(
+                run_id="run-evaluate-retry-limit",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=["never_recovers"],
+                source_commit="abc123",
+                out_root=out_root,
+                proof_class="local-simulation",
+                slice_id_prefix="eval-retry-limit",
+                worker_prefix="eval-worker",
+                execute_merge=True,
+                auto_retry=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(worker_attempts, 6)
+            self.assertTrue(merge_called)
+            self.assertEqual(result["run_plan"]["merge_execution"]["exit_code"], 1)
+            self.assertFalse(result["run_plan"]["merge_execution"]["summary_exists"])
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            worker = context_pack["workers"][0]
+            agent = agent_index["agents"][0]
+            self.assertTrue(worker["recorded"])
+            self.assertEqual(worker["summary_status"], "failed")
+            self.assertEqual(worker["auto_retry"]["attempt_count"], 6)
+            self.assertEqual(worker["auto_retry"]["final_hint_status"], "retry_limit_exceeded")
+            self.assertEqual(worker["auto_retry"]["attempts"][-1]["hint_status"], "retry_limit_exceeded")
+            self.assertEqual(worker["auto_retry"]["attempts"][-1]["exit_code"], 1)
+            self.assertEqual(worker["auto_retry"]["attempts"][-1]["repair_round_cap"], 5)
+            self.assertEqual(worker["auto_retry"]["attempts"][-1]["repair_rounds"], 5)
+            self.assertEqual(worker["auto_retry"]["attempts"][-1]["retry_limit"]["max_repair_rounds"], 5)
+            self.assertEqual(agent["status"], "failed")
+            self.assertTrue(agent["recorded"])
+            self.assertEqual(agent["auto_retry"]["final_hint_status"], "retry_limit_exceeded")
+            self.assertEqual(agent["auto_retry"]["attempts"][-1]["repair_round_cap"], 5)
+            hint_rows = fetch_rows(Path(REPO_ROOT / result["db_path"]), "select status, payload_json from repair_hints")
+            self.assertEqual(len(hint_rows), 1)
+            self.assertEqual(hint_rows[0][0], "retry_limit_exceeded")
+            hint_payload = json.loads(hint_rows[0][1])
+            self.assertEqual(hint_payload["retry_limit"]["max_repair_rounds"], 5)
+
     def test_run_plan_executes_workers_in_parallel_when_max_workers_allows(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -985,6 +1126,68 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             ]:
                 self.assert_repo_relative_posix_path(path_value)
 
+    def test_run_batch_profile_opencode_passes_preflight_report_to_workers(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            profile_path = Path(tmp) / "planned-batch.json"
+            preflight_report = write_passing_opencode_preflight_report(out_root / "harness" / "opencode-preflight-report.json")
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-preflight",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "opencode_preflight_report": repo_rel(preflight_report),
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                harness,
+                "run_worker",
+                return_value={
+                    "exit_code": 0,
+                    "summary_status": "passed",
+                    "summary_path": "",
+                    "report_path": "target/report.json",
+                    "recorded": False,
+                },
+            ) as runner:
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile-opencode",
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(result["mode"], "opencode")
+            runner.assert_called_once()
+            self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
+            self.assertEqual(runner.call_args.kwargs["opencode_preflight_report"], Path(repo_rel(preflight_report)))
+
     def test_evaluate_runs_planning_workers_and_merge_as_one_command(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -1125,6 +1328,117 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 if path_value is None:
                     continue
                 self.assert_repo_relative_posix_path(path_value)
+
+    def test_evaluate_opencode_passes_preflight_report_to_workers(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            preflight_report = write_passing_opencode_preflight_report(out_root / "harness" / "opencode-preflight-report.json")
+
+            with patch.object(
+                harness,
+                "run_worker",
+                return_value={
+                    "exit_code": 0,
+                    "summary_status": "passed",
+                    "summary_path": "",
+                    "report_path": "target/report.json",
+                    "recorded": False,
+                },
+            ) as runner:
+                result = harness.evaluate(
+                    run_id="run-evaluate-opencode",
+                    target_id="flashdb",
+                    source_repo_root=source_root,
+                    source_file="src/demo.c",
+                    functions=["first_unit"],
+                    source_commit="abc123",
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    slice_id_prefix="eval-opencode",
+                    worker_prefix="eval-worker",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    execute_merge=False,
+                    auto_retry=False,
+                    command_runner=subprocess.run,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(result["mode"], "opencode")
+            runner.assert_called_once()
+            self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
+            self.assertEqual(runner.call_args.kwargs["opencode_preflight_report"], preflight_report)
+
+    def test_evaluate_context_pack_preserves_unrecorded_failed_worker(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int missing_summary_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            merge_called = False
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal merge_called
+                if "validation/tools/run_competition.py" in argv:
+                    merge_called = True
+                return subprocess.CompletedProcess(argv, 0, stdout="no summary written\n", stderr="")
+
+            result = harness.evaluate(
+                run_id="run-evaluate-failed",
+                target_id="flashdb",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=["missing_summary_unit"],
+                source_commit="abc123",
+                out_root=out_root,
+                proof_class="local-simulation",
+                slice_id_prefix="eval-failed",
+                worker_prefix="eval-worker",
+                execute_merge=True,
+                auto_retry=False,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertFalse(merge_called)
+            self.assertEqual(result["run_plan"]["merge_execution"]["status"], "skipped")
+            self.assertEqual(result["run_plan"]["merge_execution"]["reason"], "unrecorded-worker-summaries")
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            worker = context_pack["workers"][0]
+            agent = agent_index["agents"][0]
+            self.assertFalse(worker["recorded"])
+            self.assertEqual(worker["exit_code"], 1)
+            self.assertEqual(worker["summary_status"], "missing-summary")
+            self.assert_repo_relative_posix_path(worker["summary_path"])
+            self.assert_repo_relative_posix_path(worker["report_path"])
+            self.assertFalse((REPO_ROOT / worker["summary_path"]).exists())
+            self.assertTrue((REPO_ROOT / worker["report_path"]).exists())
+            self.assertFalse(agent["recorded"])
+            self.assertEqual(agent["status"], "missing-summary")
+            self.assertEqual(context_pack["entrypoints"]["merge_summary"], None)
+            self.assertEqual(context_pack["acceptance_boundary"]["semantic_acceptance"], "final verification and worker summaries decide acceptance; this pack is an index only")
 
     def test_run_batch_profile_binds_before_after_exhibit_report(self) -> None:
         with temp_repo_dir() as tmp:
@@ -2548,6 +2862,30 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "failed")
             self.assertEqual(report["root_cause_key"], "opencode_contract_not_executed")
+
+    def test_opencode_preflight_reports_failure_when_process_crashes(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+
+            def crash_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(argv, 1, stdout="", stderr="opencode: not found\n")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                command_runner=crash_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["process_returncode"], 1)
+            self.assertEqual(result["root_cause_key"], "opencode_process_failed")
+            self.assertFalse(result["marker_exists"])
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["root_cause_key"], "opencode_process_failed")
+            stderr = (REPO_ROOT / report["logs"]["stderr"]).read_text(encoding="utf-8")
+            self.assertIn("opencode: not found", stderr)
 
     def test_opencode_preflight_cli_dispatches_flags(self) -> None:
         argv = [

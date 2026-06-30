@@ -27,6 +27,8 @@ Key FlashDB artifacts:
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json`
+- H5 context pack: `target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
+- agent index: `target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/workflow-metrics.json`
 - baseline unsafe Rust: `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs`
@@ -59,6 +61,8 @@ Fallback demo artifacts:
 - `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 - `target/competition-out-demo-before-after-exhibit/harness/batch-profile-report.json`
+- H5 context pack: `target/competition-out-demo-before-after-exhibit/harness/context-pack.json`
+- agent index: `target/competition-out-demo-before-after-exhibit/harness/agent-index.json`
 - `target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json`
 - `target/competition-out-demo-before-after-exhibit/summary/workflow-metrics.json`
 - baseline unsafe Rust: `validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs`
@@ -75,5 +79,6 @@ The fallback demo shows unsafe 3 -> 0 for `demo/store-add-one`.
 - `judge-demo-report.json` is the one-command aggregate report. It binds the paths and sha256 values for `competition-run-summary.json`, `workflow-metrics.json`, `before-after-exhibit.json`, and `milestone-release-report.json`.
 - `judge-demo-report.json.repair_summary` aggregates repair/retry/rollback exhibit fields, including the repair round cap, auto recovery, root cause counts, repair history, and rollback ids. It only comes from bound workflow metrics / before-after exhibit data and does not replace the validator or oracle.
 - `before-after-exhibit.json` is the judge-facing exhibit entrypoint. It proves artifact binding, unsafe delta, and the harness contract; it does not replace `competition-run-summary.json`, `workflow-metrics.json`, or the evidence validator.
+- `harness/context-pack.json` and `harness/agent-index.json` are `run-batch-profile` generated H5 harness audit indexes and multi-agent continuation entrypoints. They expose the planner/worker/merge/report topology and worker assignments; they do not replace the summary, validator, or oracle, and they do not expand the semantic pass claim.
 - `translation_coverage_numerator` does not increase because of these exhibits; the coverage numerator may only count translator-generated candidates that pass the corresponding gate for a named slice.
 - All public paths must remain repo-relative. Do not put local absolute paths or WSL host paths into public claims.
