@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "status": "bound",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-calc-crc32",
+  "baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
+    "sha256": "e22aff0680395c2f1e9089f749baff18581e661524d1149655e65747a2c27ef1"
+  },
+  "final": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-safe.rs",
+    "sha256": "5720f15bcf2969abca55b5fb6ab781bd626bb9a54eaedac0769365578aa29b40"
+  },
+  "oracle_evidence": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
+    "sha256": "4ed8aa57f4b048a48f65e153b04b070a151e551971113e7f4d703185e14a1c91"
+  },
+  "accepted_patch": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
+    "sha256": "aec420af155515907b5f16d7d8b430916f87288859f489d60ae905f660eddda3"
+  },
+  "patch_log": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",
+    "sha256": "aef4c8f50199c324c72802430312fb8f14ba4be3f7294931035b81048c0b1904"
+  },
+  "unsafe_reduction": {
+    "status": "measured",
+    "baseline_total_unsafe": 2,
+    "current_total_unsafe": 0,
+    "reduced_by": 2,
+    "ratio": 0.0
+  },
+  "unsafe_scan_evidence": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-before-after-unsafe-scan.json",
+    "sha256": "6e43419dd07f8e1243999c58252b98cb6965d2ff7e6a0038feb6c749c84f3141"
+  },
+  "semantic_evidence": {
+    "schema_diff": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
+      "sha256": "ada37e7330eb10d1013d11ba9ef67d3fa0f30b46456cd693ddae94a9b6827862"
+    },
+    "final_source_snapshot": {
+      "path": "validation/l2_slices/src/fdb_calc_crc32.rs",
+      "sha256": "2d12af2971c732180eb64bc1c68a88888b7b442a2fdc4b3b7fa4e5edbce0c4ac"
+    }
+  },
+  "claim_boundary": {
+    "function": "fdb_calc_crc32",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file": "sources/FlashDB/src/fdb_utils.c",
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false,
+    "boundary": "This is a real FlashDB before/after exhibit. The baseline is a reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust baseline output is still skipped and is not claimed as the source of this baseline.",
+    "observable_fields": [
+      "return_code"
+    ],
+    "non_goals": [
+      "C2Rust-generated baseline claim",
+      "translator-generated semantic pass",
+      "whole-project FlashDB migration",
+      "general pointer alias model"
+    ]
+  }
+}

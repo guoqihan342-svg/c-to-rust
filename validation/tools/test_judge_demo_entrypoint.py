@@ -29,13 +29,21 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
 
         required_fragments = [
             "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
             "python -B -m validation.tools.opencode_agent_harness run-batch-profile",
             "target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json",
+            "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
+            "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs",
+            "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-safe.rs",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
+            "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
             "python -B validation/tools/milestone_release_report.py",
             "target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json",
+            "target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json",
+            "real-fdb-calc-crc32",
+            "C2Rust baseline output remains skipped",
             "translation_coverage_numerator",
             "generated_draft_semantic_pass=false",
         ]
@@ -45,7 +53,9 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
 
         public_index_fragments = [
             "python -B -m validation.tools.opencode_agent_harness run-batch-profile",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
             "target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json",
+            "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
             "python -B validation/tools/milestone_release_report.py",
             "translation_coverage_numerator",
         ]
