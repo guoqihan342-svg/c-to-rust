@@ -568,6 +568,18 @@ def worker_unit_status_copy(unit: Any, worker: dict[str, Any]) -> Any:
         return unit
     copied = dict(unit)
     copied.setdefault("worker_summary_path", worker["path"])
+    repair_history = copied.get("repair_history")
+    if isinstance(repair_history, dict):
+        normalized_repair_history = dict(repair_history)
+        patch_events_path = normalized_repair_history.get("patch_events_path")
+        if isinstance(patch_events_path, str) and is_safe_posix_relative(patch_events_path):
+            patch_parts = Path(patch_events_path).parts
+            if patch_parts and patch_parts[0] not in {"workers", "evidence", "target", "validation"}:
+                worker_summary_parent = Path(str(worker["path"])).parent
+                normalized_repair_history["patch_events_path"] = (
+                    worker_summary_parent / Path(patch_events_path)
+                ).as_posix()
+        copied["repair_history"] = normalized_repair_history
     return copied
 
 

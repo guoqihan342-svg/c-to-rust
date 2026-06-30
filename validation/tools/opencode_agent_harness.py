@@ -3557,7 +3557,7 @@ def annotate_retry_worker_metrics(
     statuses = [str(event.get("status")) for event in history_events if isinstance(event.get("status"), str)]
     rollback_ids = retry_rollback_ids(attempts)
     repair_history = {
-        "patch_events_path": history_path.name,
+        "patch_events_path": repo_relative(history_path, repo_root=repo_root),
         "patch_events_sha256": sha256_file(history_path),
         "statuses": statuses,
         "rollback_ids": rollback_ids,

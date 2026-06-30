@@ -1785,6 +1785,119 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_run_batch_profile_auto_retry_produces_verified_before_after_repair_exhibit(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "demo-source"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int store_add_one(int value, int* out) {
+                    out[0] = value + 1;
+                    return 0;
+                }
+                """,
+                encoding="utf-8",
+            )
+            spec_path = write_slice_spec(
+                Path(tmp) / "slice-specs" / "store-add-one.json",
+                "demo",
+                "store-add-one",
+                "store_add_one",
+                "abc123",
+            )
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-before-after-auto-repair",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["store_add_one"],
+                        "slice_specs": [repo_rel(spec_path)],
+                        "reuse_accepted_evidence": True,
+                        "accepted_evidence_root": "validation/evidence",
+                        "slice_id_prefix": "demo",
+                        "worker_prefix": "worker",
+                        "mode": "deterministic",
+                        "execute_merge": True,
+                        "auto_retry": True,
+                        "emit_before_after_exhibit_report": True,
+                        "require_repair_trace": True,
+                        "acceptance_boundary": {
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "claim": "test auto-retry before/after exhibit",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            worker_attempts = 0
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal worker_attempts
+                if "scripts/c2rust-migrator.py" in argv:
+                    worker_attempts += 1
+                    request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                    if worker_attempts == 1:
+                        write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
+                    else:
+                        write_worker_summary(
+                            summary_path,
+                            request["run_id"],
+                            status="passed",
+                            failed=0,
+                            semantic_pass=1,
+                            workflow_metrics=before_after_worker_metrics(out_root, request["run_id"]),
+                        )
+                    return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {worker_attempts}\n", stderr="")
+                return subprocess.run(
+                    argv,
+                    cwd=REPO_ROOT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    capture_output=True,
+                )
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-before-after-auto-repair",
+                out_root=out_root,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(worker_attempts, 2)
+            self.assertEqual(result["run_plan"]["auto_retry"]["retried_worker_count"], 1)
+            exhibit = json.loads((out_root / "summary" / "before-after-exhibit.json").read_text(encoding="utf-8"))
+            repairer = exhibit["stage_contracts"]["repairer"]
+            self.assertEqual(repairer["status"], "verified")
+            self.assertEqual(repairer["observed_repair_unit_count"], 1)
+            self.assertEqual(repairer["histories"][0]["repair_rounds"], 1)
+            self.assertTrue(repairer["histories"][0]["auto_recovered"])
+            repair_history = repairer["histories"][0]["repair_history"]
+            self.assertTrue(repair_history["verified"])
+            self.assertIn("verified", repair_history["statuses"])
+            self.assertRegex(repair_history["patch_events_sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(len(repair_history["rollback_ids"]), 1)
+            self.assertTrue((REPO_ROOT / repair_history["patch_events_path"]).exists())
+            unit = exhibit["units"][0]
+            self.assertEqual(unit["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(unit["repair_history"], repair_history)
+            summary_metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary_metrics["translation_before_after"]["status"], "bound")
+            self.assertEqual(summary_metrics["per_unit_statuses"][0]["repair_history"], repair_history)
+
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -3636,7 +3749,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(unit["repair_rounds"], 1)
             self.assertTrue(unit["auto_recovered"])
             repair_history = unit["repair_history"]
-            repair_history_path = summary_path.parent / repair_history["patch_events_path"]
+            repair_history_path = REPO_ROOT / repair_history["patch_events_path"]
             self.assertTrue(repair_history_path.exists())
             self.assertEqual(repair_history["patch_events_sha256"], harness.sha256_file(repair_history_path))
             self.assertIn("verified", repair_history["statuses"])
