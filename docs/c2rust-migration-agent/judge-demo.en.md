@@ -73,6 +73,7 @@ The fallback demo shows unsafe 3 -> 0 for `demo/store-add-one`.
 ## Claim Boundary
 
 - `judge-demo-report.json` is the one-command aggregate report. It binds the paths and sha256 values for `competition-run-summary.json`, `workflow-metrics.json`, `before-after-exhibit.json`, and `milestone-release-report.json`.
+- `judge-demo-report.json.repair_summary` aggregates repair/retry/rollback exhibit fields, including the repair round cap, auto recovery, root cause counts, repair history, and rollback ids. It only comes from bound workflow metrics / before-after exhibit data and does not replace the validator or oracle.
 - `before-after-exhibit.json` is the judge-facing exhibit entrypoint. It proves artifact binding, unsafe delta, and the harness contract; it does not replace `competition-run-summary.json`, `workflow-metrics.json`, or the evidence validator.
 - `translation_coverage_numerator` does not increase because of these exhibits; the coverage numerator may only count translator-generated candidates that pass the corresponding gate for a named slice.
 - All public paths must remain repo-relative. Do not put local absolute paths or WSL host paths into public claims.

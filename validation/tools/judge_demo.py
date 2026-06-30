@@ -249,6 +249,10 @@ def build_report(
             ),
             "milestone_status": milestone_status,
         },
+        "repair_summary": build_repair_summary(
+            workflow_metrics=workflow_metrics,
+            before_after_exhibit=before_after_exhibit,
+        ),
         "claim_boundary": {
             "semantic_claim_source": "competition-run-summary.final_gate",
             "before_after_exhibit_role": (
@@ -261,6 +265,77 @@ def build_report(
             ],
         },
     }
+
+
+def build_repair_summary(*, workflow_metrics: dict[str, Any], before_after_exhibit: dict[str, Any]) -> dict[str, Any]:
+    stage_contracts = before_after_exhibit.get("stage_contracts")
+    repairer = stage_contracts.get("repairer") if isinstance(stage_contracts, dict) else {}
+    if not isinstance(repairer, dict):
+        repairer = {}
+    histories = repairer.get("histories")
+    normalized_histories = (
+        [history for history in histories if isinstance(history, dict)]
+        if isinstance(histories, list)
+        else repair_histories_from_workflow_metrics(workflow_metrics)
+    )
+    verified = any(history.get("verified") for history in normalized_histories)
+    status = str(repairer.get("status") or ("verified" if verified else ("recorded" if normalized_histories else "not_exercised")))
+    repair_round_cap = repairer.get("repair_round_cap")
+    cap = nonnegative_int(repair_round_cap) if repair_round_cap is not None else int(getattr(harness, "REPAIR_ROUND_CAP", 5))
+    root_cause_counts = repairer.get("root_cause_counts")
+    if not isinstance(root_cause_counts, dict):
+        root_cause_counts = workflow_metrics.get("root_cause_counts") if isinstance(workflow_metrics.get("root_cause_counts"), dict) else {}
+    return {
+        "status": status,
+        "repair_round_cap": cap,
+        "observed_repair_unit_count": len(normalized_histories),
+        "auto_recovered_unit_count": sum(1 for history in normalized_histories if history.get("auto_recovered")),
+        "rollback_evidence_count": sum(repair_history_rollback_count(history) for history in normalized_histories),
+        "avg_repair_rounds": float(repairer.get("avg_repair_rounds", workflow_metrics.get("avg_repair_rounds", 0.0)) or 0.0),
+        "auto_recovery_rate": float(repairer.get("auto_recovery_rate", workflow_metrics.get("auto_recovery_rate", 0.0)) or 0.0),
+        "human_interventions": nonnegative_int(workflow_metrics.get("human_interventions")),
+        "root_cause_counts": root_cause_counts,
+        "histories": normalized_histories,
+        "evidence_boundary": str(
+            repairer.get(
+                "evidence_boundary",
+                "Repair history is shown only when workflow metrics bind measured repair or retry evidence.",
+            )
+        ),
+    }
+
+
+def repair_histories_from_workflow_metrics(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    histories = []
+    per_unit = workflow_metrics.get("per_unit_statuses")
+    if not isinstance(per_unit, list):
+        return histories
+    for unit in per_unit:
+        if not isinstance(unit, dict) or not isinstance(unit.get("repair_history"), dict):
+            continue
+        history = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "source": str(unit.get("source", "unknown")),
+            "status": str(unit.get("status", "unknown")),
+            "repair_rounds": nonnegative_int(unit.get("repair_rounds")),
+            "auto_recovered": bool(unit.get("auto_recovered", False)),
+            "verified": bool(unit["repair_history"].get("verified", False)),
+            "repair_history": unit["repair_history"],
+        }
+        if isinstance(unit.get("root_cause_key"), str):
+            history["root_cause_key"] = unit["root_cause_key"]
+        histories.append(history)
+    return histories
+
+
+def repair_history_rollback_count(history: dict[str, Any]) -> int:
+    repair_history = history.get("repair_history")
+    if not isinstance(repair_history, dict):
+        return 0
+    rollback_ids = repair_history.get("rollback_ids")
+    if not isinstance(rollback_ids, list):
+        return 0
+    return sum(1 for rollback_id in rollback_ids if isinstance(rollback_id, str) and rollback_id)
 
 
 def resolve_workflow_metrics_path(

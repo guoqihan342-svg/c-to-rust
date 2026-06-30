@@ -38,6 +38,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
+            "repair_summary",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
             "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs",
@@ -64,6 +65,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
+            "repair_summary",
             "python -B validation/tools/milestone_release_report.py",
             "translation_coverage_numerator",
         ]
@@ -143,6 +145,16 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(persisted["metrics"]["translation_before_after"]["status"], "bound")
         self.assertEqual(persisted["metrics"]["translation_coverage_numerator"], 0)
         self.assertEqual(set(persisted["metrics"]["stage_contracts"]), {"planner", "worker", "verifier", "repairer", "reporter"})
+        self.assertEqual(persisted["repair_summary"]["status"], "verified")
+        self.assertEqual(persisted["repair_summary"]["repair_round_cap"], 5)
+        self.assertEqual(persisted["repair_summary"]["observed_repair_unit_count"], 1)
+        self.assertEqual(persisted["repair_summary"]["auto_recovered_unit_count"], 1)
+        self.assertEqual(persisted["repair_summary"]["rollback_evidence_count"], 1)
+        self.assertEqual(persisted["repair_summary"]["histories"][0]["unit_id"], "flashdb/real-fdb-calc-crc32")
+        self.assertEqual(
+            persisted["repair_summary"]["histories"][0]["repair_history"]["patch_events_path"],
+            "retry-repair-history-judge-demo-unit.jsonl",
+        )
         self.assertEqual([command["stage"] for command in persisted["commands"]], [
             "run_batch_profile",
             "validate_summary",
@@ -150,6 +162,56 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         ])
         self.assertEqual(persisted["commands"][0]["argv"][0], "python")
         self.assertIn("translator-generated semantic pass", persisted["claim_boundary"]["must_not_claim"][1])
+
+    def test_repair_summary_falls_back_to_workflow_metrics(self) -> None:
+        from validation.tools import judge_demo
+
+        workflow_metrics = {
+            "human_interventions": 2,
+            "avg_repair_rounds": 2.0,
+            "auto_recovery_rate": 0.5,
+            "root_cause_counts": {"rustc:E0609": 1, "oracle:diff": 1},
+            "per_unit_statuses": [
+                {
+                    "unit_id": "flashdb/unit-a",
+                    "source": "opencode-worker",
+                    "status": "failed",
+                    "repair_rounds": 3,
+                    "auto_recovered": False,
+                    "root_cause_key": "rustc:E0609",
+                    "repair_history": {
+                        "verified": False,
+                        "rollback_ids": ["target/judge-demo-unit/workers/unit-a/rollback-before-retry.json"],
+                    },
+                },
+                {
+                    "unit_id": "flashdb/unit-b",
+                    "source": "opencode-worker",
+                    "status": "passed",
+                    "repair_rounds": 1,
+                    "auto_recovered": True,
+                    "root_cause_key": "oracle:diff",
+                    "repair_history": {
+                        "verified": True,
+                        "rollback_ids": [],
+                    },
+                },
+            ],
+        }
+
+        summary = judge_demo.build_repair_summary(
+            workflow_metrics=workflow_metrics,
+            before_after_exhibit={},
+        )
+
+        self.assertEqual(summary["status"], "verified")
+        self.assertEqual(summary["observed_repair_unit_count"], 2)
+        self.assertEqual(summary["auto_recovered_unit_count"], 1)
+        self.assertEqual(summary["rollback_evidence_count"], 1)
+        self.assertEqual(summary["human_interventions"], 2)
+        self.assertEqual(summary["root_cause_counts"], {"rustc:E0609": 1, "oracle:diff": 1})
+        self.assertEqual(summary["histories"][0]["unit_id"], "flashdb/unit-a")
+        self.assertEqual(summary["histories"][0]["repair_rounds"], 3)
 
 
 def write_judge_demo_fixture_outputs(out_root: Path) -> None:
@@ -178,18 +240,53 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
             "accepted_patch_unit_count": 1,
             "units": [],
         },
-        "avg_repair_rounds": 0.0,
-        "auto_recovery_rate": 0.0,
+        "avg_repair_rounds": 1.0,
+        "auto_recovery_rate": 1.0,
         "human_interventions": 0,
         "always_compiles": True,
         "always_equivalent": True,
         "fail_closed_count": 0,
-        "root_cause_counts": {},
+        "root_cause_counts": {"rustc:E0308": 1},
         "wall_clock_seconds": 1,
         "llm_calls": 0,
-        "per_unit_statuses": [],
+        "per_unit_statuses": [
+            {
+                "unit_id": "flashdb/real-fdb-calc-crc32",
+                "source": "accepted-evidence-authoritative",
+                "status": "passed",
+                "repair_rounds": 1,
+                "auto_recovered": True,
+                "root_cause_key": "rustc:E0308",
+                "repair_history": {
+                    "patch_events_path": "retry-repair-history-judge-demo-unit.jsonl",
+                    "patch_events_sha256": "",
+                    "statuses": ["failed", "verified"],
+                    "rollback_ids": ["target/judge-demo-unit/workers/rollback-before-retry.json"],
+                    "verified": True,
+                },
+            }
+        ],
     }
     workflow_path = summary_dir / "workflow-metrics.json"
+    repair_history_path = summary_dir / "retry-repair-history-judge-demo-unit.jsonl"
+    repair_history_path.write_text(
+        json.dumps(
+            {
+                "attempt": 1,
+                "status": "failed",
+                "root_cause_key": "rustc:E0308",
+                "rollback_evidence": {"path": "target/judge-demo-unit/workers/rollback-before-retry.json"},
+            },
+            sort_keys=True,
+        )
+        + "\n"
+        + json.dumps({"attempt": 2, "status": "verified"}, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    workflow_metrics["per_unit_statuses"][0]["repair_history"]["patch_events_sha256"] = judge_demo_sha256(
+        repair_history_path
+    )
     workflow_path.write_text(json.dumps(workflow_metrics, sort_keys=True) + "\n", encoding="utf-8")
     summary = {
         "schema_version": 1,
@@ -216,7 +313,26 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
             "planner": {"status": "planned"},
             "worker": {"status": "passed"},
             "verifier": {"status": "passed"},
-            "repairer": {"status": "not_exercised"},
+            "repairer": {
+                "status": "verified",
+                "repair_round_cap": 5,
+                "observed_repair_unit_count": 1,
+                "avg_repair_rounds": 1.0,
+                "auto_recovery_rate": 1.0,
+                "root_cause_counts": {"rustc:E0308": 1},
+                "histories": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "source": "accepted-evidence-authoritative",
+                        "status": "passed",
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "verified": True,
+                        "repair_history": workflow_metrics["per_unit_statuses"][0]["repair_history"],
+                        "root_cause_key": "rustc:E0308",
+                    }
+                ],
+            },
             "reporter": {"status": "passed"},
         },
     }

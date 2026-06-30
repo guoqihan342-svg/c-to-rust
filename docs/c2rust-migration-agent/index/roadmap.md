@@ -49,4 +49,4 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 
-边界：真实 FlashDB exhibit 为 `real-fdb-calc-crc32` 绑定 accepted-evidence before/after artifacts，展示 unsafe 2 -> 0。C2Rust baseline output remains skipped，`generated_draft_semantic_pass=false`，该 exhibit 不增加 `translation_coverage_numerator`。
+边界：真实 FlashDB exhibit 为 `real-fdb-calc-crc32` 绑定 accepted-evidence before/after artifacts，展示 unsafe 2 -> 0。`judge-demo-report.json.repair_summary` 只汇总已绑定 workflow metrics / before-after exhibit 中的 repair/retry/rollback 字段，不替代 validator 或 oracle。C2Rust baseline output remains skipped，`generated_draft_semantic_pass=false`，该 exhibit 不增加 `translation_coverage_numerator`。

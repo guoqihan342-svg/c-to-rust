@@ -57,7 +57,7 @@ Fallback artifacts:
 - `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 
-Boundary: the real FlashDB exhibit binds accepted-evidence before/after artifacts for `real-fdb-calc-crc32` and unsafe 2 -> 0. C2Rust baseline output remains skipped, `generated_draft_semantic_pass=false`, and the exhibit does not increase `translation_coverage_numerator`.
+Boundary: the real FlashDB exhibit binds accepted-evidence before/after artifacts for `real-fdb-calc-crc32` and unsafe 2 -> 0. `judge-demo-report.json.repair_summary` only aggregates repair/retry/rollback fields from bound workflow metrics / before-after exhibit data and does not replace the validator or oracle. C2Rust baseline output remains skipped, `generated_draft_semantic_pass=false`, and the exhibit does not increase `translation_coverage_numerator`.
 
 ## Maintenance Notes
 
