@@ -1393,6 +1393,7 @@ def write_evaluate_profile_report(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
+    db_path: Path | None = None
     db_path_text = batch_result.get("db_path")
     if isinstance(db_path_text, str) and db_path_text:
         db_path = repo_path(Path(db_path_text), repo_root=repo_root)
@@ -1445,7 +1446,190 @@ def write_evaluate_profile_report(
                 )
             record_event(connection, run_id=run_id, event_type="evaluate_profile_executed", payload=payload)
             connection.commit()
+    judge_index_artifact = write_judge_evidence_index(
+        evaluate_report=payload,
+        evaluate_report_path=report_path,
+        batch_result=batch_result,
+        profile_path=profile_path,
+        run_id=run_id,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    if db_path is not None:
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="judge-evidence-index",
+                path=repo_path(Path(judge_index_artifact["binding"]["path"]), repo_root=repo_root),
+                status=str(judge_index_artifact["binding"]["status"]),
+                semantic_role="judge-evidence-index",
+                payload=judge_index_artifact["payload"],
+                repo_root=repo_root,
+            )
+            record_event(
+                connection,
+                run_id=run_id,
+                event_type="judge_evidence_index_written",
+                payload=judge_index_artifact["binding"],
+            )
+            connection.commit()
     return payload
+
+
+def write_judge_evidence_index(
+    *,
+    evaluate_report: dict[str, Any],
+    evaluate_report_path: Path,
+    batch_result: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    profile_path = repo_path(profile_path, repo_root=repo_root)
+    evaluate_report_path = repo_path(evaluate_report_path, repo_root=repo_root)
+    index_path = out_root / "harness" / "judge-evidence-index.json"
+    judge_summary = evaluate_report.get("judge_summary") if isinstance(evaluate_report.get("judge_summary"), dict) else {}
+    architecture = (
+        json.loads(json.dumps(judge_summary.get("harness_architecture")))
+        if isinstance(judge_summary.get("harness_architecture"), dict)
+        else {}
+    )
+    core_quality = (
+        json.loads(json.dumps(judge_summary.get("core_translation_quality")))
+        if isinstance(judge_summary.get("core_translation_quality"), dict)
+        else {}
+    )
+    artifact_refs: dict[str, dict[str, Any]] = {}
+
+    def add_binding(name: str, value: Any) -> None:
+        binding = artifact_binding_from_value(value, repo_root=repo_root)
+        if binding is not None:
+            artifact_refs[name] = binding
+
+    def add_path(name: str, value: Any) -> None:
+        if not isinstance(value, str) or not value:
+            return
+        path = repo_path(Path(value), repo_root=repo_root)
+        artifact_refs[name] = (
+            artifact_ref(path, repo_root=repo_root)
+            if path.is_file()
+            else {"path": value, "sha256": ""}
+        )
+
+    artifact_refs["evaluate_report"] = artifact_ref(evaluate_report_path, repo_root=repo_root)
+    artifact_refs["profile"] = artifact_ref(profile_path, repo_root=repo_root)
+    add_binding("batch_profile_report", evaluate_report.get("batch_profile_report"))
+    add_binding("context_pack", evaluate_report.get("context_pack"))
+    add_binding("agent_index", evaluate_report.get("agent_index"))
+    add_binding("route_governance_metrics_report", evaluate_report.get("route_governance_metrics_report"))
+    add_binding("before_after_exhibit_report", evaluate_report.get("before_after_exhibit_report"))
+
+    summary_validation = (
+        evaluate_report.get("summary_validation")
+        if isinstance(evaluate_report.get("summary_validation"), dict)
+        else {}
+    )
+    summary_path_text = summary_validation.get("summary") if isinstance(summary_validation, dict) else None
+    if isinstance(summary_path_text, str) and summary_path_text:
+        add_path("competition_run_summary", summary_path_text)
+        summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+        if summary_path.is_file():
+            summary = load_json(summary_path)
+            add_binding("workflow_metrics", summary.get("workflow_metrics"))
+
+    run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
+    add_path("run_plan_report", run_plan.get("report_path"))
+    merge_plan = run_plan.get("merge_plan") if isinstance(run_plan.get("merge_plan"), dict) else {}
+    add_path("merge_plan", merge_plan.get("path"))
+    add_path("worker_plan", batch_result.get("plan_path"))
+
+    profile_rel = repo_relative(profile_path, repo_root=repo_root)
+    out_root_rel = repo_relative(out_root, repo_root=repo_root)
+    reproduction_commands = {
+        "evaluate_profile": (
+            "python -B -m validation.tools.opencode_agent_harness evaluate "
+            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+        ),
+        "run_batch_profile": (
+            "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+        ),
+    }
+    if isinstance(summary_path_text, str) and summary_path_text:
+        reproduction_commands["summary_validation"] = (
+            "python -B validation/tools/validate_competition_run_summary.py "
+            f"--summary {summary_path_text}"
+        )
+
+    acceptance_boundary = (
+        evaluate_report.get("acceptance_boundary")
+        if isinstance(evaluate_report.get("acceptance_boundary"), dict)
+        else {}
+    )
+    route_metrics = (
+        evaluate_report.get("route_governance_metrics_report")
+        if isinstance(evaluate_report.get("route_governance_metrics_report"), dict)
+        else {}
+    )
+    generated_draft_semantic_pass = acceptance_boundary.get(
+        "generated_draft_semantic_pass",
+        core_quality.get("generated_draft_semantic_pass", False),
+    )
+    if not isinstance(generated_draft_semantic_pass, bool):
+        generated_draft_semantic_pass = False
+    translation_coverage_numerator = route_metrics.get("translation_coverage_numerator", 0)
+    if isinstance(translation_coverage_numerator, bool):
+        translation_coverage_numerator = 0
+    try:
+        translation_coverage_numerator_int = int(translation_coverage_numerator)
+    except (TypeError, ValueError):
+        translation_coverage_numerator_int = 0
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "judge-evidence-index",
+        "entrypoint": "evaluate --profile",
+        "status": str(evaluate_report.get("status", "unknown")),
+        "exit_code": int(evaluate_report.get("exit_code", 1)),
+        "run_id": run_id,
+        "out_root": out_root_rel,
+        "profile": artifact_ref(profile_path, repo_root=repo_root),
+        "profile_id": evaluate_report.get("profile_id"),
+        "proof_class": evaluate_report.get("proof_class"),
+        "mode": evaluate_report.get("mode"),
+        "harness_architecture": architecture,
+        "core_translation_quality": core_quality,
+        "evidence_artifact_refs": artifact_refs,
+        "reproduction_commands": reproduction_commands,
+        "claim_boundary": {
+            "index_is_semantic_gate": False,
+            "semantic_claim_source": core_quality.get(
+                "semantic_claim_source",
+                acceptance_boundary.get("semantic_claim_source", "unknown"),
+            ),
+            "generated_draft_semantic_pass": generated_draft_semantic_pass,
+            "translation_coverage_numerator": translation_coverage_numerator_int,
+            "boundary": (
+                "This file is a compact judge-facing index over existing verified artifacts. "
+                "It does not add a semantic acceptance gate, does not self-reference its own hash, "
+                "and does not count accepted-evidence bindings as translator-generated semantic pass."
+            ),
+        },
+    }
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    binding = artifact_ref(index_path, repo_root=repo_root)
+    binding.update(
+        {
+            "status": str(payload["status"]),
+            "report_kind": "judge-evidence-index",
+        }
+    )
+    return {"binding": binding, "payload": payload}
 
 
 def evaluate_profile_judge_summary(value: Any) -> dict[str, Any]:
@@ -2500,6 +2684,18 @@ def path_ref_from_text(value: Any, *, repo_root: Path) -> dict[str, str] | None:
     if not path.exists():
         return {"path": value, "sha256": ""}
     return artifact_ref(path, repo_root=repo_root)
+
+
+def artifact_binding_from_value(value: Any, *, repo_root: Path) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not isinstance(value.get("path"), str) or not value["path"]:
+        return None
+    binding = dict(value)
+    path = repo_path(Path(value["path"]), repo_root=repo_root)
+    if path.is_file():
+        binding["sha256"] = sha256_file(path)
+    else:
+        binding["sha256"] = str(value.get("sha256", ""))
+    return binding
 
 
 def route_governance_competition_summary_paths(out_root: Path) -> list[Path]:

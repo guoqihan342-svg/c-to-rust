@@ -171,6 +171,10 @@
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
         "sha256": "7ca6f03b525a7cac72f390a10434b11b3ee936ea4435f47fad308b41a12f1f3d"
       },
+      "judge_evidence_index": {
+        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
+        "sha256": "8f00a3e132e6714ec322b0e64325428e5e603154cdf505cb60342898e48451ed"
+      },
       "run_plan_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
         "sha256": "68286c31ef46307c757e8166016ad422b073be5031fd2cb14cef8d5618cf5824"

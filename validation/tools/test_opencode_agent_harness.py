@@ -2533,6 +2533,29 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            write_worker_summary(
+                summary_path,
+                "run-evaluate-profile",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=measured_unsafe_worker_metrics("run-evaluate-profile"),
+            )
+            workflow_metrics_path = summary_path.parent / "workflow-metrics.json"
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary_payload["workflow_metrics"]["path"] = repo_rel(workflow_metrics_path)
+            summary_path.write_text(json.dumps(summary_payload, sort_keys=True) + "\n", encoding="utf-8")
+            run_plan_report_path = out_root / "harness" / "run-plan-report.json"
+            merge_plan_path = out_root / "harness" / "merge-plan.json"
+            worker_plan_path = out_root / "harness" / "plans" / "workers.json"
+            for path, payload in [
+                (run_plan_report_path, {"report_kind": "run-plan-report"}),
+                (merge_plan_path, {"report_kind": "merge-plan"}),
+                (worker_plan_path, {"report_kind": "worker-plan"}),
+            ]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
             batch_result = {
                 "status": "completed",
                 "exit_code": 0,
@@ -2543,11 +2566,26 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "proof_class": "local-simulation",
                 "mode": "deterministic",
                 "report_path": repo_rel(batch_report_path),
+                "plan_path": repo_rel(worker_plan_path),
+                "run_plan": {
+                    "report_path": repo_rel(run_plan_report_path),
+                    "merge_plan": {"path": repo_rel(merge_plan_path)},
+                    "merge_execution": {"summary_path": repo_rel(summary_path)},
+                },
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
                 "context_pack": {"path": repo_rel(context_pack_path), "sha256": "old"},
                 "agent_index": {"path": repo_rel(agent_index_path), "sha256": "old"},
                 "judge_summary": {
                     "entrypoint": "run-batch-profile",
                     "harness_architecture": {"entrypoint": "run-batch-profile"},
+                    "core_translation_quality": {
+                        "semantic_claim_source": "accepted_evidence_binding",
+                        "generated_draft_semantic_pass": False,
+                        "semantic_pass_count": 1,
+                    },
                 },
             }
 
@@ -2569,6 +2607,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["batch_profile_report"]["path"], repo_rel(batch_report_path))
             self.assertEqual(report["judge_summary"]["harness_architecture"]["context_pack"], report["context_pack"])
             self.assertEqual(report["judge_summary"]["harness_architecture"]["agent_index"], report["agent_index"])
+            self.assertEqual(report["summary_validation"]["semantic_pass"], 1)
 
             context_pack = json.loads(context_pack_path.read_text(encoding="utf-8"))
             self.assertEqual(context_pack["entrypoints"]["primary_report"], repo_rel(report_path))
@@ -2584,10 +2623,39 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 batch_report["judge_summary"]["harness_architecture"]["context_pack"],
                 report["context_pack"],
             )
+            index_path = out_root / "harness" / "judge-evidence-index.json"
+            self.assertTrue(index_path.exists())
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            self.assertEqual(index["report_kind"], "judge-evidence-index")
+            self.assertEqual(index["entrypoint"], "evaluate --profile")
+            self.assertEqual(index["profile_id"], "demo-profile")
+            self.assertFalse(index["claim_boundary"]["index_is_semantic_gate"])
+            self.assertFalse(index["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertEqual(index["claim_boundary"]["translation_coverage_numerator"], 0)
+            self.assertIn("does not add a semantic acceptance gate", index["claim_boundary"]["boundary"])
+            self.assertEqual(index["harness_architecture"]["entrypoint"], "evaluate")
+            self.assertEqual(index["core_translation_quality"]["semantic_pass_count"], 1)
+            artifact_refs = index["evidence_artifact_refs"]
+            self.assertNotIn("judge_evidence_index", artifact_refs)
+            self.assertEqual(artifact_refs["evaluate_report"]["path"], repo_rel(report_path))
+            self.assertEqual(artifact_refs["evaluate_report"]["sha256"], harness.sha256_file(report_path))
+            self.assertEqual(artifact_refs["batch_profile_report"]["path"], repo_rel(batch_report_path))
+            self.assertEqual(artifact_refs["context_pack"]["path"], report["context_pack"]["path"])
+            self.assertEqual(artifact_refs["agent_index"]["path"], report["agent_index"]["path"])
+            self.assertEqual(artifact_refs["competition_run_summary"]["path"], repo_rel(summary_path))
+            self.assertEqual(artifact_refs["workflow_metrics"]["path"], repo_rel(workflow_metrics_path))
+            self.assertEqual(
+                artifact_refs["workflow_metrics"]["sha256"],
+                summary_payload["workflow_metrics"]["sha256"],
+            )
+            self.assertEqual(artifact_refs["run_plan_report"]["path"], repo_rel(run_plan_report_path))
+            self.assertEqual(artifact_refs["merge_plan"]["path"], repo_rel(merge_plan_path))
+            self.assertEqual(artifact_refs["worker_plan"]["path"], repo_rel(worker_plan_path))
+            self.assertIn("--summary " + repo_rel(summary_path), index["reproduction_commands"]["summary_validation"])
 
             artifact_rows = fetch_rows(
                 db_path,
-                "select kind, repo_rel_path, semantic_role from artifacts where kind in ('evaluate-report', 'context-pack', 'agent-index') order by kind",
+                "select kind, repo_rel_path, semantic_role from artifacts where kind in ('evaluate-report', 'context-pack', 'agent-index', 'judge-evidence-index') order by kind",
             )
             self.assertEqual(
                 artifact_rows,
@@ -2595,13 +2663,21 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     ("agent-index", repo_rel(agent_index_path), "agent-index"),
                     ("context-pack", repo_rel(context_pack_path), "agent-context-pack"),
                     ("evaluate-report", repo_rel(report_path), "evaluate-report"),
+                    ("judge-evidence-index", repo_rel(index_path), "judge-evidence-index"),
                 ],
             )
             event_rows = fetch_rows(
                 db_path,
-                "select event_type from events where event_type in ('evaluate_profile_context_refs_updated', 'evaluate_profile_executed') order by event_type",
+                "select event_type from events where event_type in ('evaluate_profile_context_refs_updated', 'evaluate_profile_executed', 'judge_evidence_index_written') order by event_type",
             )
-            self.assertEqual(event_rows, [("evaluate_profile_context_refs_updated",), ("evaluate_profile_executed",)])
+            self.assertEqual(
+                event_rows,
+                [
+                    ("evaluate_profile_context_refs_updated",),
+                    ("evaluate_profile_executed",),
+                    ("judge_evidence_index_written",),
+                ],
+            )
 
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:
         argv = [

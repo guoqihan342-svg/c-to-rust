@@ -53,6 +53,11 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
             evaluate_report["path"],
             "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
         )
+        judge_evidence_index = manifest["evaluate_profile_artifacts"]["artifacts"]["judge_evidence_index"]
+        self.assertEqual(
+            judge_evidence_index["path"],
+            "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
+        )
 
     def test_tracked_artifact_hashes_match(self):
         tracked_roots = [
@@ -76,7 +81,7 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
             *refs_from(self.manifest["target_run_artifacts"]),
             *refs_from(self.manifest["evaluate_profile_artifacts"]),
         ]
-        self.assertGreaterEqual(len(refs), 10)
+        self.assertGreaterEqual(len(refs), 11)
         existing_refs = 0
         for ref in refs:
             path = repo_path(ref["path"])
@@ -93,6 +98,26 @@ class FlashDBExplicitWorkersManifestTests(unittest.TestCase):
             self.assertEqual(evaluate_report["entrypoint"], "evaluate --profile")
             self.assertIn("not a new semantic gate", evaluate_report["claim_boundary"])
             self.assertFalse(evaluate_report["acceptance_boundary"]["generated_draft_semantic_pass"])
+        judge_index_path = repo_path(
+            self.manifest["evaluate_profile_artifacts"]["artifacts"]["judge_evidence_index"]["path"]
+        )
+        if judge_index_path.exists():
+            judge_index = json.loads(judge_index_path.read_text(encoding="utf-8"))
+            self.assertEqual(judge_index["report_kind"], "judge-evidence-index")
+            self.assertEqual(judge_index["entrypoint"], "evaluate --profile")
+            self.assertFalse(judge_index["claim_boundary"]["index_is_semantic_gate"])
+            self.assertFalse(judge_index["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertEqual(judge_index["claim_boundary"]["translation_coverage_numerator"], 0)
+            self.assertIn("does not add a semantic acceptance gate", judge_index["claim_boundary"]["boundary"])
+            self.assertEqual(
+                judge_index["evidence_artifact_refs"]["evaluate_report"]["path"],
+                self.manifest["evaluate_profile_artifacts"]["artifacts"]["evaluate_report"]["path"],
+            )
+            self.assertEqual(
+                judge_index["evidence_artifact_refs"]["competition_run_summary"]["path"],
+                self.manifest["evaluate_profile_artifacts"]["artifacts"]["competition_summary"]["path"],
+            )
+            self.assertNotIn("judge_evidence_index", judge_index["evidence_artifact_refs"])
         if repo_path(target_root["path"]).exists():
             self.assertGreater(existing_refs, 0)
 
