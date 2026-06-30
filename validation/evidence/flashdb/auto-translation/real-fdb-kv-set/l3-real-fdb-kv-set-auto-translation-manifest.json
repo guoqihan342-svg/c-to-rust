@@ -2,7 +2,7 @@
   "accepted_evidence_binding": null,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
+    "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
     "status": "skipped"
   },
   "cache": {
@@ -15,9 +15,9 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
+    "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "c2rust_baseline_identity": {
-      "sha256": "11e743e1919d6ab657d0b3c51dd4bead497e8314028c0a571f2e2c5ade188d13",
+      "sha256": "d9d465a4a4e91c1c2053358f31154d6a124435766c16736495a1a885920e6487",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -62,19 +62,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
+        "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "1dac80ea547f5ef0ebdf342c2b038a6e1d06d9b0d456b9f8c023e9c9fa4222cc",
+        "sha256": "9e42b703cddd04793305fbc6bf795446787c5052f6f072920ae1eda370a2cf46",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
         "profile": "L4-dev",
-        "sha256": "869fc633c40f120e59c8be34678b221c6e68845bd8a0b60900e236dd4e060fd9",
+        "sha256": "b580d96be1a025bfac54f35ed741ee5db83bcdd7f8b31cd3f3f92f9d6b2fc679",
         "status": "blocked"
       }
     },
@@ -115,11 +115,11 @@
       "summary"
     ],
     "oracle_boundary_contract_identity": {
-      "sha256": "027a79ac922a0c7e52e569fb23e0a4f85c59b0cdb12f5760dae7f624f615e95c",
+      "sha256": "cbf236e2b15ea7f0f14d2e5fadf243312a3856bb0a5ca1b2a528ac7b22e679e8",
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "b34d572bcb5c25e102ac3e5960ec17a9ee1bcc946d2630e017797f5e721e80de",
+      "sha256": "bb12366f2b2430c59b56b185125594a7b05c87324f85fbaf8962a0ae746fef56",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -136,7 +136,7 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-kv-set",
-    "slice_spec_sha256": "0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
+    "slice_spec_sha256": "9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
     "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
@@ -151,7 +151,7 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "81841bcee6cc2130dc59b39fbf5dd8e00c8b58275533951c02818caf9e2e62f1",
+      "sha256": "b2cbc530420a96f5bf409d91b4804a6fafc279d7a3aa93215ceba14da582895f",
       "status": "blocked"
     }
   },
@@ -217,6 +217,9 @@
         "-Isources/FlashDB/tests",
         "l3-real-fdb-kv-set-c-oracle-harness-draft.c",
         "sources/FlashDB/src/fdb_kvdb.c",
+        "sources/FlashDB/src/fdb_utils.c",
+        "sources/FlashDB/src/fdb.c",
+        "sources/FlashDB/src/fdb_file.c",
         "-o",
         "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
       ],
@@ -228,9 +231,30 @@
           "resolved_path": "sources/FlashDB/src/fdb_kvdb.c",
           "role": "source",
           "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+        },
+        {
+          "path": "src/fdb_utils.c",
+          "resolution": "source_root_relative",
+          "resolved_path": "sources/FlashDB/src/fdb_utils.c",
+          "role": "link_dependency",
+          "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+        },
+        {
+          "path": "src/fdb.c",
+          "resolution": "source_root_relative",
+          "resolved_path": "sources/FlashDB/src/fdb.c",
+          "role": "link_dependency",
+          "sha256": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e"
+        },
+        {
+          "path": "src/fdb_file.c",
+          "resolution": "source_root_relative",
+          "resolved_path": "sources/FlashDB/src/fdb_file.c",
+          "role": "link_dependency",
+          "sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d"
         }
       ],
-      "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+      "link_strategy": "compile_harness_with_declared_c_boundary_and_build_profile_sources",
       "oracle_source_mode": "declared_c_boundary_sources",
       "resolved_include_paths": [
         "sources/FlashDB/inc",
@@ -248,6 +272,9 @@
         "-Isources/FlashDB/tests",
         "l3-real-fdb-kv-set-c-oracle-harness-draft.c",
         "sources/FlashDB/src/fdb_kvdb.c",
+        "sources/FlashDB/src/fdb_utils.c",
+        "sources/FlashDB/src/fdb.c",
+        "sources/FlashDB/src/fdb_file.c",
         "-o",
         "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
       ],
@@ -260,23 +287,65 @@
       "compiler_name": "cc",
       "compiler_path": "/usr/bin/cc",
       "diagnostics": [
-        "C oracle compile command failed; no oracle evidence accepted."
+        "C oracle compile command succeeded, but execution/diff gates are still required."
       ],
       "execution_argv": [
         "C:\\WINDOWS\\system32\\wsl.exe",
         "-e",
         "sh",
         "-lc",
-        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
+        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_file.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
       ],
+      "harness_execution": {
+        "argv": [
+          "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
+        ],
+        "attempted": true,
+        "diagnostics": [
+          "C oracle harness executed, but execution output has not passed oracle diff gates."
+        ],
+        "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe",
+        "execution_argv": [
+          "C:\\WINDOWS\\system32\\wsl.exe",
+          "-e",
+          "sh",
+          "-lc",
+          "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set && /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
+        ],
+        "output_gate": {
+          "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+          "compared_fields": [
+            "return_code"
+          ],
+          "diagnostics": [
+            "C oracle harness output gate has no supported fixture stdout markers to compare."
+          ],
+          "expected_stdout_fragments": [],
+          "fixture_expected_output_status": "missing_or_empty",
+          "gate": "c_oracle_harness_output",
+          "matched_stdout_fragments": [],
+          "missing_stdout_fragments": [],
+          "schema_version": 1,
+          "semantic_pass": false,
+          "status": "unsupported_not_oracle"
+        },
+        "returncode": 0,
+        "semantic_pass": false,
+        "status": "exited_zero_not_oracle",
+        "stderr": "",
+        "stdout": "oracle harness draft for fdb_kv_set\nfixture input: validation/l2_slices/fixtures/real-fdb-kv-set.json\n",
+        "timeout_seconds": 30,
+        "toolchain_adapter": "wsl",
+        "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
+      },
       "requested_compiler": "cc",
-      "returncode": 1,
+      "returncode": 0,
       "semantic_pass": false,
-      "status": "compile_failed",
+      "status": "compile_succeeded_not_oracle",
       "stderr": "In file included from /mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/flashdb.h:22,\n                 from /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:16:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018read_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:18: warning: field precision specifier \u2018.*\u2019 expects argument of type \u2018int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                                   ~~~~~~~~\n      |                                                                                     |\n      |                                                                                     size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:9: note: in expansion of macro \u2018FDB_INFO\u2019\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |         ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:397:41: note: format string is defined here\n  397 |         FDB_INFO(\"Error: Read the KV (%.*s@0x%08\" PRIX32 \") CRC32 check failed!\\n\", name_len, kv->name, kv->addr.start);\n      |                                       ~~^~\n      |                                         |\n      |                                         int\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018new_kv\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:22: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018size_t\u2019 {aka \u2018long unsigned int\u2019} [-Wformat=]\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~                                              ~~~~~~~\n      |                                                                                                |\n      |                                                                                                size_t {aka long unsigned int}\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc/fdb_def.h:59:47: note: in definition of macro \u2018FDB_PRINT\u2019\n   59 | #define FDB_PRINT(...)                 printf(__VA_ARGS__)\n      |                                               ^~~~~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:13: note: in expansion of macro \u2018FDB_INFO\u2019\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |             ^~~~~~~~\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1083:49: note: format string is defined here\n 1083 |             FDB_INFO(\"Error: Alloc an KV (size %\" PRIuLEAST16 \") failed after GC. KV full.\\n\", kv_size);\n      |                                                ~^\n      |                                                 |\n      |                                                 unsigned int\n      |                                                %lu\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c: In function \u2018fdb_kv_print\u2019:\n/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_kvdb.c:1502:15: warning: format \u2018%u\u2019 expects argument of type \u2018unsigned int\u2019, but argument 2 has type \u2018long unsigned int\u2019 [-Wformat=]\n 1502 |     FDB_PRINT(\"size: %\" PRIu32 \"/%\" PRIu32 \" bytes.\\n\", (uint32_t)using_size + ((SECTOR_NUM - FDB_GC_EMPTY_SEC_THRESHOLD) * SECTOR_HDR_DATA_SIZE),\n      |               ^~~~~~~~~                                 ~~~~~~\n...[truncated]",
       "stdout": "",
       "toolchain_adapter": "wsl",
-      "toolchain_status_after_attempt": "COMPILE_FAILED",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
       "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
@@ -335,7 +404,7 @@
     "slice_id": "real-fdb-kv-set",
     "status": "DRAFT_GENERATED",
     "target_id": "flashdb",
-    "toolchain_status": "COMPILE_FAILED"
+    "toolchain_status": "COMPILE_SUCCEEDED_NOT_ORACLE"
   },
   "patch": {
     "blocked_repairs": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-self-healing-blocked-repairs.json",
@@ -404,9 +473,9 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "slice_spec_sha256=0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
+      "slice_spec_sha256=9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
       "fixture_hash=real-fdb-kv-set-fixture",
-      "build_profile_hash=3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
+      "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
       "translator_version=0.1.0",
       "schema_version=1"
     ],
@@ -435,7 +504,7 @@
       "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
     ],
     "level": "L3",
-    "repo_commit": "8955d6271e2e8ca71bcbc030cfb53de6f3b9e77c",
+    "repo_commit": "1f290849f594002108f13c6791c50ce30566368a",
     "rust_tests": [
       {
         "cargo_command": "cargo test replay_real_fdb_kv_set_fixture_contract",
@@ -491,11 +560,11 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "1dac80ea547f5ef0ebdf342c2b038a6e1d06d9b0d456b9f8c023e9c9fa4222cc",
+    "sha256": "9e42b703cddd04793305fbc6bf795446787c5052f6f072920ae1eda370a2cf46",
     "status": "refused"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-v5tu5r0_ validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-d3kyeqnx validation\\evidence\\flashdb\\auto-translation\\real-fdb-kv-set\\l3-real-fdb-kv-set-rust-draft.rs",
     "error_count": 0,
     "errors": [],
     "external_callee_context": {
@@ -569,7 +638,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "869fc633c40f120e59c8be34678b221c6e68845bd8a0b60900e236dd4e060fd9",
+    "sha256": "b580d96be1a025bfac54f35ed741ee5db83bcdd7f8b31cd3f3f92f9d6b2fc679",
     "status": "blocked"
   }
 }

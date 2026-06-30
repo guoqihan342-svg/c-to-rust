@@ -8,9 +8,9 @@
     "risk_count": 0,
     "risk_level": "none"
   },
-  "build_profile_hash": "3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
+  "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
   "c2rust_baseline_identity": {
-    "sha256": "11e743e1919d6ab657d0b3c51dd4bead497e8314028c0a571f2e2c5ade188d13",
+    "sha256": "d9d465a4a4e91c1c2053358f31154d6a124435766c16736495a1a885920e6487",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
@@ -55,19 +55,19 @@
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-      "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
+      "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-      "sha256": "1dac80ea547f5ef0ebdf342c2b038a6e1d06d9b0d456b9f8c023e9c9fa4222cc",
+      "sha256": "9e42b703cddd04793305fbc6bf795446787c5052f6f072920ae1eda370a2cf46",
       "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
       "profile": "L4-dev",
-      "sha256": "869fc633c40f120e59c8be34678b221c6e68845bd8a0b60900e236dd4e060fd9",
+      "sha256": "b580d96be1a025bfac54f35ed741ee5db83bcdd7f8b31cd3f3f92f9d6b2fc679",
       "status": "blocked"
     }
   },
@@ -108,11 +108,11 @@
     "summary"
   ],
   "oracle_boundary_contract_identity": {
-    "sha256": "027a79ac922a0c7e52e569fb23e0a4f85c59b0cdb12f5760dae7f624f615e95c",
+    "sha256": "cbf236e2b15ea7f0f14d2e5fadf243312a3856bb0a5ca1b2a528ac7b22e679e8",
     "status": "insufficient"
   },
   "route_decision_identity": {
-    "sha256": "b34d572bcb5c25e102ac3e5960ec17a9ee1bcc946d2630e017797f5e721e80de",
+    "sha256": "bb12366f2b2430c59b56b185125594a7b05c87324f85fbaf8962a0ae746fef56",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {
@@ -129,7 +129,7 @@
     "type_map": 1
   },
   "slice_id": "real-fdb-kv-set",
-  "slice_spec_sha256": "0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
+  "slice_spec_sha256": "9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "source_file_hashes": {
     "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
@@ -144,7 +144,7 @@
   "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "81841bcee6cc2130dc59b39fbf5dd8e00c8b58275533951c02818caf9e2e62f1",
+    "sha256": "b2cbc530420a96f5bf409d91b4804a6fafc279d7a3aa93215ceba14da582895f",
     "status": "blocked"
   }
 }

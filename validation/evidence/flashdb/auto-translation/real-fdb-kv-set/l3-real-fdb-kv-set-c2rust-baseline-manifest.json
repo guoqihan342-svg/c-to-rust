@@ -1,5 +1,5 @@
 {
-  "build_profile_hash": "3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
+  "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
   "commands": [
     {
       "available": false,
@@ -38,7 +38,7 @@
   "slice_id": "real-fdb-kv-set",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa"
+    "sha256": "9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "skipped",
@@ -56,7 +56,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-06-30T02:08:37Z"
+    "probed_at": "2026-06-30T02:19:54Z"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

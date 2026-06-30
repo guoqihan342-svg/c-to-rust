@@ -1,14 +1,14 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "d7bccd0b413b8d0e4deb14874f969b7d02067527e85dc7666736850fff52c4df",
+    "sha256": "81bc6a34f8779e820ee5148a2d5520c5298c5df7199f86f828176598f8591221",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
+    "slice_spec_sha256=9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
     "fixture_hash=real-fdb-kv-set-fixture",
-    "build_profile_hash=3c905fc88c2af36fe261b8495077154aebe9a340e183659d58e09af912fd6c99",
+    "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=not_applicable",
@@ -110,7 +110,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "sha256": "0aedf4119cfcc4a3ec96a0f70aca61e1e8e0c0b231991fdfc89a5b77c21b6daa",
+      "sha256": "9b40034cae86d6d6f256aaaa5c7fa91d2dcd00b59c5b4e7eca25d2f4e732efc5",
       "status": "ready"
     },
     "type_map": {
@@ -119,11 +119,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "8955d6271e2e8ca71bcbc030cfb53de6f3b9e77c",
+  "repo_commit": "1f290849f594002108f13c6791c50ce30566368a",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "1dac80ea547f5ef0ebdf342c2b038a6e1d06d9b0d456b9f8c023e9c9fa4222cc",
+    "sha256": "9e42b703cddd04793305fbc6bf795446787c5052f6f072920ae1eda370a2cf46",
     "status": "refused"
   },
   "schema_version": 1,
@@ -451,7 +451,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
     "profile": "L4-dev",
-    "sha256": "869fc633c40f120e59c8be34678b221c6e68845bd8a0b60900e236dd4e060fd9",
+    "sha256": "b580d96be1a025bfac54f35ed741ee5db83bcdd7f8b31cd3f3f92f9d6b2fc679",
     "status": "blocked"
   },
   "verification_plan": [

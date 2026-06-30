@@ -2,7 +2,7 @@
   "build_profile": {
     "abi": "x86_64-unknown-linux-gnu",
     "clang_available": false,
-    "compiler_command_source": "CMakeLists.txt",
+    "compiler_command_source": "tests/Makefile",
     "defines": [],
     "include_paths": [
       "inc",

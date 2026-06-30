@@ -3569,6 +3569,37 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertLess(harness.index("#include <flashdb.h>"), harness.index(prototype))
             self.assertEqual(oracle["harness_contract"]["oracle_harness_includes"], ["flashdb.h"])
 
+    def test_real_fdb_kv_set_oracle_compile_links_flashdb_support_sources(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+
+            module.generate_oracle_harness_draft(spec, evidence_dir, skip=True)
+
+            oracle = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-c-oracle-status.json").read_text(encoding="utf-8")
+            )
+            compile_command = oracle["compile_command_draft"]
+            linked_paths = {item["path"] for item in compile_command["link_source_files"]}
+            self.assertEqual(
+                compile_command["link_strategy"],
+                "compile_harness_with_declared_c_boundary_and_build_profile_sources",
+            )
+            self.assertTrue(
+                {
+                    "src/fdb_kvdb.c",
+                    "src/fdb_utils.c",
+                    "src/fdb.c",
+                    "src/fdb_file.c",
+                }.issubset(linked_paths)
+            )
+            argv_text = " ".join(compile_command["argv"])
+            for path in ("src/fdb_utils.c", "src/fdb.c", "src/fdb_file.c"):
+                self.assertIn(path, argv_text)
+
     def test_modeled_strlen_external_callee_does_not_emit_fake_i32_stub(self) -> None:
         module = load_auto_migrate_module()
         with tempfile.TemporaryDirectory(prefix="auto-migrate-stdlib-stub-") as tmp:
