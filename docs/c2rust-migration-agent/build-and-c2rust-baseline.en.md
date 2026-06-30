@@ -20,6 +20,8 @@ The Chinese source currently contains these major headings:
 - `## Current Host Constraint`
 - `## C Oracle Fallback`
 
+Current operational note: `auto_migrate.py` keeps C2Rust generation disabled by default. In an environment with C2Rust installed, set `C2RUST_BASELINE_GENERATION=1` and provide `build_profile.compiler_command_source` pointing at `compile_commands.json`; generated output is recorded as path/status/sha256 and remains `candidate_context_only`.
+
 ## Maintenance Notes
 
 - Keep filenames paired as `build-and-c2rust-baseline.md` and `build-and-c2rust-baseline.en.md` in the same directory.

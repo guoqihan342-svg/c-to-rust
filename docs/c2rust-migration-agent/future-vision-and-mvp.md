@@ -174,7 +174,7 @@ P0 内部按以下顺序执行，不能因为手写 emitter 覆盖、拆文件�
 4. 同步产出 workflow metrics artifact，替代旧的勾选框百分比：`units_total`、`units_converged`、`units_baseline_only`、`unsafe_reduction`、`avg_repair_rounds`、`auto_recovery_rate`、`human_interventions`、`always_compiles`、`always_equivalent`、`fail_closed_count`、wall clock、LLM calls 和 per-unit 状态。
 5. typed IR / generic emitter 只作为辅助：用于 trivial fast path、诊断对照、bounded candidate 或解除 harness 当前 blocker；不再为了覆盖率本身扩 Phase 2/3/4。大文件拆分、OpenSpec/evidence 清理、release tag/review gate 最后做，并设置 WIP/时间盒。
 
-- [ ] S1 端到端骨架：在比赛环境约束下跑通一个真实单元的 c2rust baseline，记录 c2rust version/flags/input hashes/output hash，并让 Rust 产物可编译。
+- [ ] S1 端到端骨架：在比赛环境约束下跑通一个真实单元的 c2rust baseline，记录 c2rust version/flags/input hashes/output hash，并让 Rust 产物可编译。进展：`auto_migrate.py` 已补上显式开启的 C2Rust baseline 生成路径；当 `C2RUST_BASELINE_GENERATION=1`、PATH 上存在 `c2rust`/`c2rust-transpile` 且 `build_profile.compiler_command_source` 能解析到 `compile_commands.json` 时，会执行受控 argv 命令、记录 stdout/stderr/timeout/returncode，并把实际生成的 Rust 输出汇总为带 path/status/sha256 的 `candidate_context_only` manifest output。剩余：仍需在 Linux/WSL/competition 环境对真实 slice 运行并证明 Rust 产物可编译。
 - [ ] S1 verifier：复用现有 C oracle/Rust replay/diff gate，把该 c2rust baseline 升级为 `verified-unsafe-baseline`；失败时 fail-closed 记录 fixture、observable diff 和下一步。
 - [ ] S2 安全化回路：在同一单元上接入 OpenCode/LLM worker，要求每轮只输出一个 unified diff、安全化理由和目标 unsafe site；compile/diff/unsafe delta 全绿且 unsafe 严格下降才接受。
 - [ ] S2 repair/retry：把 compile error stack、oracle diff、unsafe delta 结构化为 repair hint，`retry-worker` 消费 hint 重新执行，默认最多 5 轮；每次失败都回退到 last-good。
@@ -273,7 +273,7 @@ P0 内部按以下顺序执行，不能因为手写 emitter 覆盖、拆文件�
 
 - [ ] LLM 只作为候选源，不作为事实源：AI candidate manifest 必须记录 provider/model/version 或等价标签、prompt scope、输入 artifact hash、输出 hash、是否应用、接受/拒绝 gate。
 - [ ] 增加模型变更影响评估：维护小型 golden slice 回归集，同一输入在不同模型/版本下的候选差异必须被记录，并由验证门禁裁决；provider/model/prompt/input hash 变化只能使 AI candidate/cache 失效，不能改变 C oracle ground truth。
-- [ ] 保留并实装 C2Rust baseline/repair 路线：作为 L2 候选生成和对照来源，但输出必须经过相同验证，不允许绕过 fail-closed；下一阶段至少要让一个真实 slice 产生 C2Rust output，记录 output path/status/sha256，并在 candidate set 中保持 `candidate_context_only` 或明确的 validation status，不能长期只有 skipped。
+- [ ] 保留并实装 C2Rust baseline/repair 路线：作为 L2 候选生成和对照来源，但输出必须经过相同验证，不允许绕过 fail-closed；下一阶段至少要让一个真实 slice 产生 C2Rust output，记录 output path/status/sha256，并在 candidate set 中保持 `candidate_context_only` 或明确的 validation status，不能长期只有 skipped。进展：生产端已支持显式 opt-in 生成和 output_ref 绑定，默认无工具或未开启时仍 fail-closed 为 skipped/blocked；真实环境的 c2rust 安装、compile_commands 捕获、编译验证和 repair 路线仍未闭环。
 - [ ] 在 P0 语义稳定后再做多候选 router：把 L0 deterministic recipes、L1 generic typed IR、L2 C2Rust baseline/repair、L3 LLM candidate、L4 refuse 汇入同一个可审计 decision object，带 score 或 hard gate。这不能替代 C oracle，也不能让任何候选绕过共同 validation pipeline。
 - [ ] 发布量化评估和案例报告：每个 milestone 都应给出真实项目/函数数、accepted/refused/blocked 比例、主要失败类别、平均人工介入点、性能 smoke 结果、unsafe 统计、可复现命令、evidence hash、社区复核状态和已知 non-goals；同时加入竞品/基线对比，至少比较 raw C2Rust、C2Rust+repair、当前 typed-IR route、LLM candidate 和手写参考实现的生成率、编译率、accepted 率、人工介入点、unsafe/性能边界；没有这些数据时只能称为研究原型/受限 MVP。
 - [ ] 建立开源反馈循环：外部可评估 milestone 前补 `CONTRIBUTING`/issue template/review checklist 或等价文档，记录 review/PR/issue 反馈入口；社区指标不能当能力证明，但没有公开反馈记录时不得把 release 写成成熟生产工具。

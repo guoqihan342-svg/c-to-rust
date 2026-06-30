@@ -6869,6 +6869,94 @@ class AutoMigrateTests(unittest.TestCase):
             )
             jsonschema.validate(manifest, schema)
 
+    def test_c2rust_baseline_manifest_generates_output_when_explicitly_enabled(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "c2rust-generated",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int x) { return x + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "compile_commands.json"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+            compile_commands = tmp_path / "compile_commands.json"
+            compile_commands.write_text(
+                json.dumps([{"directory": str(tmp_path), "command": "cc -c demo.c", "file": "demo.c"}]),
+                encoding="utf-8",
+            )
+            fake_c2rust = tmp_path / "fake-c2rust.exe"
+            fake_c2rust.write_text("", encoding="utf-8")
+            stale_output = evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated" / "stale.rs"
+            stale_output.parent.mkdir(parents=True, exist_ok=True)
+            stale_output.write_text("// stale output from a previous run\n", encoding="utf-8")
+
+            def fake_which(name: str) -> str | None:
+                return str(fake_c2rust) if name == "c2rust" else None
+
+            def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                if argv == [str(fake_c2rust), "--version"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="c2rust 0.18.0\n", stderr="")
+                self.assertEqual(argv[:2], [str(fake_c2rust), "transpile"])
+                self.assertEqual(Path(str(kwargs.get("cwd"))).resolve(), evidence_dir.resolve())
+                self.assertIn("--emit-build-files", argv)
+                self.assertIn("--output-dir", argv)
+                self.assertEqual(Path(argv[argv.index("--emit-build-files") + 1]).resolve(), compile_commands.resolve())
+                output_dir = Path(argv[argv.index("--output-dir") + 1])
+                generated = output_dir / "src" / "lib.rs"
+                generated.parent.mkdir(parents=True, exist_ok=True)
+                generated.write_text(
+                    "pub unsafe fn add_one(x: ::std::os::raw::c_int) -> ::std::os::raw::c_int { x + 1 }\n",
+                    encoding="utf-8",
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="generated lib.rs\n", stderr="")
+
+            with (
+                mock.patch.dict(os.environ, {"C2RUST_BASELINE_GENERATION": "1"}),
+                mock.patch.object(auto_migrate.shutil, "which", side_effect=fake_which),
+                mock.patch.object(auto_migrate.subprocess, "run", side_effect=fake_run),
+            ):
+                manifest = auto_migrate.emit_c2rust_baseline_manifest(
+                    spec,
+                    slice_spec,
+                    evidence_dir,
+                )
+
+            self.assertEqual(manifest["status"], "generated")
+            self.assertEqual(manifest["reason"], "generated_by_c2rust")
+            self.assertEqual(manifest["correctness_role"], "candidate_context_only")
+            self.assertEqual(manifest["selected_command"]["name"], "c2rust")
+            self.assertNotIn("C2Rust baseline was generated", manifest["must_not_claim"])
+            self.assertIn("C2Rust output proves semantic equivalence", manifest["must_not_claim"])
+            self.assertTrue(manifest["generation"]["enabled"])
+            self.assertEqual(manifest["generation"]["compile_commands"]["path"], compile_commands.resolve().as_posix())
+            self.assertEqual(manifest["generation"]["command"]["exit_status"], "passed")
+            self.assertEqual(manifest["generation"]["command"]["returncode"], 0)
+            self.assertEqual(manifest["generation"]["command"]["timeout_seconds"], 120)
+            self.assertIn("l3-c2rust-generated-c2rust-baseline-output.rs", manifest["output"]["path"])
+            output_path = Path(manifest["output"]["path"])
+            self.assertTrue(output_path.exists())
+            self.assertEqual(manifest["output"]["status"], "generated")
+            self.assertEqual(manifest["output"]["sha256"], auto_migrate.sha256(output_path))
+            self.assertNotIn("stale.rs", json.dumps(manifest["output"]["source_files"], sort_keys=True))
+            self.assertNotIn("stale output", output_path.read_text(encoding="utf-8"))
+
+            schema = json.loads(
+                (
+                    REPO_ROOT
+                    / "validation"
+                    / "auto-translation-template"
+                    / "c2rust-baseline-manifest.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            jsonschema.validate(manifest, schema)
+
     def test_c2rust_reference_tree_can_be_configured_without_becoming_acceptance_evidence(self) -> None:
         auto_migrate = load_auto_migrate_module()
         with mock.patch.dict(os.environ, {"C2RUST_REFERENCE_TREE": "vendor/c2rust-src"}):
@@ -6891,6 +6979,32 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertFalse(binding["semantic_pass"])
         self.assertFalse(binding["generated_draft_semantic_pass"])
         self.assertIsNone(binding["output_ref"])
+        self.assertEqual(binding["baseline_manifest"], manifest_ref)
+
+    def test_c2rust_baseline_generated_candidate_binding_carries_output_ref_only(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        manifest_ref = {"path": "l3-demo-c2rust-baseline-manifest.json", "status": "generated", "sha256": "abc"}
+        output_ref = {
+            "path": "validation/evidence/demo/l3-demo-c2rust-baseline-output.rs",
+            "status": "generated",
+            "sha256": "def",
+        }
+
+        binding = auto_migrate.c2rust_baseline_candidate_binding(
+            {
+                "status": "generated",
+                "reason": "generated_by_c2rust",
+                "correctness_role": "candidate_context_only",
+                "output": output_ref,
+            },
+            baseline_manifest_ref=manifest_ref,
+        )
+
+        self.assertEqual(binding["candidate_id"], "c2rust-baseline")
+        self.assertEqual(binding["correctness_role"], "candidate_context_only")
+        self.assertEqual(binding["output_ref"], output_ref)
+        self.assertFalse(binding["semantic_pass"])
+        self.assertFalse(binding["generated_draft_semantic_pass"])
         self.assertEqual(binding["baseline_manifest"], manifest_ref)
 
     def _accepted_evidence_spec(self, root: Path, include_toolchain_marker: bool) -> dict:

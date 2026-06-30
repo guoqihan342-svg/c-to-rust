@@ -4409,15 +4409,50 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
     selected = next((item for item in commands if item.get("path")), None)
     reference_tree, reference_tree_configured = resolve_c2rust_reference_tree()
     reference_status = "present" if reference_tree.exists() else "missing"
+    generation_enabled = c2rust_baseline_generation_enabled()
+    generation: dict[str, Any] = {
+        "enabled": generation_enabled,
+        "enabled_by": "C2RUST_BASELINE_GENERATION" if generation_enabled else "",
+        "compile_commands": None,
+        "command": None,
+        "generated_files": [],
+    }
+    output: dict[str, Any] | None = None
     status = "skipped"
     diagnostics: list[str] = []
     reason = "blocked_by_missing_tools"
     if selected is None:
         diagnostics.append("no executable c2rust-transpile or c2rust command found on PATH")
-    else:
+    elif not generation_enabled:
         status = "blocked"
         reason = "baseline_generation_not_enabled"
         diagnostics.append("executable C2Rust was detected but baseline generation is not enabled in this bounded MVP")
+    else:
+        compile_commands = resolve_c2rust_compile_commands(spec, slice_spec)
+        if compile_commands is None:
+            status = "blocked"
+            reason = "missing_compile_commands"
+            diagnostics.append(
+                "C2Rust baseline generation was enabled, but build_profile.compiler_command_source "
+                "does not resolve to compile_commands.json"
+            )
+        else:
+            generation["compile_commands"] = {"path": rel(compile_commands), "sha256": sha256(compile_commands)}
+            generation_result = run_c2rust_baseline_generation(
+                selected,
+                compile_commands,
+                evidence_dir,
+                prefix,
+            )
+            generation.update(generation_result["generation"])
+            diagnostics.extend(generation_result["diagnostics"])
+            output = generation_result["output"]
+            if output is None:
+                status = "blocked"
+                reason = generation_result["reason"]
+            else:
+                status = "generated"
+                reason = "generated_by_c2rust"
     manifest = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -4438,7 +4473,8 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
             "cargo_toml": rel(reference_tree / "Cargo.toml") if reference_tree.exists() else "",
             "diagnostic_only": not reference_tree_configured,
         },
-        "output": None,
+        "generation": generation,
+        "output": output,
         "diagnostics": diagnostics,
         "must_not_claim": [
             "C2Rust output proves semantic equivalence",
@@ -4449,6 +4485,155 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
     manifest["must_not_claim"] = [item for item in manifest["must_not_claim"] if item]
     write_json(evidence_dir / f"{prefix}-c2rust-baseline-manifest.json", manifest)
     return manifest
+
+
+def c2rust_baseline_generation_enabled() -> bool:
+    value = os.environ.get("C2RUST_BASELINE_GENERATION", "").strip().lower()
+    return value in {"1", "true", "yes", "on", "enabled"}
+
+
+def resolve_c2rust_compile_commands(spec: dict[str, Any], slice_spec: Path) -> Path | None:
+    build_profile = spec.get("build_profile", {})
+    if not isinstance(build_profile, dict):
+        return None
+    configured = build_profile.get("compiler_command_source") or build_profile.get("compile_commands")
+    if not configured:
+        return None
+    configured_path = Path(str(configured))
+    candidates = [configured_path] if configured_path.is_absolute() else [
+        REPO_ROOT / configured_path,
+        slice_spec.parent / configured_path,
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def run_c2rust_baseline_generation(
+    selected: dict[str, Any],
+    compile_commands: Path,
+    evidence_dir: Path,
+    prefix: str,
+) -> dict[str, Any]:
+    timeout_seconds = 120
+    output_dir = evidence_dir / f"{prefix}-c2rust-baseline-generated"
+    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-stderr.log"
+    argv = c2rust_generation_argv(selected, compile_commands, output_dir)
+    generation: dict[str, Any] = {
+        "command": {
+            "argv": argv,
+            "working_directory": rel(evidence_dir),
+            "output_dir": rel(output_dir),
+            "stdout_log": rel(stdout_log),
+            "stderr_log": rel(stderr_log),
+            "timeout_seconds": timeout_seconds,
+            "exit_status": None,
+            "returncode": None,
+        },
+        "generated_files": [],
+    }
+    diagnostics: list[str] = []
+    try:
+        reset_c2rust_output_dir(evidence_dir, output_dir)
+        result = subprocess.run(
+            argv,
+            cwd=str(evidence_dir),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        generation["command"]["exit_status"] = "error"
+        generation["command"]["returncode"] = -1
+        diagnostics.append(f"C2Rust baseline generation command failed before completion: {exc}")
+        return {
+            "reason": "c2rust_generation_failed",
+            "diagnostics": diagnostics,
+            "generation": generation,
+            "output": None,
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    generation["command"]["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    generation["command"]["returncode"] = result.returncode
+    if result.returncode != 0:
+        diagnostics.append(f"C2Rust baseline generation command exited with {result.returncode}")
+        return {
+            "reason": "c2rust_generation_failed",
+            "diagnostics": diagnostics,
+            "generation": generation,
+            "output": None,
+        }
+
+    rust_files = sorted(path for path in output_dir.rglob("*.rs") if path.is_file())
+    if not rust_files:
+        diagnostics.append("C2Rust baseline generation completed but produced no Rust files")
+        return {
+            "reason": "c2rust_generation_no_rust_output",
+            "diagnostics": diagnostics,
+            "generation": generation,
+            "output": None,
+        }
+
+    generated_refs = [{"path": rel(path), "sha256": sha256(path)} for path in rust_files]
+    generation["generated_files"] = generated_refs
+    output_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rs"
+    write_text(output_path, combined_c2rust_output(rust_files))
+    return {
+        "reason": "generated_by_c2rust",
+        "diagnostics": diagnostics,
+        "generation": generation,
+        "output": {
+            "path": rel(output_path),
+            "status": "generated",
+            "sha256": sha256(output_path),
+            "source_files": generated_refs,
+        },
+    }
+
+
+def reset_c2rust_output_dir(evidence_dir: Path, output_dir: Path) -> None:
+    evidence_root = evidence_dir.resolve()
+    output_root = output_dir.resolve()
+    if output_root == evidence_root:
+        raise ValueError("refusing to use evidence root itself as C2Rust output directory")
+    try:
+        output_root.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError(f"refusing to use C2Rust output directory outside evidence root: {output_dir}") from exc
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def c2rust_generation_argv(selected: dict[str, Any], compile_commands: Path, output_dir: Path) -> list[str]:
+    executable = str(selected.get("path", ""))
+    name = str(selected.get("name", ""))
+    base = [executable]
+    if name == "c2rust":
+        base.append("transpile")
+    return [
+        *base,
+        "--emit-build-files",
+        str(compile_commands),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+
+def combined_c2rust_output(rust_files: list[Path]) -> str:
+    chunks: list[str] = []
+    for path in rust_files:
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if source and not source.endswith("\n"):
+            source += "\n"
+        chunks.append(f"// c2rust generated source: {rel(path)}\n{source}")
+    return "\n".join(chunks)
 
 
 def c2rust_command_candidates() -> list[dict[str, Any]]:
