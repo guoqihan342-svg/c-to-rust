@@ -76,6 +76,88 @@
         {"type": "object"}
       ]
     },
+    "compile": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "attempted",
+            "semantic_pass",
+            "candidate_output",
+            "command",
+            "artifact",
+            "diagnostics"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "passed",
+                "failed",
+                "rustc_not_found",
+                "compile_timeout",
+                "compile_error"
+              ]
+            },
+            "attempted": {"type": "boolean"},
+            "semantic_pass": {"const": false},
+            "candidate_output": {
+              "type": "object",
+              "required": ["path", "status", "sha256"],
+              "properties": {
+                "path": {"type": "string", "minLength": 1},
+                "status": {"const": "generated"},
+                "sha256": {"type": "string", "minLength": 1}
+              }
+            },
+            "command": {
+              "type": "object",
+              "required": [
+                "argv",
+                "working_directory",
+                "stdout_log",
+                "stderr_log",
+                "timeout_seconds",
+                "exit_status",
+                "returncode"
+              ],
+              "properties": {
+                "argv": {"type": "array", "items": {"type": "string"}},
+                "working_directory": {"type": "string"},
+                "stdout_log": {"type": "string", "minLength": 1},
+                "stderr_log": {"type": "string", "minLength": 1},
+                "timeout_seconds": {"type": "integer", "minimum": 1},
+                "exit_status": {
+                  "enum": ["passed", "failed", "not_executed", "timeout", "error"]
+                },
+                "returncode": {
+                  "anyOf": [
+                    {"type": "null"},
+                    {"type": "integer"}
+                  ]
+                }
+              }
+            },
+            "artifact": {
+              "anyOf": [
+                {"type": "null"},
+                {
+                  "type": "object",
+                  "required": ["path", "status", "sha256"],
+                  "properties": {
+                    "path": {"type": "string", "minLength": 1},
+                    "status": {"const": "compiled"},
+                    "sha256": {"type": "string", "minLength": 1}
+                  }
+                }
+              ]
+            },
+            "diagnostics": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      ]
+    },
     "diagnostics": {"type": "array", "items": {"type": "string"}},
     "must_not_claim": {
       "type": "array",
@@ -103,6 +185,7 @@
     {
       "if": {"properties": {"status": {"const": "generated"}}},
       "then": {
+        "required": ["compile"],
         "properties": {
           "selected_command": {"type": "object"},
           "output": {
@@ -118,7 +201,12 @@
     },
     {
       "if": {"properties": {"status": {"enum": ["skipped", "blocked"]}}},
-      "then": {"properties": {"output": {"type": "null"}}}
+      "then": {
+        "properties": {
+          "output": {"type": "null"},
+          "compile": {"type": "null"}
+        }
+      }
     }
   ]
 }

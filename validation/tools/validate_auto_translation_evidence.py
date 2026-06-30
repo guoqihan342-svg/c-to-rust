@@ -2005,6 +2005,7 @@ def validate_c2rust_baseline_candidate_binding(
     if baseline_status == "generated":
         if not isinstance(baseline_output, dict):
             raise SystemExit("c2rust_baseline generated status requires output object")
+        validate_c2rust_baseline_compile_status(baseline, baseline_output, manifest_path)
         expected_output = {
             "path": str(baseline_output.get("path", "")),
             "status": baseline_status,
@@ -2020,6 +2021,34 @@ def validate_c2rust_baseline_candidate_binding(
         return
     if output_ref is not None:
         raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
+
+
+def validate_c2rust_baseline_compile_status(
+    baseline: dict[str, Any],
+    baseline_output: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    compile_status = baseline.get("compile")
+    if not isinstance(compile_status, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires compile status in {manifest_path}")
+    if compile_status.get("semantic_pass") is not False:
+        raise SystemExit(f"c2rust_baseline compile status cannot claim semantic_pass in {manifest_path}")
+    candidate_output = compile_status.get("candidate_output")
+    if not isinstance(candidate_output, dict):
+        raise SystemExit(f"c2rust_baseline compile status missing candidate_output in {manifest_path}")
+    expected_candidate_output = {
+        "path": str(baseline_output.get("path", "")),
+        "status": "generated",
+        "sha256": str(baseline_output.get("sha256", "")),
+    }
+    if candidate_output != expected_candidate_output:
+        raise SystemExit(f"c2rust_baseline compile candidate_output drift in {manifest_path}")
+    require_file_ref(candidate_output, "c2rust_baseline.compile.candidate_output", require_status=True)
+    artifact = compile_status.get("artifact")
+    if compile_status.get("status") == "passed":
+        require_file_ref(artifact, "c2rust_baseline.compile.artifact", require_status=True)
+    elif artifact is not None:
+        raise SystemExit(f"c2rust_baseline compile artifact must be null unless compile passed in {manifest_path}")
 
 
 def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:

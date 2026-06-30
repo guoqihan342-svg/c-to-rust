@@ -6893,16 +6893,30 @@ class AutoMigrateTests(unittest.TestCase):
             )
             fake_c2rust = tmp_path / "fake-c2rust.exe"
             fake_c2rust.write_text("", encoding="utf-8")
+            fake_rustc = tmp_path / "fake-rustc.exe"
+            fake_rustc.write_text("", encoding="utf-8")
             stale_output = evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated" / "stale.rs"
             stale_output.parent.mkdir(parents=True, exist_ok=True)
             stale_output.write_text("// stale output from a previous run\n", encoding="utf-8")
 
             def fake_which(name: str) -> str | None:
-                return str(fake_c2rust) if name == "c2rust" else None
+                if name == "c2rust":
+                    return str(fake_c2rust)
+                if name == "rustc":
+                    return str(fake_rustc)
+                return None
 
             def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
                 if argv == [str(fake_c2rust), "--version"]:
                     return subprocess.CompletedProcess(argv, 0, stdout="c2rust 0.18.0\n", stderr="")
+                if argv and argv[0] == str(fake_rustc):
+                    self.assertIn("--crate-type", argv)
+                    self.assertIn("lib", argv)
+                    self.assertIn(str(evidence_dir / "l3-c2rust-generated-c2rust-baseline-output.rs"), argv)
+                    self.assertIn("-o", argv)
+                    artifact = Path(argv[argv.index("-o") + 1])
+                    artifact.write_text("fake rlib\n", encoding="utf-8")
+                    return subprocess.CompletedProcess(argv, 0, stdout="rustc ok\n", stderr="")
                 self.assertEqual(argv[:2], [str(fake_c2rust), "transpile"])
                 self.assertEqual(Path(str(kwargs.get("cwd"))).resolve(), evidence_dir.resolve())
                 self.assertIn("--emit-build-files", argv)
@@ -6946,6 +6960,17 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(manifest["output"]["sha256"], auto_migrate.sha256(output_path))
             self.assertNotIn("stale.rs", json.dumps(manifest["output"]["source_files"], sort_keys=True))
             self.assertNotIn("stale output", output_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["compile"]["status"], "passed")
+            self.assertTrue(manifest["compile"]["attempted"])
+            self.assertFalse(manifest["compile"]["semantic_pass"])
+            self.assertEqual(manifest["compile"]["candidate_output"]["path"], manifest["output"]["path"])
+            self.assertEqual(manifest["compile"]["candidate_output"]["sha256"], manifest["output"]["sha256"])
+            self.assertEqual(manifest["compile"]["command"]["returncode"], 0)
+            self.assertEqual(manifest["compile"]["command"]["exit_status"], "passed")
+            self.assertEqual(
+                manifest["compile"]["artifact"]["path"],
+                (evidence_dir / "l3-c2rust-generated-c2rust-baseline-output.rlib").as_posix(),
+            )
 
             schema = json.loads(
                 (

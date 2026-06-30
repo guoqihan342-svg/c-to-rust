@@ -4418,6 +4418,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
         "generated_files": [],
     }
     output: dict[str, Any] | None = None
+    compile_status: dict[str, Any] | None = None
     status = "skipped"
     diagnostics: list[str] = []
     reason = "blocked_by_missing_tools"
@@ -4453,6 +4454,12 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
             else:
                 status = "generated"
                 reason = "generated_by_c2rust"
+                compile_status = compile_c2rust_baseline_output(
+                    c2rust_baseline_output_path(output),
+                    evidence_dir,
+                    prefix,
+                )
+                diagnostics.extend(compile_status.get("diagnostics", []))
     manifest = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -4475,6 +4482,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
         },
         "generation": generation,
         "output": output,
+        "compile": compile_status,
         "diagnostics": diagnostics,
         "must_not_claim": [
             "C2Rust output proves semantic equivalence",
@@ -4634,6 +4642,132 @@ def combined_c2rust_output(rust_files: list[Path]) -> str:
             source += "\n"
         chunks.append(f"// c2rust generated source: {rel(path)}\n{source}")
     return "\n".join(chunks)
+
+
+def c2rust_baseline_output_path(output: dict[str, Any]) -> Path:
+    output_path = Path(str(output.get("path", "")))
+    if output_path.is_absolute():
+        return output_path
+    return REPO_ROOT / output_path
+
+
+def compile_c2rust_baseline_output(output_path: Path, evidence_dir: Path, prefix: str) -> dict[str, Any]:
+    timeout_seconds = 120
+    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stderr.log"
+    artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+    candidate_output = {
+        "path": rel(output_path),
+        "status": "generated",
+        "sha256": sha256(output_path),
+    }
+    rustc = shutil.which("rustc")
+    command: dict[str, Any] = {
+        "argv": [],
+        "working_directory": rel(evidence_dir),
+        "stdout_log": rel(stdout_log),
+        "stderr_log": rel(stderr_log),
+        "timeout_seconds": timeout_seconds,
+        "exit_status": "not_executed",
+        "returncode": None,
+    }
+    if rustc is None:
+        write_text(stdout_log, "")
+        write_text(stderr_log, "rustc not found on PATH\n")
+        return {
+            "status": "rustc_not_found",
+            "attempted": False,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output compile check skipped because rustc was not found on PATH"],
+        }
+
+    argv = [
+        rustc,
+        "--crate-type",
+        "lib",
+        str(output_path),
+        "-o",
+        str(artifact_path),
+    ]
+    command["argv"] = argv
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=str(evidence_dir),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        write_text(stdout_log, exc.stdout or "")
+        write_text(stderr_log, exc.stderr or f"rustc timed out after {timeout_seconds} seconds\n")
+        command["exit_status"] = "timeout"
+        command["returncode"] = -1
+        return {
+            "status": "compile_timeout",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output rustc compile check timed out"],
+        }
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        command["exit_status"] = "error"
+        command["returncode"] = -1
+        return {
+            "status": "compile_error",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust baseline output rustc compile check could not start: {exc}"],
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    command["returncode"] = result.returncode
+    if result.returncode != 0:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust baseline output rustc compile check exited with {result.returncode}"],
+        }
+    if not artifact_path.exists():
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output rustc compile check passed without producing an artifact"],
+        }
+
+    return {
+        "status": "passed",
+        "attempted": True,
+        "semantic_pass": False,
+        "candidate_output": candidate_output,
+        "command": command,
+        "artifact": {
+            "path": rel(artifact_path),
+            "status": "compiled",
+            "sha256": sha256(artifact_path),
+        },
+        "diagnostics": [],
+    }
 
 
 def c2rust_command_candidates() -> list[dict[str, Any]]:

@@ -15,6 +15,8 @@ This directory defines evidence contracts for bounded automatic translation and 
 - `blocked-repairs.schema.json`: blocked repair records for semantic or safety boundary violations.
 - Auto-translation semantic-pass fixtures must also persist `l3-<slice>-c2rust-baseline-manifest.json`, `l3-<slice>-route-decision.json`, and `l3-<slice>-validation-profile.json`. The manifest refs must carry `path`, `status`, and `sha256`, while cache identities use canonical JSON hashes rather than file-byte hashes.
 - 中文：自动翻译 fixture 如果要被当前 `--require-semantic-pass` 直接验证，必须把 `c2rust_baseline`、`route_decision`、`validation_profile` 三类证据落盘并写入 auto manifest、L3 evidence manifest、final verification 和 cache metadata。测试 helper 临时补字段不能作为可提交 evidence。
+- Generated C2Rust baseline manifests must include `compile` evidence bound to the same output path/status/sha256. The compile check is compile-only candidate evidence, not semantic acceptance.
+- 中文：`status=generated` 的 C2Rust baseline manifest 必须包含与同一 output path/status/sha256 绑定的 `compile` 证据；该检查只是候选产物 compile-only 证据，不能替代 oracle/diff 语义接受。
 - Generated validation profiles must bind the default competition environment profile through `competition_environment.profile_id`, `path`, and `sha256`; cache metadata must carry the matching `competition_environment_identity` in `cache_input_fields`.
 - 中文：新生成的 validation profile 必须通过 `competition_environment.profile_id`、`path` 和 `sha256` 绑定默认比赛环境 profile；cache metadata 必须在 `cache_input_fields` 中写入一致的 `competition_environment_identity`。
 - Newly generated pointer graphs use schema v2. If pointer effects make the slice alias-sensitive, the validator requires `effect_graph`; cache metadata must include `effect_graph_identity` in `cache_input_fields`.

@@ -66,12 +66,13 @@ Preferred command:
 c2rust transpile --emit-build-files path/to/compile_commands.json
 ```
 
-`auto_migrate.py` keeps baseline generation off by default. To generate a baseline manifest output in an environment where C2Rust is installed, set `C2RUST_BASELINE_GENERATION=1` and provide a slice spec whose `build_profile.compiler_command_source` resolves to the relevant `compile_commands.json`. The command is executed as an argv array, writes only under the slice evidence directory, records stdout/stderr logs, timeout, return code, generated Rust file hashes, and emits a manifest `output` with path/status/sha256. The output remains `candidate_context_only`; it is not semantic acceptance.
+`auto_migrate.py` keeps baseline generation off by default. To generate a baseline manifest output in an environment where C2Rust is installed, set `C2RUST_BASELINE_GENERATION=1` and provide a slice spec whose `build_profile.compiler_command_source` resolves to the relevant `compile_commands.json`. The command is executed as an argv array, writes only under the slice evidence directory, records stdout/stderr logs, timeout, return code, generated Rust file hashes, and emits a manifest `output` with path/status/sha256. For `status=generated`, the manifest must also bind `compile`: a compile-only `rustc --crate-type lib` check over the combined C2Rust Rust output, with stdout/stderr logs, return code, candidate output hash, and compiled artifact hash when it passes. The output remains `candidate_context_only`; compile success is not semantic acceptance.
 
 The baseline record must store:
 
 - C2Rust executable version or source-tree hashes
 - `compile_commands.json` hash
+- generated Rust output path/status/sha256 and compile-only status
 - exact command line
 - generated file hashes
 - transpiler warnings

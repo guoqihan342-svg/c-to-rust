@@ -957,7 +957,29 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 "correctness_role": "candidate_context_only",
                 "output": {
                     "path": output_path.as_posix(),
+                    "status": "generated",
                     "sha256": self._sha256(output_path),
+                },
+                "compile": {
+                    "status": "failed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                    "candidate_output": {
+                        "path": output_path.as_posix(),
+                        "status": "generated",
+                        "sha256": self._sha256(output_path),
+                    },
+                    "command": {
+                        "argv": ["rustc", "--crate-type", "lib", output_path.as_posix()],
+                        "working_directory": evidence_dir.as_posix(),
+                        "stdout_log": (evidence_dir / "rustc.stdout.log").as_posix(),
+                        "stderr_log": (evidence_dir / "rustc.stderr.log").as_posix(),
+                        "timeout_seconds": 120,
+                        "exit_status": "failed",
+                        "returncode": 1,
+                    },
+                    "artifact": None,
+                    "diagnostics": ["unit test compile failure placeholder"],
                 },
             }
             self._write_json(baseline_path, baseline)
@@ -1198,6 +1220,72 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("object", result.stderr + result.stdout)
+
+    def test_rejects_generated_c2rust_baseline_without_compile_status(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "zlib-ng" / "auto-translation" / "adler32-step"
+            baseline_path = evidence_dir / "l3-adler32-step-c2rust-baseline-manifest.json"
+            output_path = evidence_dir / "l3-adler32-step-c2rust-baseline-output.rs"
+            output_path.write_text("pub fn adler32_step(x: u32) -> u32 { x }\n", encoding="utf-8")
+            baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+            baseline["status"] = "generated"
+            baseline["reason"] = "test-forged-generated-status"
+            baseline["selected_command"] = {
+                "name": "c2rust",
+                "path": "fake-c2rust",
+                "available": True,
+                "version_status": "OK",
+                "version": "fake",
+            }
+            baseline["output"] = {
+                "path": output_path.as_posix(),
+                "status": "generated",
+                "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
+                "source_files": [],
+            }
+            baseline.pop("compile", None)
+            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "zlib-ng",
+                    "--slice-id",
+                    "adler32-step",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("compile", result.stderr + result.stdout)
 
     def test_rejects_l4_refused_route_with_generated_candidate_manifest(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
