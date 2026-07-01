@@ -18,6 +18,7 @@
     "semantic_evidence_rollup",
     "core_translation_quality",
     "harness_architecture_summary",
+    "route_governance_metrics",
     "entrypoints",
     "workflow_metrics",
     "unsafe_reduction_scope",
@@ -181,6 +182,40 @@
         "checkpoint_backend": {"type": ["string", "null"]},
         "chat_output_is_evidence": {"const": false},
         "semantic_gate": {"const": false}
+      }
+    },
+    "route_governance_metrics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["report_kind", "sources", "rollup", "boundary"],
+      "properties": {
+        "report_kind": {"const": "route-governance-metrics-rollup"},
+        "sources": {"type": "array", "items": {"type": "object"}},
+        "rollup": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "source_count",
+            "translation_coverage_numerator",
+            "accepted_evidence_semantic_pass_count",
+            "tracked_route_decision_artifacts",
+            "tracked_slice_gate_contexts",
+            "all_retention_policies_present",
+            "all_target_artifacts_reproducible"
+          ],
+          "properties": {
+            "source_count": {"type": "integer", "minimum": 0},
+            "translation_coverage_numerator": {"const": 0},
+            "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0},
+            "tracked_route_decision_artifacts": {"type": "integer", "minimum": 0},
+            "tracked_slice_gate_contexts": {"type": "integer", "minimum": 0},
+            "s2_workflow_run_count": {"type": "integer", "minimum": 0},
+            "s2_unsafe_reduction": {"type": "object"},
+            "all_retention_policies_present": {"type": "boolean"},
+            "all_target_artifacts_reproducible": {"type": "boolean"}
+          }
+        },
+        "boundary": {"type": "string", "minLength": 1}
       }
     },
     "entrypoints": {

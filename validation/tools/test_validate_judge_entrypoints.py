@@ -686,6 +686,67 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_judge_evidence_index_route_governance_metrics_report_must_match_schema(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-route-metrics-schema-", dir=target_dir))
+        route_metrics = temp_dir / "summary" / "route-governance-metrics-report.json"
+        write_json(
+            route_metrics,
+            {
+                "schema_version": 1,
+                "status": "passed",
+                "report_kind": "route-governance-metrics",
+                "inputs": {
+                    "translator_coverage_matrix": {
+                        "path": "validation/translator-coverage-matrix.json",
+                        "status": "passed",
+                        "capability_count": 11,
+                    },
+                    "evidence_governance": {
+                        "evidence_root": "validation/evidence",
+                        "status": "passed",
+                        "file_count": 1,
+                    },
+                },
+                "metrics": {
+                    "translation_coverage_numerator": 0,
+                    "accepted_evidence_semantic_pass_count": 1,
+                    "tracked_capability_delta_ledgers": 1,
+                    "tracked_capability_delta_count": 1,
+                    "tracked_route_decision_artifacts": 1,
+                    "s2_workflow_metrics": {},
+                    "candidate_generation_inventory": {},
+                    "tracked_slice_gate_contexts": 1,
+                    "slice_gate_contexts": [],
+                },
+                "denominators": {
+                    "capability_delta_ledger": "capability delta ledger artifacts",
+                    "candidate_generation_inventory": "route decision artifacts",
+                    "slice_gate_contexts": "slice gate contexts",
+                    "translation_coverage_numerator": "translator-generated only",
+                    "accepted_evidence_semantic_pass_count": "separate accepted evidence count",
+                    "s2_workflow_metrics": "competition summaries",
+                },
+                "claim_boundary": "Route governance metrics are not semantic acceptance evidence.",
+            },
+        )
+        payload = valid_deterministic_judge_index_payload()
+        payload["evidence_artifact_refs"] = {
+            "route_governance_metrics_report": {
+                "path": repo_relative(route_metrics),
+                "sha256": validator.sha256_file(route_metrics),
+            }
+        }
+
+        with self.assertRaisesRegex(ValueError, "route_governance_metrics_report.*retention_policy"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+                expected_artifacts={"route_governance_metrics_report": repo_relative(route_metrics)},
+                repo_root=REPO_ROOT,
+            )
+
     def test_judge_evidence_index_requires_opencode_graph_contract(self) -> None:
         payload = valid_opencode_judge_index_payload()
         payload["harness_architecture"]["graph_runtime"] = "plain-runtime"

@@ -14,6 +14,8 @@ import sqlite3
 import sys
 from typing import Any
 
+import jsonschema
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -22,6 +24,7 @@ if str(REPO_ROOT) not in sys.path:
 from validation.tools import milestone_release_report
 
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
+ROUTE_GOVERNANCE_METRICS_SCHEMA = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
 LOCAL_ABSOLUTE_PATH = re.compile(r"(?:^|[^A-Za-z0-9_])(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/)")
 REQUIRED_HARNESS_FEATURES = (
     "h1_evaluate_one_click",
@@ -1002,6 +1005,36 @@ def validate_artifact_binding_shape(
     return {"path": path_text, "sha256": sha256}
 
 
+def validate_route_governance_metrics_report_contract(ref: dict[str, str], *, repo_root: Path) -> dict[str, Any]:
+    path_text = ref["path"]
+    path = repo_path(path_text, repo_root=repo_root)
+    payload = load_json(path)
+    schema = load_json(ROUTE_GOVERNANCE_METRICS_SCHEMA)
+    try:
+        jsonschema.validate(payload, schema)
+    except jsonschema.ValidationError as error:
+        raise ValueError(
+            "route_governance_metrics_report must match validation/route-governance-metrics.schema.json: "
+            f"{error.message}"
+        ) from error
+    metrics = require_object(payload.get("metrics"), "route_governance_metrics_report.metrics")
+    retention = require_object(payload.get("retention_policy"), "route_governance_metrics_report.retention_policy")
+    return {
+        "status": "passed",
+        "path": path_text,
+        "translation_coverage_numerator": metrics.get("translation_coverage_numerator"),
+        "accepted_evidence_semantic_pass_count": metrics.get("accepted_evidence_semantic_pass_count"),
+        "tracked_route_decision_artifacts": metrics.get("tracked_route_decision_artifacts"),
+        "tracked_slice_gate_contexts": metrics.get("tracked_slice_gate_contexts"),
+        "retention_policy": {
+            "report_kind": retention.get("report_kind"),
+            "target_artifacts_committed": retention.get("target_artifacts", {}).get("committed")
+            if isinstance(retention.get("target_artifacts"), dict)
+            else None,
+        },
+    }
+
+
 def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: str) -> dict[str, Any]:
     policy = require_object(value, f"{label}.launch_policy")
     command = require_string(policy.get("opencode_command"), f"{label}.launch_policy.opencode_command")
@@ -1359,6 +1392,13 @@ def validate_judge_evidence_artifact_refs(
             "judge_evidence_index.evidence_artifact_refs.opencode_preflight_report",
         )
 
+    route_metrics_contract = None
+    if repo_root is not None and "route_governance_metrics_report" in validated_refs:
+        route_metrics_contract = validate_route_governance_metrics_report_contract(
+            validated_refs["route_governance_metrics_report"],
+            repo_root=repo_root,
+        )
+
     profile_ref = payload.get("profile")
     if isinstance(profile_ref, dict) and "profile" in validated_refs:
         profile_binding = validate_artifact_binding_shape(profile_ref, "judge_evidence_index.profile", repo_root=repo_root)
@@ -1374,11 +1414,14 @@ def validate_judge_evidence_artifact_refs(
             )
             compare_artifact_binding(validated_refs[name], architecture_binding, f"judge_evidence_index.evidence_artifact_refs.{name}")
 
-    return {
+    result: dict[str, Any] = {
         "status": "passed",
         "ref_count": len(validated_refs),
         "refs": sorted(validated_refs),
     }
+    if route_metrics_contract is not None:
+        result["route_governance_metrics_report"] = route_metrics_contract
+    return result
 
 
 def validate_judge_evidence_index_contract(

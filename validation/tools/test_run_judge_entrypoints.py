@@ -100,10 +100,12 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             repo_relative(out_path.parent / "judge-milestone-bundle.json"),
         )
         self.assertEqual(report["milestone_bundle"]["status"], "present")
-        self.assertIn("sha256", report["milestone_bundle"])
+        self.assertNotIn("sha256", report["milestone_bundle"])
+        self.assertEqual(report["milestone_bundle"]["hash_boundary"], "bundle_hashes_this_run_report")
         milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
         self.assertEqual(milestone_bundle["status"], "blocked")
         self.assertIn("not_all_entrypoints_executed", milestone_bundle["blockers"])
+        self.assertEqual(milestone_bundle["judge_entrypoints_run_report"]["sha256"], runner.validator.sha256_file(out_path))
         stdout_log = out_path.parent / "logs" / "before_after_judge_demo.stdout.log"
         stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
         self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["path"], repo_relative(stdout_log))
@@ -114,6 +116,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         persisted = json.loads(out_path.read_text(encoding="utf-8"))
         self.assertFalse(persisted["claim_boundary"]["semantic_gate"])
         self.assertEqual(persisted["summary"], report["summary"])
+        self.assertEqual(persisted["milestone_bundle"], report["milestone_bundle"])
 
     def test_all_entrypoints_report_has_judge_facing_summary(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
@@ -175,16 +178,20 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             repo_relative(out_path.parent / "judge-milestone-bundle.json"),
         )
         self.assertEqual(report["milestone_bundle"]["status"], "present")
+        self.assertEqual(report["milestone_bundle"]["hash_boundary"], "bundle_hashes_this_run_report")
         milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
         self.assertEqual(milestone_bundle["status"], "passed")
         self.assertTrue(milestone_bundle["summary"]["external_milestone_claim_ready"])
         self.assertFalse(milestone_bundle["claim_boundary"]["semantic_gate"])
+        self.assertEqual(milestone_bundle["judge_entrypoints_run_report"]["sha256"], runner.validator.sha256_file(out_path))
         self.assertEqual(summary["readiness"]["executed_count"], 2)
         self.assertEqual(summary["readiness"]["configured_count"], 2)
         self.assertEqual(summary["readiness"]["validation_status"], "passed")
         self.assertEqual([entry["id"] for entry in summary["entrypoints"]], ["competition_environment_smoke", "opencode_multi_worker_evaluate_profile"])
         self.assertEqual(summary["entrypoints"][0]["judge_focus"], ["environment smoke", "semantic_gate=false"])
         self.assertEqual(summary["entrypoints"][1]["key_artifacts"], {"judge_evidence_index": "target/out/index.json"})
+        persisted = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertEqual(persisted["milestone_bundle"], report["milestone_bundle"])
 
     def test_dry_run_plans_without_executing_or_validating(self) -> None:
         from validation.tools import run_judge_entrypoints as runner

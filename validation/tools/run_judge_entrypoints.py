@@ -211,12 +211,17 @@ def write_run_report(
 
 def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root: Path) -> None:
     bundle_path = out_path.parent / "judge-milestone-bundle.json"
+    report["milestone_bundle"] = {
+        "path": validator.repo_relative(bundle_path, repo_root),
+        "status": "present",
+        "hash_boundary": "bundle_hashes_this_run_report",
+    }
+    out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     judge_milestone_bundle.build_judge_milestone_bundle(
         run_report_path=out_path,
         out_path=bundle_path,
         repo_root=repo_root,
     )
-    report["milestone_bundle"] = artifact_ref(bundle_path, repo_root=repo_root)
 
 
 def select_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> list[dict[str, Any]]:

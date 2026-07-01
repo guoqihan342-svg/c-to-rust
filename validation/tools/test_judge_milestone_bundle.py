@@ -19,6 +19,75 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def route_metrics_payload(
+    *,
+    accepted_evidence_semantic_pass_count: int,
+    tracked_route_decision_artifacts: int,
+    tracked_slice_gate_contexts: int,
+    s2_workflow_run_count: int,
+    s2_reduced_by: int,
+) -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "report_kind": "route-governance-metrics",
+        "inputs": {
+            "translator_coverage_matrix": {
+                "path": "validation/translator-coverage-matrix.json",
+                "status": "passed",
+                "capability_count": 11,
+            },
+            "evidence_governance": {
+                "evidence_root": "validation/evidence",
+                "status": "passed",
+                "file_count": 1,
+            },
+        },
+        "metrics": {
+            "translation_coverage_numerator": 0,
+            "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
+            "tracked_capability_delta_ledgers": 1,
+            "tracked_capability_delta_count": 1,
+            "tracked_route_decision_artifacts": tracked_route_decision_artifacts,
+            "candidate_classification": {},
+            "capability_delta_ledger": {},
+            "s2_workflow_metrics": {
+                "run_count": s2_workflow_run_count,
+                "unsafe_reduction": {
+                    "status": "measured" if s2_reduced_by else "not_measured",
+                    "reduced_by": s2_reduced_by,
+                },
+            },
+            "candidate_generation_inventory": {},
+            "tracked_slice_gate_contexts": tracked_slice_gate_contexts,
+            "slice_gate_contexts": [],
+        },
+        "denominators": {
+            "capability_delta_ledger": "capability delta ledger artifacts",
+            "candidate_generation_inventory": "route decision artifacts",
+            "slice_gate_contexts": "slice gate contexts",
+            "translation_coverage_numerator": "translator-generated semantic-pass named slices only",
+            "accepted_evidence_semantic_pass_count": "accepted evidence semantic pass count is separate",
+            "s2_workflow_metrics": "hash-bound competition run summaries",
+        },
+        "claim_boundary": "Route governance metrics are not semantic acceptance evidence.",
+        "retention_policy": {
+            "report_kind": "route-governance-metrics-retention-policy",
+            "report_role": "p0-route-governance-and-capability-metrics",
+            "target_artifacts": {
+                "retention_class": "reproducible-local-output",
+                "committed": False,
+                "policy": "Regenerate from committed anchors.",
+            },
+            "committed_anchors": {
+                "retention_class": "release-evidence",
+                "policy": "Use validation/evidence manifests and config profiles.",
+            },
+            "claim_boundary": "Retention policy does not expand semantic acceptance or translation coverage.",
+        },
+    }
+
+
 class JudgeMilestoneBundleTests(unittest.TestCase):
     def test_bundle_binds_all_entrypoints_metrics_and_opencode_runtime(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
@@ -28,8 +97,10 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
         out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
         before_metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        before_route_metrics_path = temp_dir / "before-after" / "summary" / "route-governance-metrics-report.json"
         before_index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
+        opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
         opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
 
         write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
@@ -50,6 +121,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     "reduced_by": 2,
                 },
             },
+        )
+        write_json(
+            before_route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=1,
+                tracked_route_decision_artifacts=2,
+                tracked_slice_gate_contexts=1,
+                s2_workflow_run_count=1,
+                s2_reduced_by=2,
+            ),
         )
         write_json(
             before_index_path,
@@ -102,6 +183,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                 "llm_calls": 0,
                 "unsafe_reduction": {"status": "not_measured"},
             },
+        )
+        write_json(
+            opencode_route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=2,
+                tracked_route_decision_artifacts=2,
+                tracked_slice_gate_contexts=2,
+                s2_workflow_run_count=1,
+                s2_reduced_by=0,
+            ),
         )
         write_json(
             opencode_index_path,
@@ -164,6 +255,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "judge_focus": ["unsafe reduction"],
                         "key_artifacts": {
                             "workflow_metrics": repo_relative(before_metrics_path),
+                            "route_governance_metrics_report": repo_relative(before_route_metrics_path),
                             "judge_evidence_index": repo_relative(before_index_path),
                         },
                     },
@@ -177,6 +269,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "judge_focus": ["OpenCode multi-worker runtime"],
                         "key_artifacts": {
                             "workflow_metrics": repo_relative(opencode_metrics_path),
+                            "route_governance_metrics_report": repo_relative(opencode_route_metrics_path),
                             "judge_evidence_index": repo_relative(opencode_index_path),
                         },
                     },
@@ -203,6 +296,14 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["workflow_metrics"]["rollup"]["units_total"], 3)
         self.assertEqual(report["workflow_metrics"]["rollup"]["units_converged"], 3)
         self.assertEqual(report["workflow_metrics"]["rollup"]["measured_unsafe_reduction_source_count"], 1)
+        self.assertEqual(report["route_governance_metrics"]["report_kind"], "route-governance-metrics-rollup")
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["source_count"], 2)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["accepted_evidence_semantic_pass_count"], 3)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_route_decision_artifacts"], 4)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_slice_gate_contexts"], 3)
+        self.assertTrue(report["route_governance_metrics"]["rollup"]["all_target_artifacts_reproducible"])
+        self.assertTrue(report["route_governance_metrics"]["rollup"]["all_retention_policies_present"])
         self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 1)
         self.assertTrue(report["opencode_runtime"]["all_contracts_executed"])
         self.assertTrue(report["opencode_runtime"]["chat_output_is_evidence_false"])

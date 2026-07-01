@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Route governance metrics report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "status",
+    "report_kind",
+    "inputs",
+    "metrics",
+    "denominators",
+    "claim_boundary",
+    "retention_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "const": "passed"
+    },
+    "report_kind": {
+      "const": "route-governance-metrics"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["translator_coverage_matrix", "evidence_governance"],
+      "properties": {
+        "translator_coverage_matrix": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["path", "status", "capability_count"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "status": {"type": "string"},
+            "capability_count": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        "evidence_governance": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["evidence_root", "status", "file_count"],
+          "properties": {
+            "evidence_root": {"type": ["string", "null"]},
+            "status": {"type": "string"},
+            "file_count": {"type": ["integer", "null"], "minimum": 0}
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "translation_coverage_numerator",
+        "accepted_evidence_semantic_pass_count",
+        "tracked_capability_delta_ledgers",
+        "tracked_capability_delta_count",
+        "tracked_route_decision_artifacts",
+        "s2_workflow_metrics",
+        "candidate_generation_inventory",
+        "tracked_slice_gate_contexts",
+        "slice_gate_contexts"
+      ],
+      "properties": {
+        "translation_coverage_numerator": {"const": 0},
+        "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0},
+        "tracked_capability_delta_ledgers": {"type": "integer", "minimum": 0},
+        "tracked_capability_delta_count": {"type": "integer", "minimum": 0},
+        "tracked_route_decision_artifacts": {"type": "integer", "minimum": 0},
+        "candidate_classification": {"type": "object"},
+        "capability_delta_ledger": {"type": "object"},
+        "s2_workflow_metrics": {"type": "object"},
+        "candidate_generation_inventory": {"type": "object"},
+        "tracked_slice_gate_contexts": {"type": "integer", "minimum": 0},
+        "slice_gate_contexts": {
+          "type": "array",
+          "items": {"type": "object"}
+        }
+      }
+    },
+    "denominators": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "required": [
+        "capability_delta_ledger",
+        "candidate_generation_inventory",
+        "slice_gate_contexts",
+        "translation_coverage_numerator",
+        "accepted_evidence_semantic_pass_count",
+        "s2_workflow_metrics"
+      ]
+    },
+    "claim_boundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retention_policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "report_role",
+        "target_artifacts",
+        "committed_anchors",
+        "claim_boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "route-governance-metrics-retention-policy"},
+        "report_role": {"const": "p0-route-governance-and-capability-metrics"},
+        "target_artifacts": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["retention_class", "committed", "policy"],
+          "properties": {
+            "retention_class": {"const": "reproducible-local-output"},
+            "committed": {"const": false},
+            "policy": {"type": "string", "minLength": 1}
+          }
+        },
+        "committed_anchors": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["retention_class", "policy"],
+          "properties": {
+            "retention_class": {"const": "release-evidence"},
+            "policy": {"type": "string", "minLength": 1}
+          }
+        },
+        "claim_boundary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

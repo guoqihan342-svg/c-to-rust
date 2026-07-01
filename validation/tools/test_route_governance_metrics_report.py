@@ -4,7 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import jsonschema
+
 from validation.tools import route_governance_metrics_report
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
 
 
 class RouteGovernanceMetricsReportTests(unittest.TestCase):
@@ -169,6 +175,20 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             self.assertEqual(context["performance_smoke"]["status"], "recorded")
             self.assertTrue(context["performance_smoke"]["secondary_only"])
             self.assertIn("not semantic acceptance evidence", report["claim_boundary"])
+            self.assertEqual(report["retention_policy"]["report_kind"], "route-governance-metrics-retention-policy")
+            self.assertFalse(report["retention_policy"]["target_artifacts"]["committed"])
+            self.assertEqual(report["retention_policy"]["committed_anchors"]["retention_class"], "release-evidence")
+
+            schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+            jsonschema.validate(report, schema)
+            expanded = json.loads(json.dumps(report))
+            expanded["metrics"]["translation_coverage_numerator"] = 1
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(expanded, schema)
+            committed_target = json.loads(json.dumps(report))
+            committed_target["retention_policy"]["target_artifacts"]["committed"] = True
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(committed_target, schema)
 
     def test_rejects_failed_coverage_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="route-governance-metrics-") as tmp:
@@ -215,6 +235,7 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
     def test_core_ci_runs_route_governance_metrics_report_gate(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
 
+        self.assertIn("validation/route-governance-metrics.schema.json", workflow)
         self.assertIn("python -m unittest validation.tools.test_route_governance_metrics_report", workflow)
         self.assertIn("python validation/tools/route_governance_metrics_report.py", workflow)
 

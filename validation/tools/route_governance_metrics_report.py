@@ -116,6 +116,7 @@ def build_report(
             "and L4/accepted-evidence contexts are not counted as translator-generated semantic passes unless "
             "the shared validation gates prove semantic_pass for translator-generated Rust drafts."
         ),
+        "retention_policy": build_retention_policy(),
     }
 
 
@@ -339,6 +340,23 @@ def coverage_metrics_from(coverage_report: dict[str, Any]) -> dict[str, Any]:
             "by_construct": ledger.get("by_construct", {}),
             "blocked_callee_count": optional_int(ledger, "blocked_callee_count", 0),
         },
+    }
+
+
+def build_retention_policy() -> dict[str, Any]:
+    return {
+        "report_kind": "route-governance-metrics-retention-policy",
+        "report_role": "p0-route-governance-and-capability-metrics",
+        "target_artifacts": {
+            "retention_class": "reproducible-local-output",
+            "committed": False,
+            "policy": "Regenerate from validation evidence, translator coverage matrix, and competition summaries; bind published runs by repo-relative path and sha256.",
+        },
+        "committed_anchors": {
+            "retention_class": "release-evidence",
+            "policy": "Use validation/evidence manifests, validation/translator-coverage-matrix.json, and config/competition-env profiles as committed anchors.",
+        },
+        "claim_boundary": "Retention policy does not expand semantic acceptance, generated-draft pass counts, or translation coverage.",
     }
 
 

@@ -60,6 +60,7 @@ def build_judge_milestone_bundle(
     opencode_sources: list[dict[str, Any]] = []
     core_quality_sources: list[dict[str, Any]] = []
     architecture_sources: list[dict[str, Any]] = []
+    route_governance_sources: list[dict[str, Any]] = []
     for entry in entrypoints:
         (
             entry_report,
@@ -67,6 +68,7 @@ def build_judge_milestone_bundle(
             opencode_source,
             core_quality_source,
             architecture_source,
+            route_governance_source,
         ) = summarize_entrypoint(
             entry,
             validated_artifacts=validated_artifacts.get(str(entry.get("id", "unknown")), {}),
@@ -82,11 +84,14 @@ def build_judge_milestone_bundle(
             core_quality_sources.append(core_quality_source)
         if architecture_source is not None:
             architecture_sources.append(architecture_source)
+        if route_governance_source is not None:
+            route_governance_sources.append(route_governance_source)
 
     proof_classes = build_proof_classes(entrypoint_reports)
     workflow_metrics = build_workflow_metrics_rollup(workflow_sources)
     core_translation_quality = build_core_translation_quality_rollup(core_quality_sources)
     harness_architecture_summary = build_harness_architecture_summary(architecture_sources)
+    route_governance_metrics = build_route_governance_metrics_rollup(route_governance_sources)
     opencode_runtime = build_opencode_runtime_rollup(opencode_sources)
     opencode_policy = build_opencode_evidence_policy(opencode_sources)
     unsafe_scope = build_unsafe_reduction_scope(workflow_sources)
@@ -99,6 +104,7 @@ def build_judge_milestone_bundle(
         proof_class_contract_errors=proof_class_contract_errors,
         opencode_policy=opencode_policy,
         core_translation_quality=core_translation_quality,
+        route_governance_metrics=route_governance_metrics,
     )
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
@@ -125,6 +131,7 @@ def build_judge_milestone_bundle(
         "semantic_evidence_rollup": semantic_evidence,
         "core_translation_quality": core_translation_quality,
         "harness_architecture_summary": harness_architecture_summary,
+        "route_governance_metrics": route_governance_metrics,
         "entrypoints": entrypoint_reports,
         "workflow_metrics": workflow_metrics,
         "unsafe_reduction_scope": unsafe_scope,
@@ -156,6 +163,7 @@ def summarize_entrypoint(
     dict[str, Any] | None,
     dict[str, Any] | None,
     dict[str, Any] | None,
+    dict[str, Any] | None,
 ]:
     artifacts = artifact_refs_from_key_artifacts(entry.get("key_artifacts", {}), repo_root=repo_root)
     artifacts.update(artifact_refs_from_key_artifacts(validated_artifacts, repo_root=repo_root))
@@ -179,6 +187,11 @@ def summarize_entrypoint(
         artifact=artifacts.get("judge_evidence_index"),
         repo_root=repo_root,
     )
+    route_governance_source = route_governance_metrics_source_from_artifact(
+        entrypoint_id=str(entry.get("id", "unknown")),
+        artifact=artifacts.get("route_governance_metrics_report"),
+        repo_root=repo_root,
+    )
     return (
         {
             "id": entry.get("id"),
@@ -196,6 +209,7 @@ def summarize_entrypoint(
         opencode_source,
         core_quality_source,
         architecture_source,
+        route_governance_source,
     )
 
 
@@ -244,6 +258,7 @@ def milestone_blockers(
     proof_class_contract_errors: list[str],
     opencode_policy: dict[str, Any],
     core_translation_quality: dict[str, Any],
+    route_governance_metrics: dict[str, Any],
 ) -> list[str]:
     blockers: list[str] = list(run_report_contract) + list(proof_class_contract_errors)
     if run_report.get("status") != "passed":
@@ -269,6 +284,17 @@ def milestone_blockers(
         blockers.append("core_quality_generated_draft_semantic_pass_must_be_false")
     if int_or_zero(core_translation_quality.get("translation_coverage_numerator")) != 0:
         blockers.append("core_quality_translation_coverage_numerator_must_be_zero")
+    route_rollup = (
+        route_governance_metrics.get("rollup", {})
+        if isinstance(route_governance_metrics.get("rollup"), dict)
+        else {}
+    )
+    if int_or_zero(route_rollup.get("translation_coverage_numerator")) != 0:
+        blockers.append("route_governance_translation_coverage_numerator_must_be_zero")
+    if int_or_zero(route_rollup.get("source_count")) > 0 and not route_rollup.get("all_retention_policies_present"):
+        blockers.append("route_governance_metrics_retention_policy_missing")
+    if int_or_zero(route_rollup.get("source_count")) > 0 and not route_rollup.get("all_target_artifacts_reproducible"):
+        blockers.append("route_governance_metrics_target_artifacts_must_be_reproducible")
     return blockers
 
 
@@ -715,6 +741,46 @@ def workflow_source_from_artifact(
     }
 
 
+def route_governance_metrics_source_from_artifact(
+    *,
+    entrypoint_id: str,
+    artifact: dict[str, Any] | None,
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    payload = load_present_json_artifact(artifact, repo_root=repo_root)
+    if payload is None:
+        return None
+    metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
+    s2 = metrics.get("s2_workflow_metrics", {}) if isinstance(metrics.get("s2_workflow_metrics"), dict) else {}
+    unsafe_reduction = s2.get("unsafe_reduction", {}) if isinstance(s2.get("unsafe_reduction"), dict) else {}
+    retention = payload.get("retention_policy", {}) if isinstance(payload.get("retention_policy"), dict) else {}
+    target_artifacts = (
+        retention.get("target_artifacts", {}) if isinstance(retention.get("target_artifacts"), dict) else {}
+    )
+    return {
+        "entrypoint_id": entrypoint_id,
+        "artifact": artifact,
+        "status": payload.get("status", "unknown"),
+        "translation_coverage_numerator": int_or_zero(metrics.get("translation_coverage_numerator")),
+        "accepted_evidence_semantic_pass_count": int_or_zero(
+            metrics.get("accepted_evidence_semantic_pass_count")
+        ),
+        "tracked_route_decision_artifacts": int_or_zero(metrics.get("tracked_route_decision_artifacts")),
+        "tracked_slice_gate_contexts": int_or_zero(metrics.get("tracked_slice_gate_contexts")),
+        "s2_workflow_run_count": int_or_zero(s2.get("run_count")),
+        "s2_unsafe_reduction_status": unsafe_reduction.get("status", "unknown"),
+        "s2_reduced_by": int_or_zero(unsafe_reduction.get("reduced_by")),
+        "retention_policy_present": bool(retention),
+        "target_artifacts_committed": target_artifacts.get("committed")
+        if isinstance(target_artifacts.get("committed"), bool)
+        else None,
+        "target_artifacts_retention_class": target_artifacts.get("retention_class")
+        if isinstance(target_artifacts.get("retention_class"), str)
+        else None,
+        "claim_boundary": payload.get("claim_boundary") if isinstance(payload.get("claim_boundary"), str) else None,
+    }
+
+
 def opencode_source_from_artifact(
     *,
     entrypoint_id: str,
@@ -847,6 +913,51 @@ def build_workflow_metrics_rollup(sources: list[dict[str, Any]]) -> dict[str, An
                 "reduced_by": sum(reduced_values) if measured_complete else None,
             },
         },
+    }
+
+
+def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    all_retention_present = all(bool(source.get("retention_policy_present")) for source in sources) if sources else True
+    all_reproducible = (
+        all(
+            source.get("target_artifacts_committed") is False
+            and source.get("target_artifacts_retention_class") == "reproducible-local-output"
+            for source in sources
+        )
+        if sources
+        else True
+    )
+    return {
+        "report_kind": "route-governance-metrics-rollup",
+        "sources": sources,
+        "rollup": {
+            "source_count": len(sources),
+            "translation_coverage_numerator": sum(
+                int_or_zero(source.get("translation_coverage_numerator")) for source in sources
+            ),
+            "accepted_evidence_semantic_pass_count": sum(
+                int_or_zero(source.get("accepted_evidence_semantic_pass_count")) for source in sources
+            ),
+            "tracked_route_decision_artifacts": sum(
+                int_or_zero(source.get("tracked_route_decision_artifacts")) for source in sources
+            ),
+            "tracked_slice_gate_contexts": sum(
+                int_or_zero(source.get("tracked_slice_gate_contexts")) for source in sources
+            ),
+            "s2_workflow_run_count": sum(int_or_zero(source.get("s2_workflow_run_count")) for source in sources),
+            "s2_unsafe_reduction": {
+                "status": "measured"
+                if any(source.get("s2_unsafe_reduction_status") == "measured" for source in sources)
+                else "not_measured",
+                "reduced_by": sum(int_or_zero(source.get("s2_reduced_by")) for source in sources),
+            },
+            "all_retention_policies_present": all_retention_present,
+            "all_target_artifacts_reproducible": all_reproducible,
+        },
+        "boundary": (
+            "Route governance metrics constrain public claims and artifact retention. They are not a semantic gate "
+            "and do not increase translator-generated translation coverage."
+        ),
     }
 
 
