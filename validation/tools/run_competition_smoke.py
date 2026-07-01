@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -28,6 +29,47 @@ TRANSLATOR_COVERAGE_MATRIX = REPO_ROOT / "validation" / "tools" / "translator_co
 MILESTONE_RELEASE_REPORT = REPO_ROOT / "validation" / "tools" / "milestone_release_report.py"
 VERIFY_VENDORED_CLANG = REPO_ROOT / "validation" / "tools" / "verify_vendored_clang.py"
 DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+LOCAL_HOST_PATH_UNQUOTED = (
+    r"(?:"
+    r"[A-Za-z]:[\\/][^\s;&|]+|"
+    r"/mnt/[A-Za-z]/[^\s;&|]+|"
+    r"/home/[^\s;&|]+|"
+    r"/Users/[^\s;&|]+|"
+    r"/tmp/[^\s;&|]+|"
+    r"/var/[^\s;&|]+|"
+    r"\\\\wsl\$\\[^\s;&|]+|"
+    r"//wsl\.localhost/[^\s;&|]+"
+    r")"
+)
+LOCAL_HOST_PATH_DOUBLE_QUOTED = (
+    r"(?:"
+    r'[A-Za-z]:[\\/][^"]+|'
+    r'/mnt/[A-Za-z]/[^"]+|'
+    r'/home/[^"]+|'
+    r'/Users/[^"]+|'
+    r'/tmp/[^"]+|'
+    r'/var/[^"]+|'
+    r'\\\\wsl\$\\[^"]+|'
+    r'//wsl\.localhost/[^"]+'
+    r")"
+)
+LOCAL_HOST_PATH_SINGLE_QUOTED = (
+    r"(?:"
+    r"[A-Za-z]:[\\/][^']+|"
+    r"/mnt/[A-Za-z]/[^']+|"
+    r"/home/[^']+|"
+    r"/Users/[^']+|"
+    r"/tmp/[^']+|"
+    r"/var/[^']+|"
+    r"\\\\wsl\$\\[^']+|"
+    r"//wsl\.localhost/[^']+"
+    r")"
+)
+LOCAL_HOST_PATH_IN_COMMAND = re.compile(
+    rf'"(?P<double_quoted_path>{LOCAL_HOST_PATH_DOUBLE_QUOTED})"|'
+    rf"'(?P<single_quoted_path>{LOCAL_HOST_PATH_SINGLE_QUOTED})'|"
+    rf"(?P<plain_path>{LOCAL_HOST_PATH_UNQUOTED})"
+)
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -667,8 +709,9 @@ def command_for_log(command: list[str], *, repo_root: Path, out_root: Path) -> l
 def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) -> str:
     if not argument or not any(separator in argument for separator in ["/", "\\"]):
         return argument
+    sanitized_argument = sanitize_host_paths_in_command_text(argument)
     if any(token in argument for token in [";", "|", "&&"]):
-        return argument
+        return sanitized_argument
     path = Path(argument)
     resolved = path if path.is_absolute() else repo_root / path
     for root in [repo_root.resolve(), out_root.resolve()]:
@@ -677,6 +720,17 @@ def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) 
         except ValueError:
             continue
     return path_basename(argument)
+
+
+def sanitize_host_paths_in_command_text(argument: str) -> str:
+    def replace_match(match: re.Match[str]) -> str:
+        if match.group("double_quoted_path") is not None:
+            return f'"{path_basename(match.group("double_quoted_path"))}"'
+        if match.group("single_quoted_path") is not None:
+            return f"'{path_basename(match.group('single_quoted_path'))}'"
+        return path_basename(match.group("plain_path"))
+
+    return LOCAL_HOST_PATH_IN_COMMAND.sub(replace_match, argument)
 
 
 def path_basename(path_text: str) -> str:

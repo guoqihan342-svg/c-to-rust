@@ -23,7 +23,9 @@ def load_smoke_module():
     return module
 
 
-LOCAL_ABSOLUTE_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/)")
+LOCAL_ABSOLUTE_PATH = re.compile(
+    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|\\\\wsl\$\\|//wsl\.localhost/)"
+)
 
 
 def assert_no_local_absolute_command_arguments(testcase: unittest.TestCase, command_entries: list[dict]) -> None:
@@ -580,6 +582,26 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                 self.assertIn("python.exe", logged_arguments)
         finally:
             module.sys.executable = original_executable
+
+    def test_command_argument_for_log_sanitizes_shell_fragment_host_paths(self) -> None:
+        module = load_smoke_module()
+        cases = {
+            "echo ok; /mnt/c/Users/me/tool.exe": "echo ok; tool.exe",
+            r"echo ok && \\wsl$\Ubuntu\home\me\tool.exe": "echo ok && tool.exe",
+            "echo ok | //wsl.localhost/Ubuntu/home/me/python3": "echo ok | python3",
+            r'echo ok; "C:\Program Files\Python314\python.exe"': 'echo ok; "python.exe"',
+        }
+
+        for argument, expected in cases.items():
+            with self.subTest(argument=argument):
+                logged = module.command_argument_for_log(
+                    argument,
+                    repo_root=REPO_ROOT,
+                    out_root=REPO_ROOT / "target" / "competition-smoke",
+                )
+
+                self.assertEqual(logged, expected)
+                self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
 
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
         module = load_smoke_module()
