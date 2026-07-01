@@ -88,6 +88,60 @@ def route_metrics_payload(
     }
 
 
+def evidence_governance_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "evidence_root": "validation/evidence",
+        "failed_gates": [],
+        "portability": {
+            "status": "passed",
+            "claim_anchor_issue_count": 0,
+            "profile_hash_issue_count": 0,
+            "diagnostic_host_metadata_count": 3,
+            "issues": [],
+            "profile_hash_issues": [],
+        },
+        "inventory": {
+            "file_count": 3,
+            "total_bytes": 120,
+            "retention_classes": {
+                "committed_release": {"file_count": 2, "total_bytes": 100},
+                "diagnostic_only": {"file_count": 1, "total_bytes": 20},
+            },
+            "pipelines": [
+                {
+                    "pipeline_id": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32",
+                    "artifact_count": 2,
+                    "total_bytes": 100,
+                    "runtime_ms": 40,
+                    "retention_class": "committed_release",
+                    "compression_policy": "do_not_compress_claim_anchors",
+                    "prune_policy": "do_not_prune_without_manifest_update",
+                },
+                {
+                    "pipeline_id": "validation/evidence/flashdb/auto-translation/diagnostic",
+                    "artifact_count": 1,
+                    "total_bytes": 20,
+                    "runtime_ms": 5,
+                    "retention_class": "diagnostic_only",
+                    "compression_policy": "compress_when_large_or_superseded",
+                    "prune_policy": "may_prune_after_replacement_evidence",
+                },
+            ],
+            "runtime": {
+                "observation_count": 2,
+                "total_duration_ms": 45,
+                "max_duration_ms": 40,
+            },
+            "retention_policy": {
+                "compression_policy": "compress large diagnostic_only logs first",
+                "prune_policy": "diagnostic_only may be pruned after replacement evidence is recorded",
+            },
+        },
+    }
+
+
 class JudgeMilestoneBundleTests(unittest.TestCase):
     def test_bundle_binds_all_entrypoints_metrics_and_opencode_runtime(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
@@ -98,6 +152,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
         before_metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
         before_route_metrics_path = temp_dir / "before-after" / "summary" / "route-governance-metrics-report.json"
+        evidence_governance_path = temp_dir / "competition-smoke" / "reports" / "evidence-governance.json"
         before_index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
         opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
@@ -132,6 +187,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                 s2_reduced_by=2,
             ),
         )
+        write_json(evidence_governance_path, evidence_governance_payload())
         write_json(
             before_index_path,
             {
@@ -256,6 +312,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {
                             "workflow_metrics": repo_relative(before_metrics_path),
                             "route_governance_metrics_report": repo_relative(before_route_metrics_path),
+                            "evidence_governance_report": repo_relative(evidence_governance_path),
                             "judge_evidence_index": repo_relative(before_index_path),
                         },
                     },
@@ -304,6 +361,19 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_slice_gate_contexts"], 3)
         self.assertTrue(report["route_governance_metrics"]["rollup"]["all_target_artifacts_reproducible"])
         self.assertTrue(report["route_governance_metrics"]["rollup"]["all_retention_policies_present"])
+        self.assertEqual(report["evidence_cost_retention"]["report_kind"], "evidence-cost-retention-rollup")
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["source_count"], 1)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["artifact_count"], 3)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["total_bytes"], 120)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["pipeline_count"], 2)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["runtime_ms"]["total"], 45)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["runtime_ms"]["max"], 40)
+        self.assertEqual(
+            report["evidence_cost_retention"]["rollup"]["retention_classes"]["committed_release"]["file_count"],
+            2,
+        )
+        self.assertTrue(report["evidence_cost_retention"]["rollup"]["all_sources_passed"])
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["portability_issue_count"], 0)
         self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 1)
         self.assertTrue(report["opencode_runtime"]["all_contracts_executed"])
         self.assertTrue(report["opencode_runtime"]["chat_output_is_evidence_false"])
@@ -449,6 +519,11 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         expanded["core_translation_quality"]["translation_coverage_numerator"] = 1
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(expanded, schema)
+
+        missing_evidence_cost = json.loads(json.dumps(report))
+        missing_evidence_cost.pop("evidence_cost_retention")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_evidence_cost, schema)
 
     def test_bundle_blocks_malformed_run_report_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

@@ -19,6 +19,7 @@
     "core_translation_quality",
     "harness_architecture_summary",
     "route_governance_metrics",
+    "evidence_cost_retention",
     "entrypoints",
     "workflow_metrics",
     "unsafe_reduction_scope",
@@ -213,6 +214,61 @@
             "s2_unsafe_reduction": {"type": "object"},
             "all_retention_policies_present": {"type": "boolean"},
             "all_target_artifacts_reproducible": {"type": "boolean"}
+          }
+        },
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidence_cost_retention": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["report_kind", "sources", "rollup", "boundary"],
+      "properties": {
+        "report_kind": {"const": "evidence-cost-retention-rollup"},
+        "sources": {"type": "array", "items": {"type": "object"}},
+        "rollup": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "source_count",
+            "artifact_count",
+            "total_bytes",
+            "pipeline_count",
+            "runtime_ms",
+            "retention_classes",
+            "all_sources_passed",
+            "portability_issue_count"
+          ],
+          "properties": {
+            "source_count": {"type": "integer", "minimum": 0},
+            "artifact_count": {"type": "integer", "minimum": 0},
+            "total_bytes": {"type": "integer", "minimum": 0},
+            "pipeline_count": {"type": "integer", "minimum": 0},
+            "runtime_ms": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["observation_count", "total", "max"],
+              "properties": {
+                "observation_count": {"type": "integer", "minimum": 0},
+                "total": {"type": "integer", "minimum": 0},
+                "max": {"type": "integer", "minimum": 0}
+              }
+            },
+            "retention_classes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["file_count", "total_bytes"],
+                "properties": {
+                  "file_count": {"type": "integer", "minimum": 0},
+                  "total_bytes": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
+            "all_sources_passed": {"type": "boolean"},
+            "portability_issue_count": {"type": "integer", "minimum": 0},
+            "diagnostic_host_metadata_count": {"type": "integer", "minimum": 0}
           }
         },
         "boundary": {"type": "string", "minLength": 1}

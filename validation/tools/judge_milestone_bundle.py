@@ -61,6 +61,7 @@ def build_judge_milestone_bundle(
     core_quality_sources: list[dict[str, Any]] = []
     architecture_sources: list[dict[str, Any]] = []
     route_governance_sources: list[dict[str, Any]] = []
+    evidence_cost_sources: list[dict[str, Any]] = []
     for entry in entrypoints:
         (
             entry_report,
@@ -69,6 +70,7 @@ def build_judge_milestone_bundle(
             core_quality_source,
             architecture_source,
             route_governance_source,
+            evidence_cost_source,
         ) = summarize_entrypoint(
             entry,
             validated_artifacts=validated_artifacts.get(str(entry.get("id", "unknown")), {}),
@@ -86,12 +88,15 @@ def build_judge_milestone_bundle(
             architecture_sources.append(architecture_source)
         if route_governance_source is not None:
             route_governance_sources.append(route_governance_source)
+        if evidence_cost_source is not None:
+            evidence_cost_sources.append(evidence_cost_source)
 
     proof_classes = build_proof_classes(entrypoint_reports)
     workflow_metrics = build_workflow_metrics_rollup(workflow_sources)
     core_translation_quality = build_core_translation_quality_rollup(core_quality_sources)
     harness_architecture_summary = build_harness_architecture_summary(architecture_sources)
     route_governance_metrics = build_route_governance_metrics_rollup(route_governance_sources)
+    evidence_cost_retention = build_evidence_cost_retention_rollup(evidence_cost_sources)
     opencode_runtime = build_opencode_runtime_rollup(opencode_sources)
     opencode_policy = build_opencode_evidence_policy(opencode_sources)
     unsafe_scope = build_unsafe_reduction_scope(workflow_sources)
@@ -105,6 +110,7 @@ def build_judge_milestone_bundle(
         opencode_policy=opencode_policy,
         core_translation_quality=core_translation_quality,
         route_governance_metrics=route_governance_metrics,
+        evidence_cost_retention=evidence_cost_retention,
     )
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
@@ -132,6 +138,7 @@ def build_judge_milestone_bundle(
         "core_translation_quality": core_translation_quality,
         "harness_architecture_summary": harness_architecture_summary,
         "route_governance_metrics": route_governance_metrics,
+        "evidence_cost_retention": evidence_cost_retention,
         "entrypoints": entrypoint_reports,
         "workflow_metrics": workflow_metrics,
         "unsafe_reduction_scope": unsafe_scope,
@@ -159,6 +166,7 @@ def summarize_entrypoint(
     repo_root: Path,
 ) -> tuple[
     dict[str, Any],
+    dict[str, Any] | None,
     dict[str, Any] | None,
     dict[str, Any] | None,
     dict[str, Any] | None,
@@ -192,6 +200,11 @@ def summarize_entrypoint(
         artifact=artifacts.get("route_governance_metrics_report"),
         repo_root=repo_root,
     )
+    evidence_cost_source = evidence_cost_retention_source_from_artifact(
+        entrypoint_id=str(entry.get("id", "unknown")),
+        artifact=artifacts.get("evidence_governance_report"),
+        repo_root=repo_root,
+    )
     return (
         {
             "id": entry.get("id"),
@@ -210,6 +223,7 @@ def summarize_entrypoint(
         core_quality_source,
         architecture_source,
         route_governance_source,
+        evidence_cost_source,
     )
 
 
@@ -259,6 +273,7 @@ def milestone_blockers(
     opencode_policy: dict[str, Any],
     core_translation_quality: dict[str, Any],
     route_governance_metrics: dict[str, Any],
+    evidence_cost_retention: dict[str, Any],
 ) -> list[str]:
     blockers: list[str] = list(run_report_contract) + list(proof_class_contract_errors)
     if run_report.get("status") != "passed":
@@ -295,6 +310,13 @@ def milestone_blockers(
         blockers.append("route_governance_metrics_retention_policy_missing")
     if int_or_zero(route_rollup.get("source_count")) > 0 and not route_rollup.get("all_target_artifacts_reproducible"):
         blockers.append("route_governance_metrics_target_artifacts_must_be_reproducible")
+    evidence_rollup = (
+        evidence_cost_retention.get("rollup", {})
+        if isinstance(evidence_cost_retention.get("rollup"), dict)
+        else {}
+    )
+    if int_or_zero(evidence_rollup.get("source_count")) > 0 and not evidence_rollup.get("all_sources_passed"):
+        blockers.append("evidence_cost_retention_sources_must_pass")
     return blockers
 
 
@@ -781,6 +803,47 @@ def route_governance_metrics_source_from_artifact(
     }
 
 
+def evidence_cost_retention_source_from_artifact(
+    *,
+    entrypoint_id: str,
+    artifact: dict[str, Any] | None,
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    payload = load_present_json_artifact(artifact, repo_root=repo_root)
+    if payload is None:
+        return None
+    inventory = payload.get("inventory", {}) if isinstance(payload.get("inventory"), dict) else {}
+    portability = payload.get("portability", {}) if isinstance(payload.get("portability"), dict) else {}
+    runtime = inventory.get("runtime", {}) if isinstance(inventory.get("runtime"), dict) else {}
+    retention_classes = inventory.get("retention_classes", {})
+    if not isinstance(retention_classes, dict):
+        retention_classes = {}
+    pipelines = inventory.get("pipelines", [])
+    pipeline_count = (
+        len([pipeline for pipeline in pipelines if isinstance(pipeline, dict)])
+        if isinstance(pipelines, list)
+        else 0
+    )
+    return {
+        "entrypoint_id": entrypoint_id,
+        "artifact": artifact,
+        "status": payload.get("status", "unknown"),
+        "evidence_root": payload.get("evidence_root") if isinstance(payload.get("evidence_root"), str) else None,
+        "failed_gates": payload.get("failed_gates") if isinstance(payload.get("failed_gates"), list) else [],
+        "artifact_count": int_or_zero(inventory.get("file_count")),
+        "total_bytes": int_or_zero(inventory.get("total_bytes")),
+        "retention_classes": normalize_retention_classes(retention_classes),
+        "pipeline_count": pipeline_count,
+        "runtime_observation_count": int_or_zero(runtime.get("observation_count")),
+        "runtime_total_duration_ms": int_or_zero(runtime.get("total_duration_ms")),
+        "runtime_max_duration_ms": int_or_zero(runtime.get("max_duration_ms")),
+        "portability_status": portability.get("status", "unknown"),
+        "claim_anchor_issue_count": int_or_zero(portability.get("claim_anchor_issue_count")),
+        "profile_hash_issue_count": int_or_zero(portability.get("profile_hash_issue_count")),
+        "diagnostic_host_metadata_count": int_or_zero(portability.get("diagnostic_host_metadata_count")),
+    }
+
+
 def opencode_source_from_artifact(
     *,
     entrypoint_id: str,
@@ -961,6 +1024,54 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
     }
 
 
+def build_evidence_cost_retention_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    retention_classes: dict[str, dict[str, int]] = {}
+    for source in sources:
+        classes = source.get("retention_classes", {})
+        if not isinstance(classes, dict):
+            continue
+        for class_name, counts in classes.items():
+            if not isinstance(counts, dict):
+                continue
+            target = retention_classes.setdefault(str(class_name), {"file_count": 0, "total_bytes": 0})
+            target["file_count"] += int_or_zero(counts.get("file_count"))
+            target["total_bytes"] += int_or_zero(counts.get("total_bytes"))
+    return {
+        "report_kind": "evidence-cost-retention-rollup",
+        "sources": sources,
+        "rollup": {
+            "source_count": len(sources),
+            "artifact_count": sum(int_or_zero(source.get("artifact_count")) for source in sources),
+            "total_bytes": sum(int_or_zero(source.get("total_bytes")) for source in sources),
+            "pipeline_count": sum(int_or_zero(source.get("pipeline_count")) for source in sources),
+            "runtime_ms": {
+                "observation_count": sum(
+                    int_or_zero(source.get("runtime_observation_count")) for source in sources
+                ),
+                "total": sum(int_or_zero(source.get("runtime_total_duration_ms")) for source in sources),
+                "max": max(
+                    [int_or_zero(source.get("runtime_max_duration_ms")) for source in sources],
+                    default=0,
+                ),
+            },
+            "retention_classes": retention_classes,
+            "all_sources_passed": all(source.get("status") == "passed" for source in sources) if sources else True,
+            "portability_issue_count": sum(
+                int_or_zero(source.get("claim_anchor_issue_count"))
+                + int_or_zero(source.get("profile_hash_issue_count"))
+                for source in sources
+            ),
+            "diagnostic_host_metadata_count": sum(
+                int_or_zero(source.get("diagnostic_host_metadata_count")) for source in sources
+            ),
+        },
+        "boundary": (
+            "Evidence cost and retention metrics summarize artifact volume, runtime observations, and retention "
+            "classes for review. They are not semantic acceptance evidence and do not increase translation coverage."
+        ),
+    }
+
+
 def build_opencode_runtime_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "report_kind": "opencode-runtime-rollup",
@@ -1030,6 +1141,18 @@ def resolve_output_path(path: Path, *, repo_root: Path) -> Path:
     path_text = path.as_posix()
     validator.assert_repo_relative_posix(path_text)
     return validator.repo_path(path_text, repo_root=repo_root)
+
+
+def normalize_retention_classes(value: dict[str, Any]) -> dict[str, dict[str, int]]:
+    result: dict[str, dict[str, int]] = {}
+    for class_name, counts in value.items():
+        if not isinstance(counts, dict):
+            continue
+        result[str(class_name)] = {
+            "file_count": int_or_zero(counts.get("file_count")),
+            "total_bytes": int_or_zero(counts.get("total_bytes")),
+        }
+    return result
 
 
 def int_or_zero(value: object) -> int:
