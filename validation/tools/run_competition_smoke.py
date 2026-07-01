@@ -277,6 +277,7 @@ def run_competition_smoke(
         ],
         "command_log": {
             "path": summary_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+            "sha256": sha256(command_log_path),
         },
         "reports": {
             "evidence_governance": {

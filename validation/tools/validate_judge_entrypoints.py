@@ -33,6 +33,8 @@ LOCAL_ABSOLUTE_PATH = re.compile(
     r"/mnt/[A-Za-z]/|"
     r"/home/|/Users/|/tmp/|/var/|"
     r"\\\\wsl\$\\|"
+    r"//wsl\$/|"
+    r"\\\\wsl\.localhost\\|"
     r"//wsl\.localhost/"
     r")"
 )
@@ -501,6 +503,8 @@ def validate_competition_smoke_summary_contract(
     environment_profile: dict[str, Any] | None = None,
     entrypoint_proof_class: str | None = None,
     entrypoint_run_id: str | None = None,
+    repo_root: Path = REPO_ROOT,
+    verify_command_log_sha: bool = False,
 ) -> dict[str, Any]:
     if payload.get("report_kind") != "competition-smoke-summary":
         raise ValueError("competition_smoke_summary report_kind must be competition-smoke-summary")
@@ -563,17 +567,35 @@ def validate_competition_smoke_summary_contract(
     milestone = require_object(payload.get("milestone_release_report"), "competition_smoke_summary milestone_release_report")
     if milestone.get("semantic_acceptance_claim") is not False:
         raise ValueError("competition_smoke_summary milestone_release_report.semantic_acceptance_claim must be false")
+    command_log = require_object(payload.get("command_log"), "competition_smoke_summary.command_log")
     assert_expected_smoke_path(
-        payload.get("command_log"),
+        command_log,
         "path",
         expected_artifacts,
         "command_log",
         "competition_smoke_summary.command_log.path",
     )
+    command_log_sha = validate_sha256_hex(
+        command_log.get("sha256"),
+        "competition_smoke_summary.command_log.sha256",
+    )
+    command_log_path = repo_path(
+        require_string(expected_artifacts.get("command_log"), "expected_artifacts.command_log"),
+        repo_root=repo_root,
+    )
+    if verify_command_log_sha and command_log_path.is_file():
+        actual_sha = sha256_file(command_log_path)
+        if actual_sha != command_log_sha:
+            raise ValueError("competition_smoke_summary.command_log.sha256 must match command_log artifact")
+    for step in payload.get("steps", []):
+        step_name = require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+        if step.get("log_path") != command_log["path"]:
+            raise ValueError(f"competition_smoke_summary step {step_name}.log_path must match command_log.path")
     return {
         "status": "passed",
         "proof_class": proof_class,
         "profile_sha256": payload.get("profile_sha256"),
+        "command_log_sha256": command_log_sha,
         "final_gate": final_gate.get("status"),
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
@@ -2503,6 +2525,8 @@ def validate_harness_artifact_contracts(
             environment_profile=environment_profile,
             entrypoint_proof_class=str(smoke_contract.get("proof_class")),
             entrypoint_run_id=str(smoke_contract.get("run_id")),
+            repo_root=repo_root,
+            verify_command_log_sha=True,
         )
         if "command_log" in artifacts:
             command_log_path = repo_path(str(artifacts["command_log"]), repo_root=repo_root)

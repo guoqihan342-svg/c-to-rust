@@ -43,7 +43,7 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_valid_command_log(path: Path) -> None:
+def write_valid_command_log(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
@@ -59,6 +59,7 @@ def write_valid_command_log(path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
+    return validator.sha256_file(path)
 
 
 def temp_json_ref(path: Path, payload: dict) -> dict:
@@ -140,6 +141,7 @@ def valid_competition_smoke_summary_payload() -> dict:
         },
         "command_log": {
             "path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            "sha256": "a" * 64,
         },
         "final_gate": {"status": "passed"},
         "steps": [
@@ -1780,7 +1782,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "final_gate": {"status": "passed"},
                 },
             )
-            write_valid_command_log(command_log)
+            payload["command_log"]["sha256"] = write_valid_command_log(command_log)
+            write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -1847,7 +1850,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "final_gate": {"status": "passed"},
                 },
             )
-            write_valid_command_log(command_log)
+            payload["command_log"]["sha256"] = write_valid_command_log(command_log)
+            write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -1919,6 +1923,98 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     },
                 )
 
+    def test_competition_smoke_summary_command_log_requires_sha256(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["command_log"].pop("sha256", None)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary.command_log.sha256",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
+                },
+                entrypoint_proof_class="local-simulation",
+                entrypoint_run_id=None,
+            )
+
+    def test_competition_smoke_summary_step_log_path_must_match_command_log(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["steps"][0]["log_path"] = "target/other-smoke/logs/commands.jsonl"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary step environment-check.log_path must match command_log.path",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
+                },
+                entrypoint_proof_class="local-simulation",
+                entrypoint_run_id=None,
+            )
+
+    def test_require_local_artifacts_rejects_command_log_sha256_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-command-log-sha-drift-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            payload["command_log"]["sha256"] = "0" * 64
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_json(evidence_governance, {})
+            write_json(coverage_matrix, {})
+            write_json(milestone, {})
+            write_valid_command_log(command_log)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_summary.command_log.sha256 must match command_log artifact",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-command-log-sha-drift-test",
+                    },
+                )
+
     def test_require_local_artifacts_rejects_command_log_local_absolute_command(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
             root = Path(tmp)
@@ -1967,6 +2063,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -2755,6 +2853,28 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "command": [
                             "\\\\wsl$\\Ubuntu\\home\\runner\\toolchain-check.sh",
                             "//wsl.localhost/Ubuntu/home/runner/python",
+                        ],
+                        "returncode": 0,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_wsl_unc_alias_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": [
+                            "//wsl$/Ubuntu/home/runner/toolchain-check.sh",
+                            "\\\\wsl.localhost\\Ubuntu\\home\\runner\\python",
                         ],
                         "returncode": 0,
                     },
