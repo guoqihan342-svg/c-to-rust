@@ -39,6 +39,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "| Judge milestone bundle | target/competition-out/summary/judge-milestone-bundle.json | self | self |",
             notes,
         )
+        self.assertIn("| Auto-recovered units | 1 |", notes)
         self.assertIn("| raw C2Rust | not_verified_here | no | 0 |", notes)
         self.assertIn("python -B -m validation.tools.run_judge_entrypoints", notes)
         self.assertIn("accepted_evidence_is_not_translator_generated_coverage", notes)
@@ -225,6 +226,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "translation_coverage_numerator": 0,
                     "blocked_repair_count": 1,
                     "human_interventions": 0,
+                    "auto_recovered_unit_count": 1,
                 },
                 "unsafe_reduction": {
                     "status": "measured",

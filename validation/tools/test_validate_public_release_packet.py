@@ -175,6 +175,15 @@ def valid_packet(root: Path) -> dict:
             "publication_scope": "all-entrypoints",
             "readiness": {"status": "passed"},
             "proof_class_rollup": {"local-simulation": 4},
+            "workflow_metrics": {
+                "repair_activity": bundle_payload["workflow_metrics"]["rollup"]["repair_activity"],
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+                "boundary": (
+                    "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
+                    "They are not a semantic gate and do not increase translation coverage."
+                ),
+            },
         },
         "claim_boundary": {
             "semantic_gate": False,
@@ -195,6 +204,7 @@ def valid_packet(root: Path) -> dict:
             },
         },
         "publication_manifest": publication_manifest,
+        "quantitative_evaluation": bundle_payload["quantitative_evaluation"],
         "known_gaps": known_gaps,
         "must_not_claim": packet_must_not_claim,
         "reproduction_commands": reproduction_commands,
@@ -245,6 +255,42 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("publication_manifest must match judge_milestone_bundle.publication_manifest" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_quantitative_evaluation_drift_from_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-scorecard-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["quantitative_evaluation"] = {
+            **packet["quantitative_evaluation"],
+            "project_slice_counts": {
+                **packet["quantitative_evaluation"]["project_slice_counts"],
+                "workflow_units_total": 999,
+            },
+        }
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("quantitative_evaluation must match judge_milestone_bundle.quantitative_evaluation" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_missing_workflow_metrics_summary_from_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-workflow-summary-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["summary"].pop("workflow_metrics")
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("workflow_metrics" in error for error in result["errors"]),
             result["errors"],
         )
 

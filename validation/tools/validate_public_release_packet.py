@@ -154,9 +154,15 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         if field in publication and publication.get(field) != packet.get(field):
             raise ValueError(f"publication_manifest.{field} must match public_release_packet.{field}")
 
-    for field in ("publication_manifest", "known_gaps", "reproduction_commands"):
+    for field in ("publication_manifest", "known_gaps", "reproduction_commands", "quantitative_evaluation"):
         if packet.get(field) != bundle.get(field):
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+
+    summary = require_object(packet.get("summary"), "summary")
+    if summary.get("workflow_metrics") != expected_workflow_metrics_summary(bundle):
+        raise ValueError(
+            "summary.workflow_metrics must match judge_milestone_bundle.workflow_metrics.rollup.repair_activity"
+        )
 
     require_release_notes_match_bundle(packet, bundle, repo_root=repo_root)
 
@@ -168,6 +174,21 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             "must_not_claim must include judge_milestone_bundle.must_not_claim entries: "
             f"{missing_claims}"
         )
+
+
+def expected_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:
+    workflow = bundle.get("workflow_metrics") if isinstance(bundle.get("workflow_metrics"), dict) else {}
+    rollup = workflow.get("rollup") if isinstance(workflow.get("rollup"), dict) else {}
+    repair_activity = rollup.get("repair_activity") if isinstance(rollup.get("repair_activity"), dict) else {}
+    return {
+        "repair_activity": repair_activity,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
+            "They are not a semantic gate and do not increase translation coverage."
+        ),
+    }
 
 
 def require_release_notes_match_bundle(packet: dict[str, Any], bundle: dict[str, Any], *, repo_root: Path) -> None:

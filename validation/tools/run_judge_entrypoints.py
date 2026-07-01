@@ -282,6 +282,7 @@ def write_public_release_packet(
             "publication_scope": publication.get("publication_scope", "unknown"),
             "readiness": summary.get("readiness", {}),
             "proof_class_rollup": bundle.get("proof_class_rollup", bundle.get("proof_classes", {})),
+            "workflow_metrics": public_packet_workflow_metrics_summary(bundle),
         },
         "claim_boundary": {
             "semantic_gate": False,
@@ -299,12 +300,28 @@ def write_public_release_packet(
         "milestone_release_notes": artifact_ref(release_notes_path, repo_root=repo_root),
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
+        "quantitative_evaluation": bundle.get("quantitative_evaluation", {}),
         "known_gaps": bundle.get("known_gaps", []),
         "must_not_claim": public_packet_must_not_claim(bundle.get("must_not_claim", [])),
         "reproduction_commands": bundle.get("reproduction_commands", {}),
     }
     public_packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return packet
+
+
+def public_packet_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:
+    workflow = bundle.get("workflow_metrics") if isinstance(bundle.get("workflow_metrics"), dict) else {}
+    rollup = workflow.get("rollup") if isinstance(workflow.get("rollup"), dict) else {}
+    repair_activity = rollup.get("repair_activity") if isinstance(rollup.get("repair_activity"), dict) else {}
+    return {
+        "repair_activity": repair_activity,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
+            "They are not a semantic gate and do not increase translation coverage."
+        ),
+    }
 
 
 def public_packet_must_not_claim(value: object) -> list[str]:

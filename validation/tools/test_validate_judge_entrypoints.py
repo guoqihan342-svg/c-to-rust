@@ -750,6 +750,57 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             },
         )
 
+    def test_context_pack_entrypoints_must_be_repo_relative_when_declared(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="context-pack-entrypoints-", dir=target_dir))
+        context_pack = temp_dir / "out" / "harness" / "context-pack.json"
+        agent_index = temp_dir / "out" / "harness" / "agent-index.json"
+        primary_report = temp_dir / "out" / "harness" / "evaluate-report.json"
+        ledger = temp_dir / "out" / "state" / "opencode-agent-harness.sqlite3"
+        payload = {
+            "report_kind": "context-pack",
+            "entrypoints": {
+                "primary_report": repo_relative(primary_report),
+                "evaluate_report": repo_relative(primary_report),
+                "run_plan_report": "C:\\temp\\stale-run-plan.json",
+                "worker_plan": None,
+            },
+            "context_management_contract": {
+                "contract_kind": "context-management",
+                "schema_version": 1,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+                "evidence_policy": "on-disk-artifacts-only",
+                "context_pack": repo_relative(context_pack),
+                "agent_index": repo_relative(agent_index),
+                "primary_report": repo_relative(primary_report),
+                "report_entrypoint": "evaluate_report",
+                "resume_protocol": {
+                    "checkpoint_backend": "sqlite",
+                    "ledger_path": repo_relative(ledger),
+                    "worker_state_source": "agent-index.agents_by_worker_id",
+                },
+                "pipeline": [
+                    {"stage": "plan"},
+                    {"stage": "translate", "fanout": True},
+                    {"stage": "verify"},
+                    {"stage": "repair", "max_rounds": 5},
+                ],
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "context_pack.entrypoints.run_plan_report"):
+            validator.validate_context_management_contract(
+                payload,
+                path_text=repo_relative(context_pack),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                },
+                repo_root=REPO_ROOT,
+            )
+
     def test_expected_artifacts_rejects_drive_prefix_with_artifact_name(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
@@ -2576,6 +2627,94 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         repo_root=REPO_ROOT,
                     )
 
+    def test_resume_manifest_workers_must_match_context_and_agent_index_workers(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-worker-drift-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        worker_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {
+            "entrypoints": {"resume_manifest": repo_relative(resume_manifest)},
+            "workers": [worker_fields],
+        }
+        agent_payload = {
+            "reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}},
+            "agents": [worker_fields],
+            "agents_by_worker_id": {
+                "worker-001": {
+                    **worker_fields,
+                    "isolated_out_root": repo_relative(worker_root),
+                },
+            },
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-worker-drift",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    **worker_fields,
+                    "worker_id": "stale-worker-999",
+                    "isolated_out_root": repo_relative(worker_root),
+                }
+            ],
+            "worker_count": 1,
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "resume_manifest.workers worker ids must match context_pack.workers and agent_index",
+        ):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
     def test_worker_plan_units_must_match_context_and_agent_index_workers(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
@@ -2874,6 +3013,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             context_pack,
             {
                 "report_kind": "context-pack",
+                "entrypoints": {
+                    "primary_report": repo_relative(placeholder),
+                    "evaluate_report": repo_relative(placeholder),
+                    "worker_plan": None,
+                },
                 "context_management_contract": {
                     "agent_index": repo_relative(agent_index),
                     "chat_output_is_evidence": False,

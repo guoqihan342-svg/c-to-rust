@@ -15,6 +15,7 @@
     "milestone_release_notes",
     "competition_config_archive",
     "publication_manifest",
+    "quantitative_evaluation",
     "known_gaps",
     "must_not_claim",
     "reproduction_commands"
@@ -26,12 +27,23 @@
     "summary": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["entrypoint_count", "publication_scope", "readiness", "proof_class_rollup"],
+      "required": ["entrypoint_count", "publication_scope", "readiness", "proof_class_rollup", "workflow_metrics"],
       "properties": {
         "entrypoint_count": {"type": "integer", "minimum": 0},
         "publication_scope": {"type": "string"},
         "readiness": {"type": "object", "additionalProperties": true},
-        "proof_class_rollup": {"type": "object", "additionalProperties": true}
+        "proof_class_rollup": {"type": "object", "additionalProperties": true},
+        "workflow_metrics": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["repair_activity", "semantic_gate", "translation_coverage_numerator", "boundary"],
+          "properties": {
+            "repair_activity": {"type": "object", "additionalProperties": true},
+            "semantic_gate": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string"}
+          }
+        }
       }
     },
     "claim_boundary": {
@@ -58,6 +70,16 @@
     "milestone_release_notes": {"$ref": "#/$defs/artifactRef"},
     "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
     "publication_manifest": {"type": "object", "additionalProperties": true},
+    "quantitative_evaluation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["semantic_gate", "generated_draft_semantic_pass", "translation_coverage_numerator"],
+      "properties": {
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0}
+      }
+    },
     "known_gaps": {"type": "array"},
     "must_not_claim": {"type": "array", "items": {"type": "string"}},
     "reproduction_commands": {"type": "object", "additionalProperties": true}

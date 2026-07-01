@@ -85,6 +85,7 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         f"| Translator-generated semantic pass count | {nested_int(scorecard, 'outcome_counts', 'translator_generated_semantic_pass_count')} |",
         f"| Blocked repair count | {nested_int(scorecard, 'outcome_counts', 'blocked_repair_count')} |",
         f"| Human interventions | {nested_int(scorecard, 'outcome_counts', 'human_interventions')} |",
+        f"| Auto-recovered units | {nested_int(scorecard, 'outcome_counts', 'auto_recovered_unit_count')} |",
         f"| Unsafe reduction | {unsafe_reduction_text(scorecard.get('unsafe_reduction'), core_quality.get('unsafe_reduction'))} |",
         "",
         "## Baseline Comparison",

@@ -1440,11 +1440,33 @@ def validate_context_management_contract(
     if worker_stage.get("fanout") is not True:
         raise ValueError("context_management_contract translate stage must be fanout")
 
+    entrypoints = require_object(payload.get("entrypoints"), "context_pack.entrypoints")
+    report_entrypoint = contract.get("report_entrypoint")
+    if isinstance(report_entrypoint, str):
+        if report_entrypoint not in entrypoints:
+            raise ValueError("context_pack.entrypoints must include context_management_contract.report_entrypoint")
+        if not isinstance(entrypoints.get(report_entrypoint), str):
+            raise ValueError(f"context_pack.entrypoints.{report_entrypoint} must be a repo-relative POSIX string")
+    for key, value in sorted(entrypoints.items()):
+        if not isinstance(key, str) or not key:
+            raise ValueError("context_pack.entrypoints keys must be non-empty strings")
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise ValueError(f"context_pack.entrypoints.{key} must be a repo-relative POSIX string or null")
+        try:
+            assert_repo_relative_posix(value)
+        except ValueError as error:
+            raise ValueError(f"context_pack.entrypoints.{key}: {error}") from error
+    if isinstance(primary_report, str) and entrypoints.get("primary_report") not in (None, primary_report):
+        raise ValueError("context_pack.entrypoints.primary_report must match context_management_contract.primary_report")
+
     return {
         "path": path_text,
         "status": "passed",
         "pipeline_stages": list(REQUIRED_CONTEXT_STAGES),
         "repair_round_cap": 5,
+        "entrypoint_count": len(entrypoints),
     }
 
 
@@ -2219,14 +2241,76 @@ def validate_resume_manifest_contract(
             value = worker_payload.get(field)
             if isinstance(value, str):
                 assert_repo_relative_posix(value)
+    worker_consistency = validate_resume_manifest_worker_consistency(
+        workers,
+        context_payload=context_payload,
+        agent_payload=agent_payload,
+    )
     local_path_scan = validate_local_absolute_path_policy(payload, label=f"resume_manifest {path_text}")
     return {
         "path": path_text,
         "status": "passed",
         "checkpoint_backend": "sqlite",
         "worker_count": len(workers),
+        "worker_consistency": worker_consistency,
         "local_absolute_path_scan": local_path_scan,
     }
+
+
+def validate_resume_manifest_worker_consistency(
+    workers: list[Any],
+    *,
+    context_payload: dict[str, Any] | None,
+    agent_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if context_payload is None or agent_payload is None:
+        return {"status": "skipped", "reason": "context or agent payload not provided"}
+    context_workers = context_payload.get("workers")
+    agents = agent_payload.get("agents")
+    agents_by_worker_id = agent_payload.get("agents_by_worker_id")
+    if not isinstance(context_workers, list) or not isinstance(agents, list) or not isinstance(agents_by_worker_id, dict):
+        return {"status": "skipped", "reason": "context or agent worker collections not declared"}
+
+    resume_ids = worker_ids_from_entries(workers, label="resume_manifest.workers")
+    context_ids = worker_ids_from_entries(context_workers, label="context_pack.workers")
+    agent_ids = worker_ids_from_entries(agents, label="agent_index.agents")
+    indexed_ids = set(agents_by_worker_id)
+    if resume_ids != context_ids or resume_ids != agent_ids or resume_ids != indexed_ids:
+        raise ValueError(
+            "resume_manifest.workers worker ids must match context_pack.workers and agent_index: "
+            f"{sorted(resume_ids)} != {sorted(context_ids)} != {sorted(agent_ids)} != {sorted(indexed_ids)}"
+        )
+
+    resume_by_worker_id = entries_by_worker_id(workers, label="resume_manifest.workers")
+    context_by_worker_id = entries_by_worker_id(context_workers, label="context_pack.workers")
+    agents_by_list_id = entries_by_worker_id(agents, label="agent_index.agents")
+    comparable_fields = (
+        "assignment_path",
+        "request_path",
+        "summary_path",
+        "report_path",
+        "slice_id",
+        "function",
+        "source_commit",
+        "source_sha256",
+        "isolated_out_root",
+    )
+    for worker_id in sorted(resume_ids):
+        indexed_agent = require_object(agents_by_worker_id[worker_id], f"agents_by_worker_id.{worker_id}")
+        payloads = [
+            resume_by_worker_id[worker_id],
+            context_by_worker_id[worker_id],
+            agents_by_list_id[worker_id],
+            indexed_agent,
+        ]
+        for field in comparable_fields:
+            values = [payload.get(field) for payload in payloads if field in payload]
+            if values and any(value != values[0] for value in values[1:]):
+                raise ValueError(
+                    f"resume_manifest worker {worker_id} field {field} must match context_pack and agent_index"
+                )
+
+    return {"status": "passed", "worker_count": len(resume_ids)}
 
 
 def validate_worker_plan_contract(
