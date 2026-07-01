@@ -72,7 +72,11 @@ python validation/tools/auto_migrate.py `
 
 中文：`auto_migrate.py` 现在会为每个自动迁移 slice 生成三类一等证据：`l3-<slice>-c2rust-baseline-manifest.json`、`l3-<slice>-route-decision.json` 和 `l3-<slice>-validation-profile.json`。C2Rust baseline 只是候选上下文或交叉检查，不能替代原始 C oracle、Rust replay、schema-aware diff、negative diff、unsafe ledger 或 final verification。缺少 C2Rust 可执行文件时必须记录 `skipped` 或 `blocked`，不能伪造生成成功。
 
+中文：route-governance metrics 现在会汇总这些 C2Rust baseline manifest 的 status/output/compile-only 状态，并由 milestone scorecard 去重展示；compile 通过仍只是 candidate context，不是 semantic gate 或 translation coverage。
+
 English: `auto_migrate.py` now emits three first-class evidence files for each automatic migration slice: `l3-<slice>-c2rust-baseline-manifest.json`, `l3-<slice>-route-decision.json`, and `l3-<slice>-validation-profile.json`. The C2Rust baseline is candidate context or cross-check evidence only; it never replaces the original C oracle, Rust replay, schema-aware diff, negative diff, unsafe ledger, or final verification. Missing executable C2Rust tooling must be recorded as `skipped` or `blocked`, never as a generated success.
+
+English: route-governance metrics now summarize status/output/compile-only state from these C2Rust baseline manifests and the milestone scorecard deduplicates that view for review; compile success remains candidate context, not a semantic gate or translation coverage.
 
 中文：route decision 只决定候选生成路径和上下文预算；validation profile 决定本次运行必须通过的 gates。任何 Agent、C2Rust、手写规则或 Rust 编译通过的输出，只有在 selected validation profile 通过且没有 skipped required gate 时，才可以被绑定为 semantic pass。
 

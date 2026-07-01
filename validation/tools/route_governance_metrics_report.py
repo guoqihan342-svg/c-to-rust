@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -66,6 +68,7 @@ def build_report(
     candidate_inventory = require_dict(inventory, "candidate_generation")
     evidence_dir = evidence_root if evidence_root.is_absolute() else repo_root / evidence_root
     slice_gate_contexts = build_slice_gate_contexts(repo_root, evidence_dir)
+    c2rust_baseline = build_c2rust_baseline_rollup(slice_gate_contexts)
     s2_workflow_metrics = milestone_release_report.summarize_s2_workflow_metrics(
         milestone_release_report.load_competition_workflow_metrics(
             repo_root,
@@ -102,6 +105,7 @@ def build_report(
             "candidate_generation_inventory": candidate_inventory,
             "tracked_slice_gate_contexts": len(slice_gate_contexts),
             "slice_gate_contexts": slice_gate_contexts,
+            "c2rust_baseline": c2rust_baseline,
             "blocked_repairs": build_blocked_repairs_rollup(slice_gate_contexts),
         },
         "denominators": {
@@ -111,6 +115,7 @@ def build_report(
             "translation_coverage_numerator": "translator-generated Rust drafts with semantic-pass status backed by L3 accepted/passed route evidence",
             "accepted_evidence_semantic_pass_count": "accepted external evidence contexts reported separately and excluded from translation_coverage_numerator",
             "s2_workflow_metrics": "S2 repair, retry, unsafe-reduction, and before/after artifact-binding workflow metrics loaded from hash-bound competition-run summaries when provided",
+            "c2rust_baseline": "C2Rust baseline manifest generated/skipped/output/compile status; compile success is context only and never semantic acceptance",
             "blocked_repairs": "self-healing blocked repairs artifacts under validation/evidence/**/l3-*-self-healing-blocked-repairs.json",
         },
         "claim_boundary": (
@@ -143,17 +148,21 @@ def build_slice_gate_context(repo_root: Path, fallback_target_id: str, slice_dir
     unsafe_scan = load_optional_json(find_artifact(slice_dir, "-unsafe-scan.json"))
     negative_diff = load_optional_json(find_artifact(slice_dir, "-negative-diff.json"))
     performance_smoke = load_optional_json(find_artifact(slice_dir, "-performance-smoke.json"))
+    c2rust_baseline_path = find_artifact(slice_dir, "-c2rust-baseline-manifest.json")
+    c2rust_baseline = load_optional_json(c2rust_baseline_path)
 
     target_id = first_string(
         manifest.get("target_id"),
         final.get("target_id"),
         route.get("target_id"),
+        c2rust_baseline.get("target_id"),
         fallback_target_id,
     )
     slice_id = first_string(
         manifest.get("slice_id"),
         final.get("slice_id"),
         route.get("slice_id"),
+        c2rust_baseline.get("slice_id"),
         slice_dir.name,
     )
     route_summary = route_governance_summary(route)
@@ -198,6 +207,7 @@ def build_slice_gate_context(repo_root: Path, fallback_target_id: str, slice_dir
             "secondary_only": performance_smoke.get("secondary_only"),
             "semantic_pass": performance_smoke.get("semantic_pass"),
         },
+        "c2rust_baseline": c2rust_baseline_context(repo_root, c2rust_baseline_path, c2rust_baseline),
         "claim_boundary": (
             "Slice gate context summarizes existing route/profile/final evidence; it is not a semantic pass claim."
         ),
@@ -215,6 +225,136 @@ def route_governance_summary(route: dict[str, Any]) -> dict[str, Any]:
 def find_artifact(slice_dir: Path, suffix: str) -> Path | None:
     matches = sorted(slice_dir.glob(f"*{suffix}"))
     return matches[0] if matches else None
+
+
+def c2rust_baseline_context(
+    repo_root: Path,
+    manifest_path: Path | None,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    if not manifest:
+        return {
+            "status": "missing",
+            "reason": "missing_manifest",
+            "manifest": None,
+            "output_status": "missing",
+            "output": None,
+            "compile_status": "missing",
+            "compile_attempted": False,
+            "semantic_pass": False,
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "C2Rust baseline is candidate context only and is not semantic acceptance evidence.",
+        }
+
+    output = manifest.get("output") if isinstance(manifest.get("output"), dict) else None
+    compile_status = manifest.get("compile") if isinstance(manifest.get("compile"), dict) else None
+    return {
+        "status": string_or_default(manifest.get("status"), "unknown"),
+        "reason": string_or_default(manifest.get("reason"), "unknown"),
+        "manifest": artifact_ref(repo_root, manifest_path) if manifest_path is not None else None,
+        "output_status": string_or_default(output.get("status") if output else None, "missing"),
+        "output": output_ref(output),
+        "compile_status": string_or_default(compile_status.get("status") if compile_status else None, "missing"),
+        "compile_attempted": bool(compile_status.get("attempted")) if compile_status else False,
+        "semantic_pass": bool(compile_status.get("semantic_pass")) if compile_status else False,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline is candidate context only and is not semantic acceptance evidence.",
+    }
+
+
+def output_ref(output: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(output, dict):
+        return None
+    path = output.get("path")
+    sha = output.get("sha256")
+    if not isinstance(path, str) or not path:
+        return None
+    ref = {
+        "path": path,
+        "status": string_or_default(output.get("status"), "present"),
+    }
+    if isinstance(sha, str) and sha:
+        ref["sha256"] = sha
+    return ref
+
+
+def artifact_ref(repo_root: Path, path: Path) -> dict[str, Any]:
+    return {
+        "path": rel(repo_root, path),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "status": "present",
+    }
+
+
+def build_c2rust_baseline_rollup(contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    baseline_contexts = [
+        context.get("c2rust_baseline", {})
+        for context in contexts
+        if isinstance(context.get("c2rust_baseline"), dict)
+        and isinstance(context.get("c2rust_baseline", {}).get("manifest"), dict)
+    ]
+    status_counts: Counter[str] = Counter()
+    output_status_counts: Counter[str] = Counter()
+    compile_status_counts: Counter[str] = Counter()
+    manifests = []
+    generated_output_count = 0
+    skipped_without_output_count = 0
+    compile_attempted_count = 0
+    compile_passed_count = 0
+    compile_semantic_pass_count = 0
+
+    for baseline in baseline_contexts:
+        status = string_or_default(baseline.get("status"), "unknown")
+        output_status = string_or_default(baseline.get("output_status"), "missing")
+        compile_status = string_or_default(baseline.get("compile_status"), "missing")
+        status_counts[status] += 1
+        output_status_counts[output_status] += 1
+        compile_status_counts[compile_status] += 1
+        if output_status == "generated":
+            generated_output_count += 1
+        if status == "skipped" and output_status == "missing":
+            skipped_without_output_count += 1
+        if baseline.get("compile_attempted") is True:
+            compile_attempted_count += 1
+        if compile_status == "passed":
+            compile_passed_count += 1
+        if baseline.get("semantic_pass") is True:
+            compile_semantic_pass_count += 1
+        manifests.append(baseline["manifest"])
+
+    return {
+        "report_kind": "c2rust-baseline-rollup",
+        "status": "observed" if baseline_contexts else "none",
+        "manifest_count": len(baseline_contexts),
+        "generated_output_count": generated_output_count,
+        "skipped_without_output_count": skipped_without_output_count,
+        "compile_attempted_count": compile_attempted_count,
+        "compile_passed_count": compile_passed_count,
+        "compile_semantic_pass_count": compile_semantic_pass_count,
+        "status_counts": sorted_counter(status_counts),
+        "output_status_counts": sorted_counter(output_status_counts),
+        "compile_status_counts": sorted_counter(compile_status_counts),
+        "manifests": manifests,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "C2Rust baseline generated/output/compile counts are candidate-context evidence only; "
+            "compile success is not semantic equivalence and does not increase translation coverage."
+        ),
+    }
+
+
+def sorted_counter(counter: Counter[str]) -> dict[str, int]:
+    return {key: counter[key] for key in sorted(counter)}
+
+
+def string_or_default(value: Any, default: str) -> str:
+    return value if isinstance(value, str) and value else default
 
 
 def load_optional_json(path: Path | None) -> dict[str, Any]:

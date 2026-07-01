@@ -546,6 +546,7 @@ python -B -m unittest validation.tools.test_doc_mirror_contract
 - **FlashDB is only a use case**: Do not add FlashDB-specific recognizers, templates, or special-case routes. `flashDB_rust` is a handwritten safe implementation / validation baseline, not automatic translation output.
 - **SQLite is a scheduling ledger, not semantic evidence**: The final gate only considers on-disk evidence and the validator, not SQLite state.
 - **C2Rust baseline with skipped/blocked status does not count as generated/accepted/semantic pass**.
+- **C2Rust baseline compile-pass is still candidate context only**: route-governance and the milestone scorecard may show manifest/source/compile-pass counts, but that is not C/Rust equivalence proof or translation coverage.
 - **Proof classes must not be mixed**: `ci-approximation` results must not be labeled `competition-exact`.
 - **Docs must stay bilingual**: New documents must maintain both the Chinese primary (`.md`) and the English mirror (`.en.md`). The Chinese document's first line must match the repository-standard pointer format.
 

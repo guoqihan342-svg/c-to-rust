@@ -379,6 +379,7 @@
             "accepted_evidence_semantic_pass_count",
             "tracked_route_decision_artifacts",
             "tracked_slice_gate_contexts",
+            "c2rust_baseline",
             "all_retention_policies_present",
             "all_target_artifacts_reproducible"
           ],
@@ -390,6 +391,7 @@
             "tracked_slice_gate_contexts": {"type": "integer", "minimum": 0},
             "s2_workflow_run_count": {"type": "integer", "minimum": 0},
             "s2_unsafe_reduction": {"type": "object"},
+            "c2rust_baseline": {"$ref": "#/definitions/c2rustBaselineRollup"},
             "all_retention_policies_present": {"type": "boolean"},
             "all_target_artifacts_reproducible": {"type": "boolean"}
           }
@@ -701,7 +703,18 @@
             "handwritten_reference"
           ],
           "properties": {
-            "raw_c2rust": {"$ref": "#/definitions/comparisonRow"},
+            "raw_c2rust": {
+              "allOf": [
+                {"$ref": "#/definitions/comparisonRow"},
+                {
+                  "type": "object",
+                  "required": ["c2rust_baseline_rollup"],
+                  "properties": {
+                    "c2rust_baseline_rollup": {"$ref": "#/definitions/c2rustBaselineRollup"}
+                  }
+                }
+              ]
+            },
             "c2rust_repair": {"$ref": "#/definitions/comparisonRow"},
             "typed_ir_route": {"$ref": "#/definitions/comparisonRow"},
             "opencode_llm_worker": {"$ref": "#/definitions/comparisonRow"},
@@ -897,6 +910,57 @@
         "translation_coverage_numerator": {"const": 0},
         "chat_output_is_evidence": {"const": false},
         "counts_as_translator_generated_coverage": {"const": false},
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "c2rustBaselineRollup": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "status",
+        "source_report_count",
+        "unique_evidence_root_count",
+        "unique_manifest_count",
+        "generated_output_count",
+        "skipped_without_output_count",
+        "compile_attempted_count",
+        "compile_passed_count",
+        "compile_semantic_pass_count",
+        "status_counts",
+        "output_status_counts",
+        "compile_status_counts",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "c2rust-baseline-milestone-rollup"},
+        "status": {"type": "string", "minLength": 1},
+        "source_report_count": {"type": "integer", "minimum": 0},
+        "unique_evidence_root_count": {"type": "integer", "minimum": 0},
+        "unique_manifest_count": {"type": "integer", "minimum": 0},
+        "generated_output_count": {"type": "integer", "minimum": 0},
+        "skipped_without_output_count": {"type": "integer", "minimum": 0},
+        "compile_attempted_count": {"type": "integer", "minimum": 0},
+        "compile_passed_count": {"type": "integer", "minimum": 0},
+        "compile_semantic_pass_count": {"const": 0},
+        "status_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "output_status_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "compile_status_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
         "boundary": {"type": "string", "minLength": 1}
       }
     },

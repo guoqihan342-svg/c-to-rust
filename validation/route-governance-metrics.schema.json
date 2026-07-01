@@ -63,6 +63,7 @@
         "candidate_generation_inventory",
         "tracked_slice_gate_contexts",
         "slice_gate_contexts",
+        "c2rust_baseline",
         "blocked_repairs"
       ],
       "properties": {
@@ -156,6 +157,55 @@
         "slice_gate_contexts": {
           "type": "array",
           "items": {"type": "object"}
+        },
+        "c2rust_baseline": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "report_kind",
+            "status",
+            "manifest_count",
+            "generated_output_count",
+            "skipped_without_output_count",
+            "compile_attempted_count",
+            "compile_passed_count",
+            "compile_semantic_pass_count",
+            "status_counts",
+            "output_status_counts",
+            "compile_status_counts",
+            "manifests",
+            "semantic_gate",
+            "generated_draft_semantic_pass",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "report_kind": {"const": "c2rust-baseline-rollup"},
+            "status": {"type": "string"},
+            "manifest_count": {"type": "integer", "minimum": 0},
+            "generated_output_count": {"type": "integer", "minimum": 0},
+            "skipped_without_output_count": {"type": "integer", "minimum": 0},
+            "compile_attempted_count": {"type": "integer", "minimum": 0},
+            "compile_passed_count": {"type": "integer", "minimum": 0},
+            "compile_semantic_pass_count": {"const": 0},
+            "status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "output_status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "compile_status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "manifests": {"type": "array", "items": {"type": "object"}},
+            "semantic_gate": {"const": false},
+            "generated_draft_semantic_pass": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
+          }
         },
         "blocked_repairs": {
           "type": "object",
@@ -255,6 +305,7 @@
         "capability_delta_ledger",
         "candidate_generation_inventory",
         "slice_gate_contexts",
+        "c2rust_baseline",
         "translation_coverage_numerator",
         "accepted_evidence_semantic_pass_count",
         "s2_workflow_metrics",

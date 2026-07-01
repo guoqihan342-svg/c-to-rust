@@ -546,6 +546,7 @@ python -B -m unittest validation.tools.test_doc_mirror_contract
 - **FlashDB 只是回归用例**：不能写 FlashDB 专用 recognizer、模板或特判路径。`flashDB_rust` 是手写安全实现/验证基线，不是自动翻译产物。
 - **SQLite 是调度账本，不是语义证据**：最终 gate 只看落盘 evidence 和 validator，不看 SQLite 中的状态。
 - **C2Rust baseline 为 skipped/blocked 时不计入 generated/accepted/semantic pass**。
+- **C2Rust baseline compile-pass 也只是 candidate context**：route-governance 和 milestone scorecard 可以展示 manifest/source/compile-pass 数，但不能把它当作 C/Rust 等价证明或 translation coverage。
 - **Proof class 不可混用**：`ci-approximation` 的结果不能标为 `competition-exact`。
 - **文档要双语同步**：新增文档需同时维护中文主文档（`.md`）和英文镜像（`.en.md`）。中文文档第一行必须是 `英文镜像见 \`<对应文件>.en.md\`。`
 

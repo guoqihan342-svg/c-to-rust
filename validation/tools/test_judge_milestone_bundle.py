@@ -28,8 +28,10 @@ def route_metrics_payload(
     s2_reduced_by: int,
     blocked_repair_count: int = 0,
     blocked_repairs_status: str | None = None,
+    c2rust_baseline: dict | None = None,
 ) -> dict:
     resolved_blocked_repairs_status = blocked_repairs_status or ("observed" if blocked_repair_count else "none")
+    resolved_c2rust_baseline = c2rust_baseline or empty_c2rust_baseline_rollup()
     return {
         "schema_version": 1,
         "status": "passed",
@@ -64,6 +66,7 @@ def route_metrics_payload(
             "candidate_generation_inventory": {},
             "tracked_slice_gate_contexts": tracked_slice_gate_contexts,
             "slice_gate_contexts": [],
+            "c2rust_baseline": resolved_c2rust_baseline,
             "blocked_repairs": {
                 "status": resolved_blocked_repairs_status,
                 "blocked_repair_count": blocked_repair_count,
@@ -130,6 +133,7 @@ def route_metrics_payload(
             "translation_coverage_numerator": "translator-generated semantic-pass named slices only",
             "accepted_evidence_semantic_pass_count": "accepted evidence semantic pass count is separate",
             "s2_workflow_metrics": "hash-bound competition run summaries",
+            "c2rust_baseline": "C2Rust baseline manifest status is candidate context only",
             "blocked_repairs": "self-healing blocked repairs artifacts under validation/evidence",
         },
         "claim_boundary": "Route governance metrics are not semantic acceptance evidence.",
@@ -147,6 +151,59 @@ def route_metrics_payload(
             },
             "claim_boundary": "Retention policy does not expand semantic acceptance or translation coverage.",
         },
+    }
+
+
+def c2rust_baseline_rollup_fixture() -> dict:
+    return {
+        "report_kind": "c2rust-baseline-rollup",
+        "status": "observed",
+        "manifest_count": 2,
+        "generated_output_count": 0,
+        "skipped_without_output_count": 2,
+        "compile_attempted_count": 0,
+        "compile_passed_count": 0,
+        "compile_semantic_pass_count": 0,
+        "status_counts": {"skipped": 2},
+        "output_status_counts": {"missing": 2},
+        "compile_status_counts": {"missing": 2},
+        "manifests": [
+            {
+                "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
+                "sha256": "1" * 64,
+                "status": "present",
+            },
+            {
+                "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+                "sha256": "2" * 64,
+                "status": "present",
+            },
+        ],
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline status is candidate context only.",
+    }
+
+
+def empty_c2rust_baseline_rollup() -> dict:
+    return {
+        "report_kind": "c2rust-baseline-rollup",
+        "status": "none",
+        "manifest_count": 0,
+        "generated_output_count": 0,
+        "skipped_without_output_count": 0,
+        "compile_attempted_count": 0,
+        "compile_passed_count": 0,
+        "compile_semantic_pass_count": 0,
+        "status_counts": {},
+        "output_status_counts": {},
+        "compile_status_counts": {},
+        "manifests": [],
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline status is candidate context only.",
     }
 
 
@@ -219,6 +276,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
         opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
         opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
+        c2rust_baseline = c2rust_baseline_rollup_fixture()
 
         write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
         write_json(
@@ -255,6 +313,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                 tracked_slice_gate_contexts=1,
                 s2_workflow_run_count=1,
                 s2_reduced_by=2,
+                c2rust_baseline=c2rust_baseline,
             ),
         )
         write_json(evidence_governance_path, evidence_governance_payload())
@@ -351,6 +410,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                 tracked_slice_gate_contexts=2,
                 s2_workflow_run_count=1,
                 s2_reduced_by=0,
+                c2rust_baseline=c2rust_baseline,
             ),
         )
         write_json(
@@ -479,6 +539,18 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["route_governance_metrics"]["rollup"]["accepted_evidence_semantic_pass_count"], 3)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_route_decision_artifacts"], 4)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_slice_gate_contexts"], 3)
+        c2rust_route_rollup = report["route_governance_metrics"]["rollup"]["c2rust_baseline"]
+        self.assertEqual(c2rust_route_rollup["report_kind"], "c2rust-baseline-milestone-rollup")
+        self.assertEqual(c2rust_route_rollup["source_report_count"], 2)
+        self.assertEqual(c2rust_route_rollup["unique_evidence_root_count"], 1)
+        self.assertEqual(c2rust_route_rollup["unique_manifest_count"], 2)
+        self.assertEqual(c2rust_route_rollup["status_counts"], {"skipped": 2})
+        self.assertEqual(c2rust_route_rollup["output_status_counts"], {"missing": 2})
+        self.assertEqual(c2rust_route_rollup["compile_status_counts"], {"missing": 2})
+        self.assertEqual(c2rust_route_rollup["skipped_without_output_count"], 2)
+        self.assertEqual(c2rust_route_rollup["compile_passed_count"], 0)
+        self.assertFalse(c2rust_route_rollup["semantic_gate"])
+        self.assertEqual(c2rust_route_rollup["translation_coverage_numerator"], 0)
         self.assertEqual(report["blocked_repairs_rollup"]["rollup"]["blocked_repair_count"], 0)
         self.assertFalse(report["blocked_repairs_rollup"]["semantic_gate"])
         self.assertEqual(report["blocked_repairs_rollup"]["translation_coverage_numerator"], 0)
@@ -596,9 +668,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(quantitative_evaluation["unsafe_reduction"]["current_total_unsafe"], 0)
         self.assertEqual(quantitative_evaluation["unsafe_reduction"]["reduced_by"], 2)
         self.assertEqual(quantitative_evaluation["unsafe_reduction"]["scope"], "partial")
-        self.assertEqual(quantitative_evaluation["baseline_comparison"]["raw_c2rust"]["status"], "not_verified_here")
+        raw_c2rust = quantitative_evaluation["baseline_comparison"]["raw_c2rust"]
+        self.assertEqual(raw_c2rust["status"], "manifest_status_observed")
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["unique_manifest_count"], 2)
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["source_report_count"], 2)
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["status_counts"], {"skipped": 2})
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["compile_passed_count"], 0)
+        self.assertFalse(raw_c2rust["c2rust_baseline_rollup"]["semantic_gate"])
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["translation_coverage_numerator"], 0)
         self.assertFalse(
-            quantitative_evaluation["baseline_comparison"]["raw_c2rust"]["semantic_acceptance_claimed"]
+            raw_c2rust["semantic_acceptance_claimed"]
         )
         self.assertEqual(
             quantitative_evaluation["baseline_comparison"]["typed_ir_route"]["tracked_route_decision_artifacts"],
@@ -791,6 +870,20 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"][
             "semantic_acceptance_claimed"
         ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_raw_c2rust_rollup = json.loads(json.dumps(report))
+        missing_raw_c2rust_rollup["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"].pop(
+            "c2rust_baseline_rollup"
+        )
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_raw_c2rust_rollup, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"]["c2rust_baseline_rollup"][
+            "translation_coverage_numerator"
+        ] = 1
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(expanded, schema)
 

@@ -377,6 +377,95 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             self.assertEqual(s2["repair_history_unit_count"], 1)
             self.assertIn("S2 repair", report["denominators"]["s2_workflow_metrics"])
 
+    def test_report_exposes_c2rust_baseline_manifest_status_and_compile_rollup(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="route-governance-metrics-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            generated_dir = root / "validation/evidence/demo/auto-translation/generated-baseline"
+            skipped_dir = root / "validation/evidence/demo/auto-translation/skipped-baseline"
+            output_path = generated_dir / "c2rust-output.rs"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text("pub fn generated_baseline() -> i32 { 1 }\n", encoding="utf-8")
+            artifact_path = generated_dir / "c2rust-output.rlib"
+            artifact_path.write_text("compiled\n", encoding="utf-8")
+            self._write_c2rust_baseline_manifest(
+                generated_dir / "l3-generated-baseline-c2rust-baseline-manifest.json",
+                target_id="demo",
+                slice_id="generated-baseline",
+                status="generated",
+                reason="generated_by_c2rust",
+                output={
+                    "path": self._rel(root, output_path),
+                    "status": "generated",
+                    "sha256": sha256_file(output_path),
+                },
+                compile_status={
+                    "status": "passed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                    "candidate_output": {
+                        "path": self._rel(root, output_path),
+                        "status": "generated",
+                        "sha256": sha256_file(output_path),
+                    },
+                    "artifact": {
+                        "path": self._rel(root, artifact_path),
+                        "status": "compiled",
+                        "sha256": sha256_file(artifact_path),
+                    },
+                    "diagnostics": [],
+                },
+            )
+            self._write_c2rust_baseline_manifest(
+                skipped_dir / "l3-skipped-baseline-c2rust-baseline-manifest.json",
+                target_id="demo",
+                slice_id="skipped-baseline",
+                status="skipped",
+                reason="blocked_by_missing_tools",
+                output=None,
+                compile_status=None,
+            )
+
+            report = route_governance_metrics_report.build_report(
+                root,
+                coverage_report_path=coverage_path,
+                evidence_root=Path("validation/evidence"),
+            )
+
+            baseline = report["metrics"]["c2rust_baseline"]
+            self.assertEqual(baseline["report_kind"], "c2rust-baseline-rollup")
+            self.assertEqual(baseline["status"], "observed")
+            self.assertEqual(baseline["manifest_count"], 2)
+            self.assertEqual(baseline["generated_output_count"], 1)
+            self.assertEqual(baseline["skipped_without_output_count"], 1)
+            self.assertEqual(baseline["compile_attempted_count"], 1)
+            self.assertEqual(baseline["compile_passed_count"], 1)
+            self.assertEqual(baseline["compile_semantic_pass_count"], 0)
+            self.assertEqual(baseline["status_counts"], {"generated": 1, "skipped": 1})
+            self.assertEqual(baseline["output_status_counts"], {"generated": 1, "missing": 1})
+            self.assertEqual(baseline["compile_status_counts"], {"missing": 1, "passed": 1})
+            self.assertFalse(baseline["semantic_gate"])
+            self.assertFalse(baseline["generated_draft_semantic_pass"])
+            self.assertEqual(baseline["translation_coverage_numerator"], 0)
+            generated_context = next(
+                context
+                for context in report["metrics"]["slice_gate_contexts"]
+                if context["slice_id"] == "generated-baseline"
+            )
+            self.assertEqual(generated_context["c2rust_baseline"]["status"], "generated")
+            self.assertEqual(generated_context["c2rust_baseline"]["output_status"], "generated")
+            self.assertEqual(generated_context["c2rust_baseline"]["compile_status"], "passed")
+            self.assertFalse(generated_context["c2rust_baseline"]["semantic_pass"])
+            self.assertIn("C2Rust baseline", report["denominators"]["c2rust_baseline"])
+
+            schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+            jsonschema.validate(report, schema)
+            missing_baseline = json.loads(json.dumps(report))
+            missing_baseline["metrics"].pop("c2rust_baseline")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_baseline, schema)
+
     def test_core_ci_runs_route_governance_metrics_report_gate(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
 
@@ -426,6 +515,40 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
     def _write_json(self, path: Path, payload: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _write_c2rust_baseline_manifest(
+        self,
+        path: Path,
+        *,
+        target_id: str,
+        slice_id: str,
+        status: str,
+        reason: str,
+        output: dict | None,
+        compile_status: dict | None,
+    ) -> None:
+        self._write_json(
+            path,
+            {
+                "schema_version": 1,
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "status": status,
+                "reason": reason,
+                "correctness_role": "candidate_context_only",
+                "fallback_oracle": "original_c_oracle_required",
+                "validation_impact": "baseline status does not accept or reject candidate",
+                "output": output,
+                "compile": compile_status,
+                "must_not_claim": [
+                    "C2Rust output proves semantic equivalence",
+                    "C2Rust baseline was generated" if status != "generated" else "",
+                ],
+            },
+        )
+
+    def _rel(self, root: Path, path: Path) -> str:
+        return path.resolve().relative_to(root.resolve()).as_posix()
 
     def _write_competition_summary_with_metrics(self, summary_path: Path) -> None:
         metrics = {

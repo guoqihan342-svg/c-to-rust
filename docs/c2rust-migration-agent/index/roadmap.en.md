@@ -30,6 +30,8 @@ After success, the command writes `judge-milestone-bundle.json`, `milestone-rele
 
 With `--require-local-artifacts`, `validate_judge_entrypoints` also deep-validates non-smoke `competition_summary` artifacts through `validate_competition_run_summary.py`, including workflow metrics, before/after refs, repair history, unsafe accounting, final-gate rules, and slice counts.
 
+The same public packet now folds C2Rust baseline manifest status into route-governance and the milestone scorecard: `raw_c2rust.c2rust_baseline_rollup` deduplicates by evidence root, shows manifest/source/compile-pass counts, and still keeps `semantic_gate=false` plus `translation_coverage_numerator=0`.
+
 Primary real FlashDB run:
 
 ```bash

@@ -112,7 +112,26 @@ def valid_packet(root: Path) -> dict:
                 "blocked_repair_count": 0,
                 "human_interventions": 0,
             },
-            "baseline_comparison": {},
+            "baseline_comparison": {
+                "raw_c2rust": {
+                    "status": "manifest_status_observed",
+                    "evidence_role": "baseline_or_candidate_context_only",
+                    "semantic_acceptance_claimed": False,
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                    "c2rust_baseline_rollup": {
+                        "report_kind": "c2rust-baseline-milestone-rollup",
+                        "status": "observed",
+                        "source_report_count": 2,
+                        "unique_evidence_root_count": 1,
+                        "unique_manifest_count": 2,
+                        "compile_passed_count": 0,
+                        "translation_coverage_numerator": 0,
+                        "semantic_gate": False,
+                    },
+                    "boundary": "Raw C2Rust baseline manifests are candidate context only.",
+                }
+            },
             "claim_boundary": {
                 "semantic_gate": False,
                 "scorecard_is_semantic_gate": False,
@@ -186,7 +205,8 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
     def test_validate_packet_binds_hashes_and_claim_boundary(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
-        write_json(packet_path, valid_packet(temp_dir))
+        packet = valid_packet(temp_dir)
+        write_json(packet_path, packet)
 
         result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
 
@@ -195,6 +215,8 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["artifact_refs"]["checked_count"], 4)
         self.assertFalse(result["claim_boundary"]["semantic_gate"])
         self.assertEqual(result["claim_boundary"]["translation_coverage_numerator"], 0)
+        notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
+        self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
 
     def test_validate_packet_rejects_artifact_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-drift-", dir=REPO_ROOT / "target"))

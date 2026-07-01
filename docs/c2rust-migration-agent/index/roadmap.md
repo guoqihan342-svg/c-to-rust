@@ -22,6 +22,8 @@ python -B -m validation.tools.run_judge_entrypoints --config config/competition-
 
 启用 `--require-local-artifacts` 时，`validate_judge_entrypoints` 还会通过 `validate_competition_run_summary.py` 深校验非 smoke `competition_summary`，覆盖 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则和 slice counts。
 
+同一 public packet 现在还会把 C2Rust baseline manifest 状态纳入 route-governance 与 milestone scorecard：`raw_c2rust.c2rust_baseline_rollup` 按 evidence root 去重，展示 manifest/source/compile-pass 数，但保持 `semantic_gate=false` 和 `translation_coverage_numerator=0`。
+
 首选真实 FlashDB 运行路径：
 
 ```bash

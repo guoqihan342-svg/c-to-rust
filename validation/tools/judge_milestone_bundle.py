@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 import subprocess
@@ -961,6 +962,11 @@ def build_quantitative_evaluation(
         workflow_rollup.get("unsafe_reduction", {}) if isinstance(workflow_rollup.get("unsafe_reduction"), dict) else {}
     )
     accepted_evidence_count = int_or_zero(route_rollup.get("accepted_evidence_semantic_pass_count"))
+    c2rust_baseline_rollup = (
+        route_rollup.get("c2rust_baseline")
+        if isinstance(route_rollup.get("c2rust_baseline"), dict)
+        else empty_c2rust_baseline_milestone_rollup()
+    )
     tracked_route_decisions = int_or_zero(route_rollup.get("tracked_route_decision_artifacts"))
     tracked_slice_contexts = int_or_zero(route_rollup.get("tracked_slice_gate_contexts"))
     opencode_enabled = int_or_zero(opencode_runtime.get("enabled_entrypoint_count")) > 0
@@ -1026,9 +1032,12 @@ def build_quantitative_evaluation(
         },
         "baseline_comparison": {
             "raw_c2rust": comparison_row(
-                status="not_verified_here",
+                status="manifest_status_observed"
+                if int_or_zero(c2rust_baseline_rollup.get("unique_manifest_count")) > 0
+                else "not_verified_here",
                 evidence_role="baseline_or_candidate_context_only",
-                boundary="No raw C2Rust output is newly accepted by this milestone bundle.",
+                boundary="Raw C2Rust baseline manifests are counted as candidate context only; no output is accepted by this milestone bundle.",
+                c2rust_baseline_rollup=c2rust_baseline_rollup,
             ),
             "c2rust_repair": comparison_row(
                 status="not_verified_here",
@@ -1408,6 +1417,10 @@ def route_governance_metrics_source_from_artifact(
     if payload is None:
         return None
     metrics = payload.get("metrics", {}) if isinstance(payload.get("metrics"), dict) else {}
+    inputs = payload.get("inputs", {}) if isinstance(payload.get("inputs"), dict) else {}
+    evidence_governance = (
+        inputs.get("evidence_governance", {}) if isinstance(inputs.get("evidence_governance"), dict) else {}
+    )
     s2 = metrics.get("s2_workflow_metrics", {}) if isinstance(metrics.get("s2_workflow_metrics"), dict) else {}
     unsafe_reduction = s2.get("unsafe_reduction", {}) if isinstance(s2.get("unsafe_reduction"), dict) else {}
     retention = payload.get("retention_policy", {}) if isinstance(payload.get("retention_policy"), dict) else {}
@@ -1424,6 +1437,10 @@ def route_governance_metrics_source_from_artifact(
         ),
         "tracked_route_decision_artifacts": int_or_zero(metrics.get("tracked_route_decision_artifacts")),
         "tracked_slice_gate_contexts": int_or_zero(metrics.get("tracked_slice_gate_contexts")),
+        "evidence_root": evidence_governance.get("evidence_root")
+        if isinstance(evidence_governance.get("evidence_root"), str)
+        else None,
+        "c2rust_baseline": c2rust_baseline_source(metrics.get("c2rust_baseline")),
         "blocked_repairs": blocked_repairs_source(metrics.get("blocked_repairs")),
         "s2_workflow_run_count": int_or_zero(s2.get("run_count")),
         "s2_unsafe_reduction_status": unsafe_reduction.get("status", "unknown"),
@@ -1783,6 +1800,7 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
                 else "not_measured",
                 "reduced_by": sum(int_or_zero(source.get("s2_reduced_by")) for source in sources),
             },
+            "c2rust_baseline": build_c2rust_baseline_milestone_rollup(sources),
             "blocked_repairs": build_blocked_repairs_route_rollup(sources),
             "all_retention_policies_present": all_retention_present,
             "all_target_artifacts_reproducible": all_reproducible,
@@ -1792,6 +1810,154 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
             "and do not increase translator-generated translation coverage."
         ),
     }
+
+
+def c2rust_baseline_source(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return empty_c2rust_baseline_route_source()
+    return {
+        "report_kind": value.get("report_kind")
+        if isinstance(value.get("report_kind"), str)
+        else "c2rust-baseline-rollup",
+        "status": value.get("status") if isinstance(value.get("status"), str) else "unknown",
+        "manifest_count": int_or_zero(value.get("manifest_count")),
+        "generated_output_count": int_or_zero(value.get("generated_output_count")),
+        "skipped_without_output_count": int_or_zero(value.get("skipped_without_output_count")),
+        "compile_attempted_count": int_or_zero(value.get("compile_attempted_count")),
+        "compile_passed_count": int_or_zero(value.get("compile_passed_count")),
+        "compile_semantic_pass_count": 0,
+        "status_counts": int_count_map(value.get("status_counts")),
+        "output_status_counts": int_count_map(value.get("output_status_counts")),
+        "compile_status_counts": int_count_map(value.get("compile_status_counts")),
+        "manifests": object_list(value.get("manifests")),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": value.get("boundary")
+        if isinstance(value.get("boundary"), str)
+        else "C2Rust baseline status is candidate context only.",
+    }
+
+
+def empty_c2rust_baseline_route_source() -> dict[str, Any]:
+    return {
+        "report_kind": "c2rust-baseline-rollup",
+        "status": "none",
+        "manifest_count": 0,
+        "generated_output_count": 0,
+        "skipped_without_output_count": 0,
+        "compile_attempted_count": 0,
+        "compile_passed_count": 0,
+        "compile_semantic_pass_count": 0,
+        "status_counts": {},
+        "output_status_counts": {},
+        "compile_status_counts": {},
+        "manifests": [],
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline status is candidate context only.",
+    }
+
+
+def build_c2rust_baseline_milestone_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    report_sources = [
+        source
+        for source in sources
+        if isinstance(source.get("c2rust_baseline"), dict)
+        and source.get("c2rust_baseline", {}).get("report_kind") == "c2rust-baseline-rollup"
+    ]
+    by_evidence_root: dict[str, dict[str, Any]] = {}
+    conflict_roots: list[str] = []
+    for index, source in enumerate(report_sources):
+        key = source.get("evidence_root") if isinstance(source.get("evidence_root"), str) else f"entrypoint:{index}"
+        baseline = source["c2rust_baseline"]
+        if key in by_evidence_root:
+            if comparable_c2rust_baseline_payload(by_evidence_root[key]) != comparable_c2rust_baseline_payload(baseline):
+                conflict_roots.append(key)
+            continue
+        by_evidence_root[key] = baseline
+
+    status_counts: Counter[str] = Counter()
+    output_status_counts: Counter[str] = Counter()
+    compile_status_counts: Counter[str] = Counter()
+    manifests_by_key: dict[str, dict[str, Any]] = {}
+    generated_output_count = 0
+    skipped_without_output_count = 0
+    compile_attempted_count = 0
+    compile_passed_count = 0
+
+    for baseline in by_evidence_root.values():
+        status_counts.update(int_count_map(baseline.get("status_counts")))
+        output_status_counts.update(int_count_map(baseline.get("output_status_counts")))
+        compile_status_counts.update(int_count_map(baseline.get("compile_status_counts")))
+        generated_output_count += int_or_zero(baseline.get("generated_output_count"))
+        skipped_without_output_count += int_or_zero(baseline.get("skipped_without_output_count"))
+        compile_attempted_count += int_or_zero(baseline.get("compile_attempted_count"))
+        compile_passed_count += int_or_zero(baseline.get("compile_passed_count"))
+        for manifest in object_list(baseline.get("manifests")):
+            manifest_key = manifest_identity(manifest)
+            if manifest_key:
+                manifests_by_key.setdefault(manifest_key, manifest)
+
+    unique_manifest_count = len(manifests_by_key)
+    if unique_manifest_count == 0:
+        unique_manifest_count = sum(int_or_zero(baseline.get("manifest_count")) for baseline in by_evidence_root.values())
+    return {
+        "report_kind": "c2rust-baseline-milestone-rollup",
+        "status": "conflict" if conflict_roots else "observed" if report_sources else "none",
+        "source_report_count": len(report_sources),
+        "unique_evidence_root_count": len(by_evidence_root),
+        "unique_manifest_count": unique_manifest_count,
+        "generated_output_count": generated_output_count,
+        "skipped_without_output_count": skipped_without_output_count,
+        "compile_attempted_count": compile_attempted_count,
+        "compile_passed_count": compile_passed_count,
+        "compile_semantic_pass_count": 0,
+        "status_counts": sorted_int_counter(status_counts),
+        "output_status_counts": sorted_int_counter(output_status_counts),
+        "compile_status_counts": sorted_int_counter(compile_status_counts),
+        "manifests": [manifests_by_key[key] for key in sorted(manifests_by_key)],
+        "conflict_evidence_roots": sorted(set(conflict_roots)),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "C2Rust baseline manifest, output, and compile status are candidate-context observations only; "
+            "compile success is not semantic equivalence and does not increase translator-generated coverage."
+        ),
+    }
+
+
+def empty_c2rust_baseline_milestone_rollup() -> dict[str, Any]:
+    return build_c2rust_baseline_milestone_rollup([])
+
+
+def comparable_c2rust_baseline_payload(value: dict[str, Any]) -> str:
+    comparable = {
+        "manifest_count": int_or_zero(value.get("manifest_count")),
+        "generated_output_count": int_or_zero(value.get("generated_output_count")),
+        "skipped_without_output_count": int_or_zero(value.get("skipped_without_output_count")),
+        "compile_attempted_count": int_or_zero(value.get("compile_attempted_count")),
+        "compile_passed_count": int_or_zero(value.get("compile_passed_count")),
+        "status_counts": int_count_map(value.get("status_counts")),
+        "output_status_counts": int_count_map(value.get("output_status_counts")),
+        "compile_status_counts": int_count_map(value.get("compile_status_counts")),
+        "manifests": object_list(value.get("manifests")),
+    }
+    return json.dumps(comparable, sort_keys=True)
+
+
+def manifest_identity(manifest: dict[str, Any]) -> str | None:
+    path = manifest.get("path")
+    if not isinstance(path, str) or not path:
+        return None
+    sha = manifest.get("sha256")
+    return f"{path}@{sha}" if isinstance(sha, str) and sha else path
+
+
+def sorted_int_counter(counter: Counter[str]) -> dict[str, int]:
+    return {key: int(counter[key]) for key in sorted(counter)}
 
 
 def blocked_repairs_source(value: object) -> dict[str, Any]:

@@ -89,8 +89,8 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "",
         "## Baseline Comparison",
         "",
-        "| Baseline | Status | Semantic acceptance claimed | Translation coverage numerator |",
-        "| --- | --- | --- | ---: |",
+        "| Baseline | Status | Semantic acceptance claimed | Translation coverage numerator | Baseline manifest evidence |",
+        "| --- | --- | --- | ---: | --- |",
         *baseline_rows(object_or_empty(scorecard.get("baseline_comparison"))),
         "",
         "## Reproduction Commands",
@@ -315,9 +315,20 @@ def baseline_rows(baseline: dict[str, Any]) -> list[str]:
         label = BASELINE_LABELS.get(key, key)
         accepted = "yes" if row.get("semantic_acceptance_claimed") is True else "no"
         rows.append(
-            f"| {label} | {text(row.get('status'), 'unknown')} | {accepted} | {int_text(row.get('translation_coverage_numerator'))} |"
+            f"| {label} | {text(row.get('status'), 'unknown')} | {accepted} | {int_text(row.get('translation_coverage_numerator'))} | {baseline_manifest_evidence_text(row)} |"
         )
     return rows
+
+
+def baseline_manifest_evidence_text(row: dict[str, Any]) -> str:
+    rollup = object_or_empty(row.get("c2rust_baseline_rollup"))
+    if not rollup:
+        return "n/a"
+    return (
+        f"{int_text(rollup.get('unique_manifest_count'))} manifests / "
+        f"{int_text(rollup.get('source_report_count'))} sources / "
+        f"{int_text(rollup.get('compile_passed_count'))} compile-pass"
+    )
 
 
 def command_lines(commands: dict[str, Any]) -> list[str]:

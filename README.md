@@ -110,6 +110,7 @@
 
 - **显式多 worker profile smoke**: `config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json` 会 fan-out 两个带 source pin 的 worker（`real-fdb-calc-crc32`、`real-fdb-blob-make`），并按 planner 顺序 merge。已验证 run `harness-flashdb-explicit-workers-20260701` 通过，accepted-evidence `semantic_pass=2`；同一 profile 的 `evaluate --profile` 入口也通过并生成 `harness/evaluate-report.json` 与 `harness/judge-evidence-index.json`，后者只索引已验证 batch artifacts 的路径与 sha256。语义结论仍来自 accepted-evidence binding、competition summary、workflow metrics 和 validators；它不是新的 semantic gate，也不增加 `translation_coverage_numerator`。tracked run manifest：`validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json`。
 - 启用 route-governance metrics 的 profiles 还会产出并绑定 `summary/route-governance-metrics-report.json`；`validation/route-governance-metrics.schema.json` 与 report 内 `retention_policy` 只锁定报告字段、artifact 保留策略和 public-claim boundary，不把 accepted-evidence、before/after 展品或 route-governance 指标升级为 translator-generated semantic pass，也不增加 `translation_coverage_numerator`。
+- C2Rust baseline manifest 状态现在会进入 route-governance metrics 和 milestone scorecard：报告会统计 manifest/generated-output/skipped/compile-only 状态，并在 release notes 的 baseline comparison 中展示；这些字段仍是 candidate context only，`semantic_gate=false` 且 `translation_coverage_numerator=0`。
 
 - 评委入口本地 artifact 校验现在也会对非 smoke `competition_summary` 调用 `validate_competition_run_summary.py`，因此 workflow metrics、before/after artifact ref、repair history、unsafe 账本、final-gate 规则和 slice counts 都会走已有 summary 合同深校验，不再只靠 path+sha256 通过。
 
