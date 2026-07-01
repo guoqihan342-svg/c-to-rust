@@ -27,7 +27,15 @@ DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" 
 COMPETITION_ENV_ROOT = "config/competition-env"
 COMPETITION_ENV_BUNDLE_MANIFEST = Path("config") / "competition-env" / "bundle-manifest.json"
 ROUTE_GOVERNANCE_METRICS_SCHEMA = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
-LOCAL_ABSOLUTE_PATH = re.compile(r"(?:^|[^A-Za-z0-9_])(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/)")
+LOCAL_ABSOLUTE_PATH = re.compile(
+    r"(?:^|[^A-Za-z0-9_])(?:"
+    r"[A-Za-z]:[\\/]|"
+    r"/mnt/[A-Za-z]/|"
+    r"/home/|/Users/|/tmp/|/var/|"
+    r"\\\\wsl\$\\|"
+    r"//wsl\.localhost/"
+    r")"
+)
 REQUIRED_HARNESS_FEATURES = (
     "h1_evaluate_one_click",
     "h2_multi_worker_fanout",
@@ -1822,6 +1830,11 @@ def validate_judge_evidence_artifact_refs(
     architecture = require_object(payload.get("harness_architecture"), "judge_evidence_index.harness_architecture")
     for name in ("context_pack", "agent_index"):
         ref = architecture.get(name)
+        if expected_artifacts is not None and name in expected_artifacts and not isinstance(ref, dict):
+            raise ValueError(
+                f"judge_evidence_index.harness_architecture.{name} is required "
+                f"when expected_artifacts.{name} is declared"
+            )
         if isinstance(ref, dict) and name in validated_refs:
             architecture_binding = validate_artifact_binding_shape(
                 ref,

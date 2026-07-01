@@ -1327,6 +1327,52 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 expected_artifacts=expected_artifacts,
             )
 
+    def test_judge_evidence_index_requires_architecture_context_and_agent_refs_when_expected(self) -> None:
+        payload = valid_deterministic_judge_index_payload()
+        payload["evidence_artifact_refs"]["context_pack"] = artifact_ref("target/out/harness/context-pack.json", "6")
+        payload["evidence_artifact_refs"]["agent_index"] = artifact_ref("target/out/harness/agent-index.json", "7")
+        expected_artifacts = {
+            "competition_summary": "target/out/summary/competition-run-summary.json",
+            "workflow_metrics": "target/out/summary/workflow-metrics.json",
+            "worker_plan": "target/out/harness/plans/workers.json",
+            "context_pack": "target/out/harness/context-pack.json",
+            "agent_index": "target/out/harness/agent-index.json",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "judge_evidence_index.harness_architecture.context_pack is required when expected_artifacts.context_pack is declared",
+        ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+                expected_artifacts=expected_artifacts,
+            )
+
+    def test_judge_evidence_index_requires_architecture_agent_ref_when_context_ref_is_present(self) -> None:
+        payload = valid_deterministic_judge_index_payload()
+        context_ref = artifact_ref("target/out/harness/context-pack.json", "6")
+        payload["evidence_artifact_refs"]["context_pack"] = context_ref
+        payload["evidence_artifact_refs"]["agent_index"] = artifact_ref("target/out/harness/agent-index.json", "7")
+        payload["harness_architecture"]["context_pack"] = context_ref
+        expected_artifacts = {
+            "competition_summary": "target/out/summary/competition-run-summary.json",
+            "workflow_metrics": "target/out/summary/workflow-metrics.json",
+            "worker_plan": "target/out/harness/plans/workers.json",
+            "context_pack": "target/out/harness/context-pack.json",
+            "agent_index": "target/out/harness/agent-index.json",
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "judge_evidence_index.harness_architecture.agent_index is required when expected_artifacts.agent_index is declared",
+        ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+                expected_artifacts=expected_artifacts,
+            )
+
     def test_judge_evidence_index_expected_artifacts_reject_drive_prefix(self) -> None:
         payload = valid_opencode_judge_index_payload()
 
@@ -2429,6 +2475,35 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 {"merge_plan": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},
                 label="merge-plan",
             )
+
+    def test_merge_plan_argv_rejects_linux_local_absolute_paths(self) -> None:
+        with self.assertRaisesRegex(ValueError, "local absolute path"):
+            validator.validate_local_absolute_path_policy(
+                {"merge_plan": {"argv": ["/tmp/python/bin/python", "validation/tools/run_competition.py"]}},
+                label="merge-plan",
+            )
+
+    def test_competition_smoke_command_log_rejects_wsl_unc_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": [
+                            "\\\\wsl$\\Ubuntu\\home\\runner\\toolchain-check.sh",
+                            "//wsl.localhost/Ubuntu/home/runner/python",
+                        ],
+                        "returncode": 0,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
 
     def test_merge_execution_argv_allows_host_trace(self) -> None:
         result = validator.validate_local_absolute_path_policy(
