@@ -211,6 +211,25 @@ def valid_vendored_clang_verification_payload() -> dict:
     }
 
 
+def valid_competition_run_summary_payload(
+    *,
+    run_id: str,
+    proof_class: str = "local-simulation",
+    profile_id: str = "huawei-competition-ubuntu-24.04",
+    profile_sha256: str = "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb",
+) -> dict:
+    return {
+        "schema_version": 1,
+        "report_kind": "competition-run-summary",
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "profile_id": profile_id,
+        "profile_sha256": profile_sha256,
+        "final_gate": {"status": "passed"},
+        "slices": {"attempted": 0, "failed": 0, "semantic_pass": 0},
+    }
+
+
 def opencode_launch_policy() -> dict:
     return {
         "opencode_command": "opencode",
@@ -1584,6 +1603,58 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(artifacts["validator"]["status"], "present")
         self.assertIn("sha256", artifacts["validator"])
 
+    def test_require_local_artifacts_rejects_competition_summary_entrypoint_drift(self) -> None:
+        cases = [
+            (
+                "profile_sha256",
+                {"profile_sha256": "b" * 64},
+                "competition_summary profile_sha256 must match environment_profile.sha256",
+            ),
+            (
+                "profile_id",
+                {"profile_id": "drifted-profile"},
+                "competition_summary profile_id must match environment_profile.profile_id",
+            ),
+            (
+                "proof_class",
+                {"proof_class": "competition-exact"},
+                "competition_summary proof_class must match entrypoint proof_class",
+            ),
+            (
+                "run_id",
+                {"run_id": "stale-run"},
+                "competition_summary run_id must match entrypoint run_id",
+            ),
+        ]
+        for field, drift, expected_error in cases:
+            with self.subTest(field=field):
+                config = load_default_config()
+                config["entrypoints"] = [entrypoint_by_id(config, "before_after_judge_demo")]
+                config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
+                config["test_contract"]["required_expected_artifacts"] = ["competition_summary"]
+                temp_config = write_temp_config(config)
+                out_root = bind_entrypoint_to_out_root(
+                    config,
+                    temp_config,
+                    entry_index=0,
+                    out_root=temp_config.parent / f"out-{field}",
+                )
+                summary = out_root / "summary" / "competition-run-summary.json"
+                payload = valid_competition_run_summary_payload(
+                    run_id="competition-flashdb-before-after-exhibit",
+                )
+                payload.update(drift)
+                write_json(summary, payload)
+                config["entrypoints"][0]["expected_artifacts"] = {
+                    "competition_summary": repo_relative(summary),
+                }
+                write_json(temp_config, config)
+
+                result = validator.validate_config(temp_config, require_local_artifacts=True, repo_root=REPO_ROOT)
+
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(any(expected_error in error for error in result["errors"]), result["errors"])
+
     def test_require_local_artifacts_validates_vendored_clang_missing_summary_contract(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
             root = Path(tmp)
@@ -1855,7 +1926,12 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         summary = worker_root / "summary" / "competition-run-summary.json"
         report = worker_root / "harness" / "run-worker-report.json"
 
-        for artifact in [competition_summary, workflow_metrics, assignment, request, summary, report]:
+        competition_summary.parent.mkdir(parents=True, exist_ok=True)
+        write_json(
+            competition_summary,
+            valid_competition_run_summary_payload(run_id="competition-flashdb-before-after-exhibit"),
+        )
+        for artifact in [workflow_metrics, assignment, request, summary, report]:
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text("{}\n", encoding="utf-8")
 

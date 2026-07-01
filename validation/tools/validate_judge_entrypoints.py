@@ -815,6 +815,69 @@ def validate_competition_smoke_profile_binding(
         )
 
 
+def validate_competition_summary_entrypoint_contract(
+    payload: dict[str, Any],
+    *,
+    expected_artifacts: dict[str, Any],
+    environment_profile: dict[str, Any] | None = None,
+    entrypoint_proof_class: str | None = None,
+    entrypoint_run_id: str | None = None,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    if payload.get("schema_version") != 1:
+        raise ValueError("competition_summary.schema_version must be 1")
+
+    proof_class = require_string(payload.get("proof_class"), "competition_summary.proof_class")
+    if entrypoint_proof_class is not None and proof_class != entrypoint_proof_class:
+        raise ValueError("competition_summary proof_class must match entrypoint proof_class")
+    run_id = require_string(payload.get("run_id"), "competition_summary.run_id")
+    if entrypoint_run_id is not None and run_id != entrypoint_run_id:
+        raise ValueError("competition_summary run_id must match entrypoint run_id")
+
+    profile_id = require_string(payload.get("profile_id"), "competition_summary.profile_id")
+    profile_sha256 = validate_sha256_hex(payload.get("profile_sha256"), "competition_summary.profile_sha256")
+    if environment_profile is not None:
+        expected_profile_id = require_string(environment_profile.get("profile_id"), "environment_profile.profile_id")
+        if profile_id != expected_profile_id:
+            raise ValueError("competition_summary profile_id must match environment_profile.profile_id")
+        expected_sha256 = validate_sha256_hex(environment_profile.get("sha256"), "environment_profile.sha256")
+        if profile_sha256 != expected_sha256:
+            raise ValueError("competition_summary profile_sha256 must match environment_profile.sha256")
+
+    result: dict[str, Any] = {
+        "status": "passed",
+        "profile_id": profile_id,
+        "profile_sha256": profile_sha256,
+        "proof_class": proof_class,
+        "run_id": run_id,
+    }
+
+    final_gate = payload.get("final_gate")
+    if final_gate is not None:
+        final_gate_payload = require_object(final_gate, "competition_summary.final_gate")
+        final_gate_status = require_string(
+            final_gate_payload.get("status"),
+            "competition_summary.final_gate.status",
+        )
+        if final_gate_status not in {"passed", "failed"}:
+            raise ValueError("competition_summary final_gate.status must be passed or failed")
+        result["final_gate_status"] = final_gate_status
+
+    workflow_metrics = payload.get("workflow_metrics")
+    if isinstance(workflow_metrics, dict):
+        binding = validate_artifact_binding_shape(
+            workflow_metrics,
+            "competition_summary.workflow_metrics",
+            repo_root=repo_root,
+        )
+        expected_workflow_path = expected_artifacts.get("workflow_metrics")
+        if expected_workflow_path is not None and binding["path"] != expected_workflow_path:
+            raise ValueError("competition_summary workflow_metrics.path must match expected_artifacts.workflow_metrics")
+        result["workflow_metrics"] = binding
+
+    return result
+
+
 def validate_competition_exact_smoke_summary(payload: dict[str, Any]) -> None:
     if payload.get("proof_class") != "competition-exact":
         return
@@ -2345,6 +2408,7 @@ def validate_harness_artifact_contracts(
     repo_root: Path,
     environment_profile: dict[str, Any] | None = None,
     smoke_contract: dict[str, Any] | None = None,
+    entrypoint: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not require_local_artifacts:
         return {"status": "skipped", "reason": "require_local_artifacts=false"}
@@ -2399,6 +2463,23 @@ def validate_harness_artifact_contracts(
             path_text=str(artifacts["judge_evidence_index"]),
             repo_root=repo_root,
             expected_artifacts=artifacts,
+        )
+    if "competition_summary" in artifacts:
+        competition_summary_path = repo_path(str(artifacts["competition_summary"]), repo_root=repo_root)
+        entrypoint_proof_class = None
+        entrypoint_run_id = None
+        if entrypoint is not None:
+            if entrypoint.get("proof_class") is not None:
+                entrypoint_proof_class = str(entrypoint.get("proof_class"))
+            if entrypoint.get("run_id") is not None:
+                entrypoint_run_id = str(entrypoint.get("run_id"))
+        result["competition_summary"] = validate_competition_summary_entrypoint_contract(
+            load_json(competition_summary_path),
+            expected_artifacts=artifacts,
+            environment_profile=environment_profile,
+            entrypoint_proof_class=entrypoint_proof_class,
+            entrypoint_run_id=entrypoint_run_id,
+            repo_root=repo_root,
         )
     if "competition_smoke_summary" in artifacts:
         if smoke_contract is None:
@@ -2506,6 +2587,7 @@ def validate_config(
                             repo_root=repo_root,
                             environment_profile=config.get("environment_profile"),
                             smoke_contract=smoke_contract,
+                            entrypoint=entry,
                         ),
                     }
                 )
@@ -2548,6 +2630,7 @@ def validate_config(
                         require_local_artifacts=require_local_artifacts,
                         repo_root=repo_root,
                         environment_profile=config.get("environment_profile"),
+                        entrypoint=entry,
                     ),
                 }
             )
