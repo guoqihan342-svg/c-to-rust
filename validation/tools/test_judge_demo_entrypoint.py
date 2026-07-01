@@ -5,6 +5,13 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+REVIEW_CHECKLIST = (
+    REPO_ROOT
+    / "config"
+    / "competition-env"
+    / "review-checklists"
+    / "flashdb-harness-internal-review.json"
+)
 
 
 class JudgeDemoEntrypointTest(unittest.TestCase):
@@ -33,11 +40,13 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
             "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
             "python -B -m validation.tools.judge_demo",
+            "--review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
             "python -B -m validation.tools.opencode_agent_harness run-batch-profile",
             "target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
+            "target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "repair_summary",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
             "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
@@ -46,6 +55,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
             "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
             "python -B validation/tools/milestone_release_report.py",
+            "--review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json",
             "real-fdb-calc-crc32",
@@ -59,14 +69,17 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
 
         public_index_fragments = [
             "python -B -m validation.tools.judge_demo",
+            "--review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
             "python -B -m validation.tools.opencode_agent_harness run-batch-profile",
             "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
             "target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
+            "target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "repair_summary",
             "python -B validation/tools/milestone_release_report.py",
+            "--review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "translation_coverage_numerator",
         ]
         for fragment in public_index_fragments:
@@ -88,6 +101,8 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
 
         out_root = REPO_ROOT / "target" / "judge-demo-unit"
         profile_path = REPO_ROOT / "config" / "competition-env" / "planned-batches" / "flashdb-fdb-utils-before-after.json"
+        review_checklist_rel = "config/competition-env/review-checklists/flashdb-harness-internal-review.json"
+        milestone_review_checklist_rel = "target/judge-demo-unit/summary/milestone-review-checklist.json"
         if out_root.exists():
             import shutil
 
@@ -100,6 +115,21 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             if any(str(part).endswith("validate_competition_run_summary.py") for part in argv):
                 return subprocess.CompletedProcess(argv, 0, stdout='{"status":"passed"}\n', stderr="")
             if any(str(part).endswith("milestone_release_report.py") for part in argv):
+                self.assertIn("--review-checklist", argv)
+                self.assertEqual(argv[argv.index("--review-checklist") + 1], milestone_review_checklist_rel)
+                summary_path = out_root / "summary" / "competition-run-summary.json"
+                before_after_path = out_root / "summary" / "before-after-exhibit.json"
+                batch_path = out_root / "harness" / "batch-profile-report.json"
+                before_after = json.loads(before_after_path.read_text(encoding="utf-8"))
+                batch = json.loads(batch_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    before_after["inputs"]["competition_summary"]["sha256"],
+                    judge_demo_sha256(summary_path),
+                )
+                self.assertEqual(
+                    batch["before_after_exhibit_report"]["sha256"],
+                    judge_demo_sha256(before_after_path),
+                )
                 output_path = REPO_ROOT / argv[argv.index("--output") + 1]
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_text(
@@ -110,6 +140,10 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
                             "status": "internal_preview",
                             "metrics": {
                                 "translation_coverage_numerator": 0,
+                            },
+                            "review_gate": {
+                                "status": "passed",
+                                "review_count": 1,
                             },
                         },
                         sort_keys=True,
@@ -124,6 +158,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             profile_path=profile_path,
             run_id="judge-demo-unit",
             out_root=out_root,
+            review_checklist_paths=[REVIEW_CHECKLIST],
             command_runner=fake_runner,
             repo_root=REPO_ROOT,
         )
@@ -143,11 +178,19 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertRegex(persisted["artifacts"]["workflow_metrics"]["sha256"], r"^[0-9a-f]{64}$")
         self.assertRegex(persisted["artifacts"]["before_after_exhibit"]["sha256"], r"^[0-9a-f]{64}$")
         self.assertRegex(persisted["artifacts"]["milestone_release_report"]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(persisted["artifacts"]["milestone_review_checklist"]["path"], milestone_review_checklist_rel)
+        self.assertEqual(
+            persisted["artifacts"]["milestone_review_checklist"]["sha256"],
+            judge_demo_sha256(REVIEW_CHECKLIST),
+        )
+        self.assertEqual(persisted["artifacts"]["review_checklists"][0]["path"], review_checklist_rel)
+        self.assertEqual(persisted["artifacts"]["review_checklists"][0]["sha256"], judge_demo_sha256(REVIEW_CHECKLIST))
         self.assertEqual(persisted["metrics"]["final_gate"], "passed")
         self.assertEqual(persisted["metrics"]["semantic_pass"], 1)
         self.assertEqual(persisted["metrics"]["unsafe_reduction"]["reduced_by"], 2)
         self.assertEqual(persisted["metrics"]["translation_before_after"]["status"], "bound")
         self.assertEqual(persisted["metrics"]["translation_coverage_numerator"], 0)
+        self.assertEqual(persisted["metrics"]["review_gate"]["status"], "passed")
         self.assertEqual(set(persisted["metrics"]["stage_contracts"]), {"planner", "worker", "verifier", "repairer", "reporter"})
         self.assertEqual(persisted["harness_architecture"]["entrypoint"], "judge_demo")
         self.assertEqual(
@@ -201,11 +244,19 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(refs["judge_demo_report"]["sha256"], judge_demo_sha256(report_path))
         self.assertEqual(refs["before_after_exhibit"]["path"], "target/judge-demo-unit/summary/before-after-exhibit.json")
         self.assertEqual(refs["milestone_release_report"]["path"], "target/judge-demo-unit/summary/milestone-release-report.json")
+        self.assertEqual(refs["milestone_review_checklist"]["path"], milestone_review_checklist_rel)
+        self.assertEqual(refs["milestone_review_checklist"]["sha256"], judge_demo_sha256(REVIEW_CHECKLIST))
+        self.assertEqual(refs["internal_review_checklist"]["path"], review_checklist_rel)
+        self.assertEqual(refs["internal_review_checklist"]["sha256"], judge_demo_sha256(REVIEW_CHECKLIST))
         self.assertEqual(refs["competition_run_summary"]["path"], "target/judge-demo-unit/summary/competition-run-summary.json")
         self.assertEqual(refs["workflow_metrics"]["path"], "target/judge-demo-unit/summary/workflow-metrics.json")
         self.assertEqual(
             judge_index["reproduction_commands"]["judge_demo"],
-            "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id judge-demo-unit --out-root target/judge-demo-unit",
+            "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id judge-demo-unit --out-root target/judge-demo-unit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+        )
+        self.assertIn(
+            "--review-checklist target/judge-demo-unit/summary/milestone-review-checklist.json",
+            judge_index["reproduction_commands"]["milestone_release_report"],
         )
 
     def test_repair_summary_falls_back_to_workflow_metrics(self) -> None:
@@ -257,6 +308,64 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(summary["root_cause_counts"], {"rustc:E0609": 1, "oracle:diff": 1})
         self.assertEqual(summary["histories"][0]["unit_id"], "flashdb/unit-a")
         self.assertEqual(summary["histories"][0]["repair_rounds"], 3)
+
+    def test_judge_demo_accepts_bound_before_after_exhibit_without_translator_final_gate(self) -> None:
+        from validation.tools import judge_demo
+
+        out_root = REPO_ROOT / "target" / "judge-demo-final-gate-failed-unit"
+        profile_path = REPO_ROOT / "config" / "competition-env" / "planned-batches" / "flashdb-fdb-utils-before-after.json"
+        if out_root.exists():
+            import shutil
+
+            shutil.rmtree(out_root)
+        write_judge_demo_fixture_outputs(out_root)
+        summary_path = out_root / "summary" / "competition-run-summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary["final_gate"] = {"status": "failed", "validator": "validate_auto_translation_evidence.py --require-semantic-pass"}
+        summary["semantic_pass"] = 0
+        summary["slices"]["semantic_pass"] = 0
+        summary["slices"]["failed"] = 1
+        summary_path.write_text(json.dumps(summary, sort_keys=True) + "\n", encoding="utf-8")
+        milestone_path = out_root / "summary" / "milestone-release-report.json"
+        milestone_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "report_kind": "milestone-release-metrics",
+                    "status": "internal_preview",
+                    "metrics": {"translation_coverage_numerator": 0},
+                    "review_gate": {"status": "passed", "review_count": 1},
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = judge_demo.build_report(
+            profile_path=profile_path,
+            run_id="judge-demo-final-gate-failed-unit",
+            out_root=out_root,
+            summary_path=summary_path,
+            batch_profile_report_path=out_root / "harness" / "batch-profile-report.json",
+            milestone_report_path=milestone_path,
+            review_checklist_paths=[],
+            milestone_review_checklist_paths=[],
+            commands=[
+                {"stage": "run_batch_profile", "exit_code": 1},
+                {"stage": "validate_summary", "exit_code": 0},
+                {"stage": "milestone_release_report", "exit_code": 1},
+            ],
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["harness_architecture"]["command_status"], "passed_with_accepted_evidence_gate")
+        self.assertEqual(report["core_translation_quality"]["final_gate_status"], "failed")
+        self.assertEqual(report["core_translation_quality"]["judge_demo_gate"]["status"], "passed")
+        self.assertEqual(report["core_translation_quality"]["judge_demo_gate"]["source"], "before_after_exhibit")
+        self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["metrics"]["review_gate"]["status"], "passed")
 
 
 def write_judge_demo_fixture_outputs(out_root: Path) -> None:

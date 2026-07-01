@@ -61,7 +61,7 @@
   "reproduction": {
     "run_batch_profile_command": "python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id harness-h4-flashdb-context-index-20260701 --out-root target/competition-out-h4-flashdb-context-index-20260701",
     "summary_validation_command": "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-h4-flashdb-context-index-20260701/summary/competition-run-summary.json",
-    "judge_demo_command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit"
+    "judge_demo_command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json"
   },
   "tracked_artifacts": {
     "translation_before_after": {

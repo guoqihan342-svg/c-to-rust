@@ -430,6 +430,19 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("--profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json", before_after["command"])
         self.assertIn("--run-id competition-flashdb-before-after-exhibit", before_after["command"])
         self.assertIn("--out-root target/competition-out-flashdb-before-after-exhibit", before_after["command"])
+        self.assertIn(
+            "--review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+            before_after["command"],
+        )
+        review_checklist = before_after["review_checklist"]
+        self.assertEqual(
+            review_checklist["path"],
+            "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+        )
+        self.assertEqual(review_checklist["report_kind"], "milestone-review-checklist")
+        review_checklist_path = REPO_ROOT / review_checklist["path"]
+        self.assertTrue(review_checklist_path.exists(), review_checklist["path"])
+        self.assertEqual(review_checklist["sha256"], sha256_file(review_checklist_path))
         self.assertIn("validate_competition_run_summary.py", " ".join(before_after["verification_commands"]))
         for artifact in [
             "competition_summary",

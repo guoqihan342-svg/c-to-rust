@@ -23,14 +23,14 @@ The machine-readable judge entrypoint directory is `../../../config/competition-
 Primary real FlashDB run:
 
 ```bash
-python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
 ```
 
 Audit-expanded form:
 
 ```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
-python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
+python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
 ```
 
 Key artifacts:
@@ -38,8 +38,11 @@ Key artifacts:
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
+- `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json`
+
+Boundary: `milestone-review-checklist.json` / the review gate is audit input for release readiness and public claim boundaries only. It is not a semantic acceptance gate and does not increase `translation_coverage_numerator`.
 
 Current harness-first development entrypoint:
 

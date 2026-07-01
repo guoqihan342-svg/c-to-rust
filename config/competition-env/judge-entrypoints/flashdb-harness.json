@@ -84,9 +84,14 @@
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "39c21dc89cf19a9281e742bab937fd28ba6fd56e82dc45527626859b46973c90"
+        "sha256": "590c9f40e76ddaf772f5e62caca5f5e7bcac8e22c050aac0ec8cb19f98f4c748"
       },
-      "command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit",
+      "review_checklist": {
+        "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+        "sha256": "6d01d08d81c7edf333ee6a85cbc9d6d5c8b84ee4c59c52f726d8b11d5a585f7d",
+        "report_kind": "milestone-review-checklist"
+      },
+      "command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
       "audit_command": "python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit",
       "verification_commands": [
         "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json"

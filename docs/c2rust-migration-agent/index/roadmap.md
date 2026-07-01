@@ -15,14 +15,14 @@
 首选真实 FlashDB 运行路径：
 
 ```bash
-python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
 ```
 
 审计展开版：
 
 ```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
-python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
+python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
 ```
 
 关键 artifacts：
@@ -30,8 +30,11 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
+- `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/agent-index.json`
+
+边界：`milestone-review-checklist.json` / review gate 只作为 release readiness 与公开 claim boundary 的审计输入，不是 semantic acceptance gate，也不会增加 `translation_coverage_numerator`。
 
 当前 harness-first 开发入口：
 

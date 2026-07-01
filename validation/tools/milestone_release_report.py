@@ -24,6 +24,14 @@ BLOCKED_STATUSES = {"blocked"}
 GENERATED_CANDIDATE_STATUSES = {"candidate", "generated", "generated_candidate", "compiled"}
 SEMANTIC_PASS_STATUSES = {"accepted", "passed", "semantic_pass"}
 SEMANTIC_ROUTE_STATUSES = {"accepted", "passed", "semantic_pass"}
+REQUIRED_REVIEW_CHECKLIST_ITEMS = [
+    "harness_architecture",
+    "unsafe_ledger",
+    "test_coverage_matrix",
+    "real_slice_evidence",
+    "public_claim_boundary",
+    "known_refusals",
+]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,6 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--coverage-report", type=Path)
     parser.add_argument("--competition-summary", type=Path, action="append", default=[])
     parser.add_argument("--batch-profile-report", type=Path, action="append", default=[])
+    parser.add_argument("--review-checklist", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
@@ -41,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         coverage_report_path=args.coverage_report,
         competition_summary_paths=args.competition_summary,
         batch_profile_report_paths=args.batch_profile_report,
+        review_checklist_paths=args.review_checklist,
     )
     text = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
@@ -57,6 +67,7 @@ def build_report(
     coverage_report_path: Path | None = None,
     competition_summary_paths: list[Path] | None = None,
     batch_profile_report_paths: list[Path] | None = None,
+    review_checklist_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     coverage_report = load_coverage_report(repo_root, coverage_report_path=coverage_report_path)
@@ -70,6 +81,8 @@ def build_report(
         batch_profile_report_paths=batch_profile_report_paths or [],
     )
     before_after_exhibits = summarize_before_after_exhibits(before_after_exhibit_inputs)
+    review_checklist_inputs = load_review_checklists(repo_root, review_checklist_paths=review_checklist_paths or [])
+    review_gate = summarize_review_gate(review_checklist_inputs)
 
     require(coverage_report.get("schema_version") == 1, "coverage report schema_version must be 1")
     require(coverage_report.get("status") == "passed", "coverage report status must be passed")
@@ -106,7 +119,10 @@ def build_report(
         blockers.append("no_translator_generated_semantic_pass")
     if translator_generated_semantic_pass_count < 3:
         blockers.append("translator_generated_semantic_pass_below_p0_minimum")
-    blockers.append("external_review_not_recorded")
+    if review_gate["status"] == "missing":
+        blockers.append("external_review_not_recorded")
+    elif review_gate["status"] != "passed":
+        blockers.append("external_review_not_passed")
 
     report_status = "release_candidate" if not blockers else "internal_preview"
     harness_architecture = {
@@ -149,6 +165,7 @@ def build_report(
         },
         "harness_architecture": harness_architecture,
         "core_translation_quality": core_translation_quality,
+        "review_gate": review_gate,
         "metrics": {
             "translation_coverage_numerator": translator_generated_semantic_pass_count,
             "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
@@ -176,11 +193,13 @@ def build_report(
             "status": report_status,
             "blockers": blockers,
             "minimum_p0_translator_generated_semantic_pass_count": 3,
+            "review_gate": review_gate,
         },
         "release_note_inputs": {
             "capability_delta_ledger": ledger,
             "s2_workflow_metrics": s2_workflow_metrics,
             "before_after_exhibits": before_after_exhibits,
+            "review_gate": review_gate,
             "coverage_claim_boundary": coverage_report.get("claim_boundary"),
             "must_not_claim": [
                 "native build catalogue as translated Rust coverage",
@@ -348,6 +367,110 @@ def load_bound_before_after_exhibits(
             }
         )
     return exhibits
+
+
+def load_review_checklists(
+    repo_root: Path,
+    *,
+    review_checklist_paths: list[Path],
+) -> list[dict[str, Any]]:
+    reviews = []
+    for review_path in review_checklist_paths:
+        review_abs = review_path if review_path.is_absolute() else repo_root / review_path
+        review_abs = review_abs.resolve()
+        try:
+            review_abs.relative_to(repo_root.resolve())
+        except ValueError as error:
+            raise SystemExit(f"review checklist must stay under repo root: {review_path}") from error
+        require(review_abs.exists(), f"review checklist does not exist: {review_path}")
+        payload = json.loads(review_abs.read_text(encoding="utf-8-sig"))
+        require(isinstance(payload, dict), f"review checklist must be an object: {review_path}")
+        review = validate_review_checklist_payload(payload, review_path=review_abs)
+        review["path"] = rel(repo_root, review_abs)
+        review["sha256"] = sha256_file(review_abs)
+        reviews.append(review)
+    return reviews
+
+
+def validate_review_checklist_payload(payload: dict[str, Any], *, review_path: Path) -> dict[str, Any]:
+    require(payload.get("schema_version") == 1, f"review checklist schema_version must be 1: {review_path}")
+    require(
+        payload.get("report_kind") == "milestone-review-checklist",
+        f"review checklist report_kind must be milestone-review-checklist: {review_path}",
+    )
+    status = payload.get("status")
+    require(status in {"passed", "needs_changes", "failed"}, f"review checklist status is invalid: {review_path}")
+    reviewer = require_dict(payload, "reviewer")
+    reviewer_kind = reviewer.get("kind")
+    reviewer_id = reviewer.get("id")
+    require(reviewer_kind in {"internal", "external", "independent"}, f"reviewer.kind is invalid: {review_path}")
+    require(isinstance(reviewer_id, str) and reviewer_id, f"reviewer.id is required: {review_path}")
+
+    claim_boundary = require_dict(payload, "claim_boundary")
+    require(
+        claim_boundary.get("semantic_gate") is False,
+        f"review checklist claim_boundary.semantic_gate must be false: {review_path}",
+    )
+    require(
+        claim_boundary.get("review_is_semantic_acceptance") is False,
+        f"review checklist claim_boundary.review_is_semantic_acceptance must be false: {review_path}",
+    )
+
+    checklist = require_dict(payload, "checklist")
+    item_statuses: dict[str, str] = {}
+    item_evidence: dict[str, list[str]] = {}
+    for item in REQUIRED_REVIEW_CHECKLIST_ITEMS:
+        entry = require_dict(checklist, item)
+        item_status = entry.get("status")
+        require(item_status in {"passed", "needs_changes", "failed"}, f"{item}.status is invalid: {review_path}")
+        evidence = entry.get("evidence")
+        require(
+            isinstance(evidence, list) and evidence and all(isinstance(path, str) for path in evidence),
+            f"{item}.evidence must be a non-empty string list: {review_path}",
+        )
+        for evidence_path in evidence:
+            checked_relative_artifact_path(evidence_path)
+        item_statuses[item] = str(item_status)
+        item_evidence[item] = [str(path) for path in evidence]
+
+    if status == "passed":
+        not_passed = [item for item, item_status in item_statuses.items() if item_status != "passed"]
+        require(not not_passed, f"passed review checklist has non-passed items: {not_passed}")
+
+    return {
+        "review_id": str(payload.get("review_id", review_path.stem)),
+        "status": str(status),
+        "reviewer": {"kind": str(reviewer_kind), "id": str(reviewer_id)},
+        "required_items": list(REQUIRED_REVIEW_CHECKLIST_ITEMS),
+        "item_statuses": item_statuses,
+        "item_evidence": item_evidence,
+        "claim_boundary": claim_boundary,
+    }
+
+
+def summarize_review_gate(review_inputs: list[dict[str, Any]]) -> dict[str, Any]:
+    if not review_inputs:
+        return {
+            "status": "missing",
+            "review_count": 0,
+            "required_items": list(REQUIRED_REVIEW_CHECKLIST_ITEMS),
+            "reviews": [],
+            "claim_boundary": (
+                "Milestone review checklists are human or external review evidence only. "
+                "They do not create semantic acceptance."
+            ),
+        }
+    status = "passed" if all(review.get("status") == "passed" for review in review_inputs) else "needs_changes"
+    return {
+        "status": status,
+        "review_count": len(review_inputs),
+        "required_items": list(REQUIRED_REVIEW_CHECKLIST_ITEMS),
+        "reviews": review_inputs,
+        "claim_boundary": (
+            "Milestone review checklists cover release readiness, public claim boundaries, and known refusals. "
+            "They are not semantic gates and do not expand translation coverage."
+        ),
+    }
 
 
 def validate_before_after_exhibit_inputs(repo_root: Path, *, exhibit: dict[str, Any], exhibit_path: Path) -> None:

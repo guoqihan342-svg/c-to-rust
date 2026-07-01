@@ -102,7 +102,7 @@ jobs:
         run: python validation/tools/translator_coverage_matrix.py
 
       - name: Run milestone release report gate
-        run: python validation/tools/milestone_release_report.py
+        run: python validation/tools/milestone_release_report.py --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
 
       - name: Run route governance metrics report gate
         run: python validation/tools/route_governance_metrics_report.py

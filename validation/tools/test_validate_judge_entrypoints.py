@@ -283,6 +283,14 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             self.assertEqual(entry["profile"]["status"], "present")
             self.assertEqual(entry["profile_contract"]["status"], "passed")
             self.assertEqual(entry["tracked_manifest"]["status"], "present")
+        before_after = result["entrypoints"][0]
+        self.assertEqual(before_after["review_checklist"]["status"], "present")
+        self.assertEqual(
+            before_after["review_checklist"]["path"],
+            "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+        )
+        self.assertFalse(before_after["review_checklist_contract"]["semantic_gate"])
+        self.assertFalse(before_after["review_checklist_contract"]["review_is_semantic_acceptance"])
 
     def test_cli_writes_judge_entrypoints_readiness_report(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -728,6 +736,26 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             context_pack_payload=json.loads(context_pack.read_text(encoding="utf-8")),
             agent_index_path=agent_index,
         )
+        write_json(
+            summary,
+            {
+                "final_gate": {
+                    "status": "failed",
+                    "validator": "baseline_repair_gate",
+                },
+                "slices": {
+                    "attempted": 1,
+                    "failed": 1,
+                    "semantic_pass": 0,
+                },
+            },
+        )
+        with closing(sqlite3.connect(ledger)) as connection:
+            connection.execute(
+                "update artifacts set sha256=?, status=? where kind='competition-run-summary'",
+                (validator.sha256_file(summary), "failed"),
+            )
+            connection.commit()
 
         result = validator.validate_config(temp_config, require_local_artifacts=True, repo_root=REPO_ROOT)
 

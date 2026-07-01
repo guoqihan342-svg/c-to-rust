@@ -11,10 +11,16 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import sqlite3
+import sys
 from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools import milestone_release_report
+
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
 LOCAL_ABSOLUTE_PATH = re.compile(r"(?:^|[^A-Za-z0-9_])(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/)")
 REQUIRED_HARNESS_FEATURES = (
@@ -177,6 +183,55 @@ def validate_ref(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     if expected_sha != actual_sha:
         raise ValueError(f"artifact ref sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}")
     return {"path": path_text, "sha256": actual_sha, "status": "present"}
+
+
+def validate_entrypoint_review_checklist_ref(entry: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    review_ref = entry.get("review_checklist")
+    if review_ref is None:
+        return {
+            "ref": {"status": "skipped", "reason": "review_checklist not declared"},
+            "contract": {"status": "skipped", "reason": "review_checklist not declared"},
+        }
+    if not isinstance(review_ref, dict):
+        raise ValueError(f"{entry.get('id')}.review_checklist must be an object")
+    validated_ref = validate_ref(review_ref, repo_root=repo_root)
+    review_path = repo_path(validated_ref["path"], repo_root=repo_root)
+    payload = load_json(review_path)
+    try:
+        review_contract = milestone_release_report.validate_review_checklist_payload(
+            payload,
+            review_path=review_path,
+        )
+    except SystemExit as error:
+        raise ValueError(f"{entry.get('id')}.review_checklist invalid: {error}") from error
+    if review_ref.get("report_kind") and review_ref.get("report_kind") != payload.get("report_kind"):
+        raise ValueError(f"{entry.get('id')}.review_checklist report_kind must match payload")
+    boundary = require_object(
+        review_contract.get("claim_boundary"),
+        f"{entry.get('id')}.review_checklist.claim_boundary",
+    )
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError(f"{entry.get('id')}.review_checklist claim_boundary.semantic_gate must be false")
+    if boundary.get("review_is_semantic_acceptance") is not False:
+        raise ValueError(
+            f"{entry.get('id')}.review_checklist claim_boundary.review_is_semantic_acceptance must be false"
+        )
+    return {
+        "ref": {
+            **validated_ref,
+            "report_kind": str(payload.get("report_kind")),
+            "review_id": str(review_contract.get("review_id", "")),
+            "reviewer": review_contract.get("reviewer", {}),
+            "review_status": str(review_contract.get("status", "unknown")),
+        },
+        "contract": {
+            "status": "passed",
+            "semantic_gate": False,
+            "review_is_semantic_acceptance": False,
+            "required_items": sorted(review_contract.get("required_items", [])),
+            "item_statuses": review_contract.get("item_statuses", {}),
+        },
+    }
 
 
 def validate_expected_artifacts(
@@ -1299,7 +1354,12 @@ def validate_context_ledger_contract(
                     raise ValueError(f"context ledger missing artifacts row for worker summary: {worker_id}")
                 if summary_row[0] != summary_sha:
                     raise ValueError(f"context ledger worker summary sha256 must match file: {worker_id}")
-                if summary_row[1] != "passed" or summary_row[2] != "run-summary":
+                if not worker_summary_row_is_acceptable(
+                    row_status=str(summary_row[1]),
+                    semantic_role=str(summary_row[2]),
+                    context_payload=context_payload,
+                    summary_path=summary_path,
+                ):
                     raise ValueError(f"context ledger worker summary row must be passed run-summary: {worker_id}")
                 summary_count += 1
     except sqlite3.DatabaseError as error:
@@ -1314,6 +1374,25 @@ def validate_context_ledger_contract(
         "worker_summary_count": summary_count,
         "status": "passed",
     }
+
+
+def worker_summary_row_is_acceptable(
+    *,
+    row_status: str,
+    semantic_role: str,
+    context_payload: dict[str, Any],
+    summary_path: Path,
+) -> bool:
+    if semantic_role != "run-summary":
+        return False
+    if row_status == "passed":
+        return True
+    policy = context_payload.get("attempt_evidence_policy")
+    if row_status != "failed" or not isinstance(policy, dict) or policy.get("mode") != "baseline_repair_gate":
+        return False
+    summary = load_json(summary_path)
+    final_gate = summary.get("final_gate") if isinstance(summary.get("final_gate"), dict) else {}
+    return final_gate.get("status") == "failed"
 
 
 def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[str, Any]:
@@ -1536,6 +1615,7 @@ def validate_config(
             if isinstance(audit_command, str):
                 assert_no_local_absolute_path(audit_command)
             expected_artifacts = entry.get("expected_artifacts", {})
+            review_checklist_result = validate_entrypoint_review_checklist_ref(entry, repo_root=repo_root)
             entrypoint_results.append(
                 {
                     "id": entry.get("id"),
@@ -1560,6 +1640,8 @@ def validate_config(
                         source_pin_contract=source_pin_contract,
                         repo_root=repo_root,
                     ),
+                    "review_checklist": review_checklist_result["ref"],
+                    "review_checklist_contract": review_checklist_result["contract"],
                     "expected_artifacts": validate_expected_artifacts(
                         expected_artifacts,
                         require_local_artifacts=require_local_artifacts,

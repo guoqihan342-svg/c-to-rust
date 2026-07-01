@@ -10,7 +10,7 @@ The primary path is the current scoring story for core translation capability pl
 ## Real FlashDB One-Command Path
 
 ```bash
-python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
 ```
 
 Audit-expanded form:
@@ -18,7 +18,7 @@ Audit-expanded form:
 ```bash
 python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
 python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json
-python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
+python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
 ```
 
 Key FlashDB artifacts:
@@ -26,6 +26,7 @@ Key FlashDB artifacts:
 - `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json`
 - `target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json`
+- `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json`
 - `target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json`
 - H5 context pack: `target/competition-out-flashdb-before-after-exhibit/harness/context-pack.json`
@@ -81,8 +82,9 @@ The fallback demo shows unsafe 3 -> 0 for `demo/store-add-one`.
 
 ## Claim Boundary
 
-- `judge-demo-report.json` is the one-command aggregate report. It binds the paths and sha256 values for `competition-run-summary.json`, `workflow-metrics.json`, `before-after-exhibit.json`, and `milestone-release-report.json`.
+- `judge-demo-report.json` is the one-command aggregate report. It binds the paths and sha256 values for `competition-run-summary.json`, `workflow-metrics.json`, `before-after-exhibit.json`, `milestone-release-report.json`, and the copied `milestone-review-checklist.json`.
 - `harness/judge-evidence-index.json` is the same-shape judge evidence index. It binds `judge-demo-report.json`, summaries, workflow metrics, before/after exhibit, milestone, context pack, agent index, run/merge/worker plan paths and sha256 values; it is not a semantic gate and it does not self-reference.
+- The review checklist / review gate is release-readiness input and audit evidence only. It is not a semantic acceptance gate and does not increase `translation_coverage_numerator`.
 - `judge-demo-report.json.repair_summary` aggregates repair/retry/rollback exhibit fields, including the repair round cap, auto recovery, root cause counts, repair history, and rollback ids. It only comes from bound workflow metrics / before-after exhibit data and does not replace the validator or oracle.
 - `before-after-exhibit.json` is the judge-facing exhibit entrypoint. It proves artifact binding, unsafe delta, and the harness contract; it does not replace `competition-run-summary.json`, `workflow-metrics.json`, or the evidence validator.
 - `harness/context-pack.json` and `harness/agent-index.json` are `run-batch-profile` generated H5 harness audit indexes and multi-agent continuation entrypoints. They expose the planner/worker/merge/report topology and worker assignments; they do not replace the summary, validator, or oracle, and they do not expand the semantic pass claim.
