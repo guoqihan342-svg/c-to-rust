@@ -2,6 +2,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,18 @@ def load_smoke_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+LOCAL_ABSOLUTE_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/)")
+
+
+def assert_no_local_absolute_command_arguments(testcase: unittest.TestCase, command_entries: list[dict]) -> None:
+    for entry in command_entries:
+        for argument in entry["command"]:
+            if not isinstance(argument, str):
+                continue
+            testcase.assertNotRegex(argument, LOCAL_ABSOLUTE_PATH)
+            testcase.assertFalse(Path(argument).is_absolute(), argument)
 
 
 class FakeCommandRunner:
@@ -386,6 +399,76 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             clang.write_text("", encoding="utf-8")
 
             self.assertEqual(module.clang_source(repo_root), "vendored")
+
+    def test_slice_spec_outside_repo_is_rejected_before_command_log(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            outside_slice_spec = Path(tmp) / "outside-slice.json"
+            outside_slice_spec.write_text("{}", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "slice_spec must be repo-relative"):
+                module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-outside-slice-spec-test",
+                    slice_spec=outside_slice_spec,
+                )
+
+            self.assertFalse((out_root / "logs" / "commands.jsonl").exists())
+
+    def test_command_log_omits_local_absolute_paths_for_external_out_root(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-portability-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_log = out_root / "logs" / "commands.jsonl"
+            command_entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            assert_no_local_absolute_command_arguments(self, command_entries)
+            logged_arguments = [
+                argument
+                for entry in command_entries
+                for argument in entry["command"]
+                if isinstance(argument, str)
+            ]
+            self.assertNotIn(sys.executable, logged_arguments)
+            self.assertTrue(any(argument == "summary/vendored-clang-verification.json" for argument in logged_arguments))
+            self.assertTrue(any(argument == "reports/evidence-governance.json" for argument in logged_arguments))
+
+    def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            command_log = out_root / "logs" / "commands.jsonl"
+            command_log.parent.mkdir(parents=True)
+            command_log.write_text(
+                json.dumps({"step": "stale", "command": ["C:\\Python314\\python.exe"], "returncode": 0}) + "\n",
+                encoding="utf-8",
+            )
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-replace-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            self.assertNotIn("stale", [entry["step"] for entry in command_entries])
+            assert_no_local_absolute_command_arguments(self, command_entries)
 
 
 if __name__ == "__main__":

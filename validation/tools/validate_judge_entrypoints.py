@@ -568,6 +568,39 @@ def validate_competition_smoke_summary_contract(
     }
 
 
+def validate_competition_smoke_command_log_contract(command_log_path: Path) -> dict[str, Any]:
+    if not command_log_path.is_file():
+        raise ValueError("competition_smoke_command_log path must exist")
+    checked_entries = 0
+    with command_log_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entry = json.loads(stripped)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"competition_smoke_command_log line {line_number} must be valid JSON") from error
+            if not isinstance(entry, dict):
+                raise ValueError(f"competition_smoke_command_log line {line_number} must be an object")
+            command = entry.get("command")
+            if not isinstance(command, list) or not command:
+                raise ValueError(f"competition_smoke_command_log line {line_number} command must be a non-empty list")
+            for index, argument in enumerate(command):
+                if not isinstance(argument, str):
+                    raise ValueError(
+                        f"competition_smoke_command_log line {line_number} command[{index}] must be a string"
+                    )
+                if LOCAL_ABSOLUTE_PATH.search(argument):
+                    raise ValueError(
+                        "competition_smoke_command_log command contains forbidden local absolute path"
+                    )
+            checked_entries += 1
+    if checked_entries == 0:
+        raise ValueError("competition_smoke_command_log must contain at least one entry")
+    return {"status": "passed", "entry_count": checked_entries}
+
+
 def validate_vendored_clang_verification_contract(
     payload: dict[str, Any],
     *,
@@ -2303,6 +2336,9 @@ def validate_harness_artifact_contracts(
             entrypoint_proof_class=str(smoke_contract.get("proof_class")),
             entrypoint_run_id=str(smoke_contract.get("run_id")),
         )
+        if "command_log" in artifacts:
+            command_log_path = repo_path(str(artifacts["command_log"]), repo_root=repo_root)
+            result["competition_smoke_command_log"] = validate_competition_smoke_command_log_contract(command_log_path)
         if "vendored_clang_verification" in artifacts:
             vendored_clang_path = repo_path(str(artifacts["vendored_clang_verification"]), repo_root=repo_root)
             result["vendored_clang_verification"] = validate_vendored_clang_verification_contract(

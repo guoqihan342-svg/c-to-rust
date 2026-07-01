@@ -101,6 +101,9 @@ def run_competition_smoke(
     reports_dir = out_root / "reports"
     for directory in [logs_dir, summary_dir, reports_dir]:
         directory.mkdir(parents=True, exist_ok=True)
+    command_log_path = logs_dir / "commands.jsonl"
+    if command_log_path.exists():
+        command_log_path.unlink()
 
     started = time.monotonic()
     run_id = run_id or time.strftime("smoke-%Y%m%dT%H%M%SZ", time.gmtime())
@@ -286,6 +289,7 @@ def smoke_commands(
     slice_id: str,
     slice_spec: Path,
 ) -> list[tuple[str, list[str]]]:
+    slice_spec_arg = repo_relative_path(slice_spec, repo_root, "slice_spec")
     vendored_clang_command = [
         sys.executable,
         rel_path(VERIFY_VENDORED_CLANG, repo_root),
@@ -313,7 +317,7 @@ def smoke_commands(
                 "--slice-id",
                 slice_id,
                 "--slice-spec",
-                rel_path(slice_spec, repo_root),
+                slice_spec_arg,
                 "--require-semantic-pass",
             ],
         ),
@@ -413,7 +417,7 @@ def run_logged_step(
         setattr(result, "failure_class", failure_class)
     entry = {
         "step": step,
-        "command": command,
+        "command": command_for_log(command, repo_root=repo_root, out_root=out_root),
         "returncode": result.returncode,
         "stdout": result.stdout,
         "stderr": result.stderr,
@@ -633,6 +637,41 @@ def rel_path(path: Path, repo_root: Path) -> str:
         return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         return resolved.as_posix()
+
+
+def repo_relative_path(path: Path, repo_root: Path, field_name: str) -> str:
+    resolved = path if path.is_absolute() else repo_root / path
+    try:
+        return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError as error:
+        raise ValueError(f"{field_name} must be repo-relative") from error
+
+
+def command_for_log(command: list[str], *, repo_root: Path, out_root: Path) -> list[str]:
+    return [command_argument_for_log(argument, repo_root=repo_root, out_root=out_root) for argument in command]
+
+
+def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) -> str:
+    if not argument or not any(separator in argument for separator in ["/", "\\"]):
+        return argument
+    if any(char.isspace() for char in argument) or any(token in argument for token in [";", "|", "&&"]):
+        return argument
+    path = Path(argument)
+    resolved = path if path.is_absolute() else repo_root / path
+    for root in [repo_root.resolve(), out_root.resolve()]:
+        try:
+            return resolved.resolve().relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return path_basename(argument)
+
+
+def path_basename(path_text: str) -> str:
+    name = Path(path_text).name
+    if name:
+        return name
+    normalized = path_text.replace("\\", "/").rstrip("/")
+    return normalized.rsplit("/", 1)[-1] if normalized else path_text
 
 
 def sha256(path: Path) -> str:
