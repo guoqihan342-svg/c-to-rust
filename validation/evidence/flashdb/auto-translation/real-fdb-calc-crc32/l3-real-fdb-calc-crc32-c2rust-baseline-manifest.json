@@ -19,7 +19,7 @@
   "compile": {
     "artifact": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib",
-      "sha256": "5372772ac9517c61d5bdca342aff8d9e9ed317d88131603732eef527acbc8fde",
+      "sha256": "9c31a2b135e546da2e94c7de437415b67bd2ac17fbf0777262fbfeb71c33af00",
       "status": "compiled"
     },
     "attempted": true,
@@ -157,7 +157,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-01T22:12:10Z"
+    "probed_at": "2026-07-01T22:43:54Z"
   },
   "toolchain_repair": null,
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"

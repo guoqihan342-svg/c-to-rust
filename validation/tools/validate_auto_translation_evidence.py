@@ -27,6 +27,15 @@ L4_REFUSED_FORBIDDEN_ARTIFACT_STATUSES = {
     "candidate_generated",
     "draft_generated",
 }
+ALLOWED_UNSAFE_SEMANTIC_CLAIM_SOURCES = {
+    "accepted_evidence_binding",
+    "verified_unsafe_baseline_gates",
+}
+FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES = {
+    "c2rust_baseline",
+    "c2rust_compile_only",
+    "rustc_compile_only",
+}
 
 
 def main() -> int:
@@ -351,6 +360,28 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
     require_ref(final.get("c2rust_baseline"), baseline_path, "final_verification.c2rust_baseline")
     require_ref(final.get("route_decision"), route_path, "final_verification.route_decision")
     require_ref(final.get("validation_profile"), profile_path, "final_verification.validation_profile")
+    verified_baseline_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+    if (
+        verified_baseline_path.exists()
+        or auto_manifest.get("verified_unsafe_baseline") is not None
+        or evidence.get("verified_unsafe_baseline") is not None
+        or final.get("verified_unsafe_baseline") is not None
+    ):
+        require_ref(
+            auto_manifest.get("verified_unsafe_baseline"),
+            verified_baseline_path,
+            "auto_manifest.verified_unsafe_baseline",
+        )
+        require_ref(
+            evidence.get("verified_unsafe_baseline"),
+            verified_baseline_path,
+            "l3_manifest.evidence.verified_unsafe_baseline",
+        )
+        require_ref(
+            final.get("verified_unsafe_baseline"),
+            verified_baseline_path,
+            "final_verification.verified_unsafe_baseline",
+        )
     if "skipped_gates" not in final:
         raise SystemExit(f"validation profile skipped gates missing from {final_path}")
 
@@ -2488,6 +2519,8 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
     validate_passed_negative_diff_report(reports["negative_diff"], schema_compared_fields)
     require_status(reports["unsafe_scan"], "unsafe_scan", {"passed"})
     require_status(reports["unsafe_ledger"], "unsafe_ledger", {"passed"})
+    validate_verified_unsafe_baseline_source(reports["unsafe_scan"], "unsafe_scan", "accepted_unsafe_scan")
+    validate_verified_unsafe_baseline_source(reports["unsafe_ledger"], "unsafe_ledger", "accepted_unsafe_ledger")
     require_status(reports["final_verification"], "final_verification", {"passed"})
     if not reports["final_verification"].get("semantic_pass"):
         raise SystemExit("semantic pass requires final_verification.semantic_pass=true")
@@ -2525,6 +2558,25 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "fixture_sha256": fixture.get("sha256"),
         "checked": sorted(reports),
     }
+
+
+def validate_verified_unsafe_baseline_source(report: dict[str, Any], label: str, accepted_ref_key: str) -> None:
+    source = report.get("semantic_claim_source")
+    if source is None:
+        if isinstance(report.get(accepted_ref_key), dict):
+            return
+        if isinstance(report.get("verified_unsafe_baseline"), dict):
+            return
+        return
+    if source in FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES:
+        raise SystemExit(f"semantic pass rejects {label}.semantic_claim_source={source}")
+    if source not in ALLOWED_UNSAFE_SEMANTIC_CLAIM_SOURCES:
+        allowed = sorted(ALLOWED_UNSAFE_SEMANTIC_CLAIM_SOURCES)
+        raise SystemExit(f"semantic pass requires {label}.semantic_claim_source in {allowed}, got {source!r}")
+    if source == "accepted_evidence_binding" and not isinstance(report.get(accepted_ref_key), dict):
+        raise SystemExit(f"semantic pass requires {label}.{accepted_ref_key} for accepted_evidence_binding")
+    if source == "verified_unsafe_baseline_gates" and not isinstance(report.get("verified_unsafe_baseline"), dict):
+        raise SystemExit(f"semantic pass requires {label}.verified_unsafe_baseline for verified_unsafe_baseline_gates")
 
 
 def validate_semantic_oracle_boundary_contract(

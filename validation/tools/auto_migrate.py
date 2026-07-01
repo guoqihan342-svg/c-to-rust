@@ -5550,6 +5550,24 @@ def c2rust_baseline_output_ref(baseline: dict[str, Any], status: str) -> dict[st
     }
 
 
+def c2rust_baseline_compile_artifact_ref(baseline: dict[str, Any]) -> dict[str, Any] | None:
+    compile_status = baseline.get("compile")
+    if not isinstance(compile_status, dict):
+        return None
+    artifact = compile_status.get("artifact")
+    if not isinstance(artifact, dict):
+        return None
+    path = artifact.get("path")
+    artifact_sha = artifact.get("sha256")
+    if not path or not artifact_sha:
+        return None
+    return {
+        "path": str(path),
+        "status": str(artifact.get("status") or compile_status.get("status") or "unknown"),
+        "sha256": str(artifact_sha),
+    }
+
+
 def translation_source_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
     source = plan.get("translation_source")
     if not isinstance(source, dict):
@@ -5932,6 +5950,96 @@ def validation_profile_ref(
     return ref
 
 
+def verified_unsafe_baseline_ref(spec: dict[str, Any], evidence_dir: Path) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-c2rust-verified-unsafe-baseline.json"
+    status = "missing"
+    if path.exists():
+        status = str(read_json(path).get("status", "missing"))
+    return evidence_ref(path, status)
+
+
+def emit_c2rust_verified_unsafe_baseline(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+    accepted: dict[str, Any] | None,
+    semantic_pass: bool,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    baseline_status = str(c2rust_baseline.get("status", "missing"))
+    output_ref = c2rust_baseline_output_ref(c2rust_baseline, baseline_status)
+    compile_artifact_ref = c2rust_baseline_compile_artifact_ref(c2rust_baseline)
+    blocked_reasons: list[str] = []
+    if baseline_status != "generated":
+        blocked_reasons.append("c2rust_baseline_not_generated")
+    if output_ref is None:
+        blocked_reasons.append("c2rust_output_missing")
+    compile_status = c2rust_baseline.get("compile", {})
+    if not isinstance(compile_status, dict) or compile_status.get("status") != "passed":
+        blocked_reasons.append("c2rust_compile_not_passed")
+    if compile_artifact_ref is None:
+        blocked_reasons.append("c2rust_compile_artifact_missing")
+    blocked_reasons.append("direct_c2rust_replay_not_implemented")
+    status = "blocked" if blocked_reasons else "passed"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": status,
+        "semantic_pass": status == "passed",
+        "semantic_claim_source": "verified_unsafe_baseline_gates"
+        if status == "passed"
+        else "blocked_missing_direct_c2rust_replay",
+        "generated_draft_semantic_pass": False,
+        "source_commit": source_commit(spec),
+        "entry_function": spec.get("function_name"),
+        "fixture": {"path": fixture_path(spec), "hash": fixture_hash(spec)},
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_artifact_ref,
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+        "gate_refs": {
+            "c_oracle": evidence_ref(evidence_dir / f"{prefix}-c-oracle-status.json", "C_ORACLE_GENERATED" if semantic_pass else "draft"),
+            "rust_replay": evidence_ref(evidence_dir / f"{prefix}-rust-report.json", "passed" if semantic_pass else "incomplete"),
+            "schema_diff": evidence_ref(evidence_dir / f"{prefix}-diff.json", "passed" if semantic_pass else "incomplete"),
+            "negative_diff": evidence_ref(evidence_dir / f"{prefix}-negative-diff.json", "passed" if semantic_pass else "incomplete"),
+            "unsafe_scan": evidence_ref(evidence_dir / f"{prefix}-unsafe-scan.json", "passed" if semantic_pass else "incomplete"),
+            "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "passed" if semantic_pass else "incomplete"),
+            "final_verification": {"path": rel(evidence_dir / f"{prefix}-final-verification.json"), "status": "passed" if semantic_pass else "incomplete"},
+        },
+        "blocked_reasons": blocked_reasons,
+        "direct_c2rust_replay": {
+            "status": "blocked" if "direct_c2rust_replay_not_implemented" in blocked_reasons else "passed",
+            "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+        },
+        "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
+        "claim_boundary": {
+            "semantic_pass": status == "passed",
+            "generated_draft_semantic_pass": False,
+            "compile_only_is_semantic_pass": False,
+            "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+        },
+    }
+    write_json(evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json", payload)
+    return payload
+
+
+def bind_verified_unsafe_baseline_to_final_verification(spec: dict[str, Any], evidence_dir: Path) -> None:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    if not final_path.exists():
+        return
+    final = read_json(final_path)
+    final["verified_unsafe_baseline"] = verified_unsafe_baseline_ref(spec, evidence_dir)
+    write_json(final_path, final)
+
+
 def semantic_pass_for_run(
     accepted: dict[str, Any] | None,
     rust_check: dict[str, Any],
@@ -6004,6 +6112,7 @@ def emit_manifest(
         "patch": patch,
         "cache": cache,
         "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "verified_unsafe_baseline": verified_unsafe_baseline_ref(spec, evidence_dir),
         "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
         "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
         "l3_evidence_manifest": {
@@ -6144,6 +6253,16 @@ def emit_l3_evidence_manifest(
         accepted,
     )
     bind_route_decision_to_generated_artifacts(spec, evidence_dir, c2rust_baseline, route_decision, validation_profile)
+    emit_c2rust_verified_unsafe_baseline(
+        spec,
+        evidence_dir,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+        semantic_pass,
+    )
+    bind_verified_unsafe_baseline_to_final_verification(spec, evidence_dir)
     alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
     external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
     pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
@@ -6168,6 +6287,7 @@ def emit_l3_evidence_manifest(
             "slice_contract": evidence_ref(evidence_dir / f"{prefix}-slice-contract.json", "recorded"),
             "context_pack": evidence_ref(evidence_dir / f"{prefix}-context-pack.json", "recorded"),
             "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+            "verified_unsafe_baseline": verified_unsafe_baseline_ref(spec, evidence_dir),
             "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
             "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
             "cache_metadata": evidence_ref(evidence_dir / f"{prefix}-auto-cache-metadata.json", "recorded"),

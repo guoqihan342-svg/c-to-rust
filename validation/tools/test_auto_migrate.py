@@ -5262,9 +5262,34 @@ class AutoMigrateTests(unittest.TestCase):
                 (evidence_dir / "l3-unbounded-authoritative-final-verification.json").read_text(encoding="utf-8")
             )
             final_path = evidence_dir / "l3-unbounded-authoritative-final-verification.json"
+            verified_baseline_path = evidence_dir / "l3-unbounded-authoritative-c2rust-verified-unsafe-baseline.json"
+            auto_manifest = json.loads(
+                (evidence_dir / "l3-unbounded-authoritative-auto-translation-manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            evidence_manifest = json.loads(
+                (evidence_dir / "l3-unbounded-authoritative-evidence-manifest.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(manifest["status"], "accepted_evidence_bound")
             self.assertTrue(manifest["semantic_pass"])
+            self.assertTrue(verified_baseline_path.exists())
+            verified_baseline = json.loads(verified_baseline_path.read_text(encoding="utf-8"))
+            self.assertEqual(verified_baseline["status"], "blocked")
+            self.assertFalse(verified_baseline["semantic_pass"])
+            self.assertEqual(verified_baseline["semantic_claim_source"], "blocked_missing_direct_c2rust_replay")
+            self.assertTrue(
+                auto_manifest["verified_unsafe_baseline"]["path"].endswith(
+                    "l3-unbounded-authoritative-c2rust-verified-unsafe-baseline.json"
+                )
+            )
+            self.assertEqual(
+                auto_manifest["verified_unsafe_baseline"]["sha256"],
+                hashlib.sha256(verified_baseline_path.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(auto_manifest["verified_unsafe_baseline"], evidence_manifest["evidence"]["verified_unsafe_baseline"])
+            self.assertEqual(final["verified_unsafe_baseline"], auto_manifest["verified_unsafe_baseline"])
             self.assertEqual(route["status"], "refused")
             self.assertEqual(route["level"], "L4")
             self.assertTrue(route["policy"]["accepted_evidence_authoritative"])

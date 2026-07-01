@@ -3259,6 +3259,112 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertEqual(payload["semantic"]["semantic_claim_source"], "accepted_evidence_binding")
             self.assertIs(payload["semantic"]["generated_draft_semantic_pass"], False)
 
+    def test_semantic_pass_rejects_verified_unsafe_baseline_with_c2rust_compile_only_source(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+            spec_path = tmp_path / "demo-call-expression-authoritative.json"
+            self._write_json(spec_path, spec)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+            self._add_call_expression_oracle_boundary_contract(evidence_dir)
+
+            prefix = "l3-call-expression"
+            unsafe_scan_path = evidence_dir / f"{prefix}-unsafe-scan.json"
+            unsafe_scan = json.loads(unsafe_scan_path.read_text(encoding="utf-8"))
+            unsafe_scan["semantic_claim_source"] = "c2rust_compile_only"
+            self._write_json(unsafe_scan_path, unsafe_scan)
+            self._bind_manifest_ref(evidence_dir, prefix, "unsafe_scan", unsafe_scan_path, "passed")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("unsafe_scan.semantic_claim_source", result.stderr + result.stdout)
+
+    def test_semantic_pass_rejects_verified_unsafe_baseline_ref_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+            spec_path = tmp_path / "demo-call-expression-authoritative.json"
+            self._write_json(spec_path, spec)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+            self._add_call_expression_oracle_boundary_contract(evidence_dir)
+
+            prefix = "l3-call-expression"
+            verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+            self._write_json(
+                verified_path,
+                {
+                    "schema_version": 1,
+                    "target_id": "demo",
+                    "slice_id": "call-expression",
+                    "status": "blocked",
+                    "semantic_pass": False,
+                    "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+                    "generated_draft_semantic_pass": False,
+                },
+            )
+            verified_ref = self._ref(verified_path, "blocked")
+
+            auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+            auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+            auto_manifest["verified_unsafe_baseline"] = verified_ref
+            self._write_json(auto_manifest_path, auto_manifest)
+
+            manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["evidence"]["verified_unsafe_baseline"] = verified_ref
+
+            final_path = evidence_dir / f"{prefix}-final-verification.json"
+            final = json.loads(final_path.read_text(encoding="utf-8"))
+            final["verified_unsafe_baseline"] = dict(verified_ref)
+            final["verified_unsafe_baseline"]["sha256"] = "stale-verified-baseline-sha"
+            self._write_json(final_path, final)
+            manifest["evidence"]["final_verification"] = self._ref(final_path, "passed")
+            self._write_json(manifest_path, manifest)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("final_verification.verified_unsafe_baseline sha256 mismatch", result.stderr + result.stdout)
+
     def test_semantic_pass_rejects_missing_oracle_boundary_contract(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             tmp_path = Path(tmp)
