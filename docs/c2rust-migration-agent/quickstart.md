@@ -83,13 +83,13 @@ $env:CLANG_PATH = "C:/Program Files/LLVM/bin/clang.exe"
 
 ```bash
 # Linux/CI（不标 competition-exact）
-python validation/tools/run_competition_smoke.py --proof-class ci-approximation
+python validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
 
 # WSL/本机 Ubuntu
-python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation
+python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
 
 # 仅当在真实比赛机上运行时打开此选项
-python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact
+python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
 ```
 
 smoke 会执行：
@@ -99,7 +99,7 @@ smoke 会执行：
 - translator 覆盖矩阵检查；
 - 核心 validation 和 translator 单元测试；
 
-输出见 `target/competition-smoke/summary/competition-smoke-summary.json`。
+输出见 `target/competition-smoke/summary/competition-smoke-summary.json`。Python 入口默认每个子命令 600 秒 timeout；超时会写入 `timeout_policy` 并以 124 作为 final-gate failure。缺失 required C compiler（如 `gcc`/`g++`）会在 environment-check step 写入 `failure_class=required_c_compiler_missing`，并在所有 proof class 下 fail-closed。
 
 ## 5. 翻译第一个真实 C 切片
 
@@ -429,6 +429,7 @@ echo $CARGO_HOME  # 应输出 config/competition-env/cargo
 
 **解决**：
 - 确认 GCC 可用：`gcc --version`
+- 若环境 smoke 失败，检查 `competition-smoke-summary.json` 的 `steps[].failure_class` 是否为 `required_c_compiler_missing`
 - 确认 slice spec 中的 `include_paths` 和 `defines` 正确
 - 确认 `source_commit` 对应的源码版本正确
 
@@ -480,7 +481,7 @@ source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
 # 环境 smoke
-python validation/tools/run_competition_smoke.py --proof-class local-simulation
+python validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
 
 # 翻译单 slice
 python validation/tools/run_competition.py \

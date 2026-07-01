@@ -83,13 +83,13 @@ Run the minimal environment smoke to quickly verify the baseline is ready:
 
 ```bash
 # Linux/CI (do not label as competition-exact)
-python validation/tools/run_competition_smoke.py --proof-class ci-approximation
+python validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
 
 # WSL / local Ubuntu
-python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation
+python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
 
 # Only enable this on the actual competition host
-python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact
+python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
 ```
 
 The smoke executes:
@@ -99,7 +99,7 @@ The smoke executes:
 - Translator coverage matrix check;
 - Core validation and translator unit tests;
 
-Output goes to `target/competition-smoke/summary/competition-smoke-summary.json`.
+Output goes to `target/competition-smoke/summary/competition-smoke-summary.json`. The Python entrypoint defaults each child command to a 600-second timeout; timeouts are written to `timeout_policy` and fail the final gate with exit code 124. Missing required C compilers such as `gcc`/`g++` write `failure_class=required_c_compiler_missing` on the environment-check step and fail closed under every proof class.
 
 ## 5. Translate Your First Real C Slice
 
@@ -429,6 +429,7 @@ If the Huawei mirror is unreachable from your network in local development, skip
 
 **Resolution**:
 - Verify GCC is available: `gcc --version`
+- If environment smoke fails, check whether `competition-smoke-summary.json` records `steps[].failure_class=required_c_compiler_missing`
 - Verify `include_paths` and `defines` in the slice spec are correct
 - Verify the source code at `source_commit` matches
 
@@ -480,7 +481,7 @@ source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
 # Environment smoke
-python validation/tools/run_competition_smoke.py --proof-class local-simulation
+python validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
 
 # Translate a single slice
 python validation/tools/run_competition.py \

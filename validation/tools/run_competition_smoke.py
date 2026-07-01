@@ -33,6 +33,15 @@ DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fd
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 PROOF_CLASSES = ["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"]
 DEFAULT_STEP_TIMEOUT_SECONDS = 600
+REQUIRED_TOOL_MISSING_PATTERNS = (
+    "gcc is not installed",
+    "g++ is not installed",
+    "cc is not installed",
+    "c compiler is not installed",
+    "c compiler missing",
+    "required c compiler",
+    "no acceptable c compiler",
+)
 
 
 class CompetitionSmokeResult:
@@ -119,9 +128,22 @@ def run_competition_smoke(
             timeout_seconds=timeout_seconds,
         )
         timed_out = bool(getattr(result, "timed_out", False))
-        step_status_value = smoke_step_status(step, result.returncode, proof_class=proof_class, timed_out=timed_out)
+        failure_class = getattr(result, "failure_class", None)
+        step_status_value = smoke_step_status(
+            step,
+            result.returncode,
+            proof_class=proof_class,
+            timed_out=timed_out,
+            failure_class=failure_class,
+        )
         proof_class_effect = None
-        if step == "environment-check" and result.returncode != 0 and proof_class != "competition-exact" and not timed_out:
+        if (
+            step == "environment-check"
+            and result.returncode != 0
+            and proof_class != "competition-exact"
+            and not timed_out
+            and failure_class != "required_c_compiler_missing"
+        ):
             proof_class_effect = "exactness_blocker"
         steps.append(
             {
@@ -137,6 +159,7 @@ def run_competition_smoke(
                     if timed_out
                     else {}
                 ),
+                **({"failure_class": failure_class} if failure_class else {}),
                 **({"proof_class_effect": proof_class_effect} if proof_class_effect else {}),
             }
         )
@@ -336,11 +359,20 @@ def smoke_commands(
     ]
 
 
-def smoke_step_status(step: str, returncode: int, *, proof_class: str, timed_out: bool = False) -> str:
+def smoke_step_status(
+    step: str,
+    returncode: int,
+    *,
+    proof_class: str,
+    timed_out: bool = False,
+    failure_class: str | None = None,
+) -> str:
     if timed_out:
         return "failed"
     if returncode == 0:
         return "passed"
+    if failure_class == "required_c_compiler_missing":
+        return "failed"
     if step == "environment-check" and proof_class != "competition-exact":
         return "degraded"
     return "failed"
@@ -376,6 +408,9 @@ def run_logged_step(
             timeout_output_text(error.stderr) or f"timed out after {timeout_seconds} seconds",
         )
         setattr(result, "timed_out", True)
+    failure_class = smoke_step_failure_class(step, result)
+    if failure_class:
+        setattr(result, "failure_class", failure_class)
     entry = {
         "step": step,
         "command": command,
@@ -384,10 +419,20 @@ def run_logged_step(
         "stderr": result.stderr,
         "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
         **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
+        **({"failure_class": failure_class} if failure_class else {}),
     }
     with (logs_dir / "commands.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
     return result
+
+
+def smoke_step_failure_class(step: str, result: subprocess.CompletedProcess[str]) -> str | None:
+    if step != "environment-check" or result.returncode == 0:
+        return None
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    if any(pattern in output for pattern in REQUIRED_TOOL_MISSING_PATTERNS):
+        return "required_c_compiler_missing"
+    return None
 
 
 def timeout_output_text(value: str | bytes | None) -> str:
@@ -533,6 +578,11 @@ def final_gate_reasons_for(
     deviations: list[dict[str, Any]],
 ) -> list[str]:
     reasons = [f"step_failed:{step['step']}" for step in steps if step["status"] == "failed"]
+    reasons.extend(
+        f"{step['failure_class']}:{step['step']}"
+        for step in steps
+        if step.get("status") == "failed" and step.get("failure_class")
+    )
     if proof_class == "competition-exact" and any(
         item.get("severity") == "proof-class-limiting" for item in deviations
     ):

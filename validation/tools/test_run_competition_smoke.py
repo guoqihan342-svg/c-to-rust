@@ -27,11 +27,13 @@ class FakeCommandRunner:
         self,
         *,
         fail_commands_containing: set[str] | None = None,
+        fail_stderr_by_marker: dict[str, str] | None = None,
         timeout_commands_containing: set[str] | None = None,
     ) -> None:
         self.commands: list[list[str]] = []
         self.kwargs: list[dict[str, object]] = []
         self.fail_commands_containing = fail_commands_containing or set()
+        self.fail_stderr_by_marker = fail_stderr_by_marker or {}
         self.timeout_commands_containing = timeout_commands_containing or set()
 
     def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -43,7 +45,12 @@ class FakeCommandRunner:
                 raise subprocess.TimeoutExpired(command, kwargs.get("timeout"), output="partial", stderr="timed out")
         for marker in self.fail_commands_containing:
             if marker in command_text:
-                return subprocess.CompletedProcess(command, 1, "", f"failed {marker}")
+                return subprocess.CompletedProcess(
+                    command,
+                    1,
+                    "",
+                    self.fail_stderr_by_marker.get(marker, f"failed {marker}"),
+                )
         return subprocess.CompletedProcess(command, 0, "ok", "")
 
 
@@ -143,6 +150,31 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             environment_step = next(step for step in summary["steps"] if step["step"] == "environment-check")
             self.assertEqual(environment_step["status"], "degraded")
             self.assertEqual(environment_step["proof_class_effect"], "exactness_blocker")
+
+    def test_required_c_compiler_missing_fails_all_proof_classes(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(
+                    fail_commands_containing={"toolchain-check.sh"},
+                    fail_stderr_by_marker={"toolchain-check.sh": "FAIL: gcc is not installed\n"},
+                ),
+                repo_root=REPO_ROOT,
+                run_id="smoke-missing-compiler-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            environment_step = next(step for step in summary["steps"] if step["step"] == "environment-check")
+            self.assertEqual(environment_step["status"], "failed")
+            self.assertEqual(environment_step["failure_class"], "required_c_compiler_missing")
+            self.assertNotIn("proof_class_effect", environment_step)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertIn("step_failed:environment-check", summary["final_gate"]["reasons"])
+            self.assertIn("required_c_compiler_missing:environment-check", summary["final_gate"]["reasons"])
 
     def test_failed_vendored_clang_verification_keeps_clang_lane_unverified(self) -> None:
         module = load_smoke_module()
