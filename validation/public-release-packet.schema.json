@@ -16,6 +16,7 @@
     "competition_config_archive",
     "publication_manifest",
     "quantitative_evaluation",
+    "progress_delta_ledger",
     "known_gaps",
     "must_not_claim",
     "reproduction_commands"
@@ -27,7 +28,14 @@
     "summary": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["entrypoint_count", "publication_scope", "readiness", "proof_class_rollup", "workflow_metrics"],
+      "required": [
+        "entrypoint_count",
+        "publication_scope",
+        "readiness",
+        "proof_class_rollup",
+        "workflow_metrics",
+        "progress_delta_ledger"
+      ],
       "properties": {
         "entrypoint_count": {"type": "integer", "minimum": 0},
         "publication_scope": {"type": "string"},
@@ -43,6 +51,9 @@
             "translation_coverage_numerator": {"const": 0},
             "boundary": {"type": "string"}
           }
+        },
+        "progress_delta_ledger": {
+          "$ref": "#/$defs/progressDeltaLedger"
         }
       }
     },
@@ -80,6 +91,9 @@
         "translation_coverage_numerator": {"const": 0}
       }
     },
+    "progress_delta_ledger": {
+      "$ref": "#/$defs/progressDeltaLedger"
+    },
     "known_gaps": {"type": "array"},
     "must_not_claim": {"type": "array", "items": {"type": "string"}},
     "reproduction_commands": {"type": "object", "additionalProperties": true}
@@ -93,6 +107,30 @@
         "path": {"type": "string"},
         "status": {"const": "present"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "progressDeltaLedger": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "capability_delta",
+        "governance_delta",
+        "workflow_delta",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "progress-delta-ledger"},
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "capability_delta": {"type": "object", "additionalProperties": true},
+        "governance_delta": {"type": "object", "additionalProperties": true},
+        "workflow_delta": {"type": "object", "additionalProperties": true},
+        "boundary": {"type": "string"}
       }
     }
   }

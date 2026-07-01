@@ -86,6 +86,10 @@ English: `judge-milestone-bundle.json` now carries `harness_architecture_summary
 
 English: `public-release-packet.json` now requires `summary.workflow_metrics` and `quantitative_evaluation` to match the bound `judge-milestone-bundle.json`; these fields only copy repair activity and scorecard data for reviewer navigation, and must keep `semantic_gate=false` and `translation_coverage_numerator=0`. `validate_judge_entrypoints --require-local-artifacts` also checks non-null `context_pack.entrypoints` values as repo-relative POSIX paths and cross-checks worker identity across `resume_manifest.workers`, `context_pack.workers`, and the `agent-index` worker map.
 
+中文：`public-release-packet.json` 还要求顶层 `progress_delta_ledger` 和 `summary.progress_delta_ledger` 与被绑定的 `judge-milestone-bundle.json` 保持一致；该账本把 capability delta、governance/evidence delta 和 workflow delta 拆开给评委审阅，但固定 `semantic_gate=false`、`generated_draft_semantic_pass=false`、`translation_coverage_numerator=0`。
+
+English: `public-release-packet.json` also requires top-level `progress_delta_ledger` and `summary.progress_delta_ledger` to match the bound `judge-milestone-bundle.json`; the ledger separates capability delta, governance/evidence delta, and workflow delta for reviewer navigation while staying fixed at `semantic_gate=false`, `generated_draft_semantic_pass=false`, and `translation_coverage_numerator=0`.
+
 中文：route decision 只决定候选生成路径和上下文预算；validation profile 决定本次运行必须通过的 gates。任何 Agent、C2Rust、手写规则或 Rust 编译通过的输出，只有在 selected validation profile 通过且没有 skipped required gate 时，才可以被绑定为 semantic pass。
 
 English: the route decision controls candidate generation path and context budget only; the validation profile controls the required gates for the run. Output from an Agent, C2Rust, deterministic rules, or Rust compilation can be bound as a semantic pass only when the selected validation profile passes with no skipped required gate.

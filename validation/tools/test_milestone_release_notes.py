@@ -39,6 +39,10 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "| Judge milestone bundle | target/competition-out/summary/judge-milestone-bundle.json | self | self |",
             notes,
         )
+        self.assertIn("## Progress Delta Ledger", notes)
+        self.assertIn("| Capability delta count | 2 |", notes)
+        self.assertIn("| Governance delta count | 3 |", notes)
+        self.assertIn("| Workflow units converged | 4 / 5 |", notes)
         self.assertIn("| Auto-recovered units | 1 |", notes)
         self.assertIn("| raw C2Rust | not_verified_here | no | 0 |", notes)
         self.assertIn("python -B -m validation.tools.run_judge_entrypoints", notes)
@@ -288,6 +292,32 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "generated_draft_semantic_pass": False,
                     "translation_coverage_numerator": 0,
                 },
+            },
+            "progress_delta_ledger": {
+                "report_kind": "progress-delta-ledger",
+                "semantic_gate": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "capability_delta": {
+                    "ledger_count": 2,
+                    "delta_count": 2,
+                    "translator_generated_semantic_pass_count": 0,
+                    "accepted_evidence_semantic_pass_count": 2,
+                },
+                "governance_delta": {
+                    "delta_count": 3,
+                    "verification_command_count": 4,
+                    "route_decision_artifacts": 2,
+                    "slice_gate_contexts": 2,
+                },
+                "workflow_delta": {
+                    "workflow_units_total": 5,
+                    "workflow_units_converged": 4,
+                    "repair_history_unit_count": 1,
+                    "auto_recovered_unit_count": 1,
+                    "human_interventions": 0,
+                },
+                "boundary": "Progress deltas are review metrics only.",
             },
             "publication_manifest": {
                 "report_kind": "publication-manifest",

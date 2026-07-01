@@ -55,7 +55,20 @@ def route_metrics_payload(
             "tracked_capability_delta_count": 1,
             "tracked_route_decision_artifacts": tracked_route_decision_artifacts,
             "candidate_classification": {},
-            "capability_delta_ledger": {},
+            "capability_delta_ledger": {
+                "ledger_count": 1,
+                "delta_count": 1,
+                "governance_delta_count": 2,
+                "verification_command_count": 3,
+                "translator_generated_semantic_pass_count": 0,
+                "semantic_pass_count": accepted_evidence_semantic_pass_count,
+                "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
+                "generated_candidate_status": {"accepted_evidence_authoritative": accepted_evidence_semantic_pass_count},
+                "route_levels": {"L4": accepted_evidence_semantic_pass_count},
+                "route_statuses": {"accepted": accepted_evidence_semantic_pass_count},
+                "by_construct": {"function_call": 1},
+                "blocked_callee_count": blocked_repair_count,
+            },
             "s2_workflow_metrics": {
                 "run_count": s2_workflow_run_count,
                 "unsafe_reduction": {
@@ -701,6 +714,20 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(quantitative_evaluation["outcome_counts"]["translator_generated_semantic_pass_count"], 0)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["blocked_repair_count"], 0)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["human_interventions"], 0)
+        progress_delta = report["progress_delta_ledger"]
+        self.assertEqual(progress_delta["report_kind"], "progress-delta-ledger")
+        self.assertFalse(progress_delta["semantic_gate"])
+        self.assertFalse(progress_delta["generated_draft_semantic_pass"])
+        self.assertEqual(progress_delta["translation_coverage_numerator"], 0)
+        self.assertEqual(progress_delta["capability_delta"]["ledger_count"], 2)
+        self.assertEqual(progress_delta["capability_delta"]["delta_count"], 2)
+        self.assertEqual(progress_delta["capability_delta"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(progress_delta["capability_delta"]["accepted_evidence_semantic_pass_count"], 3)
+        self.assertEqual(progress_delta["governance_delta"]["delta_count"], 4)
+        self.assertEqual(progress_delta["governance_delta"]["verification_command_count"], 6)
+        self.assertEqual(progress_delta["governance_delta"]["route_decision_artifacts"], 4)
+        self.assertEqual(progress_delta["workflow_delta"]["workflow_units_converged"], 3)
+        self.assertEqual(progress_delta["workflow_delta"]["repair_history_unit_count"], 1)
         self.assertEqual(quantitative_evaluation["unsafe_reduction"]["status"], "measured")
         self.assertEqual(quantitative_evaluation["unsafe_reduction"]["baseline_total_unsafe"], 2)
         self.assertEqual(quantitative_evaluation["unsafe_reduction"]["current_total_unsafe"], 0)
@@ -898,6 +925,21 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         missing_quantitative_evaluation.pop("quantitative_evaluation")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_quantitative_evaluation, schema)
+
+        missing_progress_delta = json.loads(json.dumps(report))
+        missing_progress_delta.pop("progress_delta_ledger")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_progress_delta, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["progress_delta_ledger"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["progress_delta_ledger"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
 
         expanded = json.loads(json.dumps(report))
         expanded["quantitative_evaluation"]["claim_boundary"]["scorecard_is_semantic_gate"] = True

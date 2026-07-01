@@ -104,6 +104,10 @@ def build_judge_milestone_bundle(
     opencode_runtime = build_opencode_runtime_rollup(opencode_sources)
     opencode_policy = build_opencode_evidence_policy(opencode_sources)
     unsafe_scope = build_unsafe_reduction_scope(workflow_sources)
+    progress_delta_ledger = build_progress_delta_ledger(
+        route_governance_metrics=route_governance_metrics,
+        workflow_metrics=workflow_metrics,
+    )
     semantic_evidence = build_semantic_evidence_rollup(run_report)
     blockers = milestone_blockers(
         run_report,
@@ -164,6 +168,7 @@ def build_judge_milestone_bundle(
         "blocked_repairs_rollup": blocked_repairs_rollup,
         "harness_architecture_summary": harness_architecture_summary,
         "route_governance_metrics": route_governance_metrics,
+        "progress_delta_ledger": progress_delta_ledger,
         "evidence_cost_retention": evidence_cost_retention,
         "entrypoints": entrypoint_reports,
         "workflow_metrics": workflow_metrics,
@@ -1567,6 +1572,9 @@ def route_governance_metrics_source_from_artifact(
         ),
         "tracked_route_decision_artifacts": int_or_zero(metrics.get("tracked_route_decision_artifacts")),
         "tracked_slice_gate_contexts": int_or_zero(metrics.get("tracked_slice_gate_contexts")),
+        "tracked_capability_delta_ledgers": int_or_zero(metrics.get("tracked_capability_delta_ledgers")),
+        "tracked_capability_delta_count": int_or_zero(metrics.get("tracked_capability_delta_count")),
+        "capability_delta_ledger": capability_delta_ledger_source(metrics.get("capability_delta_ledger")),
         "evidence_root": evidence_governance.get("evidence_root")
         if isinstance(evidence_governance.get("evidence_root"), str)
         else None,
@@ -1935,6 +1943,13 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
             "tracked_slice_gate_contexts": sum(
                 int_or_zero(source.get("tracked_slice_gate_contexts")) for source in sources
             ),
+            "tracked_capability_delta_ledgers": sum(
+                int_or_zero(source.get("tracked_capability_delta_ledgers")) for source in sources
+            ),
+            "tracked_capability_delta_count": sum(
+                int_or_zero(source.get("tracked_capability_delta_count")) for source in sources
+            ),
+            "capability_vs_governance_delta": build_capability_vs_governance_delta(sources),
             "s2_workflow_run_count": sum(int_or_zero(source.get("s2_workflow_run_count")) for source in sources),
             "s2_unsafe_reduction": {
                 "status": "measured"
@@ -1950,6 +1965,118 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
         "boundary": (
             "Route governance metrics constrain public claims and artifact retention. They are not a semantic gate "
             "and do not increase translator-generated translation coverage."
+        ),
+    }
+
+
+def capability_delta_ledger_source(value: object) -> dict[str, Any]:
+    payload = value if isinstance(value, dict) else {}
+    return {
+        "ledger_count": int_or_zero(payload.get("ledger_count")),
+        "delta_count": int_or_zero(payload.get("delta_count")),
+        "governance_delta_count": int_or_zero(payload.get("governance_delta_count")),
+        "verification_command_count": int_or_zero(payload.get("verification_command_count")),
+        "translator_generated_semantic_pass_count": int_or_zero(
+            payload.get("translator_generated_semantic_pass_count")
+        ),
+        "semantic_pass_count": int_or_zero(payload.get("semantic_pass_count")),
+        "accepted_evidence_semantic_pass_count": int_or_zero(payload.get("accepted_evidence_semantic_pass_count")),
+        "generated_candidate_status": int_count_map(payload.get("generated_candidate_status")),
+        "route_levels": int_count_map(payload.get("route_levels")),
+        "route_statuses": int_count_map(payload.get("route_statuses")),
+        "by_construct": int_count_map(payload.get("by_construct")),
+        "blocked_callee_count": int_or_zero(payload.get("blocked_callee_count")),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+    }
+
+
+def build_capability_vs_governance_delta(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    ledgers = [
+        source.get("capability_delta_ledger")
+        for source in sources
+        if isinstance(source.get("capability_delta_ledger"), dict)
+    ]
+    return {
+        "capability_ledger_count": sum(int_or_zero(ledger.get("ledger_count")) for ledger in ledgers),
+        "capability_delta_count": sum(int_or_zero(ledger.get("delta_count")) for ledger in ledgers),
+        "governance_delta_count": sum(int_or_zero(ledger.get("governance_delta_count")) for ledger in ledgers),
+        "verification_command_count": sum(int_or_zero(ledger.get("verification_command_count")) for ledger in ledgers),
+        "translator_generated_semantic_pass_count": sum(
+            int_or_zero(ledger.get("translator_generated_semantic_pass_count")) for ledger in ledgers
+        ),
+        "accepted_evidence_semantic_pass_count": sum(
+            int_or_zero(ledger.get("accepted_evidence_semantic_pass_count")) for ledger in ledgers
+        ),
+        "route_decision_artifacts": sum(int_or_zero(source.get("tracked_route_decision_artifacts")) for source in sources),
+        "slice_gate_contexts": sum(int_or_zero(source.get("tracked_slice_gate_contexts")) for source in sources),
+        "blocked_callee_count": sum(int_or_zero(ledger.get("blocked_callee_count")) for ledger in ledgers),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Capability and governance deltas are review metrics only. They separate translator capability changes "
+            "from evidence, route, and reproduction governance work, and do not create semantic acceptance."
+        ),
+    }
+
+
+def build_progress_delta_ledger(
+    *,
+    route_governance_metrics: dict[str, Any],
+    workflow_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    route_rollup = (
+        route_governance_metrics.get("rollup", {})
+        if isinstance(route_governance_metrics.get("rollup"), dict)
+        else {}
+    )
+    delta = (
+        route_rollup.get("capability_vs_governance_delta", {})
+        if isinstance(route_rollup.get("capability_vs_governance_delta"), dict)
+        else {}
+    )
+    workflow_rollup = (
+        workflow_metrics.get("rollup", {}) if isinstance(workflow_metrics.get("rollup"), dict) else {}
+    )
+    repair_activity = (
+        workflow_rollup.get("repair_activity", {}) if isinstance(workflow_rollup.get("repair_activity"), dict) else {}
+    )
+    return {
+        "report_kind": "progress-delta-ledger",
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "capability_delta": {
+            "ledger_count": int_or_zero(delta.get("capability_ledger_count")),
+            "delta_count": int_or_zero(delta.get("capability_delta_count")),
+            "translator_generated_semantic_pass_count": int_or_zero(
+                delta.get("translator_generated_semantic_pass_count")
+            ),
+            "accepted_evidence_semantic_pass_count": int_or_zero(
+                delta.get("accepted_evidence_semantic_pass_count")
+            ),
+        },
+        "governance_delta": {
+            "delta_count": int_or_zero(delta.get("governance_delta_count")),
+            "verification_command_count": int_or_zero(delta.get("verification_command_count")),
+            "route_decision_artifacts": int_or_zero(delta.get("route_decision_artifacts")),
+            "slice_gate_contexts": int_or_zero(delta.get("slice_gate_contexts")),
+            "blocked_callee_count": int_or_zero(delta.get("blocked_callee_count")),
+        },
+        "workflow_delta": {
+            "workflow_source_count": int_or_zero(workflow_rollup.get("source_count")),
+            "workflow_units_total": int_or_zero(workflow_rollup.get("units_total")),
+            "workflow_units_converged": int_or_zero(workflow_rollup.get("units_converged")),
+            "repair_history_unit_count": int_or_zero(repair_activity.get("repair_history_unit_count")),
+            "auto_recovered_unit_count": int_or_zero(repair_activity.get("auto_recovered_unit_count")),
+            "human_interventions": int_or_zero(workflow_rollup.get("human_interventions")),
+            "llm_calls": int_or_zero(workflow_rollup.get("llm_calls")),
+        },
+        "boundary": (
+            "Progress deltas distinguish translator capability movement from governance and workflow evidence. "
+            "They are reviewer navigation metrics only, not semantic gates or translation coverage numerator."
         ),
     }
 

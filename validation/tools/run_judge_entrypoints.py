@@ -283,6 +283,7 @@ def write_public_release_packet(
             "readiness": summary.get("readiness", {}),
             "proof_class_rollup": bundle.get("proof_class_rollup", bundle.get("proof_classes", {})),
             "workflow_metrics": public_packet_workflow_metrics_summary(bundle),
+            "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
         },
         "claim_boundary": {
             "semantic_gate": False,
@@ -301,6 +302,7 @@ def write_public_release_packet(
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
         "quantitative_evaluation": bundle.get("quantitative_evaluation", {}),
+        "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
         "known_gaps": bundle.get("known_gaps", []),
         "must_not_claim": public_packet_must_not_claim(bundle.get("must_not_claim", [])),
         "reproduction_commands": bundle.get("reproduction_commands", {}),

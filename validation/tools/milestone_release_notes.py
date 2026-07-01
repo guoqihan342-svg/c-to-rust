@@ -43,6 +43,7 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
     architecture = object_or_empty(bundle.get("harness_architecture_summary"))
     workflow = object_or_empty(bundle.get("workflow_metrics"))
     core_quality = object_or_empty(bundle.get("core_translation_quality"))
+    progress_delta = object_or_empty(bundle.get("progress_delta_ledger"))
 
     lines = [
         "# FlashDB Harness MVP Release Notes",
@@ -88,6 +89,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         f"| Auto-recovered units | {nested_int(scorecard, 'outcome_counts', 'auto_recovered_unit_count')} |",
         f"| Unsafe reduction | {unsafe_reduction_text(scorecard.get('unsafe_reduction'), core_quality.get('unsafe_reduction'))} |",
         "",
+        "## Progress Delta Ledger",
+        "",
+        *progress_delta_lines(progress_delta),
+        "",
         "## Baseline Comparison",
         "",
         "| Baseline | Status | Semantic acceptance claimed | Translation coverage numerator | Baseline manifest evidence |",
@@ -127,6 +132,9 @@ def require_bundle_contract(bundle: dict[str, Any]) -> None:
     require_false_field(bundle, "claim_boundary", "bundle_is_semantic_gate", optional=True)
     require_false_field(bundle, "core_translation_quality", "generated_draft_semantic_pass", optional=True)
     require_zero_field(bundle, "core_translation_quality", "translation_coverage_numerator", optional=True)
+    require_false_field(bundle, "progress_delta_ledger", "semantic_gate")
+    require_false_field(bundle, "progress_delta_ledger", "generated_draft_semantic_pass")
+    require_zero_field(bundle, "progress_delta_ledger", "translation_coverage_numerator")
 
     require_false_field(bundle, "quantitative_evaluation", "semantic_gate")
     require_false_field(bundle, "quantitative_evaluation", "generated_draft_semantic_pass")
@@ -259,6 +267,22 @@ def architecture_lines(architecture: dict[str, Any], workflow: dict[str, Any]) -
         f"- Repair round cap: `{int_text(rollup.get('repair_round_cap'))}`",
         f"- Roles: `{', '.join(string_list(rollup.get('roles'))) or 'unknown'}`",
         f"- Repair histories: `{int_text(repair.get('repair_history_unit_count'))}`; auto-recovered units: `{int_text(repair.get('auto_recovered_unit_count'))}`",
+    ]
+
+
+def progress_delta_lines(progress_delta: dict[str, Any]) -> list[str]:
+    capability = object_or_empty(progress_delta.get("capability_delta"))
+    governance = object_or_empty(progress_delta.get("governance_delta"))
+    workflow = object_or_empty(progress_delta.get("workflow_delta"))
+    return [
+        "| Metric | Value |",
+        "| --- | ---: |",
+        f"| Capability delta count | {int_text(capability.get('delta_count'))} |",
+        f"| Governance delta count | {int_text(governance.get('delta_count'))} |",
+        f"| Verification commands | {int_text(governance.get('verification_command_count'))} |",
+        f"| Route decision artifacts | {int_text(governance.get('route_decision_artifacts'))} |",
+        f"| Workflow units converged | {int_text(workflow.get('workflow_units_converged'))} / {int_text(workflow.get('workflow_units_total'))} |",
+        f"| Repair-history units | {int_text(workflow.get('repair_history_unit_count'))} |",
     ]
 
 

@@ -95,6 +95,32 @@ def valid_packet(root: Path) -> dict:
                 }
             }
         },
+        "progress_delta_ledger": {
+            "report_kind": "progress-delta-ledger",
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "capability_delta": {
+                "ledger_count": 1,
+                "delta_count": 1,
+                "translator_generated_semantic_pass_count": 0,
+                "accepted_evidence_semantic_pass_count": 1,
+            },
+            "governance_delta": {
+                "delta_count": 2,
+                "verification_command_count": 3,
+                "route_decision_artifacts": 1,
+                "slice_gate_contexts": 1,
+            },
+            "workflow_delta": {
+                "workflow_units_total": 1,
+                "workflow_units_converged": 1,
+                "repair_history_unit_count": 1,
+                "auto_recovered_unit_count": 1,
+                "human_interventions": 0,
+            },
+            "boundary": "Progress deltas are copied from the bound bundle for review only.",
+        },
         "quantitative_evaluation": {
             "semantic_gate": False,
             "generated_draft_semantic_pass": False,
@@ -184,6 +210,7 @@ def valid_packet(root: Path) -> dict:
                     "They are not a semantic gate and do not increase translation coverage."
                 ),
             },
+            "progress_delta_ledger": bundle_payload["progress_delta_ledger"],
         },
         "claim_boundary": {
             "semantic_gate": False,
@@ -205,6 +232,7 @@ def valid_packet(root: Path) -> dict:
         },
         "publication_manifest": publication_manifest,
         "quantitative_evaluation": bundle_payload["quantitative_evaluation"],
+        "progress_delta_ledger": bundle_payload["progress_delta_ledger"],
         "known_gaps": known_gaps,
         "must_not_claim": packet_must_not_claim,
         "reproduction_commands": reproduction_commands,
@@ -291,6 +319,27 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("workflow_metrics" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_progress_delta_drift_from_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-progress-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["summary"]["progress_delta_ledger"] = {
+            **packet["summary"]["progress_delta_ledger"],
+            "capability_delta": {
+                **packet["summary"]["progress_delta_ledger"]["capability_delta"],
+                "delta_count": 999,
+            },
+        }
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger" in error for error in result["errors"]),
             result["errors"],
         )
 

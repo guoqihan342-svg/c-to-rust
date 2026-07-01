@@ -154,7 +154,13 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         if field in publication and publication.get(field) != packet.get(field):
             raise ValueError(f"publication_manifest.{field} must match public_release_packet.{field}")
 
-    for field in ("publication_manifest", "known_gaps", "reproduction_commands", "quantitative_evaluation"):
+    for field in (
+        "publication_manifest",
+        "known_gaps",
+        "reproduction_commands",
+        "quantitative_evaluation",
+        "progress_delta_ledger",
+    ):
         if packet.get(field) != bundle.get(field):
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
 
@@ -163,6 +169,8 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         raise ValueError(
             "summary.workflow_metrics must match judge_milestone_bundle.workflow_metrics.rollup.repair_activity"
         )
+    if summary.get("progress_delta_ledger") != bundle.get("progress_delta_ledger"):
+        raise ValueError("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger")
 
     require_release_notes_match_bundle(packet, bundle, repo_root=repo_root)
 

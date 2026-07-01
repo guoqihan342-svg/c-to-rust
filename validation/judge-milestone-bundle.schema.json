@@ -21,6 +21,7 @@
     "blocked_repairs_rollup",
     "harness_architecture_summary",
     "route_governance_metrics",
+    "progress_delta_ledger",
     "evidence_cost_retention",
     "entrypoints",
     "workflow_metrics",
@@ -538,6 +539,82 @@
         "all_sources_measured": {"type": "boolean"},
         "measured_units": {"type": "integer", "minimum": 0},
         "total_units": {"type": "integer", "minimum": 0}
+      }
+    },
+    "progress_delta_ledger": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "capability_delta",
+        "governance_delta",
+        "workflow_delta",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "progress-delta-ledger"},
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "capability_delta": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "ledger_count",
+            "delta_count",
+            "translator_generated_semantic_pass_count",
+            "accepted_evidence_semantic_pass_count"
+          ],
+          "properties": {
+            "ledger_count": {"type": "integer", "minimum": 0},
+            "delta_count": {"type": "integer", "minimum": 0},
+            "translator_generated_semantic_pass_count": {"const": 0},
+            "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0}
+          }
+        },
+        "governance_delta": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "delta_count",
+            "verification_command_count",
+            "route_decision_artifacts",
+            "slice_gate_contexts",
+            "blocked_callee_count"
+          ],
+          "properties": {
+            "delta_count": {"type": "integer", "minimum": 0},
+            "verification_command_count": {"type": "integer", "minimum": 0},
+            "route_decision_artifacts": {"type": "integer", "minimum": 0},
+            "slice_gate_contexts": {"type": "integer", "minimum": 0},
+            "blocked_callee_count": {"type": "integer", "minimum": 0}
+          }
+        },
+        "workflow_delta": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "workflow_source_count",
+            "workflow_units_total",
+            "workflow_units_converged",
+            "repair_history_unit_count",
+            "auto_recovered_unit_count",
+            "human_interventions"
+          ],
+          "properties": {
+            "workflow_source_count": {"type": "integer", "minimum": 0},
+            "workflow_units_total": {"type": "integer", "minimum": 0},
+            "workflow_units_converged": {"type": "integer", "minimum": 0},
+            "repair_history_unit_count": {"type": "integer", "minimum": 0},
+            "auto_recovered_unit_count": {"type": "integer", "minimum": 0},
+            "human_interventions": {"type": "integer", "minimum": 0},
+            "llm_calls": {"type": "integer", "minimum": 0}
+          }
+        },
+        "boundary": {"type": "string", "minLength": 1}
       }
     },
     "opencode_runtime": {
