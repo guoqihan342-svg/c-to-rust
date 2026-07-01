@@ -2095,6 +2095,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         out_root = bind_entrypoint_to_out_root(config, temp_config, entry_index=0, out_root=temp_dir / "out")
         context_pack = out_root / "harness" / "context-pack.json"
         agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
         competition_summary = out_root / "summary" / "competition-run-summary.json"
         workflow_metrics = out_root / "summary" / "workflow-metrics.json"
         ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
@@ -2118,6 +2119,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             "workflow_metrics": repo_relative(workflow_metrics),
             "context_pack": repo_relative(context_pack),
             "agent_index": repo_relative(agent_index),
+            "resume_manifest": repo_relative(resume_manifest),
         }
         config["test_contract"]["required_expected_artifacts"] = [
             "competition_summary",
@@ -2162,6 +2164,9 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     },
                     "schema_version": 1,
                     "semantic_gate": False,
+                },
+                "entrypoints": {
+                    "resume_manifest": repo_relative(resume_manifest),
                 },
                 "workers": [
                     {
@@ -2247,6 +2252,58 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "worker_id": "worker-001",
                     }
                 },
+                "reports": {
+                    "resume_manifest": {
+                        "path": repo_relative(resume_manifest),
+                        "report_kind": "resume-manifest",
+                        "status": "passed",
+                    },
+                },
+            },
+        )
+        write_json(
+            resume_manifest,
+            {
+                "schema_version": 1,
+                "report_kind": "resume-manifest",
+                "run_id": "competition-flashdb-before-after-exhibit",
+                "status": "passed",
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "chat_output_is_evidence": False,
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "ledger": {
+                    "path": repo_relative(ledger),
+                    "checkpoint_backend": "sqlite",
+                },
+                "context_pack": {
+                    "path": repo_relative(context_pack),
+                    "sha256": validator.sha256_file(context_pack),
+                },
+                "agent_index": {
+                    "path": repo_relative(agent_index),
+                    "sha256": validator.sha256_file(agent_index),
+                },
+                "resume_entrypoints": [
+                    "evaluate --profile",
+                    "run-plan --plan",
+                    "run-worker --assignment",
+                ],
+                "workers": [
+                    {
+                        "worker_id": "worker-001",
+                        "assignment_path": repo_relative(assignment),
+                        "request_path": repo_relative(request),
+                        "summary_path": repo_relative(summary),
+                        "report_path": repo_relative(report),
+                    }
+                ],
+                "worker_count": 1,
+                "boundary": "Resume manifest is an index only and not a semantic acceptance gate.",
             },
         )
         write_minimal_context_ledger(
@@ -2283,9 +2340,96 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         contracts = result["entrypoints"][0]["harness_contracts"]
         self.assertEqual(contracts["context_pack"]["repair_round_cap"], 5)
         self.assertEqual(contracts["agent_index"]["worker_count"], 1)
+        self.assertEqual(contracts["resume_manifest"]["status"], "passed")
+        self.assertEqual(contracts["resume_manifest"]["worker_count"], 1)
         self.assertEqual(contracts["context_agent_consistency"]["worker_count"], 1)
         self.assertEqual(contracts["ledger_context_index"]["status"], "passed")
         self.assertEqual(contracts["repair_self_heal"]["checked_workers"], 1)
+
+    def test_resume_manifest_claim_boundary_fails_closed(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-boundary-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        write_json(context_pack, {"entrypoints": {"resume_manifest": repo_relative(resume_manifest)}})
+        write_json(agent_index, {"reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}}})
+
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-boundary",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {
+                "path": repo_relative(context_pack),
+                "sha256": validator.sha256_file(context_pack),
+            },
+            "agent_index": {
+                "path": repo_relative(agent_index),
+                "sha256": validator.sha256_file(agent_index),
+            },
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": repo_relative(assignment),
+                    "request_path": repo_relative(request),
+                    "summary_path": repo_relative(summary),
+                    "report_path": repo_relative(report),
+                    "isolated_out_root": repo_relative(worker_root),
+                }
+            ],
+            "worker_count": 1,
+        }
+        expected_artifacts = {
+            "context_pack": repo_relative(context_pack),
+            "agent_index": repo_relative(agent_index),
+            "resume_manifest": repo_relative(resume_manifest),
+        }
+        cases = [
+            ("resume_manifest.semantic_gate", lambda draft: draft.__setitem__("semantic_gate", True)),
+            (
+                "resume_manifest.claim_boundary.translation_coverage_numerator",
+                lambda draft: draft["claim_boundary"].__setitem__("translation_coverage_numerator", 1),
+            ),
+            (
+                "resume_manifest.claim_boundary.chat_output_is_evidence",
+                lambda draft: draft["claim_boundary"].__setitem__("chat_output_is_evidence", True),
+            ),
+        ]
+        for expected_error, mutate in cases:
+            with self.subTest(expected_error=expected_error):
+                draft = json.loads(json.dumps(payload))
+                mutate(draft)
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_resume_manifest_contract(
+                        draft,
+                        path_text=repo_relative(resume_manifest),
+                        expected_artifacts=expected_artifacts,
+                        context_payload=json.loads(context_pack.read_text(encoding="utf-8")),
+                        agent_payload=json.loads(agent_index.read_text(encoding="utf-8")),
+                        repo_root=REPO_ROOT,
+                    )
 
     def test_worker_plan_units_must_match_context_and_agent_index_workers(self) -> None:
         target_dir = REPO_ROOT / "target"

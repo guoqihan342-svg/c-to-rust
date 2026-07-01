@@ -50,7 +50,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evaluate --target-id flashdb --source-repo-root <repo-relative-source-root> --source-file <source.c> --source-commit <commit> --out-root target/competition-out-evaluate --proof-class local-simulation --max-workers 4
 ```
 
-该入口会产出 `harness/evaluate-report.json`、`harness/context-pack.json`、`harness/agent-index.json` 和 SQLite `context_packs` 索引，用于评委审计和下一轮 OpenCode 多 agent 续跑；其中 `context_management_contract` / `agent_coordination_contract` 会把 plan -> worker fan-out -> verify/merge -> repair loop -> report 的角色边界、resume protocol 和 `chat_output_is_evidence=false` 明确落成机器可读字段。
+该入口会产出 `harness/evaluate-report.json`、`harness/context-pack.json`、`harness/agent-index.json`、`harness/resume-manifest.json` 和 SQLite `context_packs` 索引，用于评委审计和下一轮 OpenCode 多 agent 续跑；其中 `context_management_contract` / `agent_coordination_contract` 会把 plan -> worker fan-out -> verify/merge -> repair loop -> report 的角色边界、resume protocol 和 `chat_output_is_evidence=false` 明确落成机器可读字段。`resume-manifest.json` 是 current-state 续跑索引，绑定 context/agent sha、SQLite ledger、worker summaries 和 repair hints，但不是 semantic gate，也不增加 `translation_coverage_numerator`。
 
 Profile 形式的一键入口：
 

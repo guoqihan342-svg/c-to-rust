@@ -512,6 +512,10 @@ python -B -m validation.tools.milestone_release_notes \
   --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
 
+# evaluate profile 续跑索引由入口自动生成并由 validator 深校验
+# target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
+# target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
+
 # 检查 unsafe
 python validation/tools/unsafe_budget.py --max-ratio 0.10
 

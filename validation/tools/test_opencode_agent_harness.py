@@ -2821,6 +2821,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             report_path = out_root / "harness" / "evaluate-report.json"
             index_path = out_root / "harness" / "judge-evidence-index.json"
+            resume_manifest_path = out_root / "harness" / "resume-manifest.json"
             self.assertTrue(report_path.exists())
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(result["report_path"], repo_rel(report_path))
@@ -2844,19 +2845,44 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(headline["agent_index"], report["agent_index"])
             self.assertEqual(report["sidecar_reports"]["judge_evidence_index"]["path"], repo_rel(index_path))
             self.assertNotIn("sha256", report["sidecar_reports"]["judge_evidence_index"])
+            self.assertEqual(report["resume_manifest"]["path"], repo_rel(resume_manifest_path))
+            self.assertEqual(report["resume_manifest"]["report_kind"], "resume-manifest")
+            self.assertEqual(report["resume_manifest"]["status"], "completed")
+            self.assertRegex(report["resume_manifest"]["sha256"], r"^[0-9a-f]{64}$")
 
             context_pack = json.loads(context_pack_path.read_text(encoding="utf-8"))
             self.assertEqual(context_pack["entrypoints"]["primary_report"], repo_rel(report_path))
             self.assertEqual(context_pack["entrypoints"]["evaluate_report"], repo_rel(report_path))
             self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], repo_rel(batch_report_path))
             self.assertEqual(context_pack["entrypoints"]["judge_evidence_index"], repo_rel(index_path))
+            self.assertEqual(context_pack["entrypoints"]["resume_manifest"], repo_rel(resume_manifest_path))
             self.assert_context_management_contract(context_pack["context_management_contract"])
             agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
             self.assertEqual(agent_index["reports"]["evaluate_report"]["path"], repo_rel(report_path))
             self.assertEqual(agent_index["reports"]["batch_profile_report"]["path"], repo_rel(batch_report_path))
             self.assertEqual(agent_index["reports"]["judge_evidence_index"]["path"], repo_rel(index_path))
             self.assertNotIn("sha256", agent_index["reports"]["judge_evidence_index"])
+            self.assertEqual(agent_index["reports"]["resume_manifest"]["path"], repo_rel(resume_manifest_path))
+            self.assertNotIn("sha256", agent_index["reports"]["resume_manifest"])
             self.assert_agent_coordination_contract(agent_index["agent_coordination_contract"], expected_worker_count=0)
+            resume_manifest = json.loads(resume_manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(resume_manifest["report_kind"], "resume-manifest")
+            self.assertEqual(resume_manifest["run_id"], "run-evaluate-profile")
+            self.assertFalse(resume_manifest["claim_boundary"]["semantic_gate"])
+            self.assertFalse(resume_manifest["claim_boundary"]["chat_output_is_evidence"])
+            self.assertFalse(resume_manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertEqual(resume_manifest["claim_boundary"]["translation_coverage_numerator"], 0)
+            self.assertEqual(resume_manifest["ledger"]["path"], repo_rel(db_path))
+            self.assertEqual(resume_manifest["ledger"]["checkpoint_backend"], "sqlite")
+            self.assertEqual(resume_manifest["context_pack"]["path"], repo_rel(context_pack_path))
+            self.assertEqual(resume_manifest["context_pack"]["sha256"], harness.sha256_file(context_pack_path))
+            self.assertEqual(resume_manifest["agent_index"]["path"], repo_rel(agent_index_path))
+            self.assertEqual(resume_manifest["agent_index"]["sha256"], harness.sha256_file(agent_index_path))
+            self.assertEqual(resume_manifest["expected_judge_evidence_index"], repo_rel(index_path))
+            self.assertIn("evaluate --profile", resume_manifest["resume_entrypoints"])
+            self.assertIn("run-plan --plan", resume_manifest["resume_entrypoints"])
+            self.assertIn("run-worker --assignment", resume_manifest["resume_entrypoints"])
+            self.assertEqual(resume_manifest["worker_count"], 0)
             batch_report = json.loads(batch_report_path.read_text(encoding="utf-8"))
             self.assertEqual(batch_report["context_pack"], report["context_pack"])
             self.assertEqual(batch_report["agent_index"], report["agent_index"])
@@ -2888,6 +2914,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(artifact_refs["context_pack"]["sha256"], harness.sha256_file(context_pack_path))
             self.assertEqual(artifact_refs["agent_index"]["path"], report["agent_index"]["path"])
             self.assertEqual(artifact_refs["agent_index"]["sha256"], harness.sha256_file(agent_index_path))
+            self.assertEqual(artifact_refs["resume_manifest"]["path"], report["resume_manifest"]["path"])
+            self.assertEqual(artifact_refs["resume_manifest"]["sha256"], harness.sha256_file(resume_manifest_path))
             self.assertEqual(artifact_refs["competition_run_summary"]["path"], repo_rel(summary_path))
             self.assertEqual(artifact_refs["workflow_metrics"]["path"], repo_rel(workflow_metrics_path))
             self.assertEqual(
@@ -2901,7 +2929,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             artifact_rows = fetch_rows(
                 db_path,
-                "select kind, repo_rel_path, semantic_role from artifacts where kind in ('evaluate-report', 'context-pack', 'agent-index', 'judge-evidence-index') order by kind",
+                "select kind, repo_rel_path, semantic_role from artifacts where kind in ('evaluate-report', 'context-pack', 'agent-index', 'judge-evidence-index', 'resume-manifest') order by kind",
             )
             self.assertEqual(
                 artifact_rows,
@@ -2910,11 +2938,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     ("context-pack", repo_rel(context_pack_path), "agent-context-pack"),
                     ("evaluate-report", repo_rel(report_path), "evaluate-report"),
                     ("judge-evidence-index", repo_rel(index_path), "judge-evidence-index"),
+                    ("resume-manifest", repo_rel(resume_manifest_path), "resume-manifest"),
                 ],
             )
             event_rows = fetch_rows(
                 db_path,
-                "select event_type from events where event_type in ('evaluate_profile_context_refs_updated', 'evaluate_profile_executed', 'judge_evidence_index_written') order by event_type",
+                "select event_type from events where event_type in ('evaluate_profile_context_refs_updated', 'evaluate_profile_executed', 'judge_evidence_index_written', 'resume_manifest_written') order by event_type",
             )
             self.assertEqual(
                 event_rows,
@@ -2922,6 +2951,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     ("evaluate_profile_context_refs_updated",),
                     ("evaluate_profile_executed",),
                     ("judge_evidence_index_written",),
+                    ("resume_manifest_written",),
                 ],
             )
 

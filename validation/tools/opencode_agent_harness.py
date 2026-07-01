@@ -1522,6 +1522,9 @@ def write_evaluate_profile_report(
         profile_path=profile_path,
         run_id=run_id,
         out_root=out_root,
+        extra_artifact_refs={"resume_manifest": payload["resume_manifest"]}
+        if isinstance(payload.get("resume_manifest"), dict)
+        else None,
         repo_root=repo_root,
     )
     if db_path is not None:
@@ -1847,8 +1850,10 @@ def update_evaluate_profile_context_refs(
 ) -> dict[str, dict[str, str]]:
     context_pack_path = out_root / "harness" / "context-pack.json"
     agent_index_path = out_root / "harness" / "agent-index.json"
+    resume_manifest_path = out_root / "harness" / "resume-manifest.json"
     evaluate_report_rel = repo_relative(evaluate_report_path, repo_root=repo_root)
     judge_index_rel = repo_relative(judge_evidence_index_path, repo_root=repo_root)
+    resume_manifest_rel = repo_relative(resume_manifest_path, repo_root=repo_root)
     context_graph: dict[str, Any] = {}
 
     if context_pack_path.exists():
@@ -1859,6 +1864,7 @@ def update_evaluate_profile_context_refs(
             entrypoints["primary_report"] = evaluate_report_rel
             entrypoints["evaluate_report"] = evaluate_report_rel
             entrypoints["judge_evidence_index"] = judge_index_rel
+            entrypoints["resume_manifest"] = resume_manifest_rel
             if batch_profile_report_path:
                 entrypoints["batch_profile_report"] = batch_profile_report_path
         context_pack["context_management_contract"] = build_context_management_contract(
@@ -1886,6 +1892,11 @@ def update_evaluate_profile_context_refs(
                 "report_kind": "judge-evidence-index",
                 "status": status,
             }
+            reports["resume_manifest"] = {
+                "path": resume_manifest_rel,
+                "report_kind": "resume-manifest",
+                "status": status,
+            }
             if batch_profile_report_path:
                 reports["batch_profile_report"] = {
                     "path": batch_profile_report_path,
@@ -1906,8 +1917,31 @@ def update_evaluate_profile_context_refs(
     agent_index_ref = artifact_ref(agent_index_path, repo_root=repo_root)
     context_pack = load_json(context_pack_path)
     agent_index = load_json(agent_index_path)
+    resume_manifest_ref: dict[str, str] | None = None
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
+        resume_manifest_payload = build_resume_manifest(
+            db_path=db_path,
+            run_id=run_id,
+            out_root=out_root,
+            status=status,
+            context_pack=context_pack,
+            context_pack_ref=context_pack_ref,
+            agent_index=agent_index,
+            agent_index_ref=agent_index_ref,
+            evaluate_report_path=evaluate_report_path,
+            batch_profile_report_path=batch_profile_report_path,
+            judge_evidence_index_path=judge_evidence_index_path,
+            resume_manifest_path=resume_manifest_path,
+            repair_hints=repair_hint_resume_summary(connection, run_id=run_id),
+            repo_root=repo_root,
+        )
+        resume_manifest_path.write_text(
+            json.dumps(resume_manifest_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        resume_manifest_ref = artifact_ref(resume_manifest_path, repo_root=repo_root)
+        resume_manifest_ref.update({"status": status, "report_kind": "resume-manifest"})
         connection.execute(
             """
             insert into context_packs(
@@ -1954,14 +1988,175 @@ def update_evaluate_profile_context_refs(
             payload=agent_index,
             repo_root=repo_root,
         )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="resume-manifest",
+            path=resume_manifest_path,
+            status=status,
+            semantic_role="resume-manifest",
+            payload=resume_manifest_payload,
+            repo_root=repo_root,
+        )
         record_event(
             connection,
             run_id=run_id,
             event_type="evaluate_profile_context_refs_updated",
-            payload={"context_pack": context_pack_ref, "agent_index": agent_index_ref},
+            payload={
+                "context_pack": context_pack_ref,
+                "agent_index": agent_index_ref,
+                "resume_manifest": resume_manifest_ref,
+            },
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="resume_manifest_written",
+            payload=resume_manifest_ref,
         )
         connection.commit()
-    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref}
+    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref, "resume_manifest": resume_manifest_ref}
+
+
+def repair_hint_resume_summary(connection: sqlite3.Connection, *, run_id: str) -> dict[str, Any]:
+    rows = connection.execute(
+        """
+        select hint_id, slice_id, root_cause_key, status
+        from repair_hints
+        where run_id=?
+        order by created_at, hint_id
+        """,
+        (run_id,),
+    ).fetchall()
+    hints = [
+        {
+            "hint_id": str(row[0]),
+            "slice_id": row[1],
+            "root_cause_key": str(row[2]),
+            "status": str(row[3]),
+        }
+        for row in rows
+    ]
+    return {
+        "source": "sqlite repair_hints",
+        "total_count": len(hints),
+        "open_count": sum(1 for hint in hints if hint["status"] == "open"),
+        "hints": hints,
+    }
+
+
+def build_resume_manifest(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    status: str,
+    context_pack: dict[str, Any],
+    context_pack_ref: dict[str, str],
+    agent_index: dict[str, Any],
+    agent_index_ref: dict[str, str],
+    evaluate_report_path: Path,
+    batch_profile_report_path: str,
+    judge_evidence_index_path: Path,
+    resume_manifest_path: Path,
+    repair_hints: dict[str, Any],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    context_entrypoints = (
+        json.loads(json.dumps(context_pack.get("entrypoints")))
+        if isinstance(context_pack.get("entrypoints"), dict)
+        else {}
+    )
+    context_entrypoints["resume_manifest"] = repo_relative(resume_manifest_path, repo_root=repo_root)
+    workers = resume_manifest_workers(context_pack, agent_index)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "resume-manifest",
+        "run_id": run_id,
+        "status": status,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "This manifest is a current-state resume map over on-disk harness artifacts. "
+                "It is not a semantic gate and does not treat OpenCode chat output as evidence."
+            ),
+        },
+        "ledger": {
+            "path": repo_relative(db_path, repo_root=repo_root),
+            "checkpoint_backend": "sqlite",
+            "state_role": "checkpoint-index-only",
+        },
+        "context_pack": context_pack_ref,
+        "agent_index": agent_index_ref,
+        "entrypoints": context_entrypoints,
+        "evaluate_report": {
+            "path": repo_relative(evaluate_report_path, repo_root=repo_root),
+            "status": status,
+        },
+        "batch_profile_report": {
+            "path": batch_profile_report_path,
+            "status": status,
+        }
+        if batch_profile_report_path
+        else None,
+        "expected_judge_evidence_index": repo_relative(judge_evidence_index_path, repo_root=repo_root),
+        "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+        "repair_hints": repair_hints,
+        "worker_count": len(workers),
+        "workers": workers,
+    }
+
+
+def resume_manifest_workers(context_pack: dict[str, Any], agent_index: dict[str, Any]) -> list[dict[str, Any]]:
+    agents_by_worker_id = (
+        agent_index.get("agents_by_worker_id")
+        if isinstance(agent_index.get("agents_by_worker_id"), dict)
+        else {}
+    )
+    workers = context_pack.get("workers") if isinstance(context_pack.get("workers"), list) else []
+    entries: list[dict[str, Any]] = []
+    copied_fields = [
+        "worker_id",
+        "slice_id",
+        "function",
+        "assignment_path",
+        "request_path",
+        "summary_path",
+        "report_path",
+        "out_root",
+        "source_commit",
+        "source_sha256",
+        "summary_status",
+        "recorded",
+        "exit_code",
+        "handoff_contract",
+        "opencode_session_evidence",
+        "opencode_preflight_report",
+    ]
+    for worker in workers:
+        if not isinstance(worker, dict) or not worker.get("worker_id"):
+            continue
+        worker_id = str(worker["worker_id"])
+        agent = agents_by_worker_id.get(worker_id)
+        entry = {
+            field: worker.get(field)
+            for field in copied_fields
+            if field in worker and worker.get(field) is not None
+        }
+        entry["worker_id"] = worker_id
+        if isinstance(agent, dict):
+            entry["agent_status"] = agent.get("status")
+            if "isolated_out_root" not in entry and agent.get("isolated_out_root") is not None:
+                entry["isolated_out_root"] = agent.get("isolated_out_root")
+        entries.append(entry)
+    return entries
 
 
 def update_batch_profile_report_context_refs(

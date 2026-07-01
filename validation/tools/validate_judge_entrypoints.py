@@ -2125,6 +2125,97 @@ def validate_context_agent_index_consistency(
     return {"status": "passed", "worker_count": len(context_worker_ids)}
 
 
+def validate_resume_manifest_contract(
+    payload: dict[str, Any],
+    *,
+    path_text: str,
+    expected_artifacts: dict[str, Any],
+    context_payload: dict[str, Any] | None,
+    agent_payload: dict[str, Any] | None,
+    repo_root: Path,
+) -> dict[str, Any]:
+    if payload.get("report_kind") != "resume-manifest":
+        raise ValueError(f"resume_manifest report_kind must be resume-manifest: {path_text}")
+    if payload.get("schema_version") != 1:
+        raise ValueError("resume_manifest.schema_version must be 1")
+    if payload.get("semantic_gate") is not False:
+        raise ValueError("resume_manifest.semantic_gate must be false")
+    if payload.get("chat_output_is_evidence") is not False:
+        raise ValueError("resume_manifest.chat_output_is_evidence must be false")
+    boundary = require_object(payload.get("claim_boundary"), "resume_manifest.claim_boundary")
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError("resume_manifest.claim_boundary.semantic_gate must be false")
+    if boundary.get("chat_output_is_evidence") is not False:
+        raise ValueError("resume_manifest.claim_boundary.chat_output_is_evidence must be false")
+    if boundary.get("generated_draft_semantic_pass") is not False:
+        raise ValueError("resume_manifest.claim_boundary.generated_draft_semantic_pass must be false")
+    if boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError("resume_manifest.claim_boundary.translation_coverage_numerator must be 0")
+
+    ledger = require_object(payload.get("ledger"), "resume_manifest.ledger")
+    if ledger.get("checkpoint_backend") != "sqlite":
+        raise ValueError("resume_manifest.ledger.checkpoint_backend must be sqlite")
+    ledger_path = require_string(ledger.get("path"), "resume_manifest.ledger.path")
+    assert_repo_relative_posix(ledger_path)
+    if not repo_path(ledger_path, repo_root=repo_root).is_file():
+        raise ValueError("resume_manifest.ledger.path must exist")
+
+    context_binding = validate_artifact_binding_shape(
+        payload.get("context_pack"),
+        "resume_manifest.context_pack",
+        repo_root=repo_root,
+    )
+    agent_binding = validate_artifact_binding_shape(
+        payload.get("agent_index"),
+        "resume_manifest.agent_index",
+        repo_root=repo_root,
+    )
+    expected_context = expected_artifacts.get("context_pack")
+    expected_agent = expected_artifacts.get("agent_index")
+    if isinstance(expected_context, str) and context_binding["path"] != expected_context:
+        raise ValueError("resume_manifest.context_pack.path must match expected_artifacts.context_pack")
+    if isinstance(expected_agent, str) and agent_binding["path"] != expected_agent:
+        raise ValueError("resume_manifest.agent_index.path must match expected_artifacts.agent_index")
+
+    if context_payload is not None:
+        entrypoints = require_object(context_payload.get("entrypoints"), "context_pack.entrypoints")
+        if entrypoints.get("resume_manifest") != path_text:
+            raise ValueError("context_pack.entrypoints.resume_manifest must match expected_artifacts.resume_manifest")
+    if agent_payload is not None:
+        reports = require_object(agent_payload.get("reports"), "agent_index.reports")
+        resume_report = require_object(reports.get("resume_manifest"), "agent_index.reports.resume_manifest")
+        if resume_report.get("path") != path_text:
+            raise ValueError("agent_index.reports.resume_manifest.path must match expected_artifacts.resume_manifest")
+
+    entrypoints = payload.get("resume_entrypoints")
+    if not isinstance(entrypoints, list):
+        raise ValueError("resume_manifest.resume_entrypoints must be a list")
+    for required in ("evaluate --profile", "run-plan --plan", "run-worker --assignment"):
+        if required not in entrypoints:
+            raise ValueError(f"resume_manifest.resume_entrypoints missing {required}")
+
+    workers = payload.get("workers")
+    if not isinstance(workers, list):
+        raise ValueError("resume_manifest.workers must be a list")
+    if payload.get("worker_count") != len(workers):
+        raise ValueError("resume_manifest.worker_count must match workers length")
+    for index, worker in enumerate(workers):
+        worker_payload = require_object(worker, f"resume_manifest.workers[{index}]")
+        require_string(worker_payload.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
+        for field in ("assignment_path", "request_path", "summary_path", "report_path", "isolated_out_root"):
+            value = worker_payload.get(field)
+            if isinstance(value, str):
+                assert_repo_relative_posix(value)
+    local_path_scan = validate_local_absolute_path_policy(payload, label=f"resume_manifest {path_text}")
+    return {
+        "path": path_text,
+        "status": "passed",
+        "checkpoint_backend": "sqlite",
+        "worker_count": len(workers),
+        "local_absolute_path_scan": local_path_scan,
+    }
+
+
 def validate_worker_plan_contract(
     worker_plan_payload: dict[str, Any],
     context_payload: dict[str, Any],
@@ -2483,6 +2574,16 @@ def validate_harness_artifact_contracts(
             agent_payload,
             context_path_text=str(artifacts["context_pack"]),
             agent_path_text=str(artifacts["agent_index"]),
+            repo_root=repo_root,
+        )
+    if "resume_manifest" in artifacts:
+        resume_manifest_path = repo_path(str(artifacts["resume_manifest"]), repo_root=repo_root)
+        result["resume_manifest"] = validate_resume_manifest_contract(
+            load_json(resume_manifest_path),
+            path_text=str(artifacts["resume_manifest"]),
+            expected_artifacts=artifacts,
+            context_payload=context_payload,
+            agent_payload=agent_payload,
             repo_root=repo_root,
         )
     if context_payload is not None:
