@@ -20,6 +20,14 @@ The Chinese source currently contains these major headings:
 The current public before/after demo entrypoint is `../judge-demo.md`.
 The machine-readable judge entrypoint directory is `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`; it binds the competition environment smoke, FlashDB before/after demo, deterministic explicit multi-worker evaluate profile, OpenCode explicit multi-worker evaluate profile, expected artifacts including `worker_plan`, tracked manifests, and claim boundaries in one place.
 
+Full judge public packet entrypoint:
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+```
+
+After success, the command writes `judge-milestone-bundle.json` and `milestone-release-notes.md` in the same summary directory. The first file is the machine-readable external review index, and the second is human-readable release notes rendered from that bundle; neither artifact is a semantic gate or increases `translation_coverage_numerator`.
+
 Primary real FlashDB run:
 
 ```bash

@@ -503,6 +503,15 @@ python validation/tools/validate_auto_translation_evidence.py \
   --evidence-root target/competition-out/evidence \
   --require-semantic-pass
 
+# Judge one-click entrypoints and public Markdown packet
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+python -B -m validation.tools.milestone_release_notes \
+  --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
+
 # Check unsafe
 python validation/tools/unsafe_budget.py --max-ratio 0.10
 

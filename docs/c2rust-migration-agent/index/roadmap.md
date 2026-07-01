@@ -12,6 +12,14 @@
 当前公开 before/after 入口是 `../judge-demo.md`。
 机器可读的评委入口目录是 `../../../config/competition-env/judge-entrypoints/flashdb-harness.json`，其中集中绑定 competition environment smoke、FlashDB before/after demo、普通显式多 worker evaluate profile、OpenCode 显式多 worker evaluate profile、预期 artifacts（含 `worker_plan`）、tracked manifests 和 claim boundary。
 
+全量评委 public packet 入口：
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+```
+
+该命令成功后会在同目录生成 `judge-milestone-bundle.json` 和 `milestone-release-notes.md`。前者是机器可读外部评估索引，后者是从 bundle 渲染的人类可读 release notes；二者都不是 semantic gate，也不增加 `translation_coverage_numerator`。
+
 首选真实 FlashDB 运行路径：
 
 ```bash

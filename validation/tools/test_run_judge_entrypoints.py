@@ -102,10 +102,20 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["milestone_bundle"]["status"], "present")
         self.assertNotIn("sha256", report["milestone_bundle"])
         self.assertEqual(report["milestone_bundle"]["hash_boundary"], "bundle_hashes_this_run_report")
+        self.assertEqual(
+            report["milestone_release_notes"]["path"],
+            repo_relative(out_path.parent / "milestone-release-notes.md"),
+        )
+        self.assertEqual(report["milestone_release_notes"]["status"], "derived_after_bundle")
+        self.assertNotIn("sha256", report["milestone_release_notes"])
+        self.assertEqual(report["milestone_release_notes"]["hash_boundary"], "release_notes_hashes_the_bundle")
         milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
         self.assertEqual(milestone_bundle["status"], "blocked")
         self.assertIn("not_all_entrypoints_executed", milestone_bundle["blockers"])
         self.assertEqual(milestone_bundle["judge_entrypoints_run_report"]["sha256"], runner.validator.sha256_file(out_path))
+        release_notes = (out_path.parent / "milestone-release-notes.md").read_text(encoding="utf-8")
+        self.assertIn("# FlashDB Harness MVP Release Notes", release_notes)
+        self.assertIn("Translation coverage numerator: `0`", release_notes)
         stdout_log = out_path.parent / "logs" / "before_after_judge_demo.stdout.log"
         stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
         self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["path"], repo_relative(stdout_log))
@@ -179,11 +189,21 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         )
         self.assertEqual(report["milestone_bundle"]["status"], "present")
         self.assertEqual(report["milestone_bundle"]["hash_boundary"], "bundle_hashes_this_run_report")
+        self.assertEqual(
+            report["milestone_release_notes"]["path"],
+            repo_relative(out_path.parent / "milestone-release-notes.md"),
+        )
+        self.assertEqual(report["milestone_release_notes"]["status"], "derived_after_bundle")
+        self.assertNotIn("sha256", report["milestone_release_notes"])
+        self.assertEqual(report["milestone_release_notes"]["hash_boundary"], "release_notes_hashes_the_bundle")
         milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
         self.assertEqual(milestone_bundle["status"], "passed")
         self.assertTrue(milestone_bundle["summary"]["external_milestone_claim_ready"])
         self.assertFalse(milestone_bundle["claim_boundary"]["semantic_gate"])
         self.assertEqual(milestone_bundle["judge_entrypoints_run_report"]["sha256"], runner.validator.sha256_file(out_path))
+        release_notes = (out_path.parent / "milestone-release-notes.md").read_text(encoding="utf-8")
+        self.assertIn("# FlashDB Harness MVP Release Notes", release_notes)
+        self.assertIn("Semantic gate: `false`", release_notes)
         self.assertEqual(summary["readiness"]["executed_count"], 2)
         self.assertEqual(summary["readiness"]["configured_count"], 2)
         self.assertEqual(summary["readiness"]["validation_status"], "passed")
@@ -192,6 +212,66 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(summary["entrypoints"][1]["key_artifacts"], {"judge_evidence_index": "target/out/index.json"})
         persisted = json.loads(out_path.read_text(encoding="utf-8"))
         self.assertEqual(persisted["milestone_bundle"], report["milestone_bundle"])
+        self.assertEqual(persisted["milestone_release_notes"], report["milestone_release_notes"])
+
+    def test_release_notes_failure_does_not_mark_notes_present(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-notes-fail-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "competition_environment_smoke",
+                            "command": "python -B validation/tools/run_competition_smoke.py",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        def fake_write_readiness(result: dict, path: Path, *, repo_root: Path) -> dict:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-readiness",
+                "status": result["status"],
+            }
+            path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            return payload
+
+        with patch.object(runner.validator, "validate_config", side_effect=[{"status": "passed"}, {"status": "passed"}]):
+            with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
+                with patch.object(
+                    runner.milestone_release_notes,
+                    "build_release_notes",
+                    side_effect=SystemExit("release note boundary failed"),
+                ):
+                    with self.assertRaises(SystemExit):
+                        runner.run_judge_entrypoints(
+                            config_path=config_path,
+                            entrypoint_ids=[],
+                            out_path=out_path,
+                            command_runner=fake_runner,
+                            repo_root=REPO_ROOT,
+                        )
+
+        persisted = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertEqual(persisted["milestone_release_notes"]["status"], "derived_after_bundle")
+        self.assertNotEqual(persisted["milestone_release_notes"]["status"], "present")
+        self.assertNotIn("sha256", persisted["milestone_release_notes"])
+        self.assertEqual(persisted["milestone_release_notes"]["hash_boundary"], "release_notes_hashes_the_bundle")
+        self.assertTrue((out_path.parent / "judge-milestone-bundle.json").is_file())
+        self.assertFalse((out_path.parent / "milestone-release-notes.md").exists())
 
     def test_dry_run_plans_without_executing_or_validating(self) -> None:
         from validation.tools import run_judge_entrypoints as runner

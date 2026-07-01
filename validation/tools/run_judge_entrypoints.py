@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from validation.tools import validate_judge_entrypoints as validator
 from validation.tools import judge_milestone_bundle
+from validation.tools import milestone_release_notes
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -220,17 +221,24 @@ def write_run_report(
 
 def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root: Path) -> None:
     bundle_path = out_path.parent / "judge-milestone-bundle.json"
+    release_notes_path = out_path.parent / "milestone-release-notes.md"
     report["milestone_bundle"] = {
         "path": validator.repo_relative(bundle_path, repo_root),
         "status": "present",
         "hash_boundary": "bundle_hashes_this_run_report",
     }
+    report["milestone_release_notes"] = {
+        "path": validator.repo_relative(release_notes_path, repo_root),
+        "status": "derived_after_bundle",
+        "hash_boundary": "release_notes_hashes_the_bundle",
+    }
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    judge_milestone_bundle.build_judge_milestone_bundle(
+    bundle = judge_milestone_bundle.build_judge_milestone_bundle(
         run_report_path=out_path,
         out_path=bundle_path,
         repo_root=repo_root,
     )
+    release_notes_path.write_text(milestone_release_notes.build_release_notes(bundle), encoding="utf-8")
 
 
 def select_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> list[dict[str, Any]]:

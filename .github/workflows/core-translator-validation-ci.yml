@@ -86,6 +86,7 @@ jobs:
           python -m unittest validation.tools.test_evidence_governance
           python -m unittest validation.tools.test_translator_coverage_matrix
           python -m unittest validation.tools.test_milestone_release_report
+          python -m unittest validation.tools.test_milestone_release_notes
           python -m unittest validation.tools.test_route_governance_metrics_report
           python -m unittest validation.tools.test_judge_demo_entrypoint
           python -m unittest validation.tools.test_validate_judge_entrypoints
