@@ -222,14 +222,104 @@ def valid_competition_run_summary_payload(
 ) -> dict:
     return {
         "schema_version": 1,
-        "report_kind": "competition-run-summary",
         "run_id": run_id,
         "proof_class": proof_class,
         "profile_id": profile_id,
         "profile_sha256": profile_sha256,
-        "final_gate": {"status": "passed"},
-        "slices": {"attempted": 0, "failed": 0, "semantic_pass": 0},
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": 1,
+        "translator_version": "test-fixture",
+        "slices": {
+            "attempted": 1,
+            "typed_ir_generated": 1,
+            "compiled": 1,
+            "semantic_pass": 1,
+            "refused": 0,
+            "blocked": 0,
+            "failed": 0,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "artifact_roots": [
+            "target/competition-out/evidence",
+            "target/competition-out/summary",
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": "passed",
+            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+        },
     }
+
+
+def workflow_metrics_for_competition_summary(summary: dict) -> dict:
+    slices = summary["slices"]
+    return {
+        "schema_version": 1,
+        "run_id": summary["run_id"],
+        "proof_class": summary["proof_class"],
+        "units_total": slices["attempted"],
+        "units_converged": slices["semantic_pass"],
+        "units_baseline_only": max(0, int(slices["compiled"]) - int(slices["semantic_pass"])),
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": summary["unsafe_budget"]["total_first_party_non_test_unsafe"],
+            "reduced_by": None,
+            "ratio": summary["unsafe_budget"]["ratio"],
+        },
+        "translation_before_after": {
+            "status": "not_provided",
+            "unit_count": 0,
+            "measured_unsafe_unit_count": 0,
+            "accepted_patch_unit_count": 0,
+            "units": [],
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": False,
+        "always_equivalent": False,
+        "fail_closed_count": int(slices["refused"]) + int(slices["blocked"]),
+        "root_cause_counts": {},
+        "wall_clock_seconds": summary["elapsed_seconds"],
+        "llm_calls": 0,
+        "per_unit_statuses": [
+            {
+                "unit_id": "demo/unit-1",
+                "source": "slice-spec",
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            }
+        ],
+    }
+
+
+def write_competition_run_summary_with_workflow_metrics(summary_path: Path, summary: dict) -> Path:
+    metrics_path = summary_path.parent / "workflow-metrics.json"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(
+        json.dumps(workflow_metrics_for_competition_summary(summary), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    summary["workflow_metrics"] = {
+        "path": repo_relative(metrics_path),
+        "sha256": validator.sha256_file(metrics_path),
+    }
+    write_json(summary_path, summary)
+    return metrics_path
 
 
 def opencode_launch_policy() -> dict:
@@ -1726,7 +1816,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     run_id="competition-flashdb-before-after-exhibit",
                 )
                 payload.update(drift)
-                write_json(summary, payload)
+                write_competition_run_summary_with_workflow_metrics(summary, payload)
                 config["entrypoints"][0]["expected_artifacts"] = {
                     "competition_summary": repo_relative(summary),
                 }
@@ -1736,6 +1826,42 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
                 self.assertEqual(result["status"], "failed")
                 self.assertTrue(any(expected_error in error for error in result["errors"]), result["errors"])
+
+    def test_require_local_artifacts_deep_validates_competition_summary_workflow_metrics(self) -> None:
+        config = load_default_config()
+        config["entrypoints"] = [entrypoint_by_id(config, "before_after_judge_demo")]
+        config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
+        config["test_contract"]["required_expected_artifacts"] = ["competition_summary", "workflow_metrics"]
+        temp_config = write_temp_config(config)
+        out_root = bind_entrypoint_to_out_root(
+            config,
+            temp_config,
+            entry_index=0,
+            out_root=temp_config.parent / "out-deep-summary",
+        )
+        summary_path = out_root / "summary" / "competition-run-summary.json"
+        summary_payload = valid_competition_run_summary_payload(
+            run_id="competition-flashdb-before-after-exhibit",
+        )
+        metrics_path = write_competition_run_summary_with_workflow_metrics(summary_path, summary_payload)
+        metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+        metrics_payload["units_total"] = 2
+        write_json(metrics_path, metrics_payload)
+        summary_payload["workflow_metrics"]["sha256"] = validator.sha256_file(metrics_path)
+        write_json(summary_path, summary_payload)
+        config["entrypoints"][0]["expected_artifacts"] = {
+            "competition_summary": repo_relative(summary_path),
+            "workflow_metrics": repo_relative(metrics_path),
+        }
+        write_json(temp_config, config)
+
+        result = validator.validate_config(temp_config, require_local_artifacts=True, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("workflow metrics artifact units_total does not match competition summary" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_require_local_artifacts_validates_vendored_clang_missing_summary_contract(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
@@ -2106,11 +2232,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         report = worker_root / "harness" / "run-worker-report.json"
 
         competition_summary.parent.mkdir(parents=True, exist_ok=True)
-        write_json(
+        write_competition_run_summary_with_workflow_metrics(
             competition_summary,
             valid_competition_run_summary_payload(run_id="competition-flashdb-before-after-exhibit"),
         )
-        for artifact in [workflow_metrics, assignment, request, summary, report]:
+        for artifact in [assignment, request, summary, report]:
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text("{}\n", encoding="utf-8")
 

@@ -504,6 +504,7 @@ python validation/tools/validate_auto_translation_evidence.py \
   --require-semantic-pass
 
 # Judge one-click entrypoints and public packet artifacts
+# With local artifacts, this also deep-validates non-smoke competition summaries through validate_competition_run_summary.py.
 python -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json

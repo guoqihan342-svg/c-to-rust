@@ -504,6 +504,7 @@ python validation/tools/validate_auto_translation_evidence.py \
   --require-semantic-pass
 
 # 评委一键入口和公开 Markdown packet
+# 本地 artifacts 存在时，这条命令还会通过 validate_competition_run_summary.py 深校验非 smoke competition summary。
 python -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json

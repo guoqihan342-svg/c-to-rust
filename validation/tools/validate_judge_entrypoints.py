@@ -21,6 +21,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from validation.tools import validate_competition_run_summary
+
 from validation.tools import milestone_release_report
 
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
@@ -841,6 +843,7 @@ def validate_competition_summary_entrypoint_contract(
     payload: dict[str, Any],
     *,
     expected_artifacts: dict[str, Any],
+    summary_path: Path | None = None,
     environment_profile: dict[str, Any] | None = None,
     entrypoint_proof_class: str | None = None,
     entrypoint_run_id: str | None = None,
@@ -896,6 +899,16 @@ def validate_competition_summary_entrypoint_contract(
         if expected_workflow_path is not None and binding["path"] != expected_workflow_path:
             raise ValueError("competition_summary workflow_metrics.path must match expected_artifacts.workflow_metrics")
         result["workflow_metrics"] = binding
+
+    if summary_path is not None:
+        try:
+            deep_validation = validate_competition_run_summary.validate_summary(
+                summary_path,
+                repo_root=repo_root or REPO_ROOT,
+            )
+        except SystemExit as error:
+            raise ValueError(f"competition_summary deep validation failed: {error}") from error
+        result["deep_validation"] = deep_validation
 
     return result
 
@@ -2610,6 +2623,7 @@ def validate_harness_artifact_contracts(
         result["competition_summary"] = validate_competition_summary_entrypoint_contract(
             load_json(competition_summary_path),
             expected_artifacts=artifacts,
+            summary_path=competition_summary_path,
             environment_profile=environment_profile,
             entrypoint_proof_class=entrypoint_proof_class,
             entrypoint_run_id=entrypoint_run_id,
