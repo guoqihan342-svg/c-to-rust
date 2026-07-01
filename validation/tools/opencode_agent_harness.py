@@ -3361,6 +3361,11 @@ def run_plan(
     if mode == "opencode":
         opencode_preflight_binding = validate_opencode_preflight_report(
             opencode_preflight_report,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
             repo_root=repo_root,
         )
 
@@ -3593,6 +3598,8 @@ def build_run_plan_graph_contract(
             "sha256": opencode_preflight_report.get("sha256"),
             "status": opencode_preflight_report.get("status"),
             "contract_status": opencode_preflight_report.get("contract_status"),
+            "launch_policy": opencode_preflight_report.get("launch_policy"),
+            "launch_policy_sha256": opencode_preflight_report.get("launch_policy_sha256"),
         }
     return {
         "runtime": "opencode-harness-langgraph-inspired",
@@ -3904,6 +3911,11 @@ def run_worker(
     if mode == "opencode":
         preflight_binding = validate_opencode_preflight_report(
             opencode_preflight_report,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
             repo_root=repo_root,
         )
     if mode == "deterministic":
@@ -3935,6 +3947,13 @@ def run_worker(
             contract_path=handoff_contract_path,
             worker_command=worker_command,
             opencode_argv=argv,
+            launch_policy=opencode_launch_policy(
+                opencode_command=opencode_command,
+                opencode_model=opencode_model,
+                opencode_agent=opencode_agent,
+                opencode_variant=opencode_variant,
+                opencode_skip_permissions=opencode_skip_permissions,
+            ),
             repo_root=repo_root,
         )
     else:
@@ -4395,6 +4414,13 @@ def run_opencode_preflight(
         "--run-id",
         run_id,
     ]
+    launch_policy = opencode_launch_policy(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+    )
     argv = build_opencode_preflight_argv(
         opencode_command=opencode_command,
         opencode_model=opencode_model,
@@ -4412,6 +4438,7 @@ def run_opencode_preflight(
         marker_path=marker_path,
         marker_command=marker_command,
         opencode_argv=argv,
+        launch_policy=launch_policy,
         repo_root=repo_root,
     )
     started = time.monotonic()
@@ -4475,6 +4502,8 @@ def run_opencode_preflight(
         "argv": argv,
         "marker_path": repo_relative(marker_path, repo_root=repo_root),
         "marker_exists": marker_exists,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
         "handoff_contract": contract_binding,
         "opencode_session_evidence": session_binding,
         "contract_verification": contract_verification,
@@ -4494,6 +4523,11 @@ def run_opencode_preflight(
 def validate_opencode_preflight_report(
     report_path: Path | None,
     *,
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     if report_path is None:
@@ -4514,12 +4548,39 @@ def validate_opencode_preflight_report(
             "opencode preflight report is not passed: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    expected_launch_policy = opencode_launch_policy(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+    )
+    launch_policy = report.get("launch_policy")
+    if not isinstance(launch_policy, dict):
+        raise SystemExit(
+            "opencode preflight launch policy is missing: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    actual_launch_policy = normalize_opencode_launch_policy(launch_policy)
+    actual_launch_policy_sha256 = report.get("launch_policy_sha256")
+    if actual_launch_policy_sha256 != opencode_launch_policy_sha256(actual_launch_policy):
+        raise SystemExit(
+            "opencode preflight launch policy sha256 mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if actual_launch_policy != expected_launch_policy:
+        raise SystemExit(
+            "opencode preflight launch policy mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
     return {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
         "status": "passed",
         "run_id": str(report.get("run_id", "")),
         "contract_status": "executed",
+        "launch_policy": actual_launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(actual_launch_policy),
         "evidence_boundary": str(
             report.get(
                 "evidence_boundary",
@@ -5154,6 +5215,47 @@ def safe_file_component(value: str) -> str:
     return "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in value)
 
 
+def opencode_launch_policy(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+) -> dict[str, Any]:
+    return {
+        "opencode_command": opencode_command,
+        "opencode_model": opencode_model,
+        "opencode_agent": opencode_agent,
+        "opencode_variant": opencode_variant,
+        "opencode_skip_permissions": bool(opencode_skip_permissions),
+    }
+
+
+def normalize_opencode_launch_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    required_fields = {
+        "opencode_command",
+        "opencode_model",
+        "opencode_agent",
+        "opencode_variant",
+        "opencode_skip_permissions",
+    }
+    missing_fields = required_fields.difference(policy.keys())
+    if missing_fields:
+        raise SystemExit("opencode preflight launch policy is missing fields: " + ", ".join(sorted(missing_fields)))
+    return opencode_launch_policy(
+        opencode_command=str(policy.get("opencode_command", "")),
+        opencode_model=policy.get("opencode_model") if isinstance(policy.get("opencode_model"), str) else None,
+        opencode_agent=policy.get("opencode_agent") if isinstance(policy.get("opencode_agent"), str) else None,
+        opencode_variant=str(policy.get("opencode_variant", "")),
+        opencode_skip_permissions=policy.get("opencode_skip_permissions") is True,
+    )
+
+
+def opencode_launch_policy_sha256(policy: dict[str, Any]) -> str:
+    return sha256_text(json.dumps(policy, sort_keys=True))
+
+
 def build_opencode_run_argv(
     *,
     opencode_command: str,
@@ -5546,6 +5648,7 @@ def write_opencode_handoff_contract(
     contract_path: Path,
     worker_command: list[str],
     opencode_argv: list[str],
+    launch_policy: dict[str, Any],
     repo_root: Path,
     assignment_request_path: Path | None = None,
 ) -> dict[str, str]:
@@ -5564,6 +5667,8 @@ def write_opencode_handoff_contract(
         "worker_command_sha256": sha256_text(subprocess.list2cmdline(worker_command)),
         "opencode_argv": opencode_argv,
         "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
     }
@@ -5581,6 +5686,7 @@ def write_opencode_preflight_contract(
     marker_path: Path,
     marker_command: list[str],
     opencode_argv: list[str],
+    launch_policy: dict[str, Any],
     repo_root: Path,
 ) -> dict[str, str]:
     if not opencode_argv:
@@ -5595,6 +5701,8 @@ def write_opencode_preflight_contract(
         "worker_command_sha256": sha256_text(subprocess.list2cmdline(marker_command)),
         "opencode_argv": opencode_argv,
         "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "preflight proves exact-command compliance only; semantic acceptance requires worker summary and validators",
     }

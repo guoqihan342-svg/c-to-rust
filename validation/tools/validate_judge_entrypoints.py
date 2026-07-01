@@ -143,6 +143,10 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def repo_relative(path: Path, repo_root: Path) -> str:
     return path.resolve().relative_to(repo_root.resolve()).as_posix()
 
@@ -594,11 +598,35 @@ def validate_entrypoint_profile_contract(
     disallowed = sorted(commit for commit in observed_commits if commit not in allowed_commits)
     if disallowed:
         raise ValueError(f"{entry.get('id')} profile uses commits outside source_pin_policy: {disallowed}")
-    return {
+    result = {
         "profile_id": profile.get("profile_id"),
         "proof_class": profile.get("proof_class"),
         "observed_commits": sorted(observed_commits),
         "status": "passed",
+    }
+    if profile.get("mode") == "opencode":
+        result["opencode_launch_policy"] = validate_opencode_profile_launch_policy(profile, entry_id=str(entry.get("id")))
+    return result
+
+
+def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id: str) -> dict[str, Any]:
+    command = require_string(profile.get("opencode_command"), f"{entry_id} opencode profile opencode_command")
+    variant = require_string(profile.get("opencode_variant"), f"{entry_id} opencode profile opencode_variant")
+    model = profile.get("opencode_model")
+    if model is not None and not isinstance(model, str):
+        raise ValueError(f"{entry_id} opencode profile opencode_model must be a string or null")
+    agent = profile.get("opencode_agent")
+    if agent is not None and not isinstance(agent, str):
+        raise ValueError(f"{entry_id} opencode profile opencode_agent must be a string or null")
+    skip_permissions = profile.get("opencode_skip_permissions")
+    if not isinstance(skip_permissions, bool):
+        raise ValueError(f"{entry_id} opencode profile opencode_skip_permissions must be a boolean")
+    return {
+        "opencode_command": command,
+        "opencode_model": model,
+        "opencode_agent": agent,
+        "opencode_variant": variant,
+        "opencode_skip_permissions": skip_permissions,
     }
 
 
@@ -974,6 +1002,37 @@ def validate_artifact_binding_shape(
     return {"path": path_text, "sha256": sha256}
 
 
+def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: str) -> dict[str, Any]:
+    policy = require_object(value, f"{label}.launch_policy")
+    command = require_string(policy.get("opencode_command"), f"{label}.launch_policy.opencode_command")
+    variant = require_string(policy.get("opencode_variant"), f"{label}.launch_policy.opencode_variant")
+    model = policy.get("opencode_model")
+    if model is not None and not isinstance(model, str):
+        raise ValueError(f"{label}.launch_policy.opencode_model must be a string or null")
+    agent = policy.get("opencode_agent")
+    if agent is not None and not isinstance(agent, str):
+        raise ValueError(f"{label}.launch_policy.opencode_agent must be a string or null")
+    if not isinstance(policy.get("opencode_skip_permissions"), bool):
+        raise ValueError(f"{label}.launch_policy.opencode_skip_permissions must be a boolean")
+    normalized = {
+        "opencode_command": command,
+        "opencode_model": model,
+        "opencode_agent": agent,
+        "opencode_variant": variant,
+        "opencode_skip_permissions": policy["opencode_skip_permissions"],
+    }
+    expected_sha = sha256_text(json.dumps(normalized, sort_keys=True))
+    actual_sha = validate_sha256_hex(sha_value, f"{label}.launch_policy_sha256")
+    if actual_sha != expected_sha:
+        raise ValueError(f"{label}.launch_policy_sha256 must match launch_policy")
+    return normalized
+
+
+def compare_opencode_launch_policy(actual: dict[str, Any], expected: dict[str, Any], label: str) -> None:
+    if actual != expected:
+        raise ValueError(f"{label}.launch_policy must match opencode_agent_runtime.opencode_preflight_report")
+
+
 def validate_opencode_preflight_binding(
     value: Any,
     label: str,
@@ -986,13 +1045,32 @@ def validate_opencode_preflight_binding(
         raise ValueError(f"{label}.status must be passed")
     if binding.get("contract_status") != "executed":
         raise ValueError(f"{label}.contract_status must be executed")
-    result.update({"status": "passed", "contract_status": "executed"})
+    launch_policy = validate_opencode_launch_policy_binding(
+        binding.get("launch_policy"),
+        binding.get("launch_policy_sha256"),
+        label,
+    )
+    result.update(
+        {
+            "status": "passed",
+            "contract_status": "executed",
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": sha256_text(json.dumps(launch_policy, sort_keys=True)),
+        }
+    )
     if repo_root is not None:
         preflight_payload = load_json(repo_path(result["path"], repo_root=repo_root))
         if preflight_payload.get("status") != "passed":
             raise ValueError(f"{label} file status must be passed")
         if preflight_payload.get("marker_exists") is not True:
             raise ValueError(f"{label} file marker_exists must be true")
+        payload_policy = validate_opencode_launch_policy_binding(
+            preflight_payload.get("launch_policy"),
+            preflight_payload.get("launch_policy_sha256"),
+            f"{label} file",
+        )
+        if payload_policy != launch_policy:
+            raise ValueError(f"{label} file launch_policy must match binding")
         verification = require_object(preflight_payload.get("contract_verification"), f"{label}.contract_verification")
         if verification.get("status") != "executed":
             raise ValueError(f"{label}.contract_verification.status must be executed")
@@ -1049,6 +1127,7 @@ def validate_opencode_worker_runtime(
     )
     if worker_preflight["path"] != expected_preflight["path"] or worker_preflight["sha256"] != expected_preflight["sha256"]:
         raise ValueError(f"{label}.opencode_preflight_report must match opencode_agent_runtime.opencode_preflight_report")
+    compare_opencode_launch_policy(worker_preflight["launch_policy"], expected_preflight["launch_policy"], f"{label}.opencode_preflight_report")
 
     verification = require_object(worker.get("opencode_contract_verification"), f"{label}.opencode_contract_verification")
     if verification.get("status") != "executed":

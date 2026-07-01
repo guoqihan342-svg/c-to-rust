@@ -143,9 +143,10 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --worker-id worker-a \
   --mode opencode \
   --opencode-variant max \
+  --opencode-skip-permissions \
   --opencode-preflight-report target/opencode-preflight/harness/opencode-preflight-report.json
 
-`opencode-preflight` 只验证 OpenCode 能否把第一条 shell/bash/powershell/cmd tool call 精确执行为 harness 指定命令，并写出 marker/report；它不是语义验收。`run-worker --mode opencode` 和 `run-plan --mode opencode` 必须通过 `--opencode-preflight-report <report>` 绑定已通过的 preflight report，否则会在启动 OpenCode 前 fail-closed。`--mode opencode` 会在 worker 隔离目录写出 `harness/opencode-handoff-contract.json` 和 `logs/opencode-session-evidence.json`，并由 `harness/run-worker-report.json`、SQLite event、repair hint 和 artifact index 绑定。前者记录 exact deterministic worker command、request、expected summary 和 OpenCode prompt；后者解析 OpenCode `--format json` 的 JSON/JSONL 输出，解析失败时也保留 raw fallback。二者只证明 agent 执行审计链路，不替代 `competition-run-summary.json`、final gate 或 validator。
+`opencode-preflight` 只验证 OpenCode 能否把第一条 shell/bash/powershell/cmd tool call 精确执行为 harness 指定命令，并写出 marker/report；它不是语义验收。preflight report 会结构化记录 launch policy（`opencode_command`、`opencode_model`、`opencode_agent`、`opencode_variant`、`opencode_skip_permissions`）及 hash；`run-worker --mode opencode` 和 `run-plan --mode opencode` 必须通过 `--opencode-preflight-report <report>` 绑定已通过且 launch policy 与当前启动参数完全一致的 preflight report，否则会在启动 OpenCode 前 fail-closed。`--mode opencode` 会在 worker 隔离目录写出 `harness/opencode-handoff-contract.json` 和 `logs/opencode-session-evidence.json`，并由 `harness/run-worker-report.json`、SQLite event、repair hint 和 artifact index 绑定。前者记录 exact deterministic worker command、request、expected summary、OpenCode prompt 和 launch policy；后者解析 OpenCode `--format json` 的 JSON/JSONL 输出，解析失败时也保留 raw fallback。二者只证明 agent 执行审计链路，不替代 `competition-run-summary.json`、final gate 或 validator。
 
 `run-plan --auto-retry` 是有界自愈路径：失败 worker 会写入 repair hint，harness 重新执行同一个 worker，并在 worker 重新验证通过或达到 `REPAIR_ROUND_CAP=5` 上限时停止。`--max-workers` 控制并行 worker fan-out；报告用 `run_plan.graph.parallel_map.result_order=planner_order` 固定 planner 顺序 fan-in。retry 成功只说明 worker summary 重新验证通过；语义接受仍只看最终 summary validator、oracle/diff/unsafe gates。
 

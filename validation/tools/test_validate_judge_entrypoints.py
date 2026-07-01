@@ -1,4 +1,5 @@
 from contextlib import closing
+import hashlib
 import json
 import sqlite3
 import subprocess
@@ -51,13 +52,33 @@ def artifact_ref(path: str, sha_char: str) -> dict:
     return {"path": path, "sha256": sha_char * 64}
 
 
+def opencode_launch_policy() -> dict:
+    return {
+        "opencode_command": "opencode",
+        "opencode_model": None,
+        "opencode_agent": None,
+        "opencode_variant": "max",
+        "opencode_skip_permissions": False,
+    }
+
+
+def opencode_launch_policy_sha256(policy: dict) -> str:
+    return hashlib.sha256(json.dumps(policy, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def valid_opencode_judge_index_payload() -> dict:
+    launch_policy = opencode_launch_policy()
     preflight = {
         "path": "target/out/harness/opencode-preflight-report.json",
         "sha256": "a" * 64,
         "status": "passed",
         "contract_status": "executed",
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
     }
+    preflight_for_worker = json.loads(json.dumps(preflight))
+    preflight_for_refs = json.loads(json.dumps(preflight))
+    preflight_for_runtime = json.loads(json.dumps(preflight))
     worker = {
         "worker_id": "worker-a",
         "chat_output_is_evidence": False,
@@ -70,7 +91,7 @@ def valid_opencode_judge_index_payload() -> dict:
         },
         "handoff_contract": artifact_ref("target/out/workers/worker-a/harness/opencode-handoff-contract.json", "f"),
         "opencode_session_evidence": artifact_ref("target/out/workers/worker-a/logs/opencode-session-evidence.json", "1"),
-        "opencode_preflight_report": dict(preflight),
+        "opencode_preflight_report": preflight_for_worker,
         "contract_verification_status": "executed",
         "opencode_contract_verification": {
             "status": "executed",
@@ -141,7 +162,7 @@ def valid_opencode_judge_index_payload() -> dict:
             "workflow_metrics": artifact_ref("target/out/summary/workflow-metrics.json", "3"),
             "worker_plan": artifact_ref("target/out/harness/plans/workers.json", "4"),
             "profile": artifact_ref("config/competition-env/planned-batches/opencode.json", "5"),
-            "opencode_preflight_report": dict(preflight),
+            "opencode_preflight_report": preflight_for_refs,
         },
         "opencode_agent_runtime": {
             "runtime": "opencode",
@@ -151,7 +172,7 @@ def valid_opencode_judge_index_payload() -> dict:
             "contract_status_counts": {"executed": 1},
             "all_contracts_executed": True,
             "failed_or_missing_contract_workers": [],
-            "opencode_preflight_report": preflight,
+            "opencode_preflight_report": preflight_for_runtime,
             "workers": [worker],
         },
     }
@@ -344,6 +365,44 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         )
         self.assertFalse(before_after["review_checklist_contract"]["semantic_gate"])
         self.assertFalse(before_after["review_checklist_contract"]["review_is_semantic_acceptance"])
+        opencode_entry = result["entrypoints"][3]
+        self.assertEqual(
+            opencode_entry["profile_contract"]["opencode_launch_policy"],
+            {
+                "opencode_command": "opencode",
+                "opencode_model": None,
+                "opencode_agent": None,
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            },
+        )
+
+    def test_opencode_profile_requires_explicit_launch_policy_fields(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile.pop("opencode_skip_permissions", None)
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-missing-policy.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        opencode_entry = entrypoint_by_id(result, "opencode_multi_worker_evaluate_profile")
+        self.assertEqual(opencode_entry["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile opencode_skip_permissions must be a boolean",
+            result["errors"],
+        )
 
     def test_cli_writes_judge_entrypoints_readiness_report(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -443,6 +502,15 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             )
 
     def test_judge_evidence_index_requires_valid_opencode_runtime_when_present(self) -> None:
+        launch_policy = opencode_launch_policy()
+        preflight = {
+            "path": "target/out/harness/opencode-preflight-report.json",
+            "sha256": "a" * 64,
+            "status": "passed",
+            "contract_status": "executed",
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        }
         payload = {
             "schema_version": 1,
             "report_kind": "judge-evidence-index",
@@ -488,12 +556,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "contract_status_counts": {"not-executed": 1},
                 "all_contracts_executed": False,
                 "failed_or_missing_contract_workers": ["worker-a"],
-                "opencode_preflight_report": {
-                    "path": "target/out/harness/opencode-preflight-report.json",
-                    "sha256": "a" * 64,
-                    "status": "passed",
-                    "contract_status": "executed",
-                },
+                "opencode_preflight_report": json.loads(json.dumps(preflight)),
                 "workers": [
                     {
                         "worker_id": "worker-a",
@@ -507,12 +570,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         },
                         "handoff_contract": {"path": "target/out/workers/worker-a/harness/opencode-handoff-contract.json", "sha256": "f" * 64},
                         "opencode_session_evidence": {"path": "target/out/workers/worker-a/logs/opencode-session-evidence.json", "sha256": "1" * 64},
-                        "opencode_preflight_report": {
-                            "path": "target/out/harness/opencode-preflight-report.json",
-                            "sha256": "a" * 64,
-                            "status": "passed",
-                            "contract_status": "executed",
-                        },
+                        "opencode_preflight_report": json.loads(json.dumps(preflight)),
                         "contract_verification_status": "not-executed",
                         "opencode_contract_verification": {"status": "not-executed"},
                     },
@@ -686,6 +744,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         payload["evidence_artifact_refs"]["opencode_preflight_report"]["sha256"] = "7" * 64
 
         with self.assertRaisesRegex(ValueError, "evidence_artifact_refs.opencode_preflight_report must match path and sha256"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_requires_opencode_launch_policy_binding(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        del payload["opencode_agent_runtime"]["opencode_preflight_report"]["launch_policy"]
+
+        with self.assertRaisesRegex(ValueError, "opencode_agent_runtime.opencode_preflight_report.launch_policy must be an object"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_requires_matching_worker_opencode_launch_policy(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        worker_preflight = payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]
+        worker_preflight["launch_policy"]["opencode_skip_permissions"] = True
+        worker_preflight["launch_policy_sha256"] = opencode_launch_policy_sha256(worker_preflight["launch_policy"])
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "opencode_agent_runtime.workers\\[0\\].opencode_preflight_report.launch_policy must match opencode_agent_runtime.opencode_preflight_report",
+        ):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text="target/out/harness/judge-evidence-index.json",

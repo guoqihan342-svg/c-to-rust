@@ -1738,6 +1738,25 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "status": "passed",
                 "run_id": "run-profile-opencode-auto",
                 "contract_status": "executed",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": None,
+                    "opencode_agent": None,
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": False,
+                },
+                "launch_policy_sha256": harness.sha256_text(
+                    json.dumps(
+                        {
+                            "opencode_agent": None,
+                            "opencode_command": "opencode",
+                            "opencode_model": None,
+                            "opencode_skip_permissions": False,
+                            "opencode_variant": "max",
+                        },
+                        sort_keys=True,
+                    )
+                ),
                 "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
             }
             self.assertEqual(result["mode"], "opencode")
@@ -4223,6 +4242,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             result = harness.run_opencode_preflight(
                 out_root=out_root,
                 run_id="preflight-run",
+                opencode_model="gpt-5.4",
+                opencode_agent="c2rust-worker",
+                opencode_skip_permissions=True,
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
             )
@@ -4235,6 +4257,17 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "passed")
             self.assertEqual(report["contract_verification"]["status"], "executed")
+            expected_policy = {
+                "opencode_command": "opencode",
+                "opencode_model": "gpt-5.4",
+                "opencode_agent": "c2rust-worker",
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            }
+            self.assertEqual(report["launch_policy"], expected_policy)
+            self.assertRegex(report["launch_policy_sha256"], r"^[0-9a-f]{64}$")
+            contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
+            self.assertEqual(contract["launch_policy"], expected_policy)
 
     def test_opencode_preflight_rejects_marker_when_first_shell_command_differs(self) -> None:
         with temp_repo_dir() as tmp:
@@ -4389,6 +4422,151 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             self.assertEqual(calls, [])
 
+    def test_run_worker_opencode_rejects_preflight_report_without_launch_policy_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            preflight_report.parent.mkdir(parents=True, exist_ok=True)
+            preflight_report.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "preflight-run",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "marker_exists": True,
+                        "contract_verification": {"status": "executed"},
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight launch policy is missing"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_worker_opencode_rejects_preflight_launch_policy_mismatch_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(out_root / "harness" / "opencode-preflight-report.json")
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight launch policy mismatch"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    opencode_variant="lite",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_plan_opencode_rejects_preflight_launch_policy_mismatch_before_worker_fanout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            source_root = out_root / "external" / "demo"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True, exist_ok=True)
+            source_file.write_text("int first(void) { return 1; }\nint second(void) { return 2; }\n", encoding="utf-8")
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="demo",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=[],
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="demo",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(out_root / "harness" / "opencode-preflight-report.json")
+
+            with patch.object(harness, "run_worker") as runner:
+                with self.assertRaisesRegex(SystemExit, "opencode preflight launch policy mismatch"):
+                    harness.run_plan(
+                        db_path=db_path,
+                        run_id="run-test",
+                        plan_path=Path(str(plan["plan_path"])),
+                        out_root=out_root,
+                        proof_class="local-simulation",
+                        mode="opencode",
+                        opencode_preflight_report=preflight_report,
+                        opencode_model="gpt-5.4",
+                        command_runner=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="", stderr=""),
+                        repo_root=REPO_ROOT,
+                    )
+
+            runner.assert_not_called()
+
     def test_run_worker_opencode_binds_passing_preflight_report(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -4422,6 +4600,25 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "exit_code": 0,
                         "marker_exists": True,
                         "contract_verification": {"status": "executed"},
+                        "launch_policy": {
+                            "opencode_command": "opencode",
+                            "opencode_model": None,
+                            "opencode_agent": None,
+                            "opencode_variant": "max",
+                            "opencode_skip_permissions": False,
+                        },
+                        "launch_policy_sha256": harness.sha256_text(
+                            json.dumps(
+                                {
+                                    "opencode_agent": None,
+                                    "opencode_command": "opencode",
+                                    "opencode_model": None,
+                                    "opencode_skip_permissions": False,
+                                    "opencode_variant": "max",
+                                },
+                                sort_keys=True,
+                            )
+                        ),
                         "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
                     },
                     sort_keys=True,
@@ -4463,6 +4660,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(result["opencode_preflight_report"]["path"], repo_rel(preflight_report))
             self.assertEqual(result["opencode_preflight_report"]["sha256"], harness.sha256_file(preflight_report))
+            self.assertEqual(result["opencode_preflight_report"]["launch_policy"]["opencode_variant"], "max")
+            self.assertFalse(result["opencode_preflight_report"]["launch_policy"]["opencode_skip_permissions"])
             report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["opencode_preflight_report"]["status"], "passed")
             event_payload = json.loads(
@@ -4502,6 +4701,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
             preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            launch_policy = {
+                "opencode_command": "opencode",
+                "opencode_model": None,
+                "opencode_agent": None,
+                "opencode_variant": "max",
+                "opencode_skip_permissions": False,
+            }
             preflight_report.write_text(
                 json.dumps(
                     {
@@ -4511,6 +4717,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "exit_code": 0,
                         "marker_exists": True,
                         "contract_verification": {"status": "executed"},
+                        "launch_policy": launch_policy,
+                        "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
                     },
                     sort_keys=True,
                 )
@@ -4559,6 +4767,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 self.assertEqual(call.kwargs["opencode_preflight_report"], preflight_report)
             self.assertEqual(result["opencode_preflight_report"]["path"], repo_rel(preflight_report))
             self.assertEqual(result["opencode_preflight_report"]["sha256"], harness.sha256_file(preflight_report))
+            self.assertEqual(result["opencode_preflight_report"]["launch_policy"]["opencode_variant"], "max")
+            self.assertFalse(result["opencode_preflight_report"]["launch_policy"]["opencode_skip_permissions"])
             self.assertEqual(result["graph"]["opencode_worker"]["preflight_report"]["status"], "passed")
             self.assertEqual(result["graph"]["opencode_worker"]["preflight_report"]["contract_status"], "executed")
             first_attempt = result["workers"][0]["attempts"][0]
@@ -5328,6 +5538,13 @@ def write_slice_spec(path: Path, target_id: str, slice_id: str, function_name: s
 
 def write_passing_opencode_preflight_report(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
+    launch_policy = {
+        "opencode_command": "opencode",
+        "opencode_model": None,
+        "opencode_agent": None,
+        "opencode_variant": "max",
+        "opencode_skip_permissions": False,
+    }
     path.write_text(
         json.dumps(
             {
@@ -5337,6 +5554,8 @@ def write_passing_opencode_preflight_report(path: Path) -> Path:
                 "exit_code": 0,
                 "marker_exists": True,
                 "contract_verification": {"status": "executed"},
+                "launch_policy": launch_policy,
+                "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
                 "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
             },
             sort_keys=True,
