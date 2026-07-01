@@ -75,6 +75,11 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
 
         self.assertEqual(report["status"], "passed")
         self.assertEqual(report["entrypoint_count"], 1)
+        self.assertFalse(report["summary"]["readiness"]["all_entrypoints_executed"])
+        self.assertEqual(report["summary"]["readiness"]["executed_count"], 1)
+        self.assertEqual(report["summary"]["readiness"]["configured_count"], 2)
+        self.assertEqual(report["summary"]["entrypoints"][0]["id"], "before_after_judge_demo")
+        self.assertEqual(report["summary"]["entrypoints"][0]["proof_class"], "unknown")
         self.assertEqual(report["entrypoints"][0]["id"], "before_after_judge_demo")
         self.assertEqual(calls, [["python", "-B", "-m", "validation.tools.judge_demo", "--run-id", "selected"]])
         validate_config.assert_has_calls(
@@ -99,6 +104,69 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertTrue(out_path.is_file())
         persisted = json.loads(out_path.read_text(encoding="utf-8"))
         self.assertFalse(persisted["claim_boundary"]["semantic_gate"])
+        self.assertEqual(persisted["summary"], report["summary"])
+
+    def test_all_entrypoints_report_has_judge_facing_summary(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-all-summary-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "competition_environment_smoke",
+                            "priority": 0,
+                            "purpose": "competition-environment-smoke",
+                            "proof_class": "local-simulation",
+                            "run_id": "smoke-run",
+                            "command": "python -B validation/tools/run_competition_smoke.py",
+                            "judge_focus": ["environment smoke", "semantic_gate=false"],
+                            "expected_artifacts": {"competition_smoke_summary": "target/out/smoke.json"},
+                        },
+                        {
+                            "id": "opencode_multi_worker_evaluate_profile",
+                            "priority": 30,
+                            "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                            "proof_class": "local-simulation",
+                            "run_id": "opencode-run",
+                            "command": "python -B -m validation.tools.opencode_agent_harness evaluate",
+                            "judge_focus": ["OpenCode multi-agent", "repair cap 5"],
+                            "expected_artifacts": {"judge_evidence_index": "target/out/index.json"},
+                        },
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        with patch.object(runner.validator, "validate_config", side_effect=[{"status": "passed"}, {"status": "passed"}]):
+            with patch.object(runner.validator, "write_readiness_report", return_value={"status": "passed"}):
+                report = runner.run_judge_entrypoints(
+                    config_path=config_path,
+                    entrypoint_ids=[],
+                    out_path=out_path,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+        summary = report["summary"]
+        self.assertIn("2/2", summary["headline"])
+        self.assertFalse(summary["claim_boundary"]["semantic_gate"])
+        self.assertTrue(summary["readiness"]["all_entrypoints_executed"])
+        self.assertEqual(summary["readiness"]["executed_count"], 2)
+        self.assertEqual(summary["readiness"]["configured_count"], 2)
+        self.assertEqual(summary["readiness"]["validation_status"], "passed")
+        self.assertEqual([entry["id"] for entry in summary["entrypoints"]], ["competition_environment_smoke", "opencode_multi_worker_evaluate_profile"])
+        self.assertEqual(summary["entrypoints"][0]["judge_focus"], ["environment smoke", "semantic_gate=false"])
+        self.assertEqual(summary["entrypoints"][1]["key_artifacts"], {"judge_evidence_index": "target/out/index.json"})
 
     def test_dry_run_plans_without_executing_or_validating(self) -> None:
         from validation.tools import run_judge_entrypoints as runner

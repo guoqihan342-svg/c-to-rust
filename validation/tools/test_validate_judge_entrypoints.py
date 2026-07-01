@@ -95,6 +95,27 @@ def valid_opencode_judge_index_payload() -> dict:
             "translation_coverage_numerator": 0,
             "index_is_semantic_gate": False,
         },
+        "judge_headline": {
+            "report_kind": "judge-headline",
+            "status": "completed",
+            "mode": "opencode",
+            "graph_runtime": "opencode-harness-langgraph-inspired",
+            "worker_count": 1,
+            "parallelism": {"max_workers": 1, "effective_workers": 1},
+            "repair_round_cap": 5,
+            "repair_checkpoint": "repair_hints",
+            "semantic_gate": False,
+            "semantic_claim_source": "accepted_evidence_binding",
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "opencode_runtime": {
+                "enabled": True,
+                "worker_count": 1,
+                "all_contracts_executed": True,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+            },
+        },
         "harness_architecture": {
             "graph_runtime": "opencode-harness-langgraph-inspired",
             "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
@@ -141,6 +162,14 @@ def valid_deterministic_judge_index_payload() -> dict:
     payload["mode"] = "deterministic"
     payload.pop("opencode_agent_runtime", None)
     payload["evidence_artifact_refs"].pop("opencode_preflight_report", None)
+    payload["judge_headline"]["mode"] = "deterministic"
+    payload["judge_headline"]["opencode_runtime"] = {
+        "enabled": False,
+        "worker_count": 0,
+        "all_contracts_executed": False,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+    }
     return payload
 
 
@@ -296,6 +325,10 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             self.assertEqual(entry["profile_contract"]["status"], "passed")
             self.assertEqual(entry["tracked_manifest"]["status"], "present")
         smoke = result["entrypoints"][0]
+        self.assertEqual(smoke["priority"], 0)
+        smoke_focus = " ".join(smoke["judge_focus"]).lower()
+        self.assertIn("competition environment", smoke_focus)
+        self.assertIn("smoke", smoke_focus)
         smoke_summary = smoke["expected_artifacts"]["competition_smoke_summary"]
         self.assertIn(smoke_summary["status"], {"missing", "present"})
         self.assertEqual(
@@ -343,6 +376,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertFalse(report["semantic_gate"])
         self.assertEqual(report["claim_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
         self.assertEqual(report["entrypoint_count"], 4)
+        self.assertIn("4 judge entrypoints ready", report["summary"]["headline"])
+        self.assertEqual(report["summary"]["readiness"]["configured_count"], 4)
+        self.assertEqual(report["summary"]["readiness"]["validation_status"], "passed")
+        self.assertFalse(report["summary"]["claim_boundary"]["semantic_gate"])
+        self.assertEqual(
+            [entry["id"] for entry in report["summary"]["entrypoints"]],
+            [
+                "competition_environment_smoke",
+                "before_after_judge_demo",
+                "multi_worker_evaluate_profile",
+                "opencode_multi_worker_evaluate_profile",
+            ],
+        )
+        smoke_focus = " ".join(report["summary"]["entrypoints"][0]["judge_focus"]).lower()
+        self.assertIn("competition environment", smoke_focus)
+        self.assertIn("smoke", smoke_focus)
 
     def test_competition_smoke_summary_contract_rejects_semantic_gate_claim(self) -> None:
         payload = {
@@ -403,6 +452,20 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "generated_draft_semantic_pass": False,
                 "translation_coverage_numerator": 0,
                 "index_is_semantic_gate": False,
+            },
+            "judge_headline": {
+                "report_kind": "judge-headline",
+                "semantic_gate": False,
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "opencode_runtime": {
+                    "enabled": False,
+                    "worker_count": 0,
+                    "all_contracts_executed": False,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                },
             },
             "harness_architecture": {
                 "architecture_contracts": {
@@ -472,6 +535,20 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "translation_coverage_numerator": 0,
                 "index_is_semantic_gate": False,
             },
+            "judge_headline": {
+                "report_kind": "judge-headline",
+                "semantic_gate": False,
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "opencode_runtime": {
+                    "enabled": False,
+                    "worker_count": 0,
+                    "all_contracts_executed": False,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                },
+            },
             "harness_architecture": {
                 "architecture_contracts": {
                     "context_management": {
@@ -508,6 +585,26 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         payload,
                         path_text="target/out/harness/judge-evidence-index.json",
                     )
+
+    def test_judge_evidence_index_requires_judge_headline(self) -> None:
+        payload = valid_deterministic_judge_index_payload()
+        payload.pop("judge_headline", None)
+
+        with self.assertRaisesRegex(ValueError, "judge_evidence_index.judge_headline must be an object"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_headline_must_match_boundary_and_architecture(self) -> None:
+        payload = valid_deterministic_judge_index_payload()
+        payload["judge_headline"]["worker_count"] = 2
+
+        with self.assertRaisesRegex(ValueError, "judge_headline.worker_count must match harness_architecture.worker_count"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
 
     def test_judge_evidence_index_general_artifact_ref_hash_drift_fails(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -1421,6 +1518,20 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "generated_draft_semantic_pass": False,
                 "translation_coverage_numerator": 0,
                 "index_is_semantic_gate": False,
+            },
+            "judge_headline": {
+                "report_kind": "judge-headline",
+                "semantic_gate": False,
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+                "opencode_runtime": {
+                    "enabled": False,
+                    "worker_count": 0,
+                    "all_contracts_executed": False,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                },
             },
             "harness_architecture": {
                 "architecture_contracts": {

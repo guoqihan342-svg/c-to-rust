@@ -192,12 +192,19 @@ python validation/tools/run_competition.py \
 To execute the same single request through the OpenCode worker wrapper, run the assigned worker exactly once and require its summary output:
 
 ```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
 python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
-  --opencode-variant max
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
 Expected worker output: `target/competition-out/workers/worker-a/summary/competition-run-summary.json`. Missing summary output is a failed interaction, not a partial success.
@@ -254,12 +261,19 @@ python -m validation.tools.opencode_agent_harness run-worker \
 `run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and automatically performs the former `record-worker-summary` step when `competition-run-summary.json` exists. When local OpenCode / DeepSeek V4 Pro is connected, use the agent wrapper for the same request:
 
 ```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
 python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
-  --opencode-variant max
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
 ### 7.4 Generate and Execute the Merge Plan

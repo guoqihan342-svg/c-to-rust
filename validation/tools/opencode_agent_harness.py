@@ -1435,6 +1435,16 @@ def write_evaluate_profile_report(
     if isinstance(architecture, dict):
         graph = run_plan.get("graph") if isinstance(run_plan.get("graph"), dict) else {}
         architecture.setdefault("architecture_contracts", build_architecture_contracts(graph))
+    payload["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(payload["status"]),
+        proof_class=str(payload.get("proof_class", "")),
+        mode=str(payload.get("mode", "")),
+        judge_summary=payload.get("judge_summary"),
+        acceptance_boundary=payload.get("acceptance_boundary"),
+        route_metrics=payload.get("route_governance_metrics_report"),
+        opencode_runtime=opencode_agent_runtime_evidence(run_plan, repo_root=repo_root),
+    )
 
     payload["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1466,6 +1476,16 @@ def write_evaluate_profile_report(
         if isinstance(architecture, dict):
             architecture["context_pack"] = context_refs["context_pack"]
             architecture["agent_index"] = context_refs["agent_index"]
+        payload["judge_headline"] = build_judge_headline(
+            entrypoint="evaluate",
+            status=str(payload["status"]),
+            proof_class=str(payload.get("proof_class", "")),
+            mode=str(payload.get("mode", "")),
+            judge_summary=payload.get("judge_summary"),
+            acceptance_boundary=payload.get("acceptance_boundary"),
+            route_metrics=payload.get("route_governance_metrics_report"),
+            opencode_runtime=opencode_agent_runtime_evidence(run_plan, repo_root=repo_root),
+        )
         report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         with closing(connect(db_path)) as connection:
             ensure_schema(connection)
@@ -1709,6 +1729,17 @@ def write_judge_evidence_index(
     opencode_runtime = opencode_agent_runtime_evidence(run_plan, repo_root=repo_root)
     if opencode_runtime is not None:
         payload["opencode_agent_runtime"] = opencode_runtime
+    payload["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(payload["status"]),
+        proof_class=str(payload.get("proof_class", "")),
+        mode=str(payload.get("mode", "")),
+        judge_summary=judge_summary,
+        acceptance_boundary=acceptance_boundary,
+        claim_boundary=payload["claim_boundary"],
+        route_metrics=route_metrics,
+        opencode_runtime=opencode_runtime,
+    )
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     binding = artifact_ref(index_path, repo_root=repo_root)
@@ -2088,6 +2119,13 @@ def evaluate(
         acceptance_boundary=None,
         repo_root=repo_root,
     )
+    result["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(result["status"]),
+        proof_class=proof_class,
+        mode=mode,
+        judge_summary=result["judge_summary"],
+    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     with closing(connect(db_path)) as connection:
@@ -2399,6 +2437,103 @@ def build_judge_summary(
             "competition-run-summary.json, workflow metrics, before/after evidence, and validators."
         ),
     }
+
+
+def build_judge_headline(
+    *,
+    entrypoint: str,
+    status: str,
+    proof_class: str,
+    mode: str,
+    judge_summary: Any,
+    acceptance_boundary: Any = None,
+    claim_boundary: Any = None,
+    route_metrics: Any = None,
+    opencode_runtime: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    summary = judge_summary if isinstance(judge_summary, dict) else {}
+    architecture = summary.get("harness_architecture") if isinstance(summary.get("harness_architecture"), dict) else {}
+    core_quality = (
+        summary.get("core_translation_quality")
+        if isinstance(summary.get("core_translation_quality"), dict)
+        else {}
+    )
+    boundary = claim_boundary if isinstance(claim_boundary, dict) else {}
+    acceptance = acceptance_boundary if isinstance(acceptance_boundary, dict) else {}
+    route = route_metrics if isinstance(route_metrics, dict) else {}
+    retry_policy = architecture.get("retry_policy") if isinstance(architecture.get("retry_policy"), dict) else {}
+    parallelism = architecture.get("parallelism") if isinstance(architecture.get("parallelism"), dict) else {}
+    worker_count = architecture.get("worker_count")
+    if not isinstance(worker_count, int):
+        workers = core_quality.get("workers")
+        worker_count = len(workers) if isinstance(workers, list) else 0
+
+    generated_draft_semantic_pass = boundary.get(
+        "generated_draft_semantic_pass",
+        acceptance.get("generated_draft_semantic_pass", core_quality.get("generated_draft_semantic_pass", False)),
+    )
+    if not isinstance(generated_draft_semantic_pass, bool):
+        generated_draft_semantic_pass = False
+
+    translation_coverage_numerator = boundary.get(
+        "translation_coverage_numerator",
+        route.get("translation_coverage_numerator", 0),
+    )
+    if isinstance(translation_coverage_numerator, bool):
+        translation_coverage_numerator = 0
+    try:
+        translation_coverage_numerator = int(translation_coverage_numerator)
+    except (TypeError, ValueError):
+        translation_coverage_numerator = 0
+
+    opencode_enabled = opencode_runtime is not None
+    headline = {
+        "report_kind": "judge-headline",
+        "entrypoint": entrypoint,
+        "status": status,
+        "proof_class": proof_class,
+        "mode": mode,
+        "graph_runtime": architecture.get("graph_runtime"),
+        "planning_mode": architecture.get("planning_mode"),
+        "pipeline": architecture.get("pipeline", []),
+        "worker_count": worker_count,
+        "parallelism": parallelism,
+        "repair_round_cap": retry_policy.get("round_cap", REPAIR_ROUND_CAP),
+        "repair_checkpoint": retry_policy.get("checkpoint", "repair_hints"),
+        "semantic_gate": False,
+        "semantic_claim_source": boundary.get(
+            "semantic_claim_source",
+            acceptance.get("semantic_claim_source", core_quality.get("semantic_claim_source", "unknown")),
+        ),
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "translation_coverage_numerator": translation_coverage_numerator,
+        "final_gate_status": core_quality.get("final_gate_status"),
+        "semantic_pass_count": int(core_quality.get("semantic_pass_count", 0) or 0),
+        "compiled_count": int(core_quality.get("compiled_count", 0) or 0),
+        "failed_count": int(core_quality.get("failed_count", 0) or 0),
+        "context_pack": architecture.get("context_pack"),
+        "agent_index": architecture.get("agent_index"),
+        "context_index": {
+            "context_pack": architecture.get("context_pack"),
+            "agent_index": architecture.get("agent_index"),
+            "evidence_policy": "on-disk-artifacts-only",
+            "worker_state_source": "agent-index.agents_by_worker_id",
+        },
+        "opencode_runtime": {
+            "enabled": opencode_enabled,
+            "worker_count": int(opencode_runtime.get("worker_count", 0)) if opencode_runtime else 0,
+            "all_contracts_executed": bool(opencode_runtime.get("all_contracts_executed")) if opencode_runtime else False,
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+        },
+    }
+    unsafe_reduction = core_quality.get("unsafe_reduction")
+    if isinstance(unsafe_reduction, dict):
+        headline["unsafe_reduction"] = unsafe_reduction
+    repair_summary = core_quality.get("repair_summary")
+    if isinstance(repair_summary, dict):
+        headline["repair_summary"] = repair_summary
+    return headline
 
 
 def load_merge_summary(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:

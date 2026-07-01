@@ -74,6 +74,7 @@ def run_judge_entrypoints(
             status="failed",
             dry_run=dry_run,
             config_ref=invalid_config_ref(config_path, error),
+            configured_entrypoint_count=0,
             command_results=[],
             preflight_validation={"status": "failed", "errors": [str(error)]},
             validation={"status": "skipped", "reason": "preflight_failed"},
@@ -87,6 +88,7 @@ def run_judge_entrypoints(
             status="failed",
             dry_run=dry_run,
             config_ref=config_ref,
+            configured_entrypoint_count=configured_entrypoint_count(config),
             command_results=[],
             preflight_validation=preflight_validation,
             validation={"status": "skipped", "reason": "preflight_failed"},
@@ -101,6 +103,7 @@ def run_judge_entrypoints(
             status="failed",
             dry_run=dry_run,
             config_ref=config_ref,
+            configured_entrypoint_count=configured_entrypoint_count(config),
             command_results=[],
             preflight_validation=preflight_validation,
             validation={"status": "skipped", "reason": "entrypoint_selection_failed", "errors": [str(error)]},
@@ -147,6 +150,7 @@ def run_judge_entrypoints(
         status=status,
         dry_run=dry_run,
         config_ref=config_ref,
+        configured_entrypoint_count=configured_entrypoint_count(config),
         command_results=command_results,
         preflight_validation=preflight_validation,
         validation=validation,
@@ -160,6 +164,7 @@ def write_run_report(
     status: str,
     dry_run: bool,
     config_ref: dict[str, Any],
+    configured_entrypoint_count: int,
     command_results: list[dict[str, Any]],
     preflight_validation: dict[str, Any],
     validation: dict[str, Any],
@@ -186,6 +191,15 @@ def write_run_report(
             ),
         },
     }
+    report["summary"] = build_judge_run_summary(
+        status=status,
+        dry_run=dry_run,
+        configured_entrypoint_count=configured_entrypoint_count,
+        command_results=command_results,
+        validation=validation,
+        readiness_ref=readiness_ref,
+        claim_boundary=report["claim_boundary"],
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
@@ -203,6 +217,67 @@ def select_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> lis
     if missing:
         raise SystemExit(f"unknown judge entrypoint id(s): {', '.join(missing)}")
     return [by_id[entrypoint_id] for entrypoint_id in entrypoint_ids]
+
+
+def configured_entrypoint_count(config: dict[str, Any]) -> int:
+    entrypoints = config.get("entrypoints")
+    return len([entry for entry in entrypoints if isinstance(entry, dict)]) if isinstance(entrypoints, list) else 0
+
+
+def build_judge_run_summary(
+    *,
+    status: str,
+    dry_run: bool,
+    configured_entrypoint_count: int,
+    command_results: list[dict[str, Any]],
+    validation: dict[str, Any],
+    readiness_ref: dict[str, Any] | None,
+    claim_boundary: dict[str, Any],
+) -> dict[str, Any]:
+    executed_count = len(command_results)
+    all_entrypoints_executed = (
+        not dry_run
+        and status == "passed"
+        and configured_entrypoint_count > 0
+        and executed_count == configured_entrypoint_count
+    )
+    validation_status = str(validation.get("status", "unknown")) if isinstance(validation, dict) else "unknown"
+    entrypoint_summaries = [
+        {
+            "id": result.get("id"),
+            "purpose": result.get("purpose"),
+            "status": result.get("status"),
+            "exit_code": result.get("exit_code"),
+            "proof_class": result.get("proof_class", "unknown"),
+            "run_id": result.get("run_id", "unknown"),
+            "judge_focus": result.get("judge_focus", []),
+            "key_artifacts": result.get("key_artifacts", {}),
+        }
+        for result in command_results
+    ]
+    return {
+        "report_kind": "judge-entrypoints-summary",
+        "headline": (
+            f"Judge entrypoints {status}: {executed_count}/{configured_entrypoint_count} "
+            f"{'executed' if not dry_run else 'planned'}; semantic_gate=false"
+        ),
+        "readiness": {
+            "status": status,
+            "dry_run": dry_run,
+            "all_entrypoints_executed": all_entrypoints_executed,
+            "executed_count": executed_count,
+            "configured_count": configured_entrypoint_count,
+            "validation_status": validation_status,
+            "readiness_report": readiness_ref,
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "semantic_claim_source": claim_boundary.get("semantic_claim_source", "validator-owned-artifacts"),
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "entrypoints": entrypoint_summaries,
+    }
 
 
 def run_entrypoint_command(
@@ -223,6 +298,11 @@ def run_entrypoint_command(
     result = {
         "id": entry_id,
         "purpose": entry.get("purpose"),
+        "priority": entry.get("priority"),
+        "proof_class": entry.get("proof_class", "unknown"),
+        "run_id": entry.get("run_id", "unknown"),
+        "judge_focus": list(entry.get("judge_focus", [])) if isinstance(entry.get("judge_focus"), list) else [],
+        "key_artifacts": dict(entry.get("expected_artifacts", {})) if isinstance(entry.get("expected_artifacts"), dict) else {},
         "command": command,
         "argv": argv,
         "exit_code": None if dry_run else 1,

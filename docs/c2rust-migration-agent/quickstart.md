@@ -192,12 +192,19 @@ python validation/tools/run_competition.py \
 如果要通过 OpenCode worker 包装层执行同一条单次请求，只运行已分配的 worker 一次，并要求它产出 summary：
 
 ```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
 python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
-  --opencode-variant max
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
 预期 worker 输出是 `target/competition-out/workers/worker-a/summary/competition-run-summary.json`。缺少 summary 输出就是交互失败，不能算部分成功。
@@ -254,12 +261,19 @@ python -m validation.tools.opencode_agent_harness run-worker \
 `run-worker --mode deterministic` 会调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 `competition-run-summary.json` 存在时自动执行原来的 `record-worker-summary` 入库动作。连接本机 OpenCode / DeepSeek V4 Pro 时，可用 agent 包装层执行同一个 request：
 
 ```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
 python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
-  --opencode-variant max
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
 ### 7.4 生成合并计划并执行

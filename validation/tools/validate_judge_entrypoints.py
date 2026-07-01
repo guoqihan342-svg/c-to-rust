@@ -92,9 +92,47 @@ def write_readiness_report(result: dict[str, Any], out_path: Path, *, repo_root:
         "test_contract": result.get("test_contract", {}),
         "validation": result,
     }
+    report["summary"] = build_readiness_summary(result)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
+
+
+def build_readiness_summary(result: dict[str, Any]) -> dict[str, Any]:
+    entrypoints = result.get("entrypoints") if isinstance(result.get("entrypoints"), list) else []
+    configured_count = int(result.get("entrypoint_count", len(entrypoints)) or 0)
+    status = str(result.get("status", "unknown"))
+    claim_boundary = result.get("claim_boundary") if isinstance(result.get("claim_boundary"), dict) else {}
+    entrypoint_summaries = []
+    for entry in entrypoints:
+        if not isinstance(entry, dict):
+            continue
+        entrypoint_summaries.append(
+            {
+                "id": entry.get("id"),
+                "purpose": entry.get("purpose"),
+                "status": entry.get("status"),
+                "proof_class": entry.get("proof_class", "unknown"),
+                "run_id": entry.get("run_id", "unknown"),
+                "judge_focus": entry.get("judge_focus", []),
+            }
+        )
+    return {
+        "report_kind": "judge-entrypoints-summary",
+        "headline": f"{configured_count} judge entrypoints ready; status={status}; semantic_gate=false",
+        "readiness": {
+            "status": status,
+            "configured_count": configured_count,
+            "validation_status": status,
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "semantic_claim_source": claim_boundary.get("semantic_claim_source", "accepted_evidence_binding"),
+            "generated_draft_semantic_pass": claim_boundary.get("generated_draft_semantic_pass", False),
+            "translation_coverage_numerator": claim_boundary.get("translation_coverage_numerator", 0),
+        },
+        "entrypoints": entrypoint_summaries,
+    }
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -685,6 +723,18 @@ def validate_tracked_manifest_contract(
     }
 
 
+def entrypoint_metadata(entry: dict[str, Any]) -> dict[str, Any]:
+    judge_focus = entry.get("judge_focus", [])
+    return {
+        "id": entry.get("id"),
+        "purpose": entry.get("purpose"),
+        "priority": entry.get("priority"),
+        "proof_class": entry.get("proof_class", "unknown"),
+        "run_id": entry.get("run_id", "unknown"),
+        "judge_focus": list(judge_focus) if isinstance(judge_focus, list) else [],
+    }
+
+
 def require_object(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{label} must be an object")
@@ -1127,6 +1177,66 @@ def validate_judge_graph_contract(
     }
 
 
+def validate_judge_headline_contract(
+    payload: dict[str, Any],
+    *,
+    boundary: dict[str, Any],
+    architecture: dict[str, Any],
+    opencode_runtime_result: dict[str, Any] | None,
+) -> dict[str, Any]:
+    headline = require_object(payload.get("judge_headline"), "judge_evidence_index.judge_headline")
+    if headline.get("report_kind") != "judge-headline":
+        raise ValueError("judge_evidence_index.judge_headline.report_kind must be judge-headline")
+    if headline.get("semantic_gate") is not False:
+        raise ValueError("judge_evidence_index.judge_headline.semantic_gate must be false")
+    if headline.get("semantic_claim_source") != boundary.get("semantic_claim_source"):
+        raise ValueError("judge_evidence_index.judge_headline.semantic_claim_source must match claim_boundary")
+    if headline.get("generated_draft_semantic_pass") is not boundary.get("generated_draft_semantic_pass"):
+        raise ValueError("judge_evidence_index.judge_headline.generated_draft_semantic_pass must match claim_boundary")
+    if headline.get("translation_coverage_numerator") != boundary.get("translation_coverage_numerator"):
+        raise ValueError("judge_evidence_index.judge_headline.translation_coverage_numerator must match claim_boundary")
+
+    worker_count = architecture.get("worker_count")
+    if isinstance(worker_count, int) and headline.get("worker_count") != worker_count:
+        raise ValueError("judge_evidence_index.judge_headline.worker_count must match harness_architecture.worker_count")
+    graph_runtime = architecture.get("graph_runtime")
+    if graph_runtime is not None and headline.get("graph_runtime") != graph_runtime:
+        raise ValueError("judge_evidence_index.judge_headline.graph_runtime must match harness_architecture.graph_runtime")
+    parallelism = architecture.get("parallelism")
+    if isinstance(parallelism, dict) and headline.get("parallelism") != parallelism:
+        raise ValueError("judge_evidence_index.judge_headline.parallelism must match harness_architecture.parallelism")
+    retry_policy = architecture.get("retry_policy")
+    if isinstance(retry_policy, dict):
+        if headline.get("repair_round_cap") != retry_policy.get("round_cap"):
+            raise ValueError("judge_evidence_index.judge_headline.repair_round_cap must match harness_architecture.retry_policy.round_cap")
+        if headline.get("repair_checkpoint") != retry_policy.get("checkpoint"):
+            raise ValueError("judge_evidence_index.judge_headline.repair_checkpoint must match harness_architecture.retry_policy.checkpoint")
+
+    runtime_headline = require_object(headline.get("opencode_runtime"), "judge_evidence_index.judge_headline.opencode_runtime")
+    if runtime_headline.get("chat_output_is_evidence") is not False:
+        raise ValueError("judge_evidence_index.judge_headline.opencode_runtime.chat_output_is_evidence must be false")
+    if runtime_headline.get("semantic_gate") is not False:
+        raise ValueError("judge_evidence_index.judge_headline.opencode_runtime.semantic_gate must be false")
+    if opencode_runtime_result is not None:
+        if runtime_headline.get("enabled") is not True:
+            raise ValueError("judge_evidence_index.judge_headline.opencode_runtime.enabled must be true")
+        if runtime_headline.get("worker_count") != opencode_runtime_result["worker_count"]:
+            raise ValueError("judge_evidence_index.judge_headline.opencode_runtime.worker_count must match opencode_agent_runtime.worker_count")
+        if runtime_headline.get("all_contracts_executed") is not True:
+            raise ValueError("judge_evidence_index.judge_headline.opencode_runtime.all_contracts_executed must be true")
+    else:
+        if runtime_headline.get("enabled") is not False:
+            raise ValueError("judge_evidence_index.judge_headline.opencode_runtime.enabled must be false without opencode_agent_runtime")
+
+    return {
+        "status": "passed",
+        "report_kind": "judge-headline",
+        "worker_count": headline.get("worker_count"),
+        "repair_round_cap": headline.get("repair_round_cap"),
+        "opencode_runtime_enabled": runtime_headline.get("enabled"),
+    }
+
+
 def validate_judge_evidence_artifact_refs(
     payload: dict[str, Any],
     *,
@@ -1239,6 +1349,12 @@ def validate_judge_evidence_index_contract(
         architecture,
         opencode_runtime_result=opencode_runtime_result,
     )
+    headline_contract = validate_judge_headline_contract(
+        payload,
+        boundary=boundary,
+        architecture=architecture,
+        opencode_runtime_result=opencode_runtime_result,
+    )
     artifact_refs = validate_judge_evidence_artifact_refs(
         payload,
         expected_artifacts=expected_artifacts,
@@ -1252,6 +1368,7 @@ def validate_judge_evidence_index_contract(
         "status": "passed",
         "architecture_contracts": "passed",
         "graph_contract": graph_contract,
+        "judge_headline": headline_contract,
         "evidence_artifact_refs": artifact_refs,
         "local_absolute_path_scan": local_path_scan,
     }
@@ -1760,11 +1877,10 @@ def validate_config(
             expected_artifacts = entry.get("expected_artifacts", {})
             review_checklist_result = validate_entrypoint_review_checklist_ref(entry, repo_root=repo_root)
             if is_competition_smoke_entrypoint(entry):
-                entrypoint_results.append(
+                entry_result = entrypoint_metadata(entry)
+                entry_result.update(
                     {
-                        "id": entry.get("id"),
                         "status": "passed",
-                        "purpose": entry.get("purpose"),
                         "smoke_contract": validate_competition_smoke_entrypoint_contract(entry),
                         "review_checklist": review_checklist_result["ref"],
                         "review_checklist_contract": review_checklist_result["contract"],
@@ -1780,12 +1896,14 @@ def validate_config(
                         ),
                     }
                 )
+                entrypoint_results.append(
+                    entry_result
+                )
                 continue
-            entrypoint_results.append(
+            entry_result = entrypoint_metadata(entry)
+            entry_result.update(
                 {
-                    "id": entry.get("id"),
                     "status": "passed",
-                    "purpose": entry.get("purpose"),
                     "profile": validate_ref(entry["profile"], repo_root=repo_root),
                     "profile_contract": (
                         validate_entrypoint_profile_contract(
@@ -1818,6 +1936,9 @@ def validate_config(
                         repo_root=repo_root,
                     ),
                 }
+            )
+            entrypoint_results.append(
+                entry_result
             )
         except (KeyError, ValueError) as error:
             entrypoint_results.append({"id": entry.get("id") if isinstance(entry, dict) else None, "status": "failed"})
