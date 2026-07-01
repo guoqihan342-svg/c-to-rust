@@ -574,6 +574,53 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertFalse(publication_manifest["claim_boundary"]["semantic_gate"])
         self.assertFalse(publication_manifest["claim_boundary"]["publication_manifest_is_semantic_gate"])
         self.assertEqual(publication_manifest["claim_boundary"]["translation_coverage_numerator"], 0)
+        quantitative_evaluation = report["quantitative_evaluation"]
+        self.assertEqual(quantitative_evaluation["report_kind"], "quantitative-evaluation-scorecard")
+        self.assertEqual(quantitative_evaluation["evaluation_scope"], "bounded-mvp")
+        self.assertFalse(quantitative_evaluation["semantic_gate"])
+        self.assertFalse(quantitative_evaluation["generated_draft_semantic_pass"])
+        self.assertEqual(quantitative_evaluation["translation_coverage_numerator"], 0)
+        self.assertFalse(quantitative_evaluation["claim_boundary"]["semantic_gate"])
+        self.assertFalse(quantitative_evaluation["claim_boundary"]["scorecard_is_semantic_gate"])
+        self.assertEqual(quantitative_evaluation["claim_boundary"]["translation_coverage_numerator"], 0)
+        self.assertEqual(quantitative_evaluation["project_slice_counts"]["workflow_units_total"], 3)
+        self.assertEqual(quantitative_evaluation["project_slice_counts"]["workflow_units_converged"], 3)
+        self.assertEqual(quantitative_evaluation["project_slice_counts"]["before_after_bound_unit_count"], 1)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["accepted_evidence_semantic_pass_count"], 3)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["blocked_repair_count"], 0)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["human_interventions"], 0)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["status"], "measured")
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["baseline_total_unsafe"], 2)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["current_total_unsafe"], 0)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["reduced_by"], 2)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["scope"], "partial")
+        self.assertEqual(quantitative_evaluation["baseline_comparison"]["raw_c2rust"]["status"], "not_verified_here")
+        self.assertFalse(
+            quantitative_evaluation["baseline_comparison"]["raw_c2rust"]["semantic_acceptance_claimed"]
+        )
+        self.assertEqual(
+            quantitative_evaluation["baseline_comparison"]["typed_ir_route"]["tracked_route_decision_artifacts"],
+            4,
+        )
+        self.assertEqual(
+            quantitative_evaluation["baseline_comparison"]["opencode_llm_worker"]["status"],
+            "command_contract_executed",
+        )
+        self.assertFalse(
+            quantitative_evaluation["baseline_comparison"]["opencode_llm_worker"]["chat_output_is_evidence"]
+        )
+        self.assertEqual(
+            quantitative_evaluation["baseline_comparison"]["handwritten_reference"][
+                "accepted_evidence_semantic_pass_count"
+            ],
+            3,
+        )
+        self.assertFalse(
+            quantitative_evaluation["baseline_comparison"]["handwritten_reference"][
+                "counts_as_translator_generated_coverage"
+            ]
+        )
         self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
@@ -719,6 +766,47 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(expanded, schema)
 
+        missing_quantitative_evaluation = json.loads(json.dumps(report))
+        missing_quantitative_evaluation.pop("quantitative_evaluation")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_quantitative_evaluation, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["claim_boundary"]["scorecard_is_semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["claim_boundary"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"][
+            "semantic_acceptance_claimed"
+        ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["opencode_llm_worker"][
+            "chat_output_is_evidence"
+        ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["handwritten_reference"][
+            "counts_as_translator_generated_coverage"
+        ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
         missing_blocked_repairs = json.loads(json.dumps(report))
         missing_blocked_repairs.pop("blocked_repairs_rollup")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
@@ -748,6 +836,30 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         missing_blocked_claim["must_not_claim"].remove("blocked_repairs_are_not_translation_success")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_blocked_claim, schema)
+
+    def test_quantitative_evaluation_keeps_opencode_chat_output_non_evidence_when_boundary_missing(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        scorecard = bundle.build_quantitative_evaluation(
+            workflow_metrics={"rollup": {}},
+            route_governance_metrics={"rollup": {}},
+            before_after_repair_exhibit={"rollup": {}},
+            blocked_repairs_rollup={"rollup": {}},
+            unsafe_scope={},
+            semantic_evidence={},
+            opencode_runtime={"enabled_entrypoint_count": 1, "all_contracts_executed": False},
+            proof_classes={"entrypoints": []},
+            publishability={},
+        )
+
+        self.assertEqual(
+            scorecard["baseline_comparison"]["opencode_llm_worker"]["status"],
+            "command_contract_incomplete",
+        )
+        self.assertFalse(scorecard["baseline_comparison"]["opencode_llm_worker"]["chat_output_is_evidence"])
+        self.assertFalse(scorecard["claim_boundary"]["semantic_gate"])
+        self.assertFalse(scorecard["semantic_gate"])
+        self.assertEqual(scorecard["translation_coverage_numerator"], 0)
 
     def test_bundle_blocks_malformed_run_report_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

@@ -127,6 +127,17 @@ def build_judge_milestone_bundle(
     )
     must_not_claim = build_must_not_claim(opencode_runtime)
     known_gaps = build_known_gaps(proof_classes=proof_classes, opencode_runtime=opencode_runtime)
+    quantitative_evaluation = build_quantitative_evaluation(
+        workflow_metrics=workflow_metrics,
+        route_governance_metrics=route_governance_metrics,
+        before_after_repair_exhibit=before_after_repair_exhibit,
+        blocked_repairs_rollup=blocked_repairs_rollup,
+        unsafe_scope=unsafe_scope,
+        semantic_evidence=semantic_evidence,
+        opencode_runtime=opencode_runtime,
+        proof_classes=proof_classes,
+        publishability=publishability,
+    )
     report = {
         "schema_version": 1,
         "report_kind": "judge-milestone-bundle",
@@ -161,6 +172,7 @@ def build_judge_milestone_bundle(
         "must_not_claim": must_not_claim,
         "known_gaps": known_gaps,
         "reproduction_commands": reproduction_commands,
+        "quantitative_evaluation": quantitative_evaluation,
         "publication_manifest": build_publication_manifest(
             run_report=run_report,
             run_report_path=run_report_path,
@@ -832,6 +844,7 @@ def build_must_not_claim(opencode_runtime: dict[str, Any]) -> list[str]:
         "blocked_repairs_are_not_translation_success",
         "before_after_exhibit_is_not_new_semantic_gate",
         "bundle_status_passed_is_not_project_level_translation_success",
+        "quantitative_scorecard_is_not_semantic_acceptance",
         "local_simulation_is_not_competition_exact",
         "review_checklist_is_not_semantic_acceptance",
     ]
@@ -909,6 +922,177 @@ def build_known_gaps(*, proof_classes: dict[str, Any], opencode_runtime: dict[st
             }
         )
     return gaps
+
+
+def build_quantitative_evaluation(
+    *,
+    workflow_metrics: dict[str, Any],
+    route_governance_metrics: dict[str, Any],
+    before_after_repair_exhibit: dict[str, Any],
+    blocked_repairs_rollup: dict[str, Any],
+    unsafe_scope: dict[str, Any],
+    semantic_evidence: dict[str, Any],
+    opencode_runtime: dict[str, Any],
+    proof_classes: dict[str, Any],
+    publishability: dict[str, Any],
+) -> dict[str, Any]:
+    workflow_rollup = (
+        workflow_metrics.get("rollup", {}) if isinstance(workflow_metrics.get("rollup"), dict) else {}
+    )
+    route_rollup = (
+        route_governance_metrics.get("rollup", {})
+        if isinstance(route_governance_metrics.get("rollup"), dict)
+        else {}
+    )
+    before_after_rollup = (
+        before_after_repair_exhibit.get("rollup", {})
+        if isinstance(before_after_repair_exhibit.get("rollup"), dict)
+        else {}
+    )
+    blocked_rollup = (
+        blocked_repairs_rollup.get("rollup", {})
+        if isinstance(blocked_repairs_rollup.get("rollup"), dict)
+        else {}
+    )
+    repair_activity = (
+        workflow_rollup.get("repair_activity", {}) if isinstance(workflow_rollup.get("repair_activity"), dict) else {}
+    )
+    unsafe_reduction = (
+        workflow_rollup.get("unsafe_reduction", {}) if isinstance(workflow_rollup.get("unsafe_reduction"), dict) else {}
+    )
+    accepted_evidence_count = int_or_zero(route_rollup.get("accepted_evidence_semantic_pass_count"))
+    tracked_route_decisions = int_or_zero(route_rollup.get("tracked_route_decision_artifacts"))
+    tracked_slice_contexts = int_or_zero(route_rollup.get("tracked_slice_gate_contexts"))
+    opencode_enabled = int_or_zero(opencode_runtime.get("enabled_entrypoint_count")) > 0
+    opencode_status = (
+        "command_contract_executed"
+        if opencode_enabled and bool(opencode_runtime.get("all_contracts_executed"))
+        else "command_contract_incomplete"
+        if opencode_enabled
+        else "not_enabled"
+    )
+    return {
+        "report_kind": "quantitative-evaluation-scorecard",
+        "evaluation_scope": "bounded-mvp",
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "project_slice_counts": {
+            "entrypoint_count": len(
+                [
+                    entry
+                    for entry in proof_classes.get("entrypoints", [])
+                    if isinstance(entry, dict)
+                ]
+            ),
+            "workflow_source_count": int_or_zero(workflow_rollup.get("source_count")),
+            "workflow_units_total": int_or_zero(workflow_rollup.get("units_total")),
+            "workflow_units_converged": int_or_zero(workflow_rollup.get("units_converged")),
+            "before_after_bound_unit_count": int_or_zero(before_after_rollup.get("bound_unit_count")),
+            "tracked_route_decision_artifacts": tracked_route_decisions,
+            "tracked_slice_gate_contexts": tracked_slice_contexts,
+        },
+        "outcome_counts": {
+            "accepted_evidence_semantic_pass_count": accepted_evidence_count,
+            "translator_generated_semantic_pass_count": int_or_zero(
+                semantic_evidence.get("translator_generated_semantic_pass_count")
+            ),
+            "translation_coverage_numerator": 0,
+            "generated_draft_semantic_pass": False,
+            "blocked_repair_count": int_or_zero(blocked_rollup.get("blocked_repair_count")),
+            "human_action_required_count": int_or_zero(blocked_rollup.get("human_action_required_count")),
+            "human_interventions": int_or_zero(workflow_rollup.get("human_interventions")),
+            "llm_calls": int_or_zero(workflow_rollup.get("llm_calls")),
+            "auto_recovered_unit_count": int_or_zero(before_after_rollup.get("auto_recovered_unit_count")),
+            "rollback_evidence_count": int_or_zero(before_after_rollup.get("rollback_evidence_count")),
+        },
+        "unsafe_reduction": {
+            "status": unsafe_reduction.get("status", "unknown"),
+            "baseline_total_unsafe": int_or_none(unsafe_reduction.get("baseline_total_unsafe")),
+            "current_total_unsafe": int_or_none(unsafe_reduction.get("current_total_unsafe")),
+            "reduced_by": int_or_none(unsafe_reduction.get("reduced_by")),
+            "scope": unsafe_scope.get("scope", "unknown"),
+            "all_sources_measured": bool(unsafe_scope.get("all_sources_measured")),
+            "measured_units": int_or_zero(unsafe_scope.get("measured_units")),
+            "total_units": int_or_zero(unsafe_scope.get("total_units")),
+        },
+        "repair_activity": {
+            "observed_source_count": int_or_zero(repair_activity.get("observed_source_count")),
+            "repair_history_unit_count": int_or_zero(repair_activity.get("repair_history_unit_count")),
+            "auto_recovered_unit_count": int_or_zero(repair_activity.get("auto_recovered_unit_count")),
+            "avg_repair_rounds": number_or_zero(repair_activity.get("avg_repair_rounds")),
+            "auto_recovery_rate": number_or_zero(repair_activity.get("auto_recovery_rate")),
+            "human_interventions": int_or_zero(repair_activity.get("human_interventions")),
+        },
+        "baseline_comparison": {
+            "raw_c2rust": comparison_row(
+                status="not_verified_here",
+                evidence_role="baseline_or_candidate_context_only",
+                boundary="No raw C2Rust output is newly accepted by this milestone bundle.",
+            ),
+            "c2rust_repair": comparison_row(
+                status="not_verified_here",
+                evidence_role="baseline_or_repair_context_only",
+                boundary="C2Rust repair remains subject to the same validators and is not accepted by this scorecard.",
+            ),
+            "typed_ir_route": comparison_row(
+                status="route_governance_tracked",
+                evidence_role="candidate_generation_and_refusal_governance",
+                boundary="Typed-IR route metrics are governance signals, not semantic acceptance.",
+                tracked_route_decision_artifacts=tracked_route_decisions,
+                tracked_slice_gate_contexts=tracked_slice_contexts,
+            ),
+            "opencode_llm_worker": comparison_row(
+                status=opencode_status,
+                evidence_role="command_contract_and_worker_runtime",
+                boundary="OpenCode worker evidence records command-contract execution; chat output is not semantic evidence.",
+                worker_count=int_or_zero(opencode_runtime.get("worker_count")),
+                chat_output_is_evidence=False,
+                chat_output_boundary_ok=bool(opencode_runtime.get("chat_output_is_evidence_false")),
+            ),
+            "handwritten_reference": comparison_row(
+                status="accepted_evidence_context",
+                evidence_role="oracle_or_reference_context",
+                boundary="Accepted evidence may validate a case but does not become translator-generated coverage.",
+                accepted_evidence_semantic_pass_count=accepted_evidence_count,
+                counts_as_translator_generated_coverage=False,
+            ),
+        },
+        "proof_class_summary": {
+            "highest_proof_class": proof_classes.get("highest_proof_class", "unknown"),
+            "competition_exact_publishable": bool(publishability.get("competition_exact_publishable")),
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "scorecard_is_semantic_gate": False,
+            "baseline_comparison_is_semantic_acceptance": False,
+        },
+        "boundary": (
+            "This scorecard summarizes existing validator-owned artifacts for judge review. It is not a new "
+            "semantic gate, does not increase translator-generated coverage, and does not claim competition-exact proof."
+        ),
+    }
+
+
+def comparison_row(
+    *,
+    status: str,
+    evidence_role: str,
+    boundary: str,
+    **extra: Any,
+) -> dict[str, Any]:
+    row = {
+        "status": status,
+        "evidence_role": evidence_role,
+        "semantic_acceptance_claimed": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": boundary,
+    }
+    row.update(extra)
+    return row
 
 
 def build_publication_manifest(
