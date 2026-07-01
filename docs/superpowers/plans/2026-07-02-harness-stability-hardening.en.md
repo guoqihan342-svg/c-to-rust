@@ -34,7 +34,7 @@ Chinese original: `2026-07-02-harness-stability-hardening.md`.
 | Stale summary deletion failure is unhandled | Valid; Windows, antivirus, or concurrent handles can trigger it | Covered by Task 5.3a: fail closed, do not launch the worker, and do not accept the stale summary | H7/P0 |
 | Deterministic worker has no transient retry | Reasonable finding, but it should not displace the H7 mainline; deterministic workers remain fail-fast until idempotency and side-effect contracts are explicit | Deferred; a future short retry window must first define idempotent input, out-root cleanup, and summary overwrite contracts | P1/Deferred |
 | Top-level JSON error envelope | Valuable, but not a blocker for the completed stability contract | Deferred to Task 5.3b; needs a separate design to avoid swallowing traceback or breaking exit codes | P1 |
-| Real subprocess timeout integration tests | Valuable because they cover OS behavior that mocks miss | Add to the post-H7 verification pool; current unit tests cover the `TimeoutExpired` contract | P1/verification |
+| Real subprocess timeout integration tests | Valuable because they cover OS behavior that mocks miss | Completed with a real `subprocess.run` sleep timeout test proving a 1-second timeout is normalized to `124` at the OS boundary | Done/Post-H7 |
 
 ## Parallel Work Split
 
@@ -51,15 +51,18 @@ All agents should hand back small patches or worktree diffs. One main integrator
 - Done: Task 1 timeout envelope; Task 2 Python command portability split with the shared `python3 -B` portable strategy; Task 3 atomic critical evidence writes; Task 4 retry/lock/lease/fencing guardrails; Task 5 Steps 1-2 POSIX shell contract; Task 6 translator smoke fixes.
 - Verified: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`, `python -B -m unittest validation.tools.test_doc_mirror_contract -q`, `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`, `python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass`, `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json`, and `python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json`.
 - Current patch: Task 5 Step 3a stale summary cleanup fail-closed has focused test coverage; focused `--entrypoint-id` runner post-run local-artifact validation now writes `selected-entrypoints-validation-config.json` and deep-validates only the entrypoints executed in that run, so smoke/triage runs are not failed by stale artifacts from unexecuted `target/` outputs.
+- Latest patch: Task 1 now includes a real subprocess timeout integration test. It calls `subprocess.run` with a `time.sleep(5)` child process and proves that `timeout_seconds=1` returns around the one-second boundary with exit code `124` and stable timeout stderr; this closes the verification gap where only mocked `TimeoutExpired` behavior was covered. `validate_judge_entrypoints --require-local-artifacts` also binds the smoke-summary step set to `commands.jsonl`, so a command log missing any summary step fails closed instead of masquerading as a complete smoke evidence chain.
 - H7/P0 status: closed. The `competition_environment_smoke` entrypoint runs through the runner and post-run deep validation under local `local-simulation`; environment checks still record local proof-class degradation and do not claim `competition-exact`.
-- Deferred: the top-level JSON error envelope, real subprocess sleep/timeout integration tests, and deterministic-worker short retry policy remain P1 and do not block H7.
+- Deferred: the top-level JSON error envelope and deterministic-worker short retry policy remain P1 and do not block H7.
 
 ## Current Checklist
 
 - H7/P0 implemented: timeout, portable command, atomic write, retry cap, OpenCode lock classification, fencing audit contract, assignment transaction, POSIX shell contract, and translator smoke fix are implemented in code and tests.
 - Stale summary cleanup included in H7/P0: old-summary removal failures now fail closed, do not launch the worker, do not record the old summary, and open a `stale_summary_cleanup_failed` repair hint.
 - Judge smoke refreshed: the focused `competition_environment_smoke` runner passed, and post-run validation uses the generated selected-entrypoint config; local proof class remains `local-simulation`.
-- P1 deferred: top-level JSON error envelope, real subprocess sleep/timeout integration tests, and deterministic-worker short retry policy.
+- Post-H7 verification strengthened: the real `subprocess.run` sleep timeout integration test passed, covering OS timeout behavior that mocks do not cover.
+- Command-log drift guard strengthened: local-artifact deep validation now requires `commands.jsonl` to cover every smoke-summary step.
+- P1 deferred: top-level JSON error envelope and deterministic-worker short retry policy.
 
 ---
 
@@ -81,11 +84,15 @@ Add a configurable timeout field, for example `--worker-timeout-seconds`, propag
 
 Catch `subprocess.TimeoutExpired` beside `OSError`, return a `CompletedProcess` with exit code `124`, and write blocked/repair summaries with `root_cause_key=process_timeout` or an equivalent stable key. Ensure auto-retry can retry a timeout while still respecting the five-round cap and final blocked status.
 
+- [x] **Step 3a: Add real subprocess timeout integration test**
+
+Add one focused test that uses the real `subprocess.run` command runner with the current Python interpreter and a `time.sleep(5)` child process. With `timeout_seconds=1`, the harness must return within a bounded wall-clock window, report `returncode == 124`, and include `timed out after 1 seconds` in stderr.
+
 - [x] **Step 4: Verify**
 
 Run: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`
 
-Expected: OK, with new tests proving timeout kwargs and timeout evidence.
+Expected: OK, with tests proving timeout kwargs, timeout evidence, and real subprocess timeout behavior.
 
 ### Task 2: Python Command Portability Split
 

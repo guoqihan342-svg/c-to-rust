@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -4724,6 +4725,22 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertIn("partial stdout", completed.stdout)
         self.assertIn("partial stderr", completed.stderr)
         self.assertIn("timed out after 7 seconds", completed.stderr)
+
+    def test_run_worker_process_once_real_subprocess_timeout(self) -> None:
+        started_at = time.monotonic()
+
+        completed = harness.run_worker_process_once(
+            argv=[sys.executable, "-B", "-c", "import time; time.sleep(5)"],
+            command_runner=subprocess.run,
+            repo_root=REPO_ROOT,
+            timeout_seconds=1,
+        )
+
+        elapsed = time.monotonic() - started_at
+        self.assertLess(elapsed, 4.0)
+        self.assertEqual(completed.returncode, 124)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("timed out after 1 seconds", completed.stderr)
 
     def test_opencode_preflight_timeout_records_124_and_logs(self) -> None:
         with temp_repo_dir() as tmp:

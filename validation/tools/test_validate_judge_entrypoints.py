@@ -47,17 +47,20 @@ def write_json(path: Path, payload: dict) -> None:
 def write_valid_command_log(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(
-            {
-                "step": "core-auto-evidence-validator",
-                "command": ["python.exe", "validation/tools/validator.py"],
-                "returncode": 0,
-                "stdout": "",
-                "stderr": "",
-            },
-            sort_keys=True,
-        )
-        + "\n",
+        "".join(
+            json.dumps(
+                {
+                    "step": step,
+                    "command": ["python3", "-B", "validation/tools/run_competition_smoke.py", "--step", step],
+                    "returncode": 0,
+                    "stdout": "",
+                    "stderr": "",
+                },
+                sort_keys=True,
+            )
+            + "\n"
+            for step in validator.REQUIRED_COMPETITION_SMOKE_STEPS
+        ),
         encoding="utf-8",
     )
     return validator.sha256_file(path)
@@ -2223,6 +2226,75 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     smoke_contract={
                         "proof_class": "local-simulation",
                         "run_id": "smoke-command-log-sha-drift-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_command_log_missing_summary_step(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-command-log-step-coverage-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_json(evidence_governance, {})
+            write_json(coverage_matrix, {})
+            write_json(milestone, {})
+            command_log.parent.mkdir(parents=True, exist_ok=True)
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["python3", "-B", "validation/tools/run_competition_smoke.py"],
+                        "returncode": 0,
+                        "stdout": "",
+                        "stderr": "",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log missing summary steps",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-command-log-step-coverage-test",
                     },
                 )
 

@@ -34,7 +34,7 @@
 | stale summary 删除失败未处理 | 成立；Windows/杀毒/并发句柄会触发 | 已进入 Task 5.3a，删除失败 fail-closed，不启动 worker，不接受旧 summary | H7/P0 |
 | deterministic worker 零瞬时重试 | 有道理但不应抢 H7 主线；deterministic worker 当前按 fail-fast 处理，避免在缺少幂等/副作用合同前重复执行 | 后置；未来若要加短重试窗口，必须先定义幂等输入、输出目录清理和 summary 覆盖合同 | P1/Deferred |
 | 顶层 JSON error envelope | 有价值，但不应阻塞已完成稳定性合同 | 后置为 Task 5.3b；需要独立设计，避免吞 traceback 或改坏 exit code | P1 |
-| 真实子进程集成 timeout 测试 | 有价值，能覆盖 mock 不到的 OS 行为 | 放入 H7 后续验证池；当前单元测试已覆盖 `TimeoutExpired` 合同 | P1/验证增强 |
+| 真实子进程集成 timeout 测试 | 有价值，能覆盖 mock 不到的 OS 行为 | 已补真实 `subprocess.run` sleep timeout 集成测试，验证 1 秒超时会在 OS 层被规范化为 `124` | Done/Post-H7 |
 
 ## 并行分工
 
@@ -51,15 +51,18 @@
 - 已完成：Task 1 timeout envelope；Task 2 Python command portability split（统一 `python3 -B` portable strategy）；Task 3 atomic critical evidence writes；Task 4 retry/lock/lease/fencing guardrails；Task 5 Step 1-2 POSIX shell contract；Task 6 translator smoke 修复。
 - 已验证：`python -B -m unittest validation.tools.test_opencode_agent_harness -q`、`python -B -m unittest validation.tools.test_doc_mirror_contract -q`、`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`、`python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass`、`python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json`、`python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json`。
 - 当前补丁：Task 5 Step 3a stale summary cleanup fail-closed 已有单测覆盖；focused `--entrypoint-id` runner 的 post-run local-artifact validation 现在会生成 `selected-entrypoints-validation-config.json`，只深校验本次执行的入口，避免未执行入口的旧 `target/` artifact 让 smoke/triage 误失败。
+- 最新补丁：Task 1 追加真实子进程 timeout 集成测试，直接调用 `subprocess.run` 执行 `time.sleep(5)`，验证 `timeout_seconds=1` 时 harness 会在约 1 秒内返回 `124` 并写出稳定 timeout stderr；这关闭了“只 mock `TimeoutExpired`、没覆盖 OS 行为”的验证缺口。`validate_judge_entrypoints --require-local-artifacts` 还把 smoke summary 的 step 集合绑定到 `commands.jsonl`，缺任一 summary step 的 command log 会 fail-closed，避免单步日志冒充完整 smoke 证据链。
 - H7/P0 状态：已封顶。`competition_environment_smoke` 在本机 `local-simulation` proof class 下可跑通 runner 和 post-run 深校验；环境检查仍按 proof class 记录本机降级，不冒充 `competition-exact`。
-- 后置：顶层 JSON error envelope、真实子进程 sleep/timeout 集成测试、deterministic worker 短重试策略，均为 P1，不阻塞 H7。
+- 后置：顶层 JSON error envelope、deterministic worker 短重试策略，均为 P1，不阻塞 H7。
 
 ## 当前核对表
 
 - H7/P0 implemented：timeout、portable command、atomic write、retry cap、OpenCode lock、fencing audit contract、assignment transaction、POSIX shell contract、translator smoke fix 均已落到代码和测试。
 - stale summary cleanup included in H7/P0：旧 summary 删除失败现在 fail-closed，不启动 worker，不记录旧 summary，并打开 `stale_summary_cleanup_failed` repair hint。
 - judge smoke refreshed：focused `competition_environment_smoke` runner 已通过，post-run 深校验使用选中入口过滤配置；本地 proof class 明确保持 `local-simulation`。
-- P1 deferred：top-level JSON error envelope、real subprocess sleep/timeout integration tests、deterministic worker short retry policy。
+- post-H7 verification strengthened：真实 `subprocess.run` sleep timeout 集成测试已通过，覆盖 mock 不到的 OS timeout 行为。
+- command-log drift guard strengthened：本地 artifact 深校验现在要求 `commands.jsonl` 覆盖 smoke summary 的全部 steps。
+- P1 deferred：top-level JSON error envelope、deterministic worker short retry policy。
 
 ---
 
@@ -81,11 +84,15 @@ Add a configurable timeout field, for example `--worker-timeout-seconds`, propag
 
 Catch `subprocess.TimeoutExpired` beside `OSError`, return a `CompletedProcess` with exit code `124`, and write blocked/repair summaries with `root_cause_key=process_timeout` or an equivalent stable key. Ensure auto-retry can retry a timeout but still respects the five-round cap and final blocked status.
 
+- [x] **Step 3a: Add real subprocess timeout integration test**
+
+Add one focused test that uses the real `subprocess.run` command runner with the current Python interpreter and a `time.sleep(5)` child process. With `timeout_seconds=1`, the harness must return within a bounded wall-clock window, report `returncode == 124`, and include `timed out after 1 seconds` in stderr.
+
 - [x] **Step 4: Verify**
 
 Run: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`
 
-Expected: OK, with new tests proving timeout kwargs and timeout evidence.
+Expected: OK, with tests proving timeout kwargs, timeout evidence, and real subprocess timeout behavior.
 
 ### Task 2: Python Command Portability Split
 

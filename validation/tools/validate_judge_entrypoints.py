@@ -616,10 +616,15 @@ def validate_competition_smoke_artifact_roots(payload: dict[str, Any]) -> dict[s
     return {"status": "passed", "root_count": len(roots)}
 
 
-def validate_competition_smoke_command_log_contract(command_log_path: Path) -> dict[str, Any]:
+def validate_competition_smoke_command_log_contract(
+    command_log_path: Path,
+    *,
+    expected_steps: list[str] | None = None,
+) -> dict[str, Any]:
     if not command_log_path.is_file():
         raise ValueError("competition_smoke_command_log path must exist")
     checked_entries = 0
+    observed_steps: set[str] = set()
     with command_log_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
@@ -631,6 +636,9 @@ def validate_competition_smoke_command_log_contract(command_log_path: Path) -> d
                 raise ValueError(f"competition_smoke_command_log line {line_number} must be valid JSON") from error
             if not isinstance(entry, dict):
                 raise ValueError(f"competition_smoke_command_log line {line_number} must be an object")
+            step = entry.get("step")
+            if isinstance(step, str) and step:
+                observed_steps.add(step)
             command = entry.get("command")
             if not isinstance(command, list) or not command:
                 raise ValueError(f"competition_smoke_command_log line {line_number} command must be a non-empty list")
@@ -646,7 +654,15 @@ def validate_competition_smoke_command_log_contract(command_log_path: Path) -> d
             checked_entries += 1
     if checked_entries == 0:
         raise ValueError("competition_smoke_command_log must contain at least one entry")
-    return {"status": "passed", "entry_count": checked_entries}
+    if expected_steps is not None:
+        missing_steps = [step for step in expected_steps if step not in observed_steps]
+        if missing_steps:
+            raise ValueError(f"competition_smoke_command_log missing summary steps: {missing_steps}")
+    return {
+        "status": "passed",
+        "entry_count": checked_entries,
+        "observed_steps": sorted(observed_steps),
+    }
 
 
 def validate_vendored_clang_verification_contract(
@@ -2729,7 +2745,15 @@ def validate_harness_artifact_contracts(
         )
         if "command_log" in artifacts:
             command_log_path = repo_path(str(artifacts["command_log"]), repo_root=repo_root)
-            result["competition_smoke_command_log"] = validate_competition_smoke_command_log_contract(command_log_path)
+            expected_log_steps = [
+                require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+                for step in smoke_summary_payload.get("steps", [])
+                if isinstance(step, dict)
+            ]
+            result["competition_smoke_command_log"] = validate_competition_smoke_command_log_contract(
+                command_log_path,
+                expected_steps=expected_log_steps,
+            )
         if "vendored_clang_verification" in artifacts:
             vendored_clang_path = repo_path(str(artifacts["vendored_clang_verification"]), repo_root=repo_root)
             result["vendored_clang_verification"] = validate_vendored_clang_verification_contract(
