@@ -72,6 +72,39 @@
   },
   "entrypoints": [
     {
+      "id": "competition_environment_smoke",
+      "priority": 0,
+      "entrypoint_type": "competition_environment_smoke",
+      "purpose": "competition-environment-smoke",
+      "proof_class": "local-simulation",
+      "run_id": "competition-flashdb-environment-smoke-20260701",
+      "command": "python -B validation/tools/run_competition_smoke.py --proof-class local-simulation --run-id competition-flashdb-environment-smoke-20260701 --out-root target/competition-smoke-flashdb-judge-entrypoint",
+      "verification_commands": [
+        "python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --require-local-artifacts"
+      ],
+      "smoke_contract": {
+        "semantic_gate": false,
+        "semantic_acceptance_boundary": "does_not_translate_new_slices",
+        "generated_draft_semantic_pass": false,
+        "translation_coverage_numerator": 0,
+        "boundary": "This entrypoint proves competition environment and lightweight evidence gates only. It does not translate new slices and does not expand semantic acceptance."
+      },
+      "expected_artifacts": {
+        "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
+        "vendored_clang_verification": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+        "evidence_governance_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+        "translator_coverage_matrix": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+        "milestone_release_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+        "command_log": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl"
+      },
+      "judge_focus": [
+        "competition environment proof-class smoke",
+        "toolchain and vendored clang verification boundary",
+        "lightweight evidence governance and coverage gates",
+        "semantic gate remains false"
+      ]
+    },
+    {
       "id": "before_after_judge_demo",
       "priority": 1,
       "purpose": "core-translation-before-after-exhibit",
@@ -218,6 +251,7 @@
       "h6_judge_reports"
     ],
     "required_entrypoint_ids": [
+      "competition_environment_smoke",
       "before_after_judge_demo",
       "multi_worker_evaluate_profile",
       "opencode_multi_worker_evaluate_profile"

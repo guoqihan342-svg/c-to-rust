@@ -384,6 +384,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(
             set(entrypoints),
             {
+                "competition_environment_smoke",
                 "before_after_judge_demo",
                 "multi_worker_evaluate_profile",
                 "opencode_multi_worker_evaluate_profile",
@@ -422,6 +423,27 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(contract["semantic_claim_source"], "accepted_evidence_binding")
         self.assertFalse(contract["generated_draft_semantic_pass"])
         self.assertEqual(contract["translation_coverage_numerator"], 0)
+
+        smoke = entrypoints["competition_environment_smoke"]
+        self.assertEqual(smoke["priority"], 0)
+        self.assertEqual(smoke["entrypoint_type"], "competition_environment_smoke")
+        self.assertEqual(smoke["purpose"], "competition-environment-smoke")
+        self.assertIn("validation/tools/run_competition_smoke.py", smoke["command"])
+        self.assertIn("--proof-class local-simulation", smoke["command"])
+        self.assertIn("--run-id competition-flashdb-environment-smoke-20260701", smoke["command"])
+        self.assertIn("--out-root target/competition-smoke-flashdb-judge-entrypoint", smoke["command"])
+        self.assertFalse(smoke["smoke_contract"]["semantic_gate"])
+        self.assertFalse(smoke["smoke_contract"]["generated_draft_semantic_pass"])
+        self.assertEqual(smoke["smoke_contract"]["translation_coverage_numerator"], 0)
+        for artifact in [
+            "competition_smoke_summary",
+            "vendored_clang_verification",
+            "evidence_governance_report",
+            "translator_coverage_matrix",
+            "milestone_release_report",
+            "command_log",
+        ]:
+            self.assertIn(artifact, smoke["expected_artifacts"])
 
         before_after = entrypoints["before_after_judge_demo"]
         self.assertEqual(before_after["priority"], 1)
@@ -514,6 +536,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             self.assertEqual(entry["proof_class"], "local-simulation")
             self.assertIn("python -B", entry["command"])
             for ref_name in ["profile", "tracked_manifest"]:
+                if ref_name not in entry:
+                    continue
                 ref = entry[ref_name]
                 assert_repo_relative_posix(self, ref["path"])
                 path = REPO_ROOT / ref["path"]

@@ -138,7 +138,14 @@ def json_path(parts: tuple[str, ...]) -> str:
 
 
 def is_allowed_host_trace_path(parts: tuple[str, ...]) -> bool:
-    return any(part == "argv" and index > 0 and parts[index - 1] == "merge_execution" for index, part in enumerate(parts))
+    if any(part == "argv" and index > 0 and parts[index - 1] == "merge_execution" for index, part in enumerate(parts)):
+        return True
+    return (
+        len(parts) >= 4
+        and parts[-1] == "value"
+        and parts[-3] == "diagnostic_host_metadata"
+        and parts[-4] == "portability"
+    )
 
 
 def validate_local_absolute_path_policy(payload: Any, *, label: str) -> dict[str, Any]:
@@ -256,6 +263,10 @@ def validate_expected_artifacts(
     return result
 
 
+def is_competition_smoke_entrypoint(entry: dict[str, Any]) -> bool:
+    return entry.get("entrypoint_type") == "competition_environment_smoke"
+
+
 def parsed_command_flags(command: str) -> dict[str, str]:
     flags: dict[str, str] = {}
     parts = shlex.split(command, posix=True)
@@ -275,6 +286,130 @@ def require_command_flag(flags: dict[str, str], flag: str, label: str) -> str:
     if not value:
         raise ValueError(f"{label} command must include {flag}")
     return value
+
+
+def validate_competition_smoke_entrypoint_contract(entry: dict[str, Any]) -> dict[str, Any]:
+    entry_id = str(entry.get("id"))
+    command = require_string(entry.get("command"), f"{entry_id}.command")
+    argv = shlex.split(command, posix=True)
+    if "validation/tools/run_competition_smoke.py" not in argv:
+        raise ValueError(f"{entry_id} command must run validation/tools/run_competition_smoke.py")
+    flags = parsed_command_flags(command)
+    proof_class = require_command_flag(flags, "--proof-class", f"{entry_id}.command")
+    run_id = require_command_flag(flags, "--run-id", f"{entry_id}.command")
+    out_root = require_command_flag(flags, "--out-root", f"{entry_id}.command")
+    if proof_class != entry.get("proof_class"):
+        raise ValueError(f"{entry_id} command --proof-class must match entrypoint proof_class")
+    if run_id != entry.get("run_id"):
+        raise ValueError(f"{entry_id} command --run-id must match entrypoint run_id")
+    if proof_class == "competition-exact" and "--confirm-competition-exact" not in argv:
+        raise ValueError(f"{entry_id} competition-exact smoke requires --confirm-competition-exact")
+    contract = require_object(entry.get("smoke_contract"), f"{entry_id}.smoke_contract")
+    if contract.get("semantic_gate") is not False:
+        raise ValueError(f"{entry_id}.smoke_contract.semantic_gate must be false")
+    if contract.get("generated_draft_semantic_pass") is not False:
+        raise ValueError(f"{entry_id}.smoke_contract.generated_draft_semantic_pass must be false")
+    if contract.get("translation_coverage_numerator") != 0:
+        raise ValueError(f"{entry_id}.smoke_contract.translation_coverage_numerator must be 0")
+    if contract.get("semantic_acceptance_boundary") != "does_not_translate_new_slices":
+        raise ValueError(f"{entry_id}.smoke_contract.semantic_acceptance_boundary must be does_not_translate_new_slices")
+    expected_artifact_paths = validate_expected_artifacts_under_out_root(entry, out_root=out_root)
+    return {
+        "status": "passed",
+        "proof_class": proof_class,
+        "run_id": run_id,
+        "reproduction_out_root": out_root,
+        "expected_artifact_count": len(expected_artifact_paths),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+    }
+
+
+def validate_competition_smoke_summary_contract(
+    payload: dict[str, Any],
+    *,
+    expected_artifacts: dict[str, Any],
+) -> dict[str, Any]:
+    if payload.get("report_kind") != "competition-smoke-summary":
+        raise ValueError("competition_smoke_summary report_kind must be competition-smoke-summary")
+    boundary = require_object(payload.get("claim_boundary"), "competition_smoke_summary claim_boundary")
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError("competition_smoke_summary claim_boundary.semantic_gate must be false")
+    if boundary.get("generated_draft_semantic_pass") is not False:
+        raise ValueError("competition_smoke_summary claim_boundary.generated_draft_semantic_pass must be false")
+    if boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError("competition_smoke_summary claim_boundary.translation_coverage_numerator must be 0")
+    if "slices" in payload:
+        raise ValueError("competition_smoke_summary must not claim translated slices")
+    smoke_entrypoint = require_object(payload.get("smoke_entrypoint"), "competition_smoke_summary smoke_entrypoint")
+    if smoke_entrypoint.get("semantic_acceptance_boundary") != "does_not_translate_new_slices":
+        raise ValueError("competition_smoke_summary smoke_entrypoint.semantic_acceptance_boundary must be does_not_translate_new_slices")
+    final_gate = require_object(payload.get("final_gate"), "competition_smoke_summary final_gate")
+    if final_gate.get("status") != "passed":
+        raise ValueError("competition_smoke_summary final_gate.status must be passed")
+
+    assert_expected_smoke_path(
+        payload.get("vendored_clang_verification"),
+        "path",
+        expected_artifacts,
+        "vendored_clang_verification",
+        "competition_smoke_summary.vendored_clang_verification.path",
+    )
+    reports = require_object(payload.get("reports"), "competition_smoke_summary reports")
+    assert_expected_smoke_path(
+        reports.get("evidence_governance"),
+        "path",
+        expected_artifacts,
+        "evidence_governance_report",
+        "competition_smoke_summary.reports.evidence_governance.path",
+    )
+    assert_expected_smoke_path(
+        reports.get("translator_coverage_matrix"),
+        "path",
+        expected_artifacts,
+        "translator_coverage_matrix",
+        "competition_smoke_summary.reports.translator_coverage_matrix.path",
+    )
+    assert_expected_smoke_path(
+        payload.get("milestone_release_report"),
+        "path",
+        expected_artifacts,
+        "milestone_release_report",
+        "competition_smoke_summary.milestone_release_report.path",
+    )
+    milestone = require_object(payload.get("milestone_release_report"), "competition_smoke_summary milestone_release_report")
+    if milestone.get("semantic_acceptance_claim") is not False:
+        raise ValueError("competition_smoke_summary milestone_release_report.semantic_acceptance_claim must be false")
+    assert_expected_smoke_path(
+        payload.get("command_log"),
+        "path",
+        expected_artifacts,
+        "command_log",
+        "competition_smoke_summary.command_log.path",
+    )
+    return {
+        "status": "passed",
+        "proof_class": payload.get("proof_class"),
+        "final_gate": final_gate.get("status"),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+    }
+
+
+def assert_expected_smoke_path(
+    container: Any,
+    field: str,
+    expected_artifacts: dict[str, Any],
+    expected_name: str,
+    label: str,
+) -> None:
+    payload = require_object(container, label.rsplit(".", 1)[0])
+    observed = require_string(payload.get(field), label)
+    expected = require_string(expected_artifacts.get(expected_name), f"expected_artifacts.{expected_name}")
+    if observed != expected:
+        raise ValueError(f"{label} must match expected_artifacts.{expected_name}")
 
 
 def validate_claim_boundary(config: dict[str, Any]) -> dict[str, Any]:
@@ -593,6 +728,8 @@ def validate_test_contract(
     if not isinstance(required_artifacts, list):
         raise ValueError("test_contract.required_expected_artifacts must be a list")
     for entry in entrypoints:
+        if is_competition_smoke_entrypoint(entry):
+            continue
         artifacts = require_object(entry.get("expected_artifacts"), f"{entry.get('id')}.expected_artifacts")
         missing = [name for name in required_artifacts if name not in artifacts]
         if missing:
@@ -1554,6 +1691,12 @@ def validate_harness_artifact_contracts(
             repo_root=repo_root,
             expected_artifacts=artifacts,
         )
+    if "competition_smoke_summary" in artifacts:
+        smoke_summary_path = repo_path(str(artifacts["competition_smoke_summary"]), repo_root=repo_root)
+        result["competition_smoke_summary"] = validate_competition_smoke_summary_contract(
+            load_json(smoke_summary_path),
+            expected_artifacts=artifacts,
+        )
     return result
 
 
@@ -1616,6 +1759,28 @@ def validate_config(
                 assert_no_local_absolute_path(audit_command)
             expected_artifacts = entry.get("expected_artifacts", {})
             review_checklist_result = validate_entrypoint_review_checklist_ref(entry, repo_root=repo_root)
+            if is_competition_smoke_entrypoint(entry):
+                entrypoint_results.append(
+                    {
+                        "id": entry.get("id"),
+                        "status": "passed",
+                        "purpose": entry.get("purpose"),
+                        "smoke_contract": validate_competition_smoke_entrypoint_contract(entry),
+                        "review_checklist": review_checklist_result["ref"],
+                        "review_checklist_contract": review_checklist_result["contract"],
+                        "expected_artifacts": validate_expected_artifacts(
+                            expected_artifacts,
+                            require_local_artifacts=require_local_artifacts,
+                            repo_root=repo_root,
+                        ),
+                        "harness_contracts": validate_harness_artifact_contracts(
+                            expected_artifacts,
+                            require_local_artifacts=require_local_artifacts,
+                            repo_root=repo_root,
+                        ),
+                    }
+                )
+                continue
             entrypoint_results.append(
                 {
                     "id": entry.get("id"),

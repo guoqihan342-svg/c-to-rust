@@ -118,11 +118,17 @@ python validation/tools/run_competition_smoke.py \
   --out-root target/competition-smoke
 ```
 
+评委入口中的 `competition_environment_smoke` 使用同一 runner，但输出到 `target/competition-smoke-flashdb-judge-entrypoint`；`competition-smoke-summary.json` 会声明 `claim_boundary.semantic_gate=false`，只证明环境和轻量 evidence gate，不声明新的 semantic pass。
+
 smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；`competition-exact` 会把 vendored clang verifier 作为 required gate。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
 
 评委一键 harness runner：
 
 ```bash
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
 python -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --entrypoint-id before_after_judge_demo \

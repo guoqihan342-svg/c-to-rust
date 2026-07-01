@@ -17,6 +17,13 @@ def load_default_config() -> dict:
     return json.loads(validator.DEFAULT_CONFIG.read_text(encoding="utf-8"))
 
 
+def entrypoint_by_id(config: dict, entrypoint_id: str) -> dict:
+    for entry in config["entrypoints"]:
+        if entry.get("id") == entrypoint_id:
+            return entry
+    raise AssertionError(f"missing entrypoint {entrypoint_id}")
+
+
 def write_temp_config(payload: dict) -> Path:
     target_dir = REPO_ROOT / "target"
     target_dir.mkdir(exist_ok=True)
@@ -259,7 +266,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         result = validator.validate_config(validator.DEFAULT_CONFIG, repo_root=REPO_ROOT)
 
         self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["entrypoint_count"], 3)
+        self.assertEqual(result["entrypoint_count"], 4)
         self.assertEqual(result["proof_class_contract"]["proof_class_default"], "local-simulation")
         self.assertEqual(result["source_pin_contract"]["canonical_commit"], "f9d0421315c564fb890a1b14eee77b290e0d7bbe")
         self.assertIn(
@@ -273,6 +280,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(
             [entry["id"] for entry in result["entrypoints"]],
             [
+                "competition_environment_smoke",
                 "before_after_judge_demo",
                 "multi_worker_evaluate_profile",
                 "opencode_multi_worker_evaluate_profile",
@@ -280,10 +288,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         )
         for entry in result["entrypoints"]:
             self.assertEqual(entry["status"], "passed")
+            if entry["id"] == "competition_environment_smoke":
+                self.assertEqual(entry["smoke_contract"]["status"], "passed")
+                self.assertEqual(entry["review_checklist"]["status"], "skipped")
+                continue
             self.assertEqual(entry["profile"]["status"], "present")
             self.assertEqual(entry["profile_contract"]["status"], "passed")
             self.assertEqual(entry["tracked_manifest"]["status"], "present")
-        before_after = result["entrypoints"][0]
+        smoke = result["entrypoints"][0]
+        smoke_summary = smoke["expected_artifacts"]["competition_smoke_summary"]
+        self.assertIn(smoke_summary["status"], {"missing", "present"})
+        self.assertEqual(
+            smoke_summary["path"],
+            "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
+        )
+        self.assertEqual(smoke["smoke_contract"]["reproduction_out_root"], "target/competition-smoke-flashdb-judge-entrypoint")
+        before_after = result["entrypoints"][1]
         self.assertEqual(before_after["review_checklist"]["status"], "present")
         self.assertEqual(
             before_after["review_checklist"]["path"],
@@ -306,7 +326,6 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "validation.tools.validate_judge_entrypoints",
                 "--config",
                 validator.DEFAULT_CONFIG.relative_to(REPO_ROOT).as_posix(),
-                "--require-local-artifacts",
                 "--out",
                 repo_relative(report_path),
             ],
@@ -323,7 +342,56 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(report["status"], "passed")
         self.assertFalse(report["semantic_gate"])
         self.assertEqual(report["claim_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
-        self.assertEqual(report["entrypoint_count"], 3)
+        self.assertEqual(report["entrypoint_count"], 4)
+
+    def test_competition_smoke_summary_contract_rejects_semantic_gate_claim(self) -> None:
+        payload = {
+            "schema_version": 1,
+            "report_kind": "competition-smoke-summary",
+            "proof_class": "local-simulation",
+            "profile_id": "huawei-competition-ubuntu-24.04",
+            "claim_boundary": {
+                "semantic_gate": True,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "smoke_entrypoint": {
+                "semantic_acceptance_boundary": "does_not_translate_new_slices",
+            },
+            "vendored_clang_verification": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+            },
+            "reports": {
+                "evidence_governance": {
+                    "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+                },
+                "translator_coverage_matrix": {
+                    "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+                },
+            },
+            "milestone_release_report": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+                "semantic_acceptance_claim": False,
+            },
+            "command_log": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            "final_gate": {"status": "passed"},
+            "steps": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "competition_smoke_summary claim_boundary.semantic_gate must be false"):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts={
+                    "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
+                    "vendored_clang_verification": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+                    "evidence_governance_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+                    "translator_coverage_matrix": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+                    "milestone_release_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+                    "command_log": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+                },
+            )
 
     def test_judge_evidence_index_requires_valid_opencode_runtime_when_present(self) -> None:
         payload = {
@@ -551,7 +619,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
     def test_require_local_artifacts_checks_expected_artifact_presence(self) -> None:
         config = load_default_config()
-        config["entrypoints"] = [config["entrypoints"][0]]
+        config["entrypoints"] = [entrypoint_by_id(config, "before_after_judge_demo")]
         temp_config = write_temp_config(config)
         out_root = bind_entrypoint_to_out_root(config, temp_config, entry_index=0, out_root=temp_config.parent / "out")
         artifact = out_root / "harness" / "validator.txt"
@@ -573,7 +641,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
     def test_require_local_artifacts_validates_context_and_agent_contracts(self) -> None:
         config = load_default_config()
-        config["entrypoints"] = [config["entrypoints"][0]]
+        config["entrypoints"] = [entrypoint_by_id(config, "before_after_judge_demo")]
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         temp_config = write_temp_config(config)
         temp_dir = temp_config.parent
@@ -1027,7 +1095,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
     def test_context_pack_workers_must_match_agent_index_workers(self) -> None:
         config = load_default_config()
-        config["entrypoints"] = [config["entrypoints"][0]]
+        config["entrypoints"] = [entrypoint_by_id(config, "before_after_judge_demo")]
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         temp_config = write_temp_config(config)
         temp_dir = temp_config.parent
@@ -1128,7 +1196,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
     def test_context_pack_semantic_gate_fails_closed(self) -> None:
         config = load_default_config()
-        config["entrypoints"] = [config["entrypoints"][0]]
+        config["entrypoints"] = [entrypoint_by_id(config, "before_after_judge_demo")]
         config["test_contract"]["required_entrypoint_ids"] = ["before_after_judge_demo"]
         temp_config = write_temp_config(config)
         temp_dir = temp_config.parent
@@ -1244,13 +1312,14 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
     def test_tracked_manifest_reproduction_command_must_match_entrypoint_command(self) -> None:
         config = load_default_config()
         temp_config = write_temp_config(config)
-        manifest = json.loads((REPO_ROOT / config["entrypoints"][1]["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        entry = entrypoint_by_id(config, "multi_worker_evaluate_profile")
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
         manifest["reproduction"]["evaluate_profile_command"] = manifest["reproduction"]["evaluate_profile_command"].replace(
             "--run-id harness-flashdb-explicit-workers-evaluate-profile-20260701",
             "--run-id wrong-evaluate-run",
         )
         manifest_path = temp_config.parent / "drifted-explicit-workers-manifest.json"
-        config["entrypoints"][1]["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
         write_json(temp_config, config)
 
         result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
@@ -1264,10 +1333,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
     def test_tracked_manifest_claim_boundary_must_match_judge_config(self) -> None:
         config = load_default_config()
         temp_config = write_temp_config(config)
-        manifest = json.loads((REPO_ROOT / config["entrypoints"][1]["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        entry = entrypoint_by_id(config, "multi_worker_evaluate_profile")
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
         manifest["claim_boundary"]["semantic_claim_source"] = "generated_draft"
         manifest_path = temp_config.parent / "drifted-claim-boundary-manifest.json"
-        config["entrypoints"][1]["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
         write_json(temp_config, config)
 
         result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
@@ -1281,10 +1351,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
     def test_tracked_manifest_source_commits_must_follow_source_pin_policy(self) -> None:
         config = load_default_config()
         temp_config = write_temp_config(config)
-        manifest = json.loads((REPO_ROOT / config["entrypoints"][1]["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        entry = entrypoint_by_id(config, "multi_worker_evaluate_profile")
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
         manifest["workers"][0]["source_commit"] = "bad-commit"
         manifest_path = temp_config.parent / "drifted-source-commit-manifest.json"
-        config["entrypoints"][1]["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
         write_json(temp_config, config)
 
         result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
@@ -1297,7 +1368,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
     def test_tracked_manifest_reproduction_out_root_bounds_expected_artifacts(self) -> None:
         config = load_default_config()
-        config["entrypoints"][1]["expected_artifacts"]["merge_plan"] = "target/outside-harness/merge-plan.json"
+        entrypoint_by_id(config, "before_after_judge_demo")["expected_artifacts"]["merge_plan"] = "target/outside-harness/merge-plan.json"
         path = write_temp_config(config)
 
         result = validator.validate_config(path, repo_root=REPO_ROOT)
@@ -1323,6 +1394,24 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["host_trace_allowed_locations"], ["$.merge_execution.argv.0"])
+
+    def test_diagnostic_host_metadata_allows_host_trace(self) -> None:
+        result = validator.validate_local_absolute_path_policy(
+            {
+                "portability": {
+                    "diagnostic_host_metadata": [
+                        {"code": "diagnostic_host_metadata_path", "value": "F:\\agent\\crustpaper\\0630"}
+                    ]
+                }
+            },
+            label="evidence-governance",
+        )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(
+            result["host_trace_allowed_locations"],
+            ["$.portability.diagnostic_host_metadata.0.value"],
+        )
 
     def test_judge_evidence_reproduction_commands_reject_local_absolute_paths(self) -> None:
         payload = {

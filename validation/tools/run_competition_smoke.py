@@ -137,6 +137,7 @@ def run_competition_smoke(
     status = "passed" if not final_gate_reasons else "failed"
     summary = {
         "schema_version": 1,
+        "report_kind": "competition-smoke-summary",
         "run_id": run_id,
         "proof_class": proof_class,
         "profile_id": str(profile.get("profile_id", "unknown")),
@@ -166,12 +167,41 @@ def run_competition_smoke(
             ],
             "semantic_acceptance_boundary": "does_not_translate_new_slices",
         },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "semantic_claim_source": "competition_environment_smoke",
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "Competition smoke proves environment and lightweight evidence gates only. "
+                "It does not translate new slices and does not expand semantic acceptance."
+            ),
+        },
         "elapsed_seconds": int(time.monotonic() - started),
         "artifact_roots": [
             summary_path(out_root / "summary", repo_root=repo_root, out_root=out_root),
             summary_path(out_root / "logs", repo_root=repo_root, out_root=out_root),
             summary_path(out_root / "reports", repo_root=repo_root, out_root=out_root),
         ],
+        "command_log": {
+            "path": summary_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+        },
+        "reports": {
+            "evidence_governance": {
+                "path": summary_path(
+                    out_root / "reports" / "evidence-governance.json",
+                    repo_root=repo_root,
+                    out_root=out_root,
+                ),
+            },
+            "translator_coverage_matrix": {
+                "path": summary_path(
+                    out_root / "reports" / "translator-coverage-matrix.json",
+                    repo_root=repo_root,
+                    out_root=out_root,
+                ),
+            },
+        },
         "vendored_clang_verification": {
             "path": summary_path(
                 out_root / "summary" / "vendored-clang-verification.json",
