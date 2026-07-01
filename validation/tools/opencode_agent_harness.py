@@ -3361,6 +3361,7 @@ def run_plan(
     if mode == "opencode":
         opencode_preflight_binding = validate_opencode_preflight_report(
             opencode_preflight_report,
+            expected_run_id=run_id,
             opencode_command=opencode_command,
             opencode_model=opencode_model,
             opencode_agent=opencode_agent,
@@ -3911,6 +3912,7 @@ def run_worker(
     if mode == "opencode":
         preflight_binding = validate_opencode_preflight_report(
             opencode_preflight_report,
+            expected_run_id=run_id,
             opencode_command=opencode_command,
             opencode_model=opencode_model,
             opencode_agent=opencode_agent,
@@ -4523,6 +4525,7 @@ def run_opencode_preflight(
 def validate_opencode_preflight_report(
     report_path: Path | None,
     *,
+    expected_run_id: str | None = None,
     opencode_command: str = "opencode",
     opencode_model: str | None = None,
     opencode_agent: str | None = None,
@@ -4573,11 +4576,14 @@ def validate_opencode_preflight_report(
             "opencode preflight launch policy mismatch: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    report_run_id = str(report.get("run_id", ""))
+    if expected_run_id is not None and report_run_id != expected_run_id:
+        raise SystemExit(f"opencode preflight run_id mismatch: {report_run_id} != {expected_run_id}")
     return {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
         "status": "passed",
-        "run_id": str(report.get("run_id", "")),
+        "run_id": report_run_id,
         "contract_status": "executed",
         "launch_policy": actual_launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(actual_launch_policy),
