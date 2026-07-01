@@ -309,6 +309,40 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(summary["histories"][0]["unit_id"], "flashdb/unit-a")
         self.assertEqual(summary["histories"][0]["repair_rounds"], 3)
 
+    def test_judge_demo_does_not_validate_stale_summary_after_batch_failure(self) -> None:
+        from validation.tools import judge_demo
+
+        out_root = REPO_ROOT / "target" / "judge-demo-stale-summary-unit"
+        profile_path = REPO_ROOT / "config" / "competition-env" / "planned-batches" / "flashdb-fdb-utils-before-after.json"
+        if out_root.exists():
+            import shutil
+
+            shutil.rmtree(out_root)
+        write_judge_demo_fixture_outputs(out_root)
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if "validation.tools.opencode_agent_harness" in argv:
+                return subprocess.CompletedProcess(argv, 1, stdout="batch failed\n", stderr="")
+            if any(str(part).endswith("validate_competition_run_summary.py") for part in argv):
+                return subprocess.CompletedProcess(argv, 0, stdout='{"status":"passed"}\n', stderr="")
+            if any(str(part).endswith("milestone_release_report.py") for part in argv):
+                return subprocess.CompletedProcess(argv, 1, stdout="", stderr="should not run\n")
+            raise AssertionError(f"unexpected argv: {argv}")
+
+        report = judge_demo.run_judge_demo(
+            profile_path=profile_path,
+            run_id="judge-demo-stale-summary-unit",
+            out_root=out_root,
+            review_checklist_paths=[REVIEW_CHECKLIST],
+            command_runner=fake_runner,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual([command["stage"] for command in report["commands"]], ["run_batch_profile"])
+        self.assertEqual(report["artifacts"]["competition_summary"]["status"], "missing")
+        self.assertFalse((out_root / "summary" / "competition-run-summary.json").exists())
+
     def test_judge_demo_accepts_bound_before_after_exhibit_without_translator_final_gate(self) -> None:
         from validation.tools import judge_demo
 

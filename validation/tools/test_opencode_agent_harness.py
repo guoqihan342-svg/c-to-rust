@@ -3451,7 +3451,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 merge_plan["worker_summaries"],
                 [repo_rel(summary_path)],
             )
-            self.assertEqual(merge_plan["argv"][:3], ["python3", "-B", "validation/tools/run_competition.py"])
+            expected_merge_prefix = harness.portable_python_script_argv("validation/tools/run_competition.py")
+            self.assertEqual(merge_plan["argv"][: len(expected_merge_prefix)], expected_merge_prefix)
             self.assertIn("--worker-summary", merge_plan["argv"])
             self.assertIn("--run-id", merge_plan["argv"])
             run_id_idx = merge_plan["argv"].index("--run-id")
@@ -3738,10 +3739,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(hint_rows[0][:4], ("demo", "demo-add-one", "final_gate_failed", "open"))
             payload = json.loads(hint_rows[0][4])
             self.assertEqual(payload["worker_id"], "worker-a")
-            self.assertEqual(
-                payload["retry_command"][:5],
-                ["python3", "-B", "validation/tools/opencode_agent_harness.py", "retry-worker", "--db"],
+            expected_retry_prefix = harness.portable_python_script_argv(
+                "validation/tools/opencode_agent_harness.py",
+                "retry-worker",
+                "--db",
             )
+            self.assertEqual(payload["retry_command"][: len(expected_retry_prefix)], expected_retry_prefix)
             self.assertEqual(payload["revalidate_gate"], "competition-run-summary.final_gate.status == passed")
 
     def test_run_worker_records_structured_error_stack_in_repair_hint_from_stderr(self) -> None:
@@ -4001,10 +4004,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 contract["expected_summary_path"],
                 repo_rel(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
             )
-            self.assertEqual(
-                contract["worker_command"][:5],
-                ["python3", "-B", "scripts/c2rust-migrator.py", "--phase", "migrate"],
+            expected_worker_prefix = harness.portable_python_script_argv(
+                "scripts/c2rust-migrator.py",
+                "--phase",
+                "migrate",
             )
+            self.assertEqual(contract["worker_command"][: len(expected_worker_prefix)], expected_worker_prefix)
             self.assertEqual(contract["opencode_argv"], result["argv"])
             self.assertNotIn("Read the handoff contract before running the command.", contract["prompt"])
             self.assertIn("Handoff contract is audit metadata; do not inspect it before the first command.", contract["prompt"])
@@ -4471,6 +4476,26 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
         self.assertEqual(verification["status"], "executed")
         self.assertEqual(verification["expected_worker_command_line"], expected_command_line)
+
+    def test_portable_python_script_argv_uses_runnable_non_absolute_interpreter(self) -> None:
+        argv = harness.portable_python_script_argv("-c", "print('portable-python-ok')")
+
+        self.assertFalse(Path(argv[0]).is_absolute())
+        completed = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+
+        self.assertEqual(
+            completed.returncode,
+            0,
+            f"argv={argv!r} stdout={completed.stdout!r} stderr={completed.stderr!r}",
+        )
+        self.assertIn("portable-python-ok", completed.stdout)
 
     def test_opencode_contract_rejects_shell_command_from_wrong_workdir(self) -> None:
         worker_command = [

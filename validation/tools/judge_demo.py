@@ -70,6 +70,12 @@ def run_judge_demo(
         if milestone_output is not None
         else summary_dir / "milestone-release-report.json"
     )
+    remove_stale_judge_demo_outputs(
+        summary_path=summary_path,
+        batch_profile_report_path=batch_profile_report_path,
+        milestone_report_path=milestone_output,
+        harness_dir=harness_dir,
+    )
     review_checklist_paths = [
         harness.repo_path(review_path, repo_root=repo_root)
         for review_path in (review_checklist_paths or [])
@@ -101,7 +107,7 @@ def run_judge_demo(
             command_runner=command_runner,
         )
     )
-    if commands[-1]["exit_code"] == 0 or summary_path.exists():
+    if commands[-1]["exit_code"] == 0:
         commands.append(
             run_stage(
                 stage="validate_summary",
@@ -196,6 +202,31 @@ def run_judge_demo(
         repo_root=repo_root,
     )
     return report
+
+
+def remove_stale_judge_demo_outputs(
+    *,
+    summary_path: Path,
+    batch_profile_report_path: Path,
+    milestone_report_path: Path,
+    harness_dir: Path,
+) -> None:
+    stale_paths = [
+        summary_path,
+        summary_path.parent / "workflow-metrics.json",
+        summary_path.parent / "before-after-exhibit.json",
+        summary_path.parent / "judge-demo-report.json",
+        batch_profile_report_path,
+        milestone_report_path,
+        harness_dir / "judge-evidence-index.json",
+    ]
+    for path in stale_paths:
+        if not path.exists() or not path.is_file():
+            continue
+        try:
+            path.unlink()
+        except OSError as exc:
+            raise SystemExit(f"failed to remove stale judge-demo artifact {path}: {exc}") from exc
 
 
 def refresh_before_after_exhibit_binding(

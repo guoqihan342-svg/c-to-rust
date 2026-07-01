@@ -24,7 +24,7 @@
 | 外部审查条目 | 判断 | 当前处理 | 优先级 |
 |---|---|---|---|
 | 子进程无 timeout | 成立；评委现场 hang 是最高风险 | 已进入 Task 1，timeout 规范化为 `124` / `timed_out=true` | H7/P0 |
-| 裸 `"python"` 与比赛 profile 的 `python3` 不一致 | 成立；必须避免解释器漂移和本机绝对路径泄漏 | 已进入 Task 2，公开命令和 worker argv 统一 `python3 -B` portable contract | H7/P0 |
+| 裸 `"python"` 与比赛 profile 的 `python3` 不一致 | 成立；必须避免解释器漂移和本机绝对路径泄漏 | 已进入 Task 2，公开命令优先保持 `python3 -B`，执行层先探测可运行解释器，Windows 本地可回退到非绝对 `python` / `py -3` | H7/P0 |
 | 关键 evidence 非原子写 | 成立；半截 JSON 会破坏 resume/validator | 已进入 Task 3，关键 artifact 使用同目录临时文件 + `os.replace` | H7/P0 |
 | `auto_retry` 外层无独立 cap | 成立；虽有内层 5 轮 cap，但缺第二道保险 | 已进入 Task 4，外层上限为 `REPAIR_ROUND_CAP + 2` 并进 graph/report | H7/P0 |
 | OpenCode SQLite lock 匹配过窄 | 成立；第三方 CLI stderr 不稳定 | 已进入 Task 4，扩展等价 lock 信号分类 | H7/P0 |
@@ -48,7 +48,7 @@
 
 ## 2026-07-02 实施进度
 
-- 已完成：Task 1 timeout envelope；Task 2 Python command portability split（统一 `python3 -B` portable strategy）；Task 3 atomic critical evidence writes；Task 4 retry/lock/lease/fencing guardrails；Task 5 Step 1-2 POSIX shell contract；Task 6 translator smoke 修复。
+- 已完成：Task 1 timeout envelope；Task 2 Python command portability split（比赛环境优先 `python3 -B`，本地执行层探测可运行非绝对解释器并拒绝绝对路径泄漏）；Task 3 atomic critical evidence writes；Task 4 retry/lock/lease/fencing guardrails；Task 5 Step 1-2 POSIX shell contract；Task 6 translator smoke 修复。
 - 已验证：`python -B -m unittest validation.tools.test_opencode_agent_harness -q`、`python -B -m unittest validation.tools.test_doc_mirror_contract -q`、`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`、`python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass`、`python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json`、`python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json`。
 - 当前补丁：Task 5 Step 3a stale summary cleanup fail-closed 已有单测覆盖；focused `--entrypoint-id` runner 的 post-run local-artifact validation 现在会生成 `selected-entrypoints-validation-config.json`，只深校验本次执行的入口，避免未执行入口的旧 `target/` artifact 让 smoke/triage 误失败。
 - 最新补丁：Task 1 追加真实子进程 timeout 集成测试，直接调用 `subprocess.run` 执行 `time.sleep(5)`，验证 `timeout_seconds=1` 时 harness 会在约 1 秒内返回 `124` 并写出稳定 timeout stderr；这关闭了“只 mock `TimeoutExpired`、没覆盖 OS 行为”的验证缺口。`validate_judge_entrypoints --require-local-artifacts` 还把 smoke summary 的 step 集合绑定到 `commands.jsonl`，缺任一 summary step 的 command log 会 fail-closed，避免单步日志冒充完整 smoke 证据链。
@@ -117,11 +117,11 @@ Add tests that reject hard-coded runtime `["python", ...]` for harness-owned sub
 
 - [x] **Step 2: Implement command helpers**
 
-Use the competition-profile portable command string `python3 -B ...` for harness subprocess argv, public evidence, OpenCode prompts, and reproduction commands, because `toolchain-check.sh` verifies `python3` in the competition profile. Do not leak `C:\...python.exe` or `/home/.../python` into judge-facing artifact command fields.
+Use the competition-profile portable command string `python3 -B ...` when it is runnable, because `toolchain-check.sh` verifies `python3` in the competition profile. The execution layer must first probe the command and may fall back to a non-absolute host command such as `python` or `py -3` on Windows; judge-facing artifact command fields must never leak `C:\...python.exe` or `/home/.../python`.
 
 - [x] **Step 3: Update assertions**
 
-Update existing tests currently expecting literal `"python"` to assert the portable command contract: harness subprocess argv, prompt command lines, retry commands, and merge plans use `python3 -B`, and evidence validators still reject local absolute interpreter paths.
+Update existing tests to assert the portable command contract through the shared argv builder: harness subprocess argv, prompt command lines, retry commands, and merge plans use a runnable non-absolute Python command, and evidence validators still reject local absolute interpreter paths.
 
 - [x] **Step 4: Verify**
 

@@ -24,7 +24,7 @@ Chinese original: `2026-07-02-harness-stability-hardening.md`.
 | External review item | Assessment | Current treatment | Priority |
 |---|---|---|---|
 | Subprocesses have no timeout | Valid; a judge-visible hang is the highest-risk failure mode | Covered by Task 1, normalizing timeouts to `124` / `timed_out=true` | H7/P0 |
-| Bare `"python"` conflicts with the competition profile's `python3` | Valid; avoid interpreter drift and local absolute interpreter leakage | Covered by Task 2, using the `python3 -B` portable contract for public commands and worker argv | H7/P0 |
+| Bare `"python"` conflicts with the competition profile's `python3` | Valid; avoid interpreter drift and local absolute interpreter leakage | Covered by Task 2: public commands prefer `python3 -B`, while the execution layer probes for a runnable interpreter and may fall back to non-absolute `python` / `py -3` on Windows | H7/P0 |
 | Critical evidence writes are non-atomic | Valid; partial JSON can break resume and validator flows | Covered by Task 3, using same-directory temp files plus `os.replace` for critical artifacts | H7/P0 |
 | `auto_retry` lacks an independent outer cap | Valid; the inner five-round cap needs a second guardrail | Covered by Task 4, using `REPAIR_ROUND_CAP + 2` and recording the decision in graph/report artifacts | H7/P0 |
 | OpenCode SQLite lock detection is too narrow | Valid; third-party CLI stderr is unstable | Covered by Task 4 with broader equivalent lock-signal classification | H7/P0 |
@@ -48,7 +48,7 @@ All agents should hand back small patches or worktree diffs. One main integrator
 
 ## 2026-07-02 Implementation Progress
 
-- Done: Task 1 timeout envelope; Task 2 Python command portability split with the shared `python3 -B` portable strategy; Task 3 atomic critical evidence writes; Task 4 retry/lock/lease/fencing guardrails; Task 5 Steps 1-2 POSIX shell contract; Task 6 translator smoke fixes.
+- Done: Task 1 timeout envelope; Task 2 Python command portability split with competition `python3 -B` preferred and a local runnable non-absolute interpreter resolver; Task 3 atomic critical evidence writes; Task 4 retry/lock/lease/fencing guardrails; Task 5 Steps 1-2 POSIX shell contract; Task 6 translator smoke fixes.
 - Verified: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`, `python -B -m unittest validation.tools.test_doc_mirror_contract -q`, `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`, `python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass`, `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json`, and `python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json`.
 - Current patch: Task 5 Step 3a stale summary cleanup fail-closed has focused test coverage; focused `--entrypoint-id` runner post-run local-artifact validation now writes `selected-entrypoints-validation-config.json` and deep-validates only the entrypoints executed in that run, so smoke/triage runs are not failed by stale artifacts from unexecuted `target/` outputs.
 - Latest patch: Task 1 now includes a real subprocess timeout integration test. It calls `subprocess.run` with a `time.sleep(5)` child process and proves that `timeout_seconds=1` returns around the one-second boundary with exit code `124` and stable timeout stderr; this closes the verification gap where only mocked `TimeoutExpired` behavior was covered. `validate_judge_entrypoints --require-local-artifacts` also binds the smoke-summary step set to `commands.jsonl`, so a command log missing any summary step fails closed instead of masquerading as a complete smoke evidence chain.
@@ -117,11 +117,11 @@ Add tests that reject hard-coded runtime `["python", ...]` for harness-owned sub
 
 - [x] **Step 2: Implement command helpers**
 
-Use the competition-profile portable command string `python3 -B ...` for harness subprocess argv, public evidence, OpenCode prompts, and reproduction commands, because `toolchain-check.sh` verifies `python3` in the competition profile. Do not leak `C:\...python.exe` or `/home/.../python` into judge-facing artifact command fields.
+Use the competition-profile portable command string `python3 -B ...` when it is runnable, because `toolchain-check.sh` verifies `python3` in the competition profile. The execution layer must first probe the command and may fall back to a non-absolute host command such as `python` or `py -3` on Windows; judge-facing artifact command fields must never leak `C:\...python.exe` or `/home/.../python`.
 
 - [x] **Step 3: Update assertions**
 
-Update existing tests currently expecting literal `"python"` to assert the portable command contract: harness subprocess argv, prompt command lines, retry commands, and merge plans use `python3 -B`, and evidence validators still reject local absolute interpreter paths.
+Update existing tests to assert the portable command contract through the shared argv builder: harness subprocess argv, prompt command lines, retry commands, and merge plans use a runnable non-absolute Python command, and evidence validators still reject local absolute interpreter paths.
 
 - [x] **Step 4: Verify**
 

@@ -11,6 +11,12 @@ from validation.tools import c2rust_migrator
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def flashdb_translation_before_after_ref() -> dict:
+    profile_path = REPO_ROOT / "config" / "competition-env" / "planned-batches" / "flashdb-fdb-utils-before-after.json"
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    return dict(profile["attempt_evidence_policy"]["translation_before_after"])
+
+
 class C2RustMigratorTest(unittest.TestCase):
     def test_baseline_repair_gate_writes_failed_summary_from_bound_flashdb_evidence(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -29,10 +35,7 @@ class C2RustMigratorTest(unittest.TestCase):
                 "harness_attempt_number": 1,
                 "harness_repair_trace": {
                     "mode": "baseline_repair_gate",
-                    "translation_before_after": {
-                        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-                        "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17",
-                    },
+                    "translation_before_after": flashdb_translation_before_after_ref(),
                     "baseline_attempt": {
                         "attempt_number": 1,
                         "root_cause_key": "unsafe_baseline_requires_repair",
@@ -65,10 +68,7 @@ class C2RustMigratorTest(unittest.TestCase):
             "harness_attempt_number": 2,
             "harness_repair_trace": {
                 "mode": "baseline_repair_gate",
-                "translation_before_after": {
-                    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-                    "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17",
-                },
+                "translation_before_after": flashdb_translation_before_after_ref(),
                 "accepted_attempt": {
                     "min_attempt_number": 2,
                     "require_hint_id": True,

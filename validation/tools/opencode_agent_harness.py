@@ -42,6 +42,8 @@ REPAIR_LOG_TAIL_CHARS = 4096
 PROCESS_TIMEOUT_EXIT_CODE = 124
 DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 600
 PORTABLE_PYTHON_COMMAND = "python3"
+PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
+_RESOLVED_PYTHON_COMMAND: list[str] | None = None
 LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
     r"(?<![A-Za-z0-9_])(?:"
     r"[A-Za-z]:[\\/][^\s\"'`,;)]*|"
@@ -5692,7 +5694,40 @@ def opencode_launch_policy_sha256(policy: dict[str, Any]) -> str:
 
 
 def portable_python_script_argv(script: str, *args: str) -> list[str]:
-    return [PORTABLE_PYTHON_COMMAND, "-B", script, *args]
+    return [*portable_python_command_argv(), "-B", script, *args]
+
+
+def portable_python_command_argv() -> list[str]:
+    global _RESOLVED_PYTHON_COMMAND
+    override = os.environ.get(PYTHON_COMMAND_OVERRIDE_ENV)
+    if override:
+        return shlex.split(override, posix=os.name != "nt")
+    if _RESOLVED_PYTHON_COMMAND is not None:
+        return list(_RESOLVED_PYTHON_COMMAND)
+    candidates: list[list[str]] = [[PORTABLE_PYTHON_COMMAND], ["python"]]
+    if os.name == "nt":
+        candidates.append(["py", "-3"])
+    for candidate in candidates:
+        if python_command_is_runnable(candidate):
+            _RESOLVED_PYTHON_COMMAND = candidate
+            return list(candidate)
+    _RESOLVED_PYTHON_COMMAND = [PORTABLE_PYTHON_COMMAND]
+    return list(_RESOLVED_PYTHON_COMMAND)
+
+
+def python_command_is_runnable(candidate: list[str]) -> bool:
+    try:
+        completed = subprocess.run(
+            [*candidate, "-B", "-c", "import sys"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return int(completed.returncode) == 0
 
 
 def shell_command_line(argv: list[str]) -> str:
