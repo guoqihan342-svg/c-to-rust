@@ -1354,6 +1354,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "blocked_callees": [],
                         "ir_feature_gap_kinds": {},
                         "forbidden_change_counts": {},
+                        "smallest_next_tests": [],
+                        "next_actions": [],
                         "semantic_gate": False,
                         "translation_coverage_numerator": 0,
                         "boundary": "Blocked repairs are not semantic acceptance evidence.",

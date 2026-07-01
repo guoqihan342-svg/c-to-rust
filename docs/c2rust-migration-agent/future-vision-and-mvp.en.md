@@ -60,6 +60,8 @@ Current supplement: `judge-milestone-bundle.json` now applies repair-accounting 
 
 Current supplement: `route-governance-metrics-report.json` now emits `metrics.blocked_repairs`, rolling up self-healing blocked-repairs playbooks into blocked repair count, affected slice count, human intervention points, blocked callees, IR feature gap kinds, and forbidden-change distribution. `judge-milestone-bundle.json` now also exposes a top-level `blocked_repairs_rollup`, making those fail-closed next-step playbooks visible to judges in one screen. The schema locks `semantic_gate=false`, `generated_draft_semantic_pass=false`, and `translation_coverage_numerator=0`, and `must_not_claim` includes `blocked_repairs_are_not_translation_success`. Boundary: blocked repairs explain why a repair was refused or blocked and what the smallest next test is; they are not translation success, do not prove unsafe reduction, and do not increase translator-generated coverage.
 
+Current supplement: `metrics.blocked_repairs` and `blocked_repairs_rollup.rollup` now also expose `smallest_next_tests` and `next_actions`, turning each fail-closed repair playbook's candidate route, next action, smallest replay command, expected gate, human intervention point, source span, and entrypoint ownership into a machine-readable index. The schemas require these fields so a public milestone cannot report only blocked counts without showing how to repair them next. Boundary: these next actions are repair-route indexes and audit entrypoints, not acceptance evidence; they keep `semantic_gate=false` and `translation_coverage_numerator=0`.
+
 Frozen/deferred items:
 
 - Do not expand handwritten-emitter C syntax coverage unless it directly blocks a real H1-H6 sample.

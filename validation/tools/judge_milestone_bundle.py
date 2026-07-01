@@ -1390,6 +1390,8 @@ def blocked_repairs_source(value: object) -> dict[str, Any]:
         "blocked_callees": string_list(value.get("blocked_callees")),
         "ir_feature_gap_kinds": int_count_map(value.get("ir_feature_gap_kinds")),
         "forbidden_change_counts": int_count_map(value.get("forbidden_change_counts")),
+        "smallest_next_tests": object_list(value.get("smallest_next_tests")),
+        "next_actions": object_list(value.get("next_actions")),
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
     }
@@ -1401,6 +1403,8 @@ def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[st
     status_counts: dict[str, int] = {}
     gap_kinds: dict[str, int] = {}
     forbidden_changes: dict[str, int] = {}
+    smallest_tests: list[dict[str, Any]] = []
+    next_actions: list[dict[str, Any]] = []
     blocked_repair_count = 0
     slice_count = 0
     human_action_required_count = 0
@@ -1416,6 +1420,13 @@ def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[st
             append_unique(callees, callee)
         merge_int_counts(gap_kinds, blocked.get("ir_feature_gap_kinds"))
         merge_int_counts(forbidden_changes, blocked.get("forbidden_change_counts"))
+        for test in object_list(blocked.get("smallest_next_tests")):
+            append_unique_dict(smallest_tests, test)
+        for action in object_list(blocked.get("next_actions")):
+            enriched = dict(action)
+            if isinstance(source.get("entrypoint_id"), str) and "entrypoint_id" not in enriched:
+                enriched["entrypoint_id"] = source["entrypoint_id"]
+            append_unique_dict(next_actions, enriched)
     return {
         "status": "observed" if blocked_repair_count else "none",
         "blocked_repair_count": blocked_repair_count,
@@ -1426,6 +1437,8 @@ def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[st
         "blocked_callees": callees,
         "ir_feature_gap_kinds": gap_kinds,
         "forbidden_change_counts": forbidden_changes,
+        "smallest_next_tests": smallest_tests,
+        "next_actions": next_actions,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
         "boundary": (
@@ -1446,6 +1459,8 @@ def empty_blocked_repairs_rollup() -> dict[str, Any]:
         "blocked_callees": [],
         "ir_feature_gap_kinds": {},
         "forbidden_change_counts": {},
+        "smallest_next_tests": [],
+        "next_actions": [],
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
     }
@@ -1594,6 +1609,12 @@ def int_count_map(value: object) -> dict[str, int]:
     return {str(key): int_or_zero(count) for key, count in value.items()}
 
 
+def object_list(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def merge_int_counts(target: dict[str, int], value: object) -> None:
     for key, count in int_count_map(value).items():
         target[key] = target.get(key, 0) + count
@@ -1606,6 +1627,11 @@ def increment_count(target: dict[str, int], value: object) -> None:
 
 def append_unique(items: list[str], value: object) -> None:
     if isinstance(value, str) and value and value not in items:
+        items.append(value)
+
+
+def append_unique_dict(items: list[dict[str, Any]], value: dict[str, Any]) -> None:
+    if value not in items:
         items.append(value)
 
 

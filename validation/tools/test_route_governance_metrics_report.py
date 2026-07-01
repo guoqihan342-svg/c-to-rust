@@ -89,10 +89,41 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                     "slice_id": "refused",
                     "blocked_repairs": [
                         {
+                            "repair_id": "repair-refused-1",
+                            "blocked_reason": "External callee semantics are not bound to oracle evidence.",
+                            "forbidden_change": "missing_l1_evidence",
+                            "candidate_patch_id": "candidate-refused-1",
+                            "source_span": {
+                                "file": "src/demo.c",
+                                "line_start": 12,
+                                "line_end": 14,
+                            },
+                            "human_action_required": True,
                             "human_intervention_point": "Bind external callee semantics before promotion.",
                             "ir_feature_gap": {
                                 "kind": "external_direct_callee_context",
                                 "blocked_callees": ["helper_blocked"],
+                            },
+                            "oracle_fixture_gap": {
+                                "status": "missing_or_insufficient",
+                                "reason": "helper_blocked has no fixture-bound behavior.",
+                            },
+                            "candidate_routes": [
+                                {
+                                    "route": "typed_ir",
+                                    "status": "blocked",
+                                    "next_action": "bind_external_callee_semantics",
+                                },
+                                {
+                                    "route": "manual",
+                                    "status": "allowed_with_review",
+                                    "next_action": "write_reviewed_helper_contract",
+                                },
+                            ],
+                            "smallest_next_test": {
+                                "kind": "callee_contract_replay",
+                                "command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                                "expected_gate": "external callee contract is bound before candidate promotion",
                             },
                         }
                     ],
@@ -167,6 +198,57 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                 metrics["blocked_repairs"]["ir_feature_gap_kinds"],
                 {"external_direct_callee_context": 1},
             )
+            self.assertEqual(
+                metrics["blocked_repairs"]["smallest_next_tests"],
+                [
+                    {
+                        "kind": "callee_contract_replay",
+                        "command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                        "expected_gate": "external callee contract is bound before candidate promotion",
+                    }
+                ],
+            )
+            self.assertEqual(
+                metrics["blocked_repairs"]["next_actions"],
+                [
+                    {
+                        "repair_id": "repair-refused-1",
+                        "target_id": "demo",
+                        "slice_id": "refused",
+                        "pipeline_id": "validation/evidence/demo/auto-translation/refused",
+                        "route": "typed_ir",
+                        "status": "blocked",
+                        "next_action": "bind_external_callee_semantics",
+                        "smallest_next_test_kind": "callee_contract_replay",
+                        "smallest_next_test_command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                        "expected_gate": "external callee contract is bound before candidate promotion",
+                        "human_intervention_point": "Bind external callee semantics before promotion.",
+                        "source_span": {
+                            "file": "src/demo.c",
+                            "line_start": 12,
+                            "line_end": 14,
+                        },
+                    },
+                    {
+                        "repair_id": "repair-refused-1",
+                        "target_id": "demo",
+                        "slice_id": "refused",
+                        "pipeline_id": "validation/evidence/demo/auto-translation/refused",
+                        "route": "manual",
+                        "status": "allowed_with_review",
+                        "next_action": "write_reviewed_helper_contract",
+                        "smallest_next_test_kind": "callee_contract_replay",
+                        "smallest_next_test_command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                        "expected_gate": "external callee contract is bound before candidate promotion",
+                        "human_intervention_point": "Bind external callee semantics before promotion.",
+                        "source_span": {
+                            "file": "src/demo.c",
+                            "line_start": 12,
+                            "line_end": 14,
+                        },
+                    },
+                ],
+            )
             context = metrics["slice_gate_contexts"][0]
             self.assertEqual(context["target_id"], "demo")
             self.assertEqual(context["slice_id"], "refused")
@@ -181,6 +263,10 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             self.assertEqual(
                 context["blocked_repairs"]["entries"][0]["human_intervention_point"],
                 "Bind external callee semantics before promotion.",
+            )
+            self.assertEqual(
+                context["blocked_repairs"]["next_actions"][0]["next_action"],
+                "bind_external_callee_semantics",
             )
             self.assertEqual(context["fixture"]["case_count"], 2)
             self.assertEqual(context["unsafe"]["first_party_non_test_unsafe_count"], 0)
@@ -210,6 +296,21 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             missing_blocked_repairs["metrics"].pop("blocked_repairs")
             with self.assertRaises(jsonschema.exceptions.ValidationError):
                 jsonschema.validate(missing_blocked_repairs, schema)
+
+            missing_next_actions = json.loads(json.dumps(report))
+            missing_next_actions["metrics"]["blocked_repairs"].pop("next_actions")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_next_actions, schema)
+
+            missing_next_action_route = json.loads(json.dumps(report))
+            missing_next_action_route["metrics"]["blocked_repairs"]["next_actions"][0].pop("route")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_next_action_route, schema)
+
+            missing_next_action_command = json.loads(json.dumps(report))
+            missing_next_action_command["metrics"]["blocked_repairs"]["next_actions"][0].pop("next_action")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_next_action_command, schema)
 
             expanded = json.loads(json.dumps(report))
             expanded["metrics"]["blocked_repairs"]["semantic_gate"] = True

@@ -66,6 +66,8 @@
 
 本轮补充：`route-governance-metrics-report.json` 现在输出 `metrics.blocked_repairs`，从 self-healing blocked-repairs playbook 汇总 blocked repair 数、涉及 slice 数、人工介入点、blocked callees、IR feature gap kind 和 forbidden change 分布；`judge-milestone-bundle.json` 同步新增顶层 `blocked_repairs_rollup`，把这些 fail-closed 下一步 playbook 提升成评委一屏可读的公开面。schema 锁定 `semantic_gate=false`、`generated_draft_semantic_pass=false`、`translation_coverage_numerator=0`，并把 `blocked_repairs_are_not_translation_success` 写入 `must_not_claim`。边界：blocked repairs 只说明为什么拒绝或阻塞、下一步最小测试是什么，不代表翻译成功、不证明 unsafe reduction，也不增加 translator-generated coverage。
 
+本轮补充：`metrics.blocked_repairs` 和 `blocked_repairs_rollup.rollup` 现在还会公开 `smallest_next_tests` 与 `next_actions`，把每个 fail-closed repair playbook 中的 candidate route、下一步动作、最小重放命令、expected gate、人工介入点、source span 和 entrypoint 归属汇总成机器可读索引。schema 要求这些字段存在，防止公开 milestone 只给“blocked 数量”却不给“下一步怎么修”。边界：这些 next actions 是修复路线索引和审计入口，不是自动接受证据，不改变 `semantic_gate=false` 和 `translation_coverage_numerator=0`。
+
 冻结/后置项：
 
 - 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H6 的真实样例。

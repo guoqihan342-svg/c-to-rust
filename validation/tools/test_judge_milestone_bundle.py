@@ -80,6 +80,32 @@ def route_metrics_payload(
                 "forbidden_change_counts": {"missing_l1_evidence": blocked_repair_count}
                 if blocked_repair_count
                 else {},
+                "smallest_next_tests": [
+                    {
+                        "kind": "callee_contract_replay",
+                        "command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                        "expected_gate": "external callee contract is bound before candidate promotion",
+                    }
+                ]
+                if blocked_repair_count
+                else [],
+                "next_actions": [
+                    {
+                        "repair_id": "repair-refused-1",
+                        "target_id": "demo",
+                        "slice_id": "refused",
+                        "pipeline_id": "validation/evidence/demo/auto-translation/refused",
+                        "route": "typed_ir",
+                        "status": "blocked",
+                        "next_action": "bind_external_callee_semantics",
+                        "smallest_next_test_kind": "callee_contract_replay",
+                        "smallest_next_test_command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                        "expected_gate": "external callee contract is bound before candidate promotion",
+                        "human_intervention_point": "Bind external callee semantics before promotion.",
+                    }
+                ]
+                if blocked_repair_count
+                else [],
                 "semantic_gate": False,
                 "translation_coverage_numerator": 0,
                 "boundary": "Blocked repair rollup is route-governance context only.",
@@ -624,6 +650,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(expanded, schema)
 
+        missing_blocked_next_actions = json.loads(json.dumps(report))
+        missing_blocked_next_actions["blocked_repairs_rollup"]["rollup"].pop("next_actions")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_next_actions, schema)
+
+        missing_blocked_claim = json.loads(json.dumps(report))
+        missing_blocked_claim["must_not_claim"].remove("blocked_repairs_are_not_translation_success")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_claim, schema)
+
     def test_bundle_blocks_malformed_run_report_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
@@ -1036,12 +1072,53 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(blocked["human_intervention_points"], ["Bind external callee semantics before promotion."])
         self.assertEqual(blocked["blocked_callees"], ["helper_blocked"])
         self.assertEqual(blocked["ir_feature_gap_kinds"], {"external_direct_callee_context": 2})
+        self.assertEqual(
+            blocked["smallest_next_tests"],
+            [
+                {
+                    "kind": "callee_contract_replay",
+                    "command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                    "expected_gate": "external callee contract is bound before candidate promotion",
+                }
+            ],
+        )
+        self.assertEqual(
+            blocked["next_actions"],
+            [
+                {
+                    "entrypoint_id": "before_after_judge_demo",
+                    "repair_id": "repair-refused-1",
+                    "target_id": "demo",
+                    "slice_id": "refused",
+                    "pipeline_id": "validation/evidence/demo/auto-translation/refused",
+                    "route": "typed_ir",
+                    "status": "blocked",
+                    "next_action": "bind_external_callee_semantics",
+                    "smallest_next_test_kind": "callee_contract_replay",
+                    "smallest_next_test_command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
+                    "expected_gate": "external callee contract is bound before candidate promotion",
+                    "human_intervention_point": "Bind external callee semantics before promotion.",
+                }
+            ],
+        )
         self.assertFalse(report["blocked_repairs_rollup"]["semantic_gate"])
         self.assertFalse(report["blocked_repairs_rollup"]["generated_draft_semantic_pass"])
         self.assertEqual(report["blocked_repairs_rollup"]["translation_coverage_numerator"], 0)
         self.assertFalse(blocked["semantic_gate"])
         self.assertEqual(blocked["translation_coverage_numerator"], 0)
         self.assertIn("blocked_repairs_are_not_translation_success", report["must_not_claim"])
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        jsonschema.validate(report, schema)
+
+        missing_next_action_route = json.loads(json.dumps(report))
+        missing_next_action_route["blocked_repairs_rollup"]["rollup"]["next_actions"][0].pop("route")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_next_action_route, schema)
+
+        missing_next_action_command = json.loads(json.dumps(report))
+        missing_next_action_command["blocked_repairs_rollup"]["rollup"]["next_actions"][0].pop("next_action")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_next_action_command, schema)
 
     def test_bundle_blocks_stale_or_incomplete_blocked_repairs_rollup(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

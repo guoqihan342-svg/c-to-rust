@@ -250,6 +250,8 @@
             "blocked_callees",
             "ir_feature_gap_kinds",
             "forbidden_change_counts",
+            "smallest_next_tests",
+            "next_actions",
             "semantic_gate",
             "translation_coverage_numerator",
             "boundary"
@@ -273,6 +275,42 @@
             "forbidden_change_counts": {
               "type": "object",
               "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "smallest_next_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["kind"],
+                "properties": {
+                  "kind": {"type": "string", "minLength": 1},
+                  "command": {"type": "string", "minLength": 1},
+                  "expected_gate": {"type": "string", "minLength": 1}
+                }
+              }
+            },
+            "next_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["route", "status", "next_action"],
+                "properties": {
+                  "entrypoint_id": {"type": "string", "minLength": 1},
+                  "route": {"type": "string", "minLength": 1},
+                  "status": {"type": "string", "minLength": 1},
+                  "next_action": {"type": "string", "minLength": 1},
+                  "repair_id": {"type": "string", "minLength": 1},
+                  "target_id": {"type": "string", "minLength": 1},
+                  "slice_id": {"type": "string", "minLength": 1},
+                  "pipeline_id": {"type": "string", "minLength": 1},
+                  "smallest_next_test_kind": {"type": "string", "minLength": 1},
+                  "smallest_next_test_command": {"type": "string", "minLength": 1},
+                  "expected_gate": {"type": "string", "minLength": 1},
+                  "human_intervention_point": {"type": "string", "minLength": 1},
+                  "source_span": {"type": "object"}
+                }
+              }
             },
             "semantic_gate": {"const": false},
             "translation_coverage_numerator": {"const": 0},
@@ -504,6 +542,7 @@
       "minItems": 1,
       "allOf": [
         {"contains": {"const": "accepted_evidence_is_not_translator_generated_coverage"}},
+        {"contains": {"const": "blocked_repairs_are_not_translation_success"}},
         {"contains": {"const": "before_after_exhibit_is_not_new_semantic_gate"}},
         {"contains": {"const": "bundle_status_passed_is_not_project_level_translation_success"}},
         {"contains": {"const": "local_simulation_is_not_competition_exact"}}

@@ -286,6 +286,7 @@ def blocked_repair_entry(repair: Any) -> dict[str, Any] | None:
     smallest_next_test = (
         repair.get("smallest_next_test", {}) if isinstance(repair.get("smallest_next_test"), dict) else {}
     )
+    source_span = repair.get("source_span", {}) if isinstance(repair.get("source_span"), dict) else {}
     candidate_routes = []
     for route in list_or_empty(repair.get("candidate_routes")):
         if isinstance(route, dict):
@@ -301,6 +302,11 @@ def blocked_repair_entry(repair: Any) -> dict[str, Any] | None:
         "blocked_reason": repair.get("blocked_reason"),
         "forbidden_change": repair.get("forbidden_change"),
         "candidate_patch_id": repair.get("candidate_patch_id"),
+        "source_span": {
+            "file": source_span.get("file"),
+            "line_start": source_span.get("line_start"),
+            "line_end": source_span.get("line_end"),
+        },
         "human_action_required": repair.get("human_action_required") is True,
         "human_intervention_point": repair.get("human_intervention_point"),
         "ir_feature_gap_kind": gap.get("kind"),
@@ -354,6 +360,7 @@ def blocked_repairs_summary(
     gap_kinds: dict[str, int] = {}
     forbidden_changes: dict[str, int] = {}
     smallest_tests: list[dict[str, Any]] = []
+    next_actions: list[dict[str, Any]] = []
     for entry in entries:
         append_unique(human_points, entry.get("human_intervention_point"))
         for callee in list_or_empty(entry.get("blocked_callees")):
@@ -362,7 +369,9 @@ def blocked_repairs_summary(
         increment_count(forbidden_changes, entry.get("forbidden_change"))
         test = entry.get("smallest_next_test")
         if isinstance(test, dict) and any(test.get(key) is not None for key in ["kind", "command", "expected_gate"]):
-            smallest_tests.append(test)
+            append_unique_dict(smallest_tests, test)
+        for action in blocked_repair_next_actions(entry):
+            append_unique_dict(next_actions, action)
     count = len(entries)
     return {
         "status": status if status is not None else ("observed" if count else "none"),
@@ -375,6 +384,7 @@ def blocked_repairs_summary(
         "ir_feature_gap_kinds": gap_kinds,
         "forbidden_change_counts": forbidden_changes,
         "smallest_next_tests": smallest_tests,
+        "next_actions": next_actions,
         "entries": entries,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
@@ -385,9 +395,40 @@ def blocked_repairs_summary(
     }
 
 
+def blocked_repair_next_actions(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    smallest = entry.get("smallest_next_test") if isinstance(entry.get("smallest_next_test"), dict) else {}
+    source_span = entry.get("source_span") if isinstance(entry.get("source_span"), dict) else {}
+    for route in list_or_empty(entry.get("candidate_routes")):
+        if not isinstance(route, dict) or not isinstance(route.get("next_action"), str):
+            continue
+        action: dict[str, Any] = {
+            "route": route.get("route"),
+            "status": route.get("status"),
+            "next_action": route.get("next_action"),
+        }
+        copy_string(action, "repair_id", entry.get("repair_id"))
+        copy_string(action, "target_id", entry.get("target_id"))
+        copy_string(action, "slice_id", entry.get("slice_id"))
+        copy_string(action, "pipeline_id", entry.get("pipeline_id"))
+        copy_string(action, "smallest_next_test_kind", smallest.get("kind"))
+        copy_string(action, "smallest_next_test_command", smallest.get("command"))
+        copy_string(action, "expected_gate", smallest.get("expected_gate"))
+        copy_string(action, "human_intervention_point", entry.get("human_intervention_point"))
+        if source_span and any(source_span.get(key) is not None for key in ["file", "line_start", "line_end"]):
+            action["source_span"] = source_span
+        actions.append(action)
+    return actions
+
+
 def increment_count(counts: dict[str, int], value: Any) -> None:
     if isinstance(value, str) and value:
         counts[value] = counts.get(value, 0) + 1
+
+
+def copy_string(target: dict[str, Any], key: str, value: Any) -> None:
+    if isinstance(value, str) and value:
+        target[key] = value
 
 
 def fixture_case_count(manifest: dict[str, Any]) -> int | None:
@@ -405,6 +446,11 @@ def fixture_case_count(manifest: dict[str, Any]) -> int | None:
 
 def append_unique(items: list[str], value: Any) -> None:
     if isinstance(value, str) and value and value not in items:
+        items.append(value)
+
+
+def append_unique_dict(items: list[dict[str, Any]], value: dict[str, Any]) -> None:
+    if value not in items:
         items.append(value)
 
 
