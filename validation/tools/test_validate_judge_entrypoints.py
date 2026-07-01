@@ -1354,6 +1354,20 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "s2_workflow_metrics": "competition summaries",
                 },
                 "claim_boundary": "Route governance metrics are not semantic acceptance evidence.",
+                "retention_policy": {
+                    "report_kind": "route-governance-metrics-retention-policy",
+                    "report_role": "p0-route-governance-and-capability-metrics",
+                    "target_artifacts": {
+                        "retention_class": "reproducible-local-output",
+                        "committed": False,
+                        "policy": "regenerate from summary inputs",
+                    },
+                    "committed_anchors": {
+                        "retention_class": "release-evidence",
+                        "policy": "commit only durable anchors",
+                    },
+                    "claim_boundary": "Retention policy does not change semantic acceptance.",
+                },
             },
         )
         payload = valid_deterministic_judge_index_payload()
@@ -1364,13 +1378,60 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             }
         }
 
-        with self.assertRaisesRegex(ValueError, "route_governance_metrics_report.*retention_policy"):
+        with self.assertRaisesRegex(ValueError, "route_governance_metrics_report.*s2_workflow_metrics"):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text="target/out/harness/judge-evidence-index.json",
                 expected_artifacts={"route_governance_metrics_report": repo_relative(route_metrics)},
                 repo_root=REPO_ROOT,
             )
+
+        full_payload = json.loads(route_metrics.read_text(encoding="utf-8"))
+        full_payload["metrics"]["s2_workflow_metrics"] = {
+            "run_count": 1,
+            "input_summaries": [],
+            "units_total": 1,
+            "units_converged": 1,
+            "units_baseline_only": 0,
+            "unsafe_reduction": {
+                "status": "measured",
+                "baseline_total_unsafe": 2,
+                "current_total_unsafe": 0,
+                "reduced_by": 2,
+                "ratio": 0.0,
+            },
+            "translation_before_after": {
+                "status": "not_provided",
+                "input_run_count": 0,
+                "unit_count": 0,
+                "measured_unsafe_unit_count": 0,
+                "accepted_patch_unit_count": 0,
+            },
+            "measured_unsafe_reduction_run_count": 1,
+            "avg_repair_rounds": 1.0,
+            "auto_recovery_rate": 1.0,
+            "human_interventions": 0,
+            "fail_closed_count": 0,
+            "root_cause_counts": {},
+            "wall_clock_seconds": 1,
+            "llm_calls": 1,
+            "repair_history_unit_count": 1,
+            "auto_recovered_units": 1,
+            "claim_boundary": "S2 workflow metrics are not semantic acceptance.",
+        }
+        write_json(route_metrics, full_payload)
+        payload["evidence_artifact_refs"]["route_governance_metrics_report"]["sha256"] = validator.sha256_file(route_metrics)
+
+        result = validator.validate_judge_evidence_index_contract(
+            payload,
+            path_text="target/out/harness/judge-evidence-index.json",
+            expected_artifacts={"route_governance_metrics_report": repo_relative(route_metrics)},
+            repo_root=REPO_ROOT,
+        )
+        self.assertEqual(
+            result["evidence_artifact_refs"]["route_governance_metrics_report"]["status"],
+            "passed",
+        )
 
     def test_judge_evidence_index_requires_opencode_graph_contract(self) -> None:
         payload = valid_opencode_judge_index_payload()

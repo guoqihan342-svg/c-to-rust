@@ -175,6 +175,14 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     "current_total_unsafe": 0,
                     "reduced_by": 2,
                 },
+                "per_unit_statuses": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "repair_history": {"rollback_ids": ["rollback-001"]},
+                    }
+                ],
             },
         )
         write_json(
@@ -267,6 +275,10 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                 "human_interventions": 0,
                 "llm_calls": 0,
                 "unsafe_reduction": {"status": "not_measured"},
+                "per_unit_statuses": [
+                    {"unit_id": "flashdb/real-fdb-blob-make", "repair_rounds": 0, "auto_recovered": False},
+                    {"unit_id": "flashdb/real-fdb-kv-set", "repair_rounds": 0, "auto_recovered": False},
+                ],
             },
         )
         write_json(
@@ -382,6 +394,13 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["workflow_metrics"]["rollup"]["units_total"], 3)
         self.assertEqual(report["workflow_metrics"]["rollup"]["units_converged"], 3)
         self.assertEqual(report["workflow_metrics"]["rollup"]["measured_unsafe_reduction_source_count"], 1)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["source_count"], 2)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["observed_source_count"], 1)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["repair_history_unit_count"], 1)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["auto_recovered_unit_count"], 1)
+        self.assertAlmostEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["avg_repair_rounds"], 1.0 / 3.0)
+        self.assertAlmostEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["auto_recovery_rate"], 1.0 / 3.0)
+        self.assertIn("semantic gate", report["workflow_metrics"]["rollup"]["repair_activity"]["boundary"])
         self.assertEqual(report["route_governance_metrics"]["report_kind"], "route-governance-metrics-rollup")
         self.assertEqual(report["route_governance_metrics"]["rollup"]["source_count"], 2)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["translation_coverage_numerator"], 0)

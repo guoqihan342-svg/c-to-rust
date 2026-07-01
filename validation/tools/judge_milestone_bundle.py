@@ -877,6 +877,7 @@ def workflow_source_from_artifact(
     if payload is None:
         return None
     unsafe_reduction = payload.get("unsafe_reduction", {}) if isinstance(payload.get("unsafe_reduction"), dict) else {}
+    per_unit_statuses = payload.get("per_unit_statuses") if isinstance(payload.get("per_unit_statuses"), list) else []
     return {
         "entrypoint_id": entrypoint_id,
         "artifact": artifact,
@@ -884,6 +885,12 @@ def workflow_source_from_artifact(
         "units_converged": int_or_zero(payload.get("units_converged")),
         "avg_repair_rounds": number_or_zero(payload.get("avg_repair_rounds")),
         "auto_recovery_rate": number_or_zero(payload.get("auto_recovery_rate")),
+        "repair_history_unit_count": sum(
+            1 for unit in per_unit_statuses if isinstance(unit, dict) and isinstance(unit.get("repair_history"), dict)
+        ),
+        "auto_recovered_unit_count": sum(
+            1 for unit in per_unit_statuses if isinstance(unit, dict) and unit.get("auto_recovered") is True
+        ),
         "human_interventions": int_or_zero(payload.get("human_interventions")),
         "llm_calls": int_or_zero(payload.get("llm_calls")),
         "unsafe_reduction_status": unsafe_reduction.get("status", "unknown"),
@@ -1195,6 +1202,7 @@ def build_workflow_metrics_rollup(sources: list[dict[str, Any]]) -> dict[str, An
             "human_interventions": sum(int_or_zero(source.get("human_interventions")) for source in sources),
             "llm_calls": sum(int_or_zero(source.get("llm_calls")) for source in sources),
             "measured_unsafe_reduction_source_count": len(measured_sources),
+            "repair_activity": build_repair_activity_rollup(sources),
             "unsafe_reduction": {
                 "status": "measured" if measured_sources else "not_measured",
                 "baseline_total_unsafe": sum(baseline_values) if measured_complete else None,
@@ -1203,6 +1211,42 @@ def build_workflow_metrics_rollup(sources: list[dict[str, Any]]) -> dict[str, An
             },
         },
     }
+
+
+def build_repair_activity_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    units_total = sum(int_or_zero(source.get("units_total")) for source in sources)
+    observed_sources = [
+        source
+        for source in sources
+        if number_or_zero(source.get("avg_repair_rounds")) > 0
+        or number_or_zero(source.get("auto_recovery_rate")) > 0
+        or int_or_zero(source.get("repair_history_unit_count")) > 0
+        or int_or_zero(source.get("auto_recovered_unit_count")) > 0
+    ]
+    return {
+        "source_count": len(sources),
+        "observed_source_count": len(observed_sources),
+        "repair_history_unit_count": sum(int_or_zero(source.get("repair_history_unit_count")) for source in sources),
+        "auto_recovered_unit_count": sum(int_or_zero(source.get("auto_recovered_unit_count")) for source in sources),
+        "avg_repair_rounds": weighted_source_metric(sources, "avg_repair_rounds", units_total),
+        "auto_recovery_rate": weighted_source_metric(sources, "auto_recovery_rate", units_total),
+        "human_interventions": sum(int_or_zero(source.get("human_interventions")) for source in sources),
+        "boundary": (
+            "Repair activity summarizes hash-bound workflow metrics only. It is not a semantic gate, "
+            "does not prove unsafe reduction without measured unsafe counts, and does not increase translation coverage."
+        ),
+    }
+
+
+def weighted_source_metric(sources: list[dict[str, Any]], key: str, units_total: int) -> float:
+    if units_total <= 0:
+        return 0.0
+    numerator = 0.0
+    for source in sources:
+        units = int_or_zero(source.get("units_total"))
+        value = number_or_zero(source.get(key))
+        numerator += float(value) * units
+    return numerator / float(units_total)
 
 
 def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:

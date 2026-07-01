@@ -1496,9 +1496,10 @@ def validate_route_governance_metrics_report_contract(ref: dict[str, str], *, re
     try:
         jsonschema.validate(payload, schema)
     except jsonschema.ValidationError as error:
+        path = jsonschema_error_path(error)
         raise ValueError(
             "route_governance_metrics_report must match validation/route-governance-metrics.schema.json: "
-            f"{error.message}"
+            f"{path}: {error.message}"
         ) from error
     metrics = require_object(payload.get("metrics"), "route_governance_metrics_report.metrics")
     retention = require_object(payload.get("retention_policy"), "route_governance_metrics_report.retention_policy")
@@ -1516,6 +1517,16 @@ def validate_route_governance_metrics_report_contract(ref: dict[str, str], *, re
             else None,
         },
     }
+
+
+def jsonschema_error_path(error: jsonschema.ValidationError) -> str:
+    parts = ["$"]
+    for item in error.absolute_path:
+        if isinstance(item, int):
+            parts.append(f"[{item}]")
+        else:
+            parts.append(f".{item}")
+    return "".join(parts)
 
 
 def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: str) -> dict[str, Any]:

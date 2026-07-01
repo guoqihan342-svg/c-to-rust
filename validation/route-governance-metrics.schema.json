@@ -72,7 +72,84 @@
         "tracked_route_decision_artifacts": {"type": "integer", "minimum": 0},
         "candidate_classification": {"type": "object"},
         "capability_delta_ledger": {"type": "object"},
-        "s2_workflow_metrics": {"type": "object"},
+        "s2_workflow_metrics": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "run_count",
+            "input_summaries",
+            "units_total",
+            "units_converged",
+            "units_baseline_only",
+            "unsafe_reduction",
+            "translation_before_after",
+            "measured_unsafe_reduction_run_count",
+            "avg_repair_rounds",
+            "auto_recovery_rate",
+            "human_interventions",
+            "fail_closed_count",
+            "root_cause_counts",
+            "wall_clock_seconds",
+            "llm_calls",
+            "repair_history_unit_count",
+            "auto_recovered_units",
+            "claim_boundary"
+          ],
+          "properties": {
+            "run_count": {"type": "integer", "minimum": 0},
+            "input_summaries": {"type": "array", "items": {"type": "object"}},
+            "units_total": {"type": "integer", "minimum": 0},
+            "units_converged": {"type": "integer", "minimum": 0},
+            "units_baseline_only": {"type": "integer", "minimum": 0},
+            "unsafe_reduction": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": [
+                "status",
+                "baseline_total_unsafe",
+                "current_total_unsafe",
+                "reduced_by",
+                "ratio"
+              ],
+              "properties": {
+                "status": {"enum": ["measured", "not_measured"]},
+                "baseline_total_unsafe": {"type": ["integer", "null"], "minimum": 0},
+                "current_total_unsafe": {"type": ["integer", "null"], "minimum": 0},
+                "reduced_by": {"type": ["integer", "null"], "minimum": 0},
+                "ratio": {"type": ["number", "null"], "minimum": 0}
+              }
+            },
+            "translation_before_after": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": [
+                "status",
+                "input_run_count",
+                "unit_count",
+                "measured_unsafe_unit_count",
+                "accepted_patch_unit_count"
+              ],
+              "properties": {
+                "status": {"enum": ["bound", "not_provided"]},
+                "input_run_count": {"type": "integer", "minimum": 0},
+                "unit_count": {"type": "integer", "minimum": 0},
+                "measured_unsafe_unit_count": {"type": "integer", "minimum": 0},
+                "accepted_patch_unit_count": {"type": "integer", "minimum": 0}
+              }
+            },
+            "measured_unsafe_reduction_run_count": {"type": "integer", "minimum": 0},
+            "avg_repair_rounds": {"type": "number", "minimum": 0},
+            "auto_recovery_rate": {"type": "number", "minimum": 0},
+            "human_interventions": {"type": "integer", "minimum": 0},
+            "fail_closed_count": {"type": "integer", "minimum": 0},
+            "root_cause_counts": {"type": "object"},
+            "wall_clock_seconds": {"type": "integer", "minimum": 0},
+            "llm_calls": {"type": "integer", "minimum": 0},
+            "repair_history_unit_count": {"type": "integer", "minimum": 0},
+            "auto_recovered_units": {"type": "integer", "minimum": 0},
+            "claim_boundary": {"type": "string", "minLength": 1}
+          }
+        },
         "candidate_generation_inventory": {"type": "object"},
         "tracked_slice_gate_contexts": {"type": "integer", "minimum": 0},
         "slice_gate_contexts": {
