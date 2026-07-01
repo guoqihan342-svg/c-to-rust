@@ -6898,6 +6898,52 @@ class AutoMigrateTests(unittest.TestCase):
             )
             jsonschema.validate(manifest, schema)
 
+    def test_flashdb_calc_crc32_slice_resolves_real_compile_commands(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        slice_spec = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+        spec = json.loads(slice_spec.read_text(encoding="utf-8"))
+
+        compile_commands = auto_migrate.resolve_c2rust_compile_commands(spec, slice_spec)
+
+        self.assertIsNotNone(compile_commands)
+        assert compile_commands is not None
+        self.assertEqual(compile_commands.name, "compile_commands.json")
+        self.assertTrue(compile_commands.is_file())
+        database = json.loads(compile_commands.read_text(encoding="utf-8"))
+        self.assertEqual(len(database), 1)
+        command = database[0]
+        self.assertEqual(command["file"], "../src/fdb_utils.c")
+        self.assertIn("-I../inc", command["command"])
+        self.assertFalse(Path(command["directory"]).is_absolute())
+        provenance = spec["build_profile"]["compiler_command_provenance"]
+        self.assertEqual(provenance["derived_from"], "sources/FlashDB/tests/Makefile")
+        self.assertEqual(provenance["source_rule"], "%.o: %.c")
+
+    def test_c2rust_compile_commands_resolver_rejects_non_compilation_database_files(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {"build_profile": {"compiler_command_source": "CMakeLists.txt"}}
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+            (tmp_path / "CMakeLists.txt").write_text("add_library(demo demo.c)\n", encoding="utf-8")
+
+            self.assertIsNone(auto_migrate.resolve_c2rust_compile_commands(spec, slice_spec))
+
+    def test_c2rust_compile_commands_resolver_rejects_invalid_database_shape(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {"build_profile": {"compiler_command_source": "compile_commands.json"}}
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+            (tmp_path / "compile_commands.json").write_text(
+                json.dumps([{"directory": str(tmp_path), "file": "demo.c"}]),
+                encoding="utf-8",
+            )
+
+            self.assertIsNone(auto_migrate.resolve_c2rust_compile_commands(spec, slice_spec))
+
     def test_c2rust_baseline_manifest_generates_output_when_explicitly_enabled(self) -> None:
         auto_migrate = load_auto_migrate_module()
         spec = {
@@ -7010,6 +7056,95 @@ class AutoMigrateTests(unittest.TestCase):
                 ).read_text(encoding="utf-8")
             )
             jsonschema.validate(manifest, schema)
+
+    def test_c2rust_baseline_schema_rejects_hollow_generated_manifest(self) -> None:
+        schema = json.loads(
+            (
+                REPO_ROOT
+                / "validation"
+                / "auto-translation-template"
+                / "c2rust-baseline-manifest.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        generated_manifest = {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "c2rust-generated",
+            "status": "generated",
+            "reason": "generated_by_c2rust",
+            "correctness_role": "candidate_context_only",
+            "fallback_oracle": "original_c_oracle_required",
+            "validation_impact": "candidate context only",
+            "source_commit": "1234567",
+            "slice_spec": {"path": "slice.json", "sha256": "slice-sha"},
+            "build_profile_hash": "profile-sha",
+            "commands": [
+                {
+                    "name": "c2rust",
+                    "path": "fake-c2rust",
+                    "available": True,
+                    "version_status": "OK",
+                    "version": "c2rust 0.18.0",
+                }
+            ],
+            "selected_command": {"name": "c2rust", "path": "fake-c2rust"},
+            "reference_tree": {
+                "path": "tools/c2rust-reference",
+                "status": "missing",
+                "cargo_toml": "",
+                "diagnostic_only": True,
+            },
+            "generation": {
+                "enabled": True,
+                "enabled_by": "C2RUST_BASELINE_GENERATION",
+                "compile_commands": {"path": "compile_commands.json", "sha256": "compile-db-sha"},
+                "command": {
+                    "argv": ["c2rust", "transpile", "--emit-build-files", "compile_commands.json"],
+                    "working_directory": "validation/evidence/demo",
+                    "stdout_log": "baseline.stdout.log",
+                    "stderr_log": "baseline.stderr.log",
+                    "timeout_seconds": 120,
+                    "exit_status": "passed",
+                    "returncode": 0,
+                },
+                "generated_files": [{"path": "src/lib.rs", "sha256": "lib-sha"}],
+            },
+            "output": {"path": "baseline.rs", "status": "generated", "sha256": "output-sha"},
+            "compile": None,
+            "diagnostics": [],
+            "must_not_claim": ["C2Rust output proves semantic equivalence"],
+        }
+
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(generated_manifest, schema)
+
+        generated_manifest["compile"] = {
+            "status": "passed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": {"path": "baseline.rs", "status": "generated", "sha256": "output-sha"},
+            "command": {
+                "argv": ["rustc", "--crate-type", "lib", "baseline.rs"],
+                "working_directory": "validation/evidence/demo",
+                "stdout_log": "baseline.stdout.log",
+                "stderr_log": "baseline.stderr.log",
+                "timeout_seconds": 60,
+                "exit_status": "passed",
+                "returncode": 0,
+            },
+            "artifact": {"path": "baseline.rlib", "status": "compiled", "sha256": "artifact-sha"},
+            "diagnostics": [],
+        }
+        generated_manifest["output"] = {"path": "baseline.rs", "sha256": "output-sha"}
+
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(generated_manifest, schema)
+
+        generated_manifest["output"] = {"path": "baseline.rs", "status": "generated", "sha256": "output-sha"}
+        generated_manifest["generation"].pop("generated_files")
+
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(generated_manifest, schema)
 
     def test_c2rust_reference_tree_can_be_configured_without_becoming_acceptance_evidence(self) -> None:
         auto_migrate = load_auto_migrate_module()

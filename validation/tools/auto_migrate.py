@@ -4513,9 +4513,27 @@ def resolve_c2rust_compile_commands(spec: dict[str, Any], slice_spec: Path) -> P
         slice_spec.parent / configured_path,
     ]
     for candidate in candidates:
-        if candidate.exists() and candidate.is_file():
+        if candidate.name != "compile_commands.json":
+            continue
+        if candidate.exists() and candidate.is_file() and is_compile_commands_database(candidate):
             return candidate.resolve()
     return None
+
+
+def is_compile_commands_database(path: Path) -> bool:
+    try:
+        database = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(database, list) or not database:
+        return False
+    for entry in database:
+        if not isinstance(entry, dict):
+            return False
+        for key in ["directory", "command", "file"]:
+            if not isinstance(entry.get(key), str) or not entry[key]:
+                return False
+    return True
 
 
 def run_c2rust_baseline_generation(

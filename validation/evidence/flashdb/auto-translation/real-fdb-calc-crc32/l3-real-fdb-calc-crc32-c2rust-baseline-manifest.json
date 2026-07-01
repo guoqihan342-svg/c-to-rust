@@ -1,5 +1,5 @@
 {
-  "build_profile_hash": "130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
+  "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
   "commands": [
     {
       "available": false,
@@ -16,11 +16,19 @@
       "version_status": "NOT_FOUND"
     }
   ],
+  "compile": null,
   "correctness_role": "candidate_context_only",
   "diagnostics": [
     "no executable c2rust-transpile or c2rust command found on PATH"
   ],
   "fallback_oracle": "original_c_oracle_required",
+  "generation": {
+    "command": null,
+    "compile_commands": null,
+    "enabled": false,
+    "enabled_by": "",
+    "generated_files": []
+  },
   "must_not_claim": [
     "C2Rust output proves semantic equivalence",
     "C2Rust baseline was generated"
@@ -38,7 +46,7 @@
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435"
+    "sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "skipped",
@@ -50,13 +58,13 @@
       "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
     },
     "diagnostic_only": true,
-    "environment_profile_hash": "062135195e3281dc520d42128af4c0500434961bf0d0f35fd32cebf640156755",
+    "environment_profile_hash": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867",
     "os_name": "nt",
     "path_search": [
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-06-29T18:21:28Z"
+    "probed_at": "2026-07-01T19:30:27Z"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

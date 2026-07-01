@@ -2005,6 +2005,7 @@ def validate_c2rust_baseline_candidate_binding(
     if baseline_status == "generated":
         if not isinstance(baseline_output, dict):
             raise SystemExit("c2rust_baseline generated status requires output object")
+        validate_c2rust_baseline_generation_status(baseline, baseline_output, manifest_path)
         validate_c2rust_baseline_compile_status(baseline, baseline_output, manifest_path)
         expected_output = {
             "path": str(baseline_output.get("path", "")),
@@ -2021,6 +2022,40 @@ def validate_c2rust_baseline_candidate_binding(
         return
     if output_ref is not None:
         raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
+
+
+def validate_c2rust_baseline_generation_status(
+    baseline: dict[str, Any],
+    baseline_output: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    generation = baseline.get("generation")
+    if not isinstance(generation, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires generation block in {manifest_path}")
+    compile_commands = generation.get("compile_commands")
+    require_file_ref(compile_commands, "c2rust_baseline.generation.compile_commands")
+    command = generation.get("command")
+    if not isinstance(command, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires generation command in {manifest_path}")
+    if command.get("exit_status") != "passed" or command.get("returncode") != 0:
+        raise SystemExit(f"c2rust_baseline generation command did not pass in {manifest_path}")
+    argv = command.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
+        raise SystemExit(f"c2rust_baseline generation command missing argv in {manifest_path}")
+    for key in ["stdout_log", "stderr_log"]:
+        log_ref = command.get(key)
+        if not isinstance(log_ref, str) or not log_ref:
+            raise SystemExit(f"c2rust_baseline generation command missing {key} in {manifest_path}")
+        log_path = resolve_ref_path(log_ref)
+        if not log_path.exists() or not log_path.is_file():
+            raise SystemExit(f"c2rust_baseline generation command {key} points to missing file: {log_path}")
+    generated_files = generation.get("generated_files")
+    if not isinstance(generated_files, list) or not generated_files:
+        raise SystemExit(f"c2rust_baseline generated status requires generated_files in {manifest_path}")
+    for index, generated_file in enumerate(generated_files):
+        require_file_ref(generated_file, f"c2rust_baseline.generation.generated_files[{index}]")
+    if baseline_output.get("source_files") != generated_files:
+        raise SystemExit(f"c2rust_baseline output.source_files drift from generation.generated_files in {manifest_path}")
 
 
 def validate_c2rust_baseline_compile_status(

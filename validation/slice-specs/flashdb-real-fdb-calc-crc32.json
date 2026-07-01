@@ -107,7 +107,21 @@
   },
   "build_profile": {
     "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-    "compiler_command_source": "CMakeLists.txt",
+    "compiler_command_source": "validation/slice-specs/flashdb-real-fdb-calc-crc32/compile_commands.json",
+    "compiler_command_provenance": {
+      "format": "clang-compilation-database",
+      "derived_from": "sources/FlashDB/tests/Makefile",
+      "source_rule": "%.o: %.c",
+      "source_variables": {
+        "CC": "cc",
+        "CFLAGS": "-O0 -g3 -Wall -Wno-format",
+        "INCDIR": "-I. -I$(ROOTPATH)/inc",
+        "ROOTPATH": ".."
+      },
+      "entry_scope": "single translation unit for src/fdb_utils.c",
+      "semantic_gate": false,
+      "candidate_context_only": true
+    },
     "include_paths": [
       "inc",
       "tests"

@@ -22,6 +22,8 @@ The Chinese source currently contains these major headings:
 
 Current operational note: `auto_migrate.py` keeps C2Rust generation disabled by default. In an environment with C2Rust installed, set `C2RUST_BASELINE_GENERATION=1` and provide `build_profile.compiler_command_source` pointing at `compile_commands.json`; generated output is recorded as path/status/sha256 plus compile-only `rustc --crate-type lib` status, and remains `candidate_context_only`. Compile success is not semantic acceptance.
 
+The C2Rust resolver now only accepts a clang compilation database named `compile_commands.json`; `CMakeLists.txt`, Makefiles, or other build scripts are not accepted as compilation databases. The current FlashDB `real-fdb-calc-crc32` slice has a minimal database at `validation/slice-specs/flashdb-real-fdb-calc-crc32/compile_commands.json`, derived from the `%.o: %.c` rule in `sources/FlashDB/tests/Makefile` for `src/fdb_utils.c`. This is only a C2Rust baseline prerequisite; until C2Rust actually generates output and the output passes compile-only validation, baseline evidence must remain `skipped` or `blocked`.
+
 Route-governance metrics now read the baseline manifests and publish status/output/compile-only counts into the milestone scorecard. This makes raw C2Rust availability visible to judges without changing the acceptance boundary: a generated and compile-passed baseline is still only candidate context until the shared C oracle, Rust replay, diff, unsafe, and final-verification gates accept it.
 
 ## Maintenance Notes

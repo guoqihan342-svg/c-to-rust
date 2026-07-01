@@ -9,8 +9,8 @@
       "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
       "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
       "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-      "unsafe_ledger": "e64539172ff12e6ad222860932850c311dff7869876b06638ecb1e8166627e3b",
-      "unsafe_scan": "87024c9614d130d8462a538070436a81c13334eb857545c5a65bd4f1820543ad"
+      "unsafe_ledger": "ab0091821da24733480ded878cc5612a9670946ab989da210bb80f96abdc1d0f",
+      "unsafe_scan": "63fe8c5407060959671147cdb5c7b5b74f419ef0910a3e34307bbcb314cd34bf"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -31,16 +31,16 @@
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
+    "slice_spec_sha256=14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
+    "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "compile_profile": {
     "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
     "command_args": [
-      "CMakeLists.txt"
+      "validation/slice-specs/flashdb-real-fdb-calc-crc32/compile_commands.json"
     ],
     "config_header_included": true,
     "include_paths": [
@@ -51,7 +51,7 @@
   "config_header": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "7834346a158b0b4eca2c09f6bca81b8dec8459adc7fb929c096fa495d1923d40"
+    "sha256": "21b868d4bfef7eb36c8f63582b4424beba297c770c67de97183c1803cf273703"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -68,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-  "repo_commit": "e719a132165a60c609928cce0e812cb485a2cd54",
+  "repo_commit": "224d73bb6262eff0442e56b7cb5ee8d6c93443ff",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

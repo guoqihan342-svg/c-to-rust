@@ -9,6 +9,11 @@
       "kind": "unsupported_syntax",
       "reason": "expression `crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8)` uses increment/decrement value semantics outside the bounded MVP C subset",
       "source_span": "crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8)"
+    },
+    {
+      "kind": "legacy_direct_retired",
+      "reason": "legacy string translator direct artifact generation is retained only as diagnostic compatibility evidence; it no longer produces a generated candidate",
+      "source_span": null
     }
   ],
   "schema_version": 1,

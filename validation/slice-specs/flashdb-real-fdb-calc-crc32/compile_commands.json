@@ -1,0 +1,8 @@
+[
+  {
+    "directory": "sources/FlashDB/tests",
+    "command": "cc -O0 -g3 -Wall -Wno-format -I. -I../inc -c ../src/fdb_utils.c -o ../src/fdb_utils.o",
+    "file": "../src/fdb_utils.c",
+    "output": "../src/fdb_utils.o"
+  }
+]

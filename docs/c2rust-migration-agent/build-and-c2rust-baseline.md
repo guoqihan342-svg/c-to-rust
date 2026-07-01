@@ -57,6 +57,8 @@ Acceptance criteria:
 - `compile_commands.json` must include every C file used by the selected profile.
 - Macro definitions and include paths must match the selected `fdb_cfg.h`.
 - The generated file must be stored with a hash and command log.
+- `auto_migrate.py` 的 C2Rust resolver 只接受文件名为 `compile_commands.json` 的 clang compilation database；`CMakeLists.txt`、Makefile 或其它构建脚本不能被当作 compilation database。
+- 当前 FlashDB `real-fdb-calc-crc32` slice 的最小数据库已落在 `validation/slice-specs/flashdb-real-fdb-calc-crc32/compile_commands.json`，按 `sources/FlashDB/tests/Makefile` 的 `%.o: %.c` 规则绑定 `src/fdb_utils.c`。它只是 C2Rust baseline 的输入前置；在 C2Rust 真正生成并 compile-only 通过前，baseline evidence 仍必须保持 `skipped` 或 `blocked`。
 
 ## C2Rust Baseline Command
 

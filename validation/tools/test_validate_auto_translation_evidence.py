@@ -1287,6 +1287,87 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("compile", result.stderr + result.stdout)
 
+    def test_rejects_generated_c2rust_baseline_generated_file_sha_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            compile_commands = tmp_path / "compile_commands.json"
+            stdout_log = tmp_path / "c2rust.stdout.log"
+            stderr_log = tmp_path / "c2rust.stderr.log"
+            generated_file = tmp_path / "generated" / "src" / "lib.rs"
+            output_file = tmp_path / "c2rust-baseline-output.rs"
+            artifact_file = tmp_path / "c2rust-baseline-output.rlib"
+            generated_file.parent.mkdir(parents=True)
+            compile_commands.write_text(
+                json.dumps([{"directory": str(tmp_path), "command": "cc -c demo.c", "file": "demo.c"}]),
+                encoding="utf-8",
+            )
+            stdout_log.write_text("c2rust ok\n", encoding="utf-8")
+            stderr_log.write_text("", encoding="utf-8")
+            generated_file.write_text("pub fn generated() {}\n", encoding="utf-8")
+            output_file.write_text("pub fn generated() {}\n", encoding="utf-8")
+            artifact_file.write_text("fake rlib\n", encoding="utf-8")
+
+            generated_ref = {"path": generated_file.as_posix(), "sha256": "not-the-real-sha"}
+            output_ref = {
+                "path": output_file.as_posix(),
+                "status": "generated",
+                "sha256": hashlib.sha256(output_file.read_bytes()).hexdigest(),
+                "source_files": [generated_ref],
+            }
+            baseline = {
+                "generation": {
+                    "compile_commands": {
+                        "path": compile_commands.as_posix(),
+                        "sha256": hashlib.sha256(compile_commands.read_bytes()).hexdigest(),
+                    },
+                    "command": {
+                        "argv": ["c2rust", "transpile", "--emit-build-files", compile_commands.as_posix()],
+                        "working_directory": tmp_path.as_posix(),
+                        "stdout_log": stdout_log.as_posix(),
+                        "stderr_log": stderr_log.as_posix(),
+                        "timeout_seconds": 120,
+                        "exit_status": "passed",
+                        "returncode": 0,
+                    },
+                    "generated_files": [generated_ref],
+                },
+                "compile": {
+                    "status": "passed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                    "candidate_output": {
+                        "path": output_file.as_posix(),
+                        "status": "generated",
+                        "sha256": hashlib.sha256(output_file.read_bytes()).hexdigest(),
+                    },
+                    "command": {
+                        "argv": ["rustc", "--crate-type", "lib", output_file.as_posix()],
+                        "working_directory": tmp_path.as_posix(),
+                        "stdout_log": stdout_log.as_posix(),
+                        "stderr_log": stderr_log.as_posix(),
+                        "timeout_seconds": 60,
+                        "exit_status": "passed",
+                        "returncode": 0,
+                    },
+                    "artifact": {
+                        "path": artifact_file.as_posix(),
+                        "status": "compiled",
+                        "sha256": hashlib.sha256(artifact_file.read_bytes()).hexdigest(),
+                    },
+                    "diagnostics": [],
+                },
+            }
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_c2rust_baseline_generation_status(
+                    baseline,
+                    output_ref,
+                    tmp_path / "c2rust-baseline-manifest.json",
+                )
+
+            self.assertIn("generated_files[0]", str(raised.exception))
+
     def test_rejects_l4_refused_route_with_generated_candidate_manifest(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

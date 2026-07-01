@@ -4,9 +4,9 @@
   ],
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
+    "slice_spec_sha256=14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
+    "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -52,7 +52,7 @@
     "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
   ],
   "level": "L3",
-  "repo_commit": "e719a132165a60c609928cce0e812cb485a2cd54",
+  "repo_commit": "224d73bb6262eff0442e56b7cb5ee8d6c93443ff",
   "rust_tests": [
     {
       "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_calc_crc32",

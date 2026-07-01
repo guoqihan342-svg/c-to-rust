@@ -185,15 +185,64 @@
     {
       "if": {"properties": {"status": {"const": "generated"}}},
       "then": {
-        "required": ["compile"],
+        "required": ["compile", "generation"],
         "properties": {
           "selected_command": {"type": "object"},
           "output": {
             "type": "object",
-            "required": ["path", "sha256"],
+            "required": ["path", "status", "sha256"],
             "properties": {
               "path": {"type": "string", "minLength": 1},
+              "status": {"const": "generated"},
               "sha256": {"type": "string", "minLength": 1}
+            }
+          },
+          "compile": {"type": "object"},
+          "generation": {
+            "type": "object",
+            "required": ["compile_commands", "command", "generated_files"],
+            "properties": {
+              "compile_commands": {
+                "type": "object",
+                "required": ["path", "sha256"],
+                "properties": {
+                  "path": {"type": "string", "minLength": 1},
+                  "sha256": {"type": "string", "minLength": 1}
+                }
+              },
+              "command": {
+                "type": "object",
+                "required": [
+                  "argv",
+                  "working_directory",
+                  "stdout_log",
+                  "stderr_log",
+                  "timeout_seconds",
+                  "exit_status",
+                  "returncode"
+                ],
+                "properties": {
+                  "argv": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                  "working_directory": {"type": "string", "minLength": 1},
+                  "stdout_log": {"type": "string", "minLength": 1},
+                  "stderr_log": {"type": "string", "minLength": 1},
+                  "timeout_seconds": {"type": "integer", "minimum": 1},
+                  "exit_status": {"const": "passed"},
+                  "returncode": {"const": 0}
+                }
+              },
+              "generated_files": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["path", "sha256"],
+                  "properties": {
+                    "path": {"type": "string", "minLength": 1},
+                    "sha256": {"type": "string", "minLength": 1}
+                  }
+                }
+              }
             }
           }
         }

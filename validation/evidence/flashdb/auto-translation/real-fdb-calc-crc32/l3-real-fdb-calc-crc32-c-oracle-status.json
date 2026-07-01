@@ -255,6 +255,7 @@
         }
       }
     ],
+    "oracle_harness_includes": [],
     "oracle_source_mode": "declared_c_boundary_sources",
     "source_files": [
       {
