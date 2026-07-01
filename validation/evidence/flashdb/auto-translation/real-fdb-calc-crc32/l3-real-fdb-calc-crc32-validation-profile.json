@@ -4,18 +4,22 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "05e9855caa146373b003e150fbb2b7ae3d23ff3391e8cb667046e8870ea7d1b0",
-        "status": "skipped"
+        "sha256": "7e90874ede35182f03beddec36d170049425c1ed2e0745e556640d80ade783c2",
+        "status": "generated"
       },
       "candidate_id": "c2rust-baseline",
       "correctness_role": "candidate_context_only",
       "generated_draft_semantic_pass": false,
       "kind": "c2rust-baseline",
-      "output_ref": null,
-      "reason": "blocked_by_missing_tools",
+      "output_ref": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rs",
+        "sha256": "7ea393d1d09f0f4f91127247599b4d91c3be3c350e70cc384902e1c8db34b316",
+        "status": "generated"
+      },
+      "reason": "generated_by_c2rust",
       "role": "baseline_or_repair_candidate_context",
       "semantic_pass": false,
-      "status": "skipped"
+      "status": "generated"
     },
     "candidate_set": [
       {
@@ -38,18 +42,22 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "05e9855caa146373b003e150fbb2b7ae3d23ff3391e8cb667046e8870ea7d1b0",
-          "status": "skipped"
+          "sha256": "7e90874ede35182f03beddec36d170049425c1ed2e0745e556640d80ade783c2",
+          "status": "generated"
         },
         "candidate_id": "c2rust-baseline",
         "correctness_role": "candidate_context_only",
         "generated_draft_semantic_pass": false,
         "kind": "c2rust-baseline",
-        "output_ref": null,
-        "reason": "blocked_by_missing_tools",
+        "output_ref": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rs",
+          "sha256": "7ea393d1d09f0f4f91127247599b4d91c3be3c350e70cc384902e1c8db34b316",
+          "status": "generated"
+        },
+        "reason": "generated_by_c2rust",
         "role": "baseline_or_repair_candidate_context",
         "semantic_pass": false,
-        "status": "skipped"
+        "status": "generated"
       }
     ],
     "compatibility_sources": [

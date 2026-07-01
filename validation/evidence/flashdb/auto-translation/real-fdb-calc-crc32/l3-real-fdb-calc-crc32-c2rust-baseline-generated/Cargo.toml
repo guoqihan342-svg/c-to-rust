@@ -1,0 +1,20 @@
+[workspace]
+members = [
+]
+[package]
+name = "l3_real_fdb_calc_crc32_c2rust_baseline_generated"
+authors = ["C2Rust"]
+version = "0.0.0"
+publish = false
+edition = "2021"
+autobins = false
+
+[lib]
+name = "l3_real_fdb_calc_crc32_c2rust_baseline_generated"
+path = "lib.rs"
+crate-type = ["staticlib", "rlib"]
+[dependencies]
+
+
+[profile.release]
+strip = "debuginfo"

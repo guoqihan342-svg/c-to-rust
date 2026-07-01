@@ -1,5 +1,6 @@
 .gitattributes text eol=lf
 *.sh text eol=lf
 validation/evidence/** text eol=lf
+validation/evidence/**/*.rlib binary -eol
 validation/evidence/**/*.json text eol=lf
 validation/slice-specs/*.json text eol=lf

@@ -2,39 +2,126 @@
   "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
   "commands": [
     {
-      "available": false,
+      "available": true,
       "name": "c2rust-transpile",
-      "path": "",
-      "version": "",
-      "version_status": "NOT_FOUND"
+      "path": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
+      "version": "transpile 0.22.1",
+      "version_status": "OK"
     },
     {
-      "available": false,
+      "available": true,
       "name": "c2rust",
-      "path": "",
-      "version": "",
-      "version_status": "NOT_FOUND"
+      "path": "/mnt/f/agent/c2rust-master/target/release/c2rust",
+      "version": "C2Rust 0.22.1",
+      "version_status": "OK"
     }
   ],
-  "compile": null,
+  "compile": {
+    "artifact": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib",
+      "sha256": "5372772ac9517c61d5bdca342aff8d9e9ed317d88131603732eef527acbc8fde",
+      "status": "compiled"
+    },
+    "attempted": true,
+    "candidate_output": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rs",
+      "sha256": "7ea393d1d09f0f4f91127247599b4d91c3be3c350e70cc384902e1c8db34b316",
+      "status": "generated"
+    },
+    "command": {
+      "argv": [
+        "/root/.cargo/bin/cargo",
+        "build"
+      ],
+      "candidate_output_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rs",
+      "compile_strategy": "cargo_generated_crate",
+      "crate_root": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated",
+      "env_overrides": {
+        "RUSTC_BOOTSTRAP": "1",
+        "RUSTUP_TOOLCHAIN": "stable"
+      },
+      "exit_status": "passed",
+      "returncode": 0,
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-cargo.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-cargo.stdout.log",
+      "timeout_seconds": 120,
+      "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated"
+    },
+    "diagnostics": [],
+    "semantic_pass": false,
+    "status": "passed"
+  },
   "correctness_role": "candidate_context_only",
-  "diagnostics": [
-    "no executable c2rust-transpile or c2rust command found on PATH"
-  ],
+  "diagnostics": [],
   "fallback_oracle": "original_c_oracle_required",
   "generation": {
-    "command": null,
-    "compile_commands": null,
-    "enabled": false,
-    "enabled_by": "",
-    "generated_files": []
+    "command": {
+      "argv": [
+        "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
+        "--emit-build-files",
+        "--output-dir",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated",
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-compile-commands/compile_commands.json"
+      ],
+      "exit_status": "passed",
+      "output_dir": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated",
+      "returncode": 0,
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-stdout.log",
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    "compile_commands": {
+      "normalized_for_c2rust": true,
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-compile-commands/compile_commands.json",
+      "sha256": "a7c2b56e35068d8eceb04a170dd84ba99f7cabe00e5763aa6553777d214fa95d"
+    },
+    "enabled": true,
+    "enabled_by": "C2RUST_BASELINE_GENERATION",
+    "generated_files": [
+      {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/build.rs",
+        "sha256": "d8d8a186067c32010920faeaa773571dba8c14fb40b95eb7de41af240b70d5e3"
+      },
+      {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/lib.rs",
+        "sha256": "a345c3ed9c088bb8324a3954e91b7d44ad3a2c2cc6bb6e5ebe83cb8199f35775"
+      },
+      {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/src/fdb_utils.rs",
+        "sha256": "804fb81f1557f180c12506c342e9f22c980e26b04df554fba702852c57daf0d5"
+      }
+    ],
+    "source_compile_commands": {
+      "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32/compile_commands.json",
+      "sha256": "012d7b7a9d21a56ceb1a5ad7e6cd3c1174e7c7ac2e51c8310f95513559fc6134"
+    }
   },
   "must_not_claim": [
-    "C2Rust output proves semantic equivalence",
-    "C2Rust baseline was generated"
+    "C2Rust output proves semantic equivalence"
   ],
-  "output": null,
-  "reason": "blocked_by_missing_tools",
+  "output": {
+    "cargo_toml": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/Cargo.toml",
+    "crate_root": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated",
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rs",
+    "sha256": "7ea393d1d09f0f4f91127247599b4d91c3be3c350e70cc384902e1c8db34b316",
+    "source_files": [
+      {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/build.rs",
+        "sha256": "d8d8a186067c32010920faeaa773571dba8c14fb40b95eb7de41af240b70d5e3"
+      },
+      {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/lib.rs",
+        "sha256": "a345c3ed9c088bb8324a3954e91b7d44ad3a2c2cc6bb6e5ebe83cb8199f35775"
+      },
+      {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/src/fdb_utils.rs",
+        "sha256": "804fb81f1557f180c12506c342e9f22c980e26b04df554fba702852c57daf0d5"
+      }
+    ],
+    "status": "generated"
+  },
+  "reason": "generated_by_c2rust",
   "reference_tree": {
     "cargo_toml": "",
     "diagnostic_only": true,
@@ -42,14 +129,20 @@
     "status": "missing"
   },
   "schema_version": 1,
-  "selected_command": null,
+  "selected_command": {
+    "available": true,
+    "name": "c2rust-transpile",
+    "path": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
+    "version": "transpile 0.22.1",
+    "version_status": "OK"
+  },
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
     "sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "status": "skipped",
+  "status": "generated",
   "target_id": "flashdb",
   "tool_probe": {
     "competition_environment_identity": {
@@ -59,48 +152,13 @@
     },
     "diagnostic_only": true,
     "environment_profile_hash": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867",
-    "os_name": "nt",
+    "os_name": "posix",
     "path_search": [
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-01T21:08:53Z"
+    "probed_at": "2026-07-01T22:12:10Z"
   },
-  "toolchain_repair": {
-    "competition_environment": {
-      "profile": "config/competition-env/environment.json",
-      "proof_class": "local_or_wsl_until_competition_run"
-    },
-    "correctness_role": "candidate_context_only",
-    "must_not_claim": [
-      "toolchain repair proves C2Rust generated output",
-      "compile-only C2Rust output proves semantic equivalence"
-    ],
-    "reason": "blocked_by_missing_tools",
-    "required_commands": [
-      "c2rust-transpile",
-      "c2rust"
-    ],
-    "required_dependencies": [
-      "rustc",
-      "cargo",
-      "clang",
-      "libclang"
-    ],
-    "rerun_command": [
-      "python3",
-      "-B",
-      "-m",
-      "validation.tools.auto_migrate",
-      "--slice-spec",
-      "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-      "--out-root",
-      "validation/evidence"
-    ],
-    "rerun_env": {
-      "C2RUST_BASELINE_GENERATION": "1"
-    },
-    "status": "required"
-  },
+  "toolchain_repair": null,
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

@@ -111,7 +111,7 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "4b744ea64e7e36eeda2c2da802c40f9a4a3e01d0",
+  "repo_commit": "c69aa256aa2613b7f405588f770eae74f32e5dcf",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {

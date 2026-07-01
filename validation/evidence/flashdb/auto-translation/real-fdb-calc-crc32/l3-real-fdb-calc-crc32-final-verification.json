@@ -10,8 +10,8 @@
       "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
       "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
       "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-      "unsafe_ledger": "882c17c5a807b4df5494b2ad08e50c9edd85a7ca2ebf2e10986bf9bc7540bc18",
-      "unsafe_scan": "2c15ff6e7240fb269f31ecefdd0da55e359555f195f010d1516ffa29be49c80b"
+      "unsafe_ledger": "03d6803a28ca784c453117dafc9c8619c006120c894fb5d702d6a8feaf598201",
+      "unsafe_scan": "4f5a4b2ae03d668c168c8c5c56fdda7f5f7b55f5e92e17f114dd7bf8f4f7e1d4"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -37,8 +37,8 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "05e9855caa146373b003e150fbb2b7ae3d23ff3391e8cb667046e8870ea7d1b0",
-    "status": "skipped"
+    "sha256": "7e90874ede35182f03beddec36d170049425c1ed2e0745e556640d80ade783c2",
+    "status": "generated"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "external_callee_scope": {
@@ -128,7 +128,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "2e685864c8af17d34d8ff1a3d82ebd1624e07da04935217dce4f8631aa0009fc",
+    "sha256": "9ed2a97372ab6276f7467f7add0e8cdc160a8f2b292c189542a45b429d1f103f",
     "status": "refused"
   },
   "rust_check_status": "passed",
@@ -146,7 +146,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "c66931b631bf5780b0caf2ac14fdc71c3f986091be7e411247ebe16dcf6092c8",
+    "sha256": "f98b88e05c0f4878e4191fe47f3426bb4e6d905c60a67d8e85e2bd720d7d0664",
     "status": "passed"
   },
   "validation_profile_status": "passed",

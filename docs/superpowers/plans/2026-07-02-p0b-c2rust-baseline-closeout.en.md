@@ -16,13 +16,14 @@ Chinese original: `2026-07-02-p0b-c2rust-baseline-closeout.md`.
 
 `opencode-agent-harness-逐行稳定性审查.md` is directionally right about timeouts, atomic writes, `python3`, retry caps, SQLite locks, and fencing/transaction semantics, but the current branch has already absorbed those H7 items into tested contracts. Reopening them as P0 would waste the remaining window.
 
-The real P0-B blocker is C2Rust baseline evidence. FlashDB source and `compile_commands.json` exist, and the production path can generate output plus compile-only status under a mocked C2Rust. What remains is a real C2Rust binary, a live integration target, and stronger anti-spoof negative tests.
+P0-B4 is now closed for the `real-fdb-calc-crc32` slice. FlashDB source and `compile_commands.json` exist, the real WSL `c2rust-transpile 0.22.1` command is callable, and the C2Rust CLI contract is pinned: `--emit-build-files` is a boolean switch, and the prepared compilation database is passed as a positional argument named exactly `compile_commands.json`. `auto_migrate.py` writes the normalized database to `<evidence>/<prefix>-c2rust-compile-commands/compile_commands.json`, generates a C2Rust crate plus a combined output file, compiles the generated crate with Cargo, copies the produced rlib into a stable evidence artifact, and keeps `compile.semantic_pass=false` / `correctness_role=candidate_context_only`. The next P0 item is P0-C: bind this compile-only baseline to C oracle, Rust replay, diff, negative diff, and unsafe-ledger evidence before any OpenCode/LLM safety patch is accepted.
 
 ## File Structure
 
 - Modify: `validation/tools/auto_migrate.py`
   - Add a small helper that builds `toolchain_repair` for missing or disabled C2Rust baseline generation.
   - Keep `status` as `skipped` or `blocked`; never promote repair hints to generated evidence.
+  - For generated C2Rust crates, compile through the emitted `Cargo.toml` instead of concatenating crate files into one Rust source for bare `rustc`.
 - Modify: `validation/auto-translation-template/c2rust-baseline-manifest.schema.json`
   - Add optional schema for `toolchain_repair`.
   - Keep generated status requirements and skipped/blocked `output=null` / `compile=null` rules unchanged.
@@ -30,6 +31,7 @@ The real P0-B blocker is C2Rust baseline evidence. FlashDB source and `compile_c
   - Extend the missing-tool test.
   - Add an opt-in live C2Rust test gated by environment and real tool availability.
   - Add a route integration test for generated C2Rust `output_ref`.
+  - Add a generated-crate compile-only test proving Cargo is used when C2Rust emits `Cargo.toml`, and the rlib artifact is bound to the manifest.
 - Modify: `validation/tools/test_validate_auto_translation_evidence.py`
   - Add validator negatives for compile candidate-output drift, compile semantic spoofing, and artifact contradictions.
 - Modify: `validation/tools/test_template_schema_contracts.py`
@@ -338,7 +340,7 @@ Expected: OK, and both schemas pin C2Rust compile-only semantic pass count to ze
 - Update generated outputs under the same evidence directory only if produced by real C2Rust.
 - Refresh route metrics and judge packet artifacts under `target/` first, then commit only intended durable evidence.
 
-- [ ] **Step 1: Build or expose real C2Rust**
+- [x] **Step 1: Build or expose real C2Rust**
 
 Preferred WSL commands:
 
@@ -356,9 +358,60 @@ cd /mnt/f/agent/c2rust-master
 cargo build --release
 ```
 
-Expected: a runnable `c2rust` or `c2rust-transpile`. If build fails, record failure logs as toolchain repair diagnostics; do not mark baseline generated.
+Expected: a runnable `c2rust` or `c2rust-transpile`. Current WSL evidence has a runnable `c2rust-transpile 0.22.1` through `/mnt/f/agent/c2rust-master/target/release`. If build fails in another environment, record failure logs as toolchain repair diagnostics; do not mark baseline generated.
 
-- [ ] **Step 2: Run the real FlashDB baseline**
+- [x] **Step 2: Fix and verify C2Rust compilation database handoff**
+
+The C2Rust command must be shaped as:
+
+```bash
+c2rust-transpile --emit-build-files --output-dir <output-dir> <path/to/compile_commands.json>
+```
+
+Acceptance:
+
+```python
+prepared = evidence_dir / f"{prefix}-c2rust-compile-commands" / "compile_commands.json"
+assert prepared.name == "compile_commands.json"
+assert argv[-1] == str(prepared)
+```
+
+Verified focused tests:
+
+```powershell
+python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_c2rust_command_candidates_accepts_explicit_command_override validation.tools.test_auto_migrate.AutoMigrateTests.test_prepare_c2rust_compile_commands_normalizes_makefile_relative_entry validation.tools.test_auto_migrate.AutoMigrateTests.test_c2rust_baseline_manifest_generates_output_when_explicitly_enabled -q
+```
+
+Current result: real WSL `auto_migrate` now reaches `status=generated` / `reason=generated_by_c2rust` and writes C2Rust-generated files under `l3-real-fdb-calc-crc32-c2rust-baseline-generated/`.
+
+- [x] **Step 3: Replace bare-rustc compile-only with generated-crate Cargo compile**
+
+Write a red test near `test_c2rust_baseline_manifest_generates_output_when_explicitly_enabled`:
+
+```python
+def test_c2rust_baseline_manifest_compiles_generated_crate_with_cargo(self) -> None:
+    auto_migrate = load_auto_migrate_module()
+    with tempfile.TemporaryDirectory(prefix="auto-migrate-c2rust-crate-") as tmp:
+        evidence_dir = Path(tmp)
+        output_dir = evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated"
+
+        # Fake C2Rust writes Cargo.toml, lib.rs, and src/fdb_utils.rs.
+        # The fake runner must fail if compile uses bare rustc against the combined output,
+        # and pass only when argv invokes cargo build/check from the generated crate root.
+```
+
+Minimal implementation:
+
+- `run_c2rust_baseline_generation()` should record generated crate metadata when `output_dir / "Cargo.toml"` exists, such as `output.crate_root` and `output.cargo_toml`.
+- `compile_c2rust_baseline_output()` should accept an optional `crate_root`.
+- If `crate_root/Cargo.toml` exists and `cargo` is available, run Cargo from the generated crate root instead of bare `rustc` on the combined file.
+- Use an explicit compile-only adapter, for example env overrides `RUSTUP_TOOLCHAIN=stable` and `RUSTC_BOOTSTRAP=1`, because C2Rust emits old nightly feature attributes and a `rust-toolchain.toml` pinned to an old toolchain.
+- On success, copy the generated `target/debug/*.rlib` to a stable `*-c2rust-baseline-output.rlib` evidence artifact with repo-relative path and sha256; keep `compile.semantic_pass=false`.
+- If Cargo is unavailable or fails, keep `compile.status=failed` with stdout/stderr logs and diagnostics; do not convert compile failure into semantic failure or success.
+
+Result: implemented in `validation/tools/auto_migrate.py` with `compile_strategy=cargo_generated_crate`, `env_overrides={"RUSTUP_TOOLCHAIN":"stable","RUSTC_BOOTSTRAP":"1"}`, stable rlib evidence binding, and the focused red/green test in `validation/tools/test_auto_migrate.py`.
+
+- [x] **Step 4: Run the real FlashDB baseline**
 
 ```bash
 cd /mnt/f/agent/crustpaper/0630
@@ -383,7 +436,9 @@ Expected successful evidence:
 
 If status remains `blocked` or `skipped`, keep that evidence honest and make sure `toolchain_repair` names the next concrete action.
 
-- [ ] **Step 3: Verify after evidence refresh**
+Result: WSL run produced `validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json` with `status=generated`, `reason=generated_by_c2rust`, `correctness_role=candidate_context_only`, `compile.status=passed`, `compile.command.compile_strategy=cargo_generated_crate`, artifact `l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib`, and `compile.semantic_pass=false`.
+
+- [x] **Step 5: Verify after evidence refresh**
 
 Run:
 
@@ -398,3 +453,9 @@ python -B -m unittest validation.tools.test_doc_mirror_contract -q
 ```
 
 Expected: all selected tests and validators pass. The final validator semantic pass still comes from accepted evidence or downstream semantic gates, not from C2Rust compile-only output.
+
+Actual this round:
+
+- `python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_c2rust_baseline_manifest_generates_output_when_explicitly_enabled -q` passed.
+- WSL `C2RUST_BASELINE_GENERATION=1 python3 -B -m validation.tools.auto_migrate ... --accept-existing-evidence` passed and refreshed evidence.
+- `python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass` passed, with semantic pass sourced from `accepted_evidence_binding`, not from the C2Rust compile-only draft.

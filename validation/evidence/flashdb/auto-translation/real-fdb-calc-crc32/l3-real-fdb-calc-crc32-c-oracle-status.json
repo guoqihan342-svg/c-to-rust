@@ -69,35 +69,32 @@
       "C oracle compile command succeeded, but execution/diff gates are still required."
     ],
     "execution_argv": [
-      "C:\\WINDOWS\\system32\\wsl.exe",
-      "-e",
-      "sh",
-      "-lc",
-      "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /usr/bin/cc -std=c99 -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_file.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
+      "/usr/bin/cc",
+      "-std=c99",
+      "-I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc",
+      "-I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests",
+      "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
+      "/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.c",
+      "/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_file.c",
+      "-o",
+      "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
     ],
     "harness_execution": {
       "argv": [
         "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
       ],
-      "attempted": true,
+      "attempted": false,
       "diagnostics": [
-        "C oracle harness executed, but execution output has not passed oracle diff gates."
+        "C oracle harness execution could not start; no oracle evidence accepted."
       ],
       "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe",
-      "execution_argv": [
-        "C:\\WINDOWS\\system32\\wsl.exe",
-        "-e",
-        "sh",
-        "-lc",
-        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32 && /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
-      ],
       "output_gate": {
         "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
         "compared_fields": [
           "return_code"
         ],
         "diagnostics": [
-          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+          "C oracle harness output gate did not run because harness execution did not exit zero."
         ],
         "expected_stdout_fragments": [
           "fixture case empty-crc-zero return_code matched",
@@ -105,22 +102,21 @@
         ],
         "fixture_expected_output_status": "declared_not_executed",
         "gate": "c_oracle_harness_output",
-        "matched_stdout_fragments": [
+        "matched_stdout_fragments": [],
+        "missing_stdout_fragments": [
           "fixture case empty-crc-zero return_code matched",
           "fixture case ascii-123456789-crc-zero return_code matched"
         ],
-        "missing_stdout_fragments": [],
         "schema_version": 1,
         "semantic_pass": false,
-        "status": "matched_not_oracle"
+        "status": "not_run_not_oracle"
       },
-      "returncode": 0,
+      "returncode": null,
       "semantic_pass": false,
-      "status": "exited_zero_not_oracle",
-      "stderr": "",
-      "stdout": "oracle harness draft for fdb_calc_crc32\nfixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json\nfixture case empty-crc-zero return_code matched\nfixture case ascii-123456789-crc-zero return_code matched\n",
+      "status": "execution_error_not_oracle",
+      "stderr": "[Errno 2] No such file or directory: 'validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe'",
+      "stdout": "",
       "timeout_seconds": 30,
-      "toolchain_adapter": "wsl",
       "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
     },
     "requested_compiler": "cc",
@@ -129,7 +125,7 @@
     "status": "compile_succeeded_not_oracle",
     "stderr": "",
     "stdout": "",
-    "toolchain_adapter": "wsl",
+    "toolchain_adapter": "local",
     "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
   },

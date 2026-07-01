@@ -1,0 +1,8 @@
+[
+  {
+    "command": "cc -O0 -g3 -Wall -Wno-format -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests -I/mnt/f/agent/crustpaper/0630/sources/FlashDB/inc -c /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.c -o /mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.o",
+    "directory": "/mnt/f/agent/crustpaper/0630/sources/FlashDB/tests",
+    "file": "/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.c",
+    "output": "/mnt/f/agent/crustpaper/0630/sources/FlashDB/src/fdb_utils.o"
+  }
+]

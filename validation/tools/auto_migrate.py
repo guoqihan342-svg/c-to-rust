@@ -4438,10 +4438,20 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
                 "does not resolve to compile_commands.json"
             )
         else:
-            generation["compile_commands"] = {"path": rel(compile_commands), "sha256": sha256(compile_commands)}
+            prepared_compile_commands, compile_commands_metadata = prepare_c2rust_compile_commands(
+                compile_commands,
+                evidence_dir,
+                prefix,
+            )
+            generation["source_compile_commands"] = compile_commands_metadata["source"]
+            generation["compile_commands"] = {
+                "path": rel(prepared_compile_commands),
+                "sha256": sha256(prepared_compile_commands),
+                "normalized_for_c2rust": compile_commands_metadata["normalized_for_c2rust"],
+            }
             generation_result = run_c2rust_baseline_generation(
                 selected,
-                compile_commands,
+                prepared_compile_commands,
                 evidence_dir,
                 prefix,
             )
@@ -4458,6 +4468,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
                     c2rust_baseline_output_path(output),
                     evidence_dir,
                     prefix,
+                    crate_root=c2rust_baseline_crate_root(output),
                 )
                 diagnostics.extend(compile_status.get("diagnostics", []))
     toolchain_repair = None if status == "generated" else c2rust_toolchain_repair(reason, slice_spec=slice_spec)
@@ -4538,6 +4549,84 @@ def is_compile_commands_database(path: Path) -> bool:
     return True
 
 
+def prepare_c2rust_compile_commands(compile_commands: Path, evidence_dir: Path, prefix: str) -> tuple[Path, dict[str, Any]]:
+    database = json.loads(compile_commands.read_text(encoding="utf-8"))
+    normalized = [normalize_c2rust_compile_command_entry(entry) for entry in database]
+    prepared = evidence_dir / f"{prefix}-c2rust-compile-commands" / "compile_commands.json"
+    write_json(prepared, normalized)
+    return prepared, {
+        "source": {"path": rel(compile_commands), "sha256": sha256(compile_commands)},
+        "normalized_for_c2rust": True,
+    }
+
+
+def normalize_c2rust_compile_command_entry(entry: dict[str, Any]) -> dict[str, str]:
+    source_directory = Path(str(entry["directory"]))
+    if not source_directory.is_absolute():
+        source_directory = REPO_ROOT / source_directory
+    source_directory = source_directory.resolve()
+    source_file = resolve_compile_command_path(str(entry["file"]), source_directory)
+    output = entry.get("output")
+    output_path = resolve_compile_command_path(str(output), source_directory) if output else None
+    command = normalize_c2rust_compile_command(str(entry["command"]), source_directory, source_file, output_path)
+    normalized = {
+        "directory": source_directory.as_posix(),
+        "command": command,
+        "file": source_file.as_posix(),
+    }
+    if output_path is not None:
+        normalized["output"] = output_path.as_posix()
+    return normalized
+
+
+def normalize_c2rust_compile_command(
+    command: str,
+    source_directory: Path,
+    source_file: Path,
+    output_path: Path | None,
+) -> str:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        tokens = command.split()
+    normalized: list[str] = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "-I" and i + 1 < len(tokens):
+            normalized.extend([token, resolve_compile_command_path(tokens[i + 1], source_directory).as_posix()])
+            i += 2
+            continue
+        if token.startswith("-I") and len(token) > 2:
+            normalized.append("-I" + resolve_compile_command_path(token[2:], source_directory).as_posix())
+            i += 1
+            continue
+        if token == "-c" and i + 1 < len(tokens):
+            normalized.extend([token, source_file.as_posix()])
+            i += 2
+            continue
+        if token == "-o" and i + 1 < len(tokens):
+            normalized.extend([token, (output_path or resolve_compile_command_path(tokens[i + 1], source_directory)).as_posix()])
+            i += 2
+            continue
+        if token == source_file.name or token.endswith(".c"):
+            candidate = resolve_compile_command_path(token, source_directory)
+            if candidate == source_file:
+                normalized.append(source_file.as_posix())
+                i += 1
+                continue
+        normalized.append(token)
+        i += 1
+    return shlex.join(normalized)
+
+
+def resolve_compile_command_path(value: str, source_directory: Path) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = source_directory / path
+    return path.resolve()
+
+
 def run_c2rust_baseline_generation(
     selected: dict[str, Any],
     compile_commands: Path,
@@ -4612,16 +4701,21 @@ def run_c2rust_baseline_generation(
     generation["generated_files"] = generated_refs
     output_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rs"
     write_text(output_path, combined_c2rust_output(rust_files))
+    output: dict[str, Any] = {
+        "path": rel(output_path),
+        "status": "generated",
+        "sha256": sha256(output_path),
+        "source_files": generated_refs,
+    }
+    cargo_toml = output_dir / "Cargo.toml"
+    if cargo_toml.exists():
+        output["crate_root"] = rel(output_dir)
+        output["cargo_toml"] = rel(cargo_toml)
     return {
         "reason": "generated_by_c2rust",
         "diagnostics": diagnostics,
         "generation": generation,
-        "output": {
-            "path": rel(output_path),
-            "status": "generated",
-            "sha256": sha256(output_path),
-            "source_files": generated_refs,
-        },
+        "output": output,
     }
 
 
@@ -4642,15 +4736,19 @@ def reset_c2rust_output_dir(evidence_dir: Path, output_dir: Path) -> None:
 def c2rust_generation_argv(selected: dict[str, Any], compile_commands: Path, output_dir: Path) -> list[str]:
     executable = str(selected.get("path", ""))
     name = str(selected.get("name", ""))
-    base = [executable]
+    argv_prefix = selected.get("argv_prefix")
+    if isinstance(argv_prefix, list) and all(isinstance(item, str) and item for item in argv_prefix):
+        base = list(argv_prefix)
+    else:
+        base = [executable]
     if name == "c2rust":
         base.append("transpile")
     return [
         *base,
         "--emit-build-files",
-        str(compile_commands),
         "--output-dir",
         str(output_dir),
+        str(compile_commands),
     ]
 
 
@@ -4671,7 +4769,154 @@ def c2rust_baseline_output_path(output: dict[str, Any]) -> Path:
     return REPO_ROOT / output_path
 
 
-def compile_c2rust_baseline_output(output_path: Path, evidence_dir: Path, prefix: str) -> dict[str, Any]:
+def c2rust_baseline_crate_root(output: dict[str, Any]) -> Path | None:
+    crate_root_value = str(output.get("crate_root", "") or "")
+    if not crate_root_value:
+        return None
+    crate_root = Path(crate_root_value)
+    if crate_root.is_absolute():
+        return crate_root
+    return REPO_ROOT / crate_root
+
+
+def c2rust_generated_crate_artifact(crate_root: Path) -> Path | None:
+    debug_dir = crate_root / "target" / "debug"
+    artifacts = sorted(path for path in debug_dir.glob("lib*.rlib") if path.is_file())
+    return artifacts[0] if artifacts else None
+
+
+def compile_c2rust_generated_crate(
+    *,
+    output_path: Path,
+    evidence_dir: Path,
+    prefix: str,
+    crate_root: Path,
+    candidate_output: dict[str, Any],
+    timeout_seconds: int,
+) -> dict[str, Any]:
+    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-cargo.stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-cargo.stderr.log"
+    env_overrides = {"RUSTUP_TOOLCHAIN": "stable", "RUSTC_BOOTSTRAP": "1"}
+    command: dict[str, Any] = {
+        "argv": [],
+        "working_directory": rel(crate_root),
+        "stdout_log": rel(stdout_log),
+        "stderr_log": rel(stderr_log),
+        "timeout_seconds": timeout_seconds,
+        "exit_status": "not_executed",
+        "returncode": None,
+        "compile_strategy": "cargo_generated_crate",
+        "env_overrides": env_overrides,
+        "crate_root": rel(crate_root),
+        "candidate_output_path": rel(output_path),
+    }
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        write_text(stdout_log, "")
+        write_text(stderr_log, "cargo not found on PATH\n")
+        return {
+            "status": "rustc_not_found",
+            "attempted": False,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust generated crate compile check skipped because cargo was not found on PATH"],
+        }
+
+    argv = [cargo, "build"]
+    command["argv"] = argv
+    env = os.environ.copy()
+    env.update(env_overrides)
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=str(crate_root),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        write_text(stdout_log, exc.stdout or "")
+        write_text(stderr_log, exc.stderr or f"cargo build timed out after {timeout_seconds} seconds\n")
+        command["exit_status"] = "timeout"
+        command["returncode"] = -1
+        return {
+            "status": "compile_timeout",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust generated crate cargo compile check timed out"],
+        }
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        command["exit_status"] = "error"
+        command["returncode"] = -1
+        return {
+            "status": "compile_error",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust generated crate cargo compile check could not start: {exc}"],
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    command["returncode"] = result.returncode
+    if result.returncode != 0:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust generated crate cargo compile check exited with {result.returncode}"],
+        }
+
+    artifact_path = c2rust_generated_crate_artifact(crate_root)
+    if artifact_path is None:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust generated crate cargo compile check passed without producing an rlib artifact"],
+        }
+
+    stable_artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+    shutil.copyfile(artifact_path, stable_artifact_path)
+    return {
+        "status": "passed",
+        "attempted": True,
+        "semantic_pass": False,
+        "candidate_output": candidate_output,
+        "command": command,
+        "artifact": {
+            "path": rel(stable_artifact_path),
+            "status": "compiled",
+            "sha256": sha256(stable_artifact_path),
+        },
+        "diagnostics": [],
+    }
+
+
+def compile_c2rust_baseline_output(
+    output_path: Path,
+    evidence_dir: Path,
+    prefix: str,
+    *,
+    crate_root: Path | None = None,
+) -> dict[str, Any]:
     timeout_seconds = 120
     stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stdout.log"
     stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stderr.log"
@@ -4681,6 +4926,15 @@ def compile_c2rust_baseline_output(output_path: Path, evidence_dir: Path, prefix
         "status": "generated",
         "sha256": sha256(output_path),
     }
+    if crate_root is not None and (crate_root / "Cargo.toml").exists():
+        return compile_c2rust_generated_crate(
+            output_path=output_path,
+            evidence_dir=evidence_dir,
+            prefix=prefix,
+            crate_root=crate_root,
+            candidate_output=candidate_output,
+            timeout_seconds=timeout_seconds,
+        )
     rustc = shutil.which("rustc")
     command: dict[str, Any] = {
         "argv": [],
@@ -4791,8 +5045,11 @@ def compile_c2rust_baseline_output(output_path: Path, evidence_dir: Path, prefix
 
 
 def c2rust_command_candidates() -> list[dict[str, Any]]:
+    explicit = c2rust_explicit_command_candidate()
     names = ["c2rust-transpile", "c2rust"]
     candidates = []
+    if explicit is not None:
+        candidates.append(explicit)
     for name in names:
         path = shutil.which(name)
         version = c2rust_command_version(path) if path else {"version_status": "NOT_FOUND", "version": ""}
@@ -4800,12 +5057,57 @@ def c2rust_command_candidates() -> list[dict[str, Any]]:
     return candidates
 
 
-def c2rust_command_version(path: str | None) -> dict[str, str]:
-    if not path:
+def c2rust_explicit_command_candidate() -> dict[str, Any] | None:
+    configured = os.environ.get("C2RUST_COMMAND", "").strip()
+    if not configured:
+        return None
+    try:
+        argv_prefix = shlex.split(configured, posix=(os.name != "nt"))
+    except ValueError as exc:
+        return {
+            "name": "C2RUST_COMMAND",
+            "path": "",
+            "available": False,
+            "source": "env:C2RUST_COMMAND",
+            "configured_command": configured,
+            "argv_prefix": [],
+            "version_status": "ERROR",
+            "version": "",
+            "version_error": str(exc),
+        }
+    if not argv_prefix:
+        return None
+    executable = argv_prefix[0]
+    resolved = shutil.which(executable) or (executable if Path(executable).exists() else "")
+    available = bool(resolved)
+    version = c2rust_command_version(argv_prefix) if available else {"version_status": "NOT_FOUND", "version": ""}
+    return {
+        "name": c2rust_command_name_from_argv(argv_prefix),
+        "path": executable if available else "",
+        "available": available,
+        "source": "env:C2RUST_COMMAND",
+        "configured_command": configured,
+        "argv_prefix": argv_prefix,
+        **version,
+    }
+
+
+def c2rust_command_name_from_argv(argv_prefix: list[str]) -> str:
+    command_name = Path(argv_prefix[-1]).name
+    if command_name.lower().endswith(".exe"):
+        command_name = command_name[:-4]
+    if command_name in {"c2rust", "c2rust-transpile"}:
+        return command_name
+    return command_name or "C2RUST_COMMAND"
+
+
+def c2rust_command_version(command: str | list[str] | None) -> dict[str, str]:
+    if not command:
         return {"version_status": "NOT_FOUND", "version": ""}
+    argv = [command] if isinstance(command, str) else list(command)
     try:
         result = subprocess.run(
-            [path, "--version"],
+            [*argv, "--version"],
             text=True,
             capture_output=True,
             timeout=5,
@@ -4820,6 +5122,10 @@ def c2rust_command_version(path: str | None) -> dict[str, str]:
 
 
 def c2rust_toolchain_repair(reason: str, *, slice_spec: Path) -> dict[str, Any]:
+    rerun_env = {"C2RUST_BASELINE_GENERATION": "1"}
+    configured_command = os.environ.get("C2RUST_COMMAND", "").strip()
+    if configured_command:
+        rerun_env["C2RUST_COMMAND"] = configured_command
     return {
         "status": "required",
         "reason": reason,
@@ -4827,9 +5133,9 @@ def c2rust_toolchain_repair(reason: str, *, slice_spec: Path) -> dict[str, Any]:
         "required_dependencies": ["rustc", "cargo", "clang", "libclang"],
         "competition_environment": {
             "profile": "config/competition-env/environment.json",
-            "proof_class": "local_or_wsl_until_competition_run",
-        },
-        "rerun_env": {"C2RUST_BASELINE_GENERATION": "1"},
+                "proof_class": "local_or_wsl_until_competition_run",
+            },
+        "rerun_env": rerun_env,
         "rerun_command": [
             "python3",
             "-B",
