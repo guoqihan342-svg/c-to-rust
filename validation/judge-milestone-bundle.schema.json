@@ -30,6 +30,7 @@
     "must_not_claim",
     "known_gaps",
     "reproduction_commands",
+    "publication_manifest",
     "retention_policy"
   ],
   "properties": {
@@ -582,6 +583,132 @@
               "command": {"type": ["string", "null"]}
             }
           }
+        }
+      }
+    },
+    "publication_manifest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "bundle_version",
+        "publication_scope",
+        "source_commit",
+        "repo_commit",
+        "target_source_pin",
+        "judge_config",
+        "competition_config_archive",
+        "judge_entrypoints_run_report",
+        "judge_milestone_bundle",
+        "supported_subset",
+        "published_entrypoints",
+        "published_artifact_refs",
+        "published_artifact_count",
+        "claim_boundary",
+        "reproduction_commands",
+        "known_gaps",
+        "known_non_goals",
+        "must_not_claim"
+      ],
+      "properties": {
+        "report_kind": {"const": "publication-manifest"},
+        "bundle_version": {"const": 1},
+        "publication_scope": {"enum": ["full", "partial", "blocked"]},
+        "source_commit": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status"],
+          "properties": {
+            "status": {"type": "string"},
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        },
+        "repo_commit": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status"],
+          "properties": {
+            "status": {"type": "string"},
+            "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        },
+        "target_source_pin": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status"],
+          "properties": {
+            "status": {"type": "string"},
+            "target_id": {"type": ["string", "null"]},
+            "repository": {"type": ["string", "null"]},
+            "branch": {"type": ["string", "null"]},
+            "canonical_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"}
+          }
+        },
+        "judge_config": {"type": "object", "additionalProperties": true, "required": ["path", "status"]},
+        "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
+        "judge_entrypoints_run_report": {"$ref": "#/definitions/artifactRef"},
+        "judge_milestone_bundle": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["path", "status", "hash_boundary"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "status": {"const": "self"},
+            "hash_boundary": {"type": "string", "minLength": 1}
+          }
+        },
+        "supported_subset": {"type": "object", "additionalProperties": true},
+        "published_entrypoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "status", "proof_class", "run_id"]
+          }
+        },
+        "published_artifact_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {"$ref": "#/definitions/artifactRef"},
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["artifact_name", "entrypoint_id"]
+              }
+            ]
+          }
+        },
+        "published_artifact_count": {"type": "integer", "minimum": 0},
+        "claim_boundary": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "semantic_gate",
+            "generated_draft_semantic_pass",
+            "translation_coverage_numerator",
+            "publication_manifest_is_semantic_gate"
+          ],
+          "properties": {
+            "semantic_gate": {"const": false},
+            "generated_draft_semantic_pass": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "publication_manifest_is_semantic_gate": {"const": false}
+          }
+        },
+        "reproduction_commands": {"type": "object"},
+        "known_gaps": {"type": "array"},
+        "known_non_goals": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "contains": {"const": "semantic acceptance"}
+        },
+        "must_not_claim": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "contains": {"const": "accepted_evidence_is_not_translator_generated_coverage"}
         }
       }
     },

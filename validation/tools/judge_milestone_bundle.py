@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
 
@@ -119,6 +120,13 @@ def build_judge_milestone_bundle(
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
     publishability = build_publishability(status=status, readiness=readiness, proof_classes=proof_classes)
+    reproduction_commands = build_reproduction_commands(
+        run_report=run_report,
+        run_report_path=run_report_path,
+        repo_root=repo_root,
+    )
+    must_not_claim = build_must_not_claim(opencode_runtime)
+    known_gaps = build_known_gaps(proof_classes=proof_classes, opencode_runtime=opencode_runtime)
     report = {
         "schema_version": 1,
         "report_kind": "judge-milestone-bundle",
@@ -150,11 +158,25 @@ def build_judge_milestone_bundle(
         "unsafe_reduction_scope": unsafe_scope,
         "opencode_runtime": opencode_runtime,
         "opencode_evidence_policy": opencode_policy,
-        "must_not_claim": build_must_not_claim(opencode_runtime),
-        "known_gaps": build_known_gaps(proof_classes=proof_classes, opencode_runtime=opencode_runtime),
-        "reproduction_commands": build_reproduction_commands(
+        "must_not_claim": must_not_claim,
+        "known_gaps": known_gaps,
+        "reproduction_commands": reproduction_commands,
+        "publication_manifest": build_publication_manifest(
             run_report=run_report,
             run_report_path=run_report_path,
+            out_path=out_path,
+            judge_entrypoints_run_report=artifact_ref(run_report_path, repo_root=repo_root),
+            entrypoint_reports=entrypoint_reports,
+            claim_boundary=claim_boundary,
+            claim_scope=claim_scope,
+            proof_classes=proof_classes,
+            publishability=publishability,
+            harness_architecture_summary=harness_architecture_summary,
+            before_after_repair_exhibit=before_after_repair_exhibit,
+            opencode_runtime=opencode_runtime,
+            reproduction_commands=reproduction_commands,
+            must_not_claim=must_not_claim,
+            known_gaps=known_gaps,
             repo_root=repo_root,
         ),
         "retention_policy": build_retention_policy(),
@@ -887,6 +909,214 @@ def build_known_gaps(*, proof_classes: dict[str, Any], opencode_runtime: dict[st
             }
         )
     return gaps
+
+
+def build_publication_manifest(
+    *,
+    run_report: dict[str, Any],
+    run_report_path: Path,
+    out_path: Path,
+    judge_entrypoints_run_report: dict[str, Any],
+    entrypoint_reports: list[dict[str, Any]],
+    claim_boundary: dict[str, Any],
+    claim_scope: dict[str, Any],
+    proof_classes: dict[str, Any],
+    publishability: dict[str, Any],
+    harness_architecture_summary: dict[str, Any],
+    before_after_repair_exhibit: dict[str, Any],
+    opencode_runtime: dict[str, Any],
+    reproduction_commands: dict[str, Any],
+    must_not_claim: list[str],
+    known_gaps: list[dict[str, Any]],
+    repo_root: Path,
+) -> dict[str, Any]:
+    config = run_report.get("config") if isinstance(run_report.get("config"), dict) else {}
+    archive = (
+        run_report.get("competition_config_archive")
+        if isinstance(run_report.get("competition_config_archive"), dict)
+        else None
+    )
+    artifact_refs = publication_artifact_refs(entrypoint_reports)
+    repo_commit = source_commit_ref(repo_root=repo_root)
+    return {
+        "report_kind": "publication-manifest",
+        "bundle_version": 1,
+        "publication_scope": publication_scope(
+            claim_scope=claim_scope,
+            publishability=publishability,
+        ),
+        "source_commit": repo_commit,
+        "repo_commit": repo_commit,
+        "target_source_pin": publication_source_pin_ref(run_report),
+        "judge_config": publication_config_ref(config),
+        "competition_config_archive": publication_archive_ref(archive),
+        "judge_entrypoints_run_report": judge_entrypoints_run_report,
+        "judge_milestone_bundle": {
+            "path": validator.repo_relative(out_path, repo_root),
+            "status": "self",
+            "hash_boundary": "The bundle does not embed its own sha256 because that would make the hash recursive.",
+        },
+        "run_report_path": validator.repo_relative(run_report_path, repo_root),
+        "supported_subset": {
+            "entrypoint_count": len([entry for entry in run_report.get("entrypoints", []) if isinstance(entry, dict)]),
+            "entrypoint_ids": [
+                entry.get("id")
+                for entry in run_report.get("entrypoints", [])
+                if isinstance(entry, dict)
+            ],
+            "proof_classes": proof_classes,
+            "harness_graph_runtime": harness_architecture_summary.get("graph_runtime"),
+            "harness_roles": harness_architecture_summary.get("roles", []),
+            "repair_round_cap": int_or_zero(harness_architecture_summary.get("repair_round_cap")),
+            "before_after_bound_unit_count": int_or_zero(
+                before_after_repair_exhibit.get("rollup", {}).get("bound_unit_count")
+                if isinstance(before_after_repair_exhibit.get("rollup"), dict)
+                else 0
+            ),
+            "opencode_runtime_enabled": int_or_zero(opencode_runtime.get("enabled_entrypoint_count")) > 0,
+        },
+        "published_entrypoints": publication_entrypoints(entrypoint_reports),
+        "published_artifact_refs": artifact_refs,
+        "published_artifact_count": len(artifact_refs),
+        "publishability": publishability,
+        "claim_scope": claim_scope,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "publication_manifest_is_semantic_gate": False,
+            "boundary": (
+                "This manifest indexes the external review package. It does not create semantic acceptance, "
+                "competition-exact proof, or translator-generated coverage."
+            ),
+            "source_boundary": claim_boundary.get("boundary"),
+        },
+        "reproduction_commands": reproduction_commands,
+        "known_gaps": known_gaps,
+        "known_non_goals": [
+            "semantic acceptance",
+            "competition-exact proof without competition host attestation",
+            "translator-generated coverage increase",
+            "project-level C-to-Rust completeness",
+            "OpenCode chat output as semantic evidence",
+        ],
+        "must_not_claim": must_not_claim,
+    }
+
+
+def publication_scope(*, claim_scope: dict[str, Any], publishability: dict[str, Any]) -> str:
+    if publishability.get("all_entrypoints_run_publishable"):
+        return "full"
+    if claim_scope.get("external_review_index_ready"):
+        return "partial"
+    return "blocked"
+
+
+def publication_entrypoints(entrypoint_reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": entry.get("id"),
+            "status": entry.get("status"),
+            "proof_class": entry.get("proof_class"),
+            "run_id": entry.get("run_id"),
+        }
+        for entry in entrypoint_reports
+    ]
+
+
+def publication_artifact_refs(entrypoint_reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    seen: set[tuple[str, str | None]] = set()
+    for entry in entrypoint_reports:
+        artifacts = entry.get("artifacts", {})
+        if not isinstance(artifacts, dict):
+            continue
+        for artifact_name, artifact in artifacts.items():
+            if not isinstance(artifact, dict):
+                continue
+            path = artifact.get("path")
+            sha256 = artifact.get("sha256")
+            if not isinstance(path, str):
+                continue
+            key = (path, sha256 if isinstance(sha256, str) else None)
+            if key in seen:
+                continue
+            seen.add(key)
+            ref = dict(artifact)
+            ref["artifact_name"] = artifact_name
+            ref["entrypoint_id"] = entry.get("id")
+            refs.append(ref)
+    return refs
+
+
+def source_commit_ref(*, repo_root: Path) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        return {"status": "absent", "reason": f"{type(exc).__name__}: {exc}"}
+    commit = completed.stdout.strip()
+    if completed.returncode == 0 and len(commit) == 40 and all(char in "0123456789abcdef" for char in commit):
+        return {"status": "present", "commit": commit}
+    return {
+        "status": "absent",
+        "reason": (completed.stderr or completed.stdout or "git rev-parse HEAD failed").strip(),
+    }
+
+
+def publication_config_ref(config: dict[str, Any]) -> dict[str, Any]:
+    path = config.get("path") if isinstance(config.get("path"), str) else "unknown"
+    ref = {
+        "path": path,
+        "status": config.get("status", "present" if path != "unknown" else "absent"),
+    }
+    if isinstance(config.get("sha256"), str):
+        ref["sha256"] = config["sha256"]
+    return ref
+
+
+def publication_source_pin_ref(run_report: dict[str, Any]) -> dict[str, Any]:
+    validation = run_report.get("validation")
+    if isinstance(validation, dict):
+        contract = validation.get("source_pin_contract")
+        if isinstance(contract, dict):
+            return {
+                "status": contract.get("status", "unknown"),
+                "target_id": contract.get("target_id"),
+                "repository": contract.get("repository"),
+                "branch": contract.get("branch"),
+                "canonical_commit": contract.get("canonical_commit"),
+            }
+    return {"status": "absent"}
+
+
+def publication_archive_ref(archive: dict[str, Any] | None) -> dict[str, Any]:
+    if archive is None:
+        return {"status": "absent"}
+    ref = {
+        "status": archive.get("status", "present"),
+        "root": archive.get("root"),
+        "file_count": int_or_zero(archive.get("file_count")),
+        "report_kind": archive.get("report_kind"),
+    }
+    files = archive.get("files")
+    if isinstance(files, dict):
+        ref["file_count"] = len(files)
+        manifest = files.get("config/competition-env/bundle-manifest.json")
+        if isinstance(manifest, dict):
+            ref["bundle_manifest"] = {
+                "path": manifest.get("path"),
+                "sha256": manifest.get("sha256"),
+                "status": manifest.get("status"),
+            }
+    return ref
 
 
 def build_reproduction_commands(

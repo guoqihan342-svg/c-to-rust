@@ -434,6 +434,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         },
                     },
                 ],
+                "validation": {
+                    "status": "passed",
+                    "source_pin_contract": {
+                        "status": "passed",
+                        "target_id": "flashdb",
+                        "repository": "https://gitcode.com/xwxf/FlashDB.git",
+                        "branch": "competition",
+                        "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                    },
+                },
             },
         )
 
@@ -532,6 +542,38 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn("opencode_chat_output_is_semantic_evidence", report["must_not_claim"])
         self.assertIn("run_judge_entrypoints", report["reproduction_commands"])
         self.assertEqual(len(report["reproduction_commands"]["entrypoints"]), 2)
+        publication_manifest = report["publication_manifest"]
+        self.assertEqual(publication_manifest["report_kind"], "publication-manifest")
+        self.assertEqual(publication_manifest["bundle_version"], 1)
+        self.assertEqual(publication_manifest["publication_scope"], "full")
+        self.assertEqual(publication_manifest["source_commit"]["status"], "present")
+        self.assertRegex(publication_manifest["source_commit"]["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(publication_manifest["repo_commit"], publication_manifest["source_commit"])
+        self.assertEqual(publication_manifest["target_source_pin"]["target_id"], "flashdb")
+        self.assertEqual(publication_manifest["target_source_pin"]["branch"], "competition")
+        self.assertEqual(
+            publication_manifest["target_source_pin"]["canonical_commit"],
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        )
+        self.assertEqual(publication_manifest["judge_config"]["path"], "unknown")
+        self.assertEqual(publication_manifest["judge_entrypoints_run_report"], report["judge_entrypoints_run_report"])
+        self.assertEqual(publication_manifest["judge_milestone_bundle"]["path"], repo_relative(out_path))
+        self.assertEqual(publication_manifest["competition_config_archive"]["status"], "absent")
+        self.assertEqual(
+            [entry["id"] for entry in publication_manifest["published_entrypoints"]],
+            ["before_after_judge_demo", "opencode_multi_worker_evaluate_profile"],
+        )
+        self.assertEqual(publication_manifest["published_entrypoints"][0]["proof_class"], "local-simulation")
+        self.assertGreaterEqual(publication_manifest["published_artifact_count"], 6)
+        self.assertTrue(
+            all(ref["status"] == "present" and "sha256" in ref for ref in publication_manifest["published_artifact_refs"])
+        )
+        self.assertEqual(publication_manifest["reproduction_commands"], report["reproduction_commands"])
+        self.assertEqual(publication_manifest["known_gaps"], report["known_gaps"])
+        self.assertIn("semantic acceptance", publication_manifest["known_non_goals"])
+        self.assertFalse(publication_manifest["claim_boundary"]["semantic_gate"])
+        self.assertFalse(publication_manifest["claim_boundary"]["publication_manifest_is_semantic_gate"])
+        self.assertEqual(publication_manifest["claim_boundary"]["translation_coverage_numerator"], 0)
         self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
@@ -651,6 +693,31 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         missing_evidence_cost.pop("evidence_cost_retention")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_evidence_cost, schema)
+
+        missing_publication_manifest = json.loads(json.dumps(report))
+        missing_publication_manifest.pop("publication_manifest")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_publication_manifest, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["publication_manifest_is_semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["generated_draft_semantic_pass"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
 
         missing_blocked_repairs = json.loads(json.dumps(report))
         missing_blocked_repairs.pop("blocked_repairs_rollup")
