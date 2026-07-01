@@ -1,18 +1,7 @@
 {
-  "blocked": [
-    {
-      "kind": "unsupported_syntax",
-      "reason": "statement `struct fdb_blob blob` is outside the bounded MVP C subset",
-      "source_span": "struct fdb_blob blob"
-    },
-    {
-      "kind": "unsupported_syntax",
-      "reason": "call expression `fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))` is outside the bounded MVP C subset: nested call expressions are outside the bounded subset",
-      "source_span": "return fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))"
-    }
-  ],
+  "blocked": [],
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "status": "blocked",
+  "status": "none",
   "target_id": "flashdb"
 }

@@ -23,9 +23,9 @@
   "provenance": {
     "compile_execution": {
       "semantic_pass": false,
-      "status": "skipped_by_flag",
-      "toolchain_adapter": "not_executed",
-      "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED"
+      "status": "compile_succeeded_not_oracle",
+      "toolchain_adapter": "wsl",
+      "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE"
     },
     "cycle_boundary": "This provenance intentionally omits the root c-oracle self hash; auto-translation evidence records the accepted c-oracle hash after regeneration.",
     "evidence_refs": {
@@ -34,7 +34,7 @@
       "slice_spec": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
       "version_manifest": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-version-manifest.json"
     },
-    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+    "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
     "global_dependencies": [
       {
         "definition_status": "same_file_top_level_declared",
@@ -56,7 +56,7 @@
     ],
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+      "sha256": "d2794cdec34bb058825b73054dc510a81bc262b86f5f0fadc1324be7705666b5",
       "status": "draft"
     },
     "source_file_hashes": {
@@ -76,7 +76,7 @@
     ],
     "signature": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)"
   },
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "passed",
   "target_id": "flashdb",
   "toolchain_status": "C_ORACLE_GENERATED"

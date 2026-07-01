@@ -49,7 +49,7 @@ cd c-to-rust
 If working on an existing checkout, ensure you are on the correct branch:
 
 ```bash
-git checkout codex/flashdb-rust-skeleton
+git checkout codex/agent-harness-flashdb-mvp
 ```
 
 ## 3. Activate the Competition Environment
@@ -83,13 +83,13 @@ Run the minimal environment smoke to quickly verify the baseline is ready:
 
 ```bash
 # Linux/CI (do not label as competition-exact)
-python validation/tools/run_competition_smoke.py --proof-class ci-approximation
+python validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
 
 # WSL / local Ubuntu
-python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation
+python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
 
 # Only enable this on the actual competition host
-python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact
+python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
 ```
 
 The smoke executes:
@@ -99,7 +99,7 @@ The smoke executes:
 - Translator coverage matrix check;
 - Core validation and translator unit tests;
 
-Output goes to `target/competition-smoke/summary/competition-smoke-summary.json`.
+Output goes to `target/competition-smoke/summary/competition-smoke-summary.json`. The Python entrypoint defaults each child command to a 600-second timeout; timeouts are written to `timeout_policy` and fail the final gate with exit code 124. Missing required C compilers such as `gcc`/`g++` write `failure_class=required_c_compiler_missing` on the environment-check step and fail closed under every proof class.
 
 ## 5. Translate Your First Real C Slice
 
@@ -108,11 +108,14 @@ Use the unified runner `run_competition.py` for end-to-end slice translation:
 ```bash
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --out-root target/competition-out \
@@ -134,11 +137,14 @@ The runner automatically performs:
 # Step 1: Extract the slice
 python validation/tools/extract_source_slice.py \
   --repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --out target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json
 
@@ -169,16 +175,39 @@ bash config/competition-env/toolchain-check.sh
 
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --out-root target/competition-out \
   --proof-class competition-exact
 ```
+
+To execute the same single request through the OpenCode worker wrapper, run the assigned worker exactly once and require its summary output:
+
+```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
+```
+
+Expected worker output: `target/competition-out/workers/worker-a/summary/competition-run-summary.json`. Missing summary output is a failed interaction, not a partial success.
 
 ## 7. Multi-Agent / Parallel Workers
 
@@ -203,33 +232,51 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
+  --include-path tests \
   --out-root target/competition-out/workers/worker-a
 ```
+
+The quickstart path must generate or validate fresh output under `target/competition-out`. Committed historical evidence is diagnostic only and is not the default worker input.
 
 Repeat for worker-b, worker-c with other independent slices such as `fdb_kv_set`, `fdb_blob_make`, etc.
 
 ### 7.3 Run a Worker
 
 ```bash
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
-```
-
-### 7.4 Record Worker Results
-
-```bash
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
 ```
 
-### 7.5 Generate and Execute the Merge Plan
+`run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and automatically performs the former `record-worker-summary` step when `competition-run-summary.json` exists. When local OpenCode / DeepSeek V4 Pro is connected, use the agent wrapper for the same request:
+
+```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
+```
+
+### 7.4 Generate and Execute the Merge Plan
 
 ```bash
 python -m validation.tools.opencode_agent_harness write-merge-plan \
@@ -274,7 +321,8 @@ target/competition-out/
 ├── workers/<worker-id>/                  # Isolated output per worker
 │   ├── evidence/
 │   ├── summary/competition-run-summary.json
-│   └── logs/commands.jsonl
+│   ├── harness/run-worker-report.json
+│   └── logs/
 ├── evidence/<target>/auto-translation/<slice>/
 │   ├── l3-<slice>-clang-lowering-report.json
 │   ├── l3-<slice>-rust-draft.rs
@@ -288,15 +336,33 @@ target/competition-out/
     └── commands.jsonl
 ```
 
+For the first FlashDB slice, the concrete artifacts to inspect are:
+
+- `target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json`
+- `target/competition-out/summary/competition-run-summary.json`
+- `target/competition-out/logs/commands.jsonl`
+
 Key fields in `competition-run-summary.json`:
 
 ```json
 {
+  "schema_version": 1,
   "run_id": "<uuid>",
   "proof_class": "local-simulation",
   "profile_id": "huawei-competition-ubuntu-24.04",
+  "profile_sha256": "<64 lowercase hex chars>",
   "clang_source": "CLANG_PATH | vendored | missing",
-  "cargo_mirror_activation": {"method": "CARGO_HOME", "path": "config/competition-env/cargo"},
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "path": "config/competition-env/cargo",
+    "config_file": "config/competition-env/cargo/config.toml"
+  },
+  "elapsed_seconds": 0,
+  "translator_version": "<git sha or version>",
   "slices": {
     "attempted": 1,
     "typed_ir_generated": 1,
@@ -307,7 +373,16 @@ Key fields in `competition-run-summary.json`:
     "failed": 0
   },
   "unsafe_budget": {"status": "passed", "total_first_party_non_test_unsafe": 0, "ratio": 0.0},
-  "final_gate": {"status": "passed"}
+  "artifact_roots": [
+    "target/competition-out/slice-specs",
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs"
+  ],
+  "final_gate": {
+    "status": "passed",
+    "validator": "validation/tools/validate_competition_run_summary.py"
+  }
 }
 ```
 
@@ -354,6 +429,7 @@ If the Huawei mirror is unreachable from your network in local development, skip
 
 **Resolution**:
 - Verify GCC is available: `gcc --version`
+- If environment smoke fails, check whether `competition-smoke-summary.json` records `steps[].failure_class=required_c_compiler_missing`
 - Verify `include_paths` and `defines` in the slice spec are correct
 - Verify the source code at `source_commit` matches
 
@@ -405,15 +481,18 @@ source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
 # Environment smoke
-python validation/tools/run_competition_smoke.py --proof-class local-simulation
+python validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
 
 # Translate a single slice
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --include-path inc \
   --out-root target/competition-out \
   --proof-class local-simulation
@@ -423,6 +502,29 @@ python validation/tools/validate_auto_translation_evidence.py \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
   --evidence-root target/competition-out/evidence \
   --require-semantic-pass
+
+# Judge one-click entrypoints and public packet artifacts
+# With local artifacts, this also deep-validates non-smoke competition summaries through validate_competition_run_summary.py.
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+# The milestone bundle includes harness_architecture_summary.contract_matrix:
+# plan/translate/verify/repair/report -> roles, artifacts, validators, and non-semantic boundaries.
+
+python -B -m validation.tools.milestone_release_notes \
+  --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
+
+# Generated by run_judge_entrypoints after the bundle and release notes are written
+# target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+# Validates schema, hashes, claim boundary, local-path hygiene, packet-to-bundle consistency, and release notes rendering
+python -B -m validation.tools.validate_public_release_packet \
+  --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+
+# evaluate profile resume indexes are generated by the entrypoints and deep-validated by the validator
+# target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
+# target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
 
 # Check unsafe
 python validation/tools/unsafe_budget.py --max-ratio 0.10
@@ -447,13 +549,14 @@ python -B -m unittest validation.tools.test_doc_mirror_contract
 - **FlashDB is only a use case**: Do not add FlashDB-specific recognizers, templates, or special-case routes. `flashDB_rust` is a handwritten safe implementation / validation baseline, not automatic translation output.
 - **SQLite is a scheduling ledger, not semantic evidence**: The final gate only considers on-disk evidence and the validator, not SQLite state.
 - **C2Rust baseline with skipped/blocked status does not count as generated/accepted/semantic pass**.
+- **C2Rust baseline compile-pass is still candidate context only**: route-governance and the milestone scorecard may show manifest/source/compile-pass counts, but that is not C/Rust equivalence proof or translation coverage.
 - **Proof classes must not be mixed**: `ci-approximation` results must not be labeled `competition-exact`.
 - **Docs must stay bilingual**: New documents must maintain both the Chinese primary (`.md`) and the English mirror (`.en.md`). The Chinese document's first line must match the repository-standard pointer format.
 
 ## 13. Next Steps
 
-1. Read `CONTEXT.md` for current project status
-2. Read `future-vision-and-mvp.md` for the roadmap and current P0 backlog
-3. Read `COVERAGE.md` for current C construct support boundaries
-4. Read `opencode-agent-harness-design.md` for multi-agent design
-5. Read `config/competition-env/opencode-single-interaction.md` for the competition single-interaction workflow
+1. Complete the environment smoke and `real-fdb-calc-crc32` minimal reproduction in Sections 3-5.
+2. Read `future-vision-and-mvp.md` for the roadmap and current P0 backlog.
+3. Read `COVERAGE.md` for current C construct support boundaries.
+4. Read `config/competition-env/opencode-single-interaction.md` for the competition single-interaction workflow.
+5. Read `opencode-agent-harness-design.md` for multi-agent design.

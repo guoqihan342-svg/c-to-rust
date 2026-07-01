@@ -15,7 +15,7 @@
 //!
 //! **Layer 3: Typed Value IR** — integer/pointer/struct/array with explicit casts only.
 //! All implicit conversions from Layer 1 become explicit `Cast` nodes here. Pointer
-//! arithmetic is decomposed into element access. Array-to-pointer decay is explicit.
+//! arithmetic is decomposed into element access. Array/function-to-pointer decay is explicit.
 //!
 //! **Lowering layer** (not yet a separate module): converts from Semantic IR to a Rust
 //! candidate. Every lowering rule must be provable. When lowering fails, the reason is
@@ -175,6 +175,21 @@ pub enum IrExpr {
         target: IrType,
         expr: Box<IrExpr>,
         implicit: bool,
+        source_span: Option<SourceSpan>,
+    },
+    LValueToRValue {
+        target: IrType,
+        expr: Box<IrExpr>,
+        source_span: Option<SourceSpan>,
+    },
+    ArrayToPointerDecay {
+        target: IrType,
+        expr: Box<IrExpr>,
+        source_span: Option<SourceSpan>,
+    },
+    FunctionToPointerDecay {
+        target: IrType,
+        expr: Box<IrExpr>,
         source_span: Option<SourceSpan>,
     },
     Index {
@@ -358,9 +373,12 @@ struct EmitContext {
     nullable_pointer_params: HashSet<String>,
     readonly_pointer_read_params: HashSet<String>,
     readonly_pointer_mentioned_params: HashSet<String>,
+    opaque_pointer_call_arg_params: HashSet<String>,
+    raw_direct_call_pointer_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
     opaque_record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
+    zero_initialized_record_locals: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
 }
 
@@ -496,6 +514,10 @@ impl EmitContext {
             &readonly_pointer_uses.mentioned_params,
         )?;
         validate_mutable_pointer_write_alias_boundary(&function.body, &function.params, &policy)?;
+        let opaque_pointer_call_arg_params =
+            collect_opaque_pointer_call_arg_params(&function.body, &function.params);
+        let raw_direct_call_pointer_params =
+            collect_raw_direct_call_pointer_params(&function.body, &function.params);
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
         let opaque_record_pointer_field_value_params =
@@ -504,6 +526,8 @@ impl EmitContext {
                 &function.params,
                 &mutable_record_pointer_write_params,
             )?;
+        let zero_initialized_record_locals =
+            collect_zero_initialized_record_locals(&function.body)?;
         let mut readonly_globals = HashMap::new();
         for global in globals {
             if readonly_globals
@@ -524,9 +548,12 @@ impl EmitContext {
             nullable_pointer_params,
             readonly_pointer_read_params: readonly_pointer_uses.read_params,
             readonly_pointer_mentioned_params: readonly_pointer_uses.mentioned_params,
+            opaque_pointer_call_arg_params,
+            raw_direct_call_pointer_params,
             mutable_record_pointer_write_params,
             opaque_record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
+            zero_initialized_record_locals,
             readonly_globals,
         })
     }
@@ -561,6 +588,18 @@ impl EmitContext {
 
     fn is_opaque_record_pointer_field_value_param(&self, name: &str) -> bool {
         self.opaque_record_pointer_field_value_params.contains(name)
+    }
+
+    fn is_opaque_pointer_call_arg_param(&self, name: &str) -> bool {
+        self.opaque_pointer_call_arg_params.contains(name)
+    }
+
+    fn is_raw_direct_call_pointer_param(&self, name: &str) -> bool {
+        self.raw_direct_call_pointer_params.contains(name)
+    }
+
+    fn is_zero_initialized_record_local(&self, name: &str) -> bool {
+        self.zero_initialized_record_locals.contains(name)
     }
 
     fn is_mutable_record_pointer_read_field(&self, name: &str, field: &str) -> bool {
@@ -681,7 +720,7 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
     if !globals.is_empty() {
         rust.push('\n');
     }
-    let record_definitions = emit_record_definitions(function)?;
+    let record_definitions = emit_record_definitions(function, &context)?;
     for definition in &record_definitions {
         rust.push_str(definition);
     }
@@ -722,9 +761,19 @@ fn emit_param(
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
-    } else if context.is_opaque_record_pointer_field_value_param(&param.name) {
+    } else if context.is_opaque_record_pointer_field_value_param(&param.name)
+        || context.is_opaque_pointer_call_arg_param(&param.name)
+    {
         emit_opaque_void_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if should_emit_raw_direct_call_pointer_param(&param.name, &param.ty, context) {
+        emit_raw_direct_call_pointer_param_type(&param.ty).ok_or_else(|| {
+            format!(
+                "param {} has raw direct call pointer type {} unsupported",
+                param.name,
+                type_label(&param.ty)
+            )
+        })?
     } else if readonly_pointer_slice_element_type(&param.ty).is_some()
         && !context.is_readonly_pointer_read_param(&param.name)
         && !context.is_readonly_pointer_mentioned_param(&param.name)
@@ -759,6 +808,9 @@ fn emit_assigned_param_type(ty: &IrType) -> Result<String, String> {
 }
 
 fn emit_param_type(ty: &IrType) -> Result<String, String> {
+    if let Some(function_pointer_ty) = emit_function_pointer_param_type(ty)? {
+        return Ok(function_pointer_ty);
+    }
     if let Some(element_ty) = readonly_pointer_slice_element_type(ty) {
         let element_ty = emit_scalar_type(element_ty)?;
         return Ok(format!("&[{element_ty}]"));
@@ -767,6 +819,76 @@ fn emit_param_type(ty: &IrType) -> Result<String, String> {
         return emit_value_type(pointee).map(|ty| format!("&{ty}"));
     }
     emit_value_type(ty)
+}
+
+fn emit_function_pointer_param_type(ty: &IrType) -> Result<Option<String>, String> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return Ok(None);
+    };
+    if !matches!(pointee.kind, IrTypeKind::Function) {
+        return Ok(None);
+    }
+    emit_function_pointer_signature_type(&pointee.spelled)
+        .map(Some)
+        .map_err(|detail| {
+            format!(
+                "function pointer type {} is unsupported: {detail}",
+                type_label(ty)
+            )
+        })
+}
+
+fn emit_function_pointer_signature_type(spelling: &str) -> Result<String, String> {
+    let trimmed = spelling.trim();
+    let Some(open) = trimmed.find('(') else {
+        return Err("missing parameter list".to_string());
+    };
+    if !trimmed.ends_with(')') {
+        return Err("missing closing parameter list".to_string());
+    }
+    let return_type = trimmed[..open].trim();
+    let params = trimmed[open + 1..trimmed.len() - 1].trim();
+    let rust_return = emit_function_pointer_signature_scalar(return_type, true)?;
+    let rust_params = if params.is_empty() || params == "void" {
+        Vec::new()
+    } else {
+        params
+            .split(',')
+            .map(|param| emit_function_pointer_signature_scalar(param.trim(), false))
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    let params = rust_params.join(", ");
+    if rust_return == "()" {
+        Ok(format!("fn({params})"))
+    } else {
+        Ok(format!("fn({params}) -> {rust_return}"))
+    }
+}
+
+fn emit_function_pointer_signature_scalar(
+    spelling: &str,
+    allow_void: bool,
+) -> Result<String, String> {
+    if spelling.contains('(') || spelling.contains(')') || spelling.contains('*') {
+        return Err(format!(
+            "{spelling} is outside the simple scalar signature subset"
+        ));
+    }
+    match spelling {
+        "void" if allow_void => Ok("()".to_string()),
+        "int" => Ok("i32".to_string()),
+        "signed char" | "int8_t" => Ok("i8".to_string()),
+        "unsigned char" | "uint8_t" => Ok("u8".to_string()),
+        "int16_t" => Ok("i16".to_string()),
+        "uint16_t" => Ok("u16".to_string()),
+        "unsigned int" | "uint32_t" => Ok("u32".to_string()),
+        "int64_t" => Ok("i64".to_string()),
+        "uint64_t" => Ok("u64".to_string()),
+        "size_t" => Ok("usize".to_string()),
+        _ => Err(format!(
+            "{spelling} is outside the simple scalar signature subset"
+        )),
+    }
 }
 
 fn emit_value_type(ty: &IrType) -> Result<String, String> {
@@ -785,11 +907,92 @@ fn emit_opaque_void_pointer_param_type(ty: &IrType) -> Result<String, String> {
     })
 }
 
+fn emit_raw_direct_call_pointer_param_type(ty: &IrType) -> Option<String> {
+    if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
+        return Some(pointer_ty);
+    }
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return None;
+    };
+    if is_incomplete_record_type(pointee) {
+        let mutability = if pointee.is_const { "const" } else { "mut" };
+        return Some(format!("*{mutability} core::ffi::c_void"));
+    }
+    if is_readonly_8_bit_pointer_type(ty) {
+        return Some("*const core::ffi::c_void".to_string());
+    }
+    None
+}
+
+fn should_emit_raw_direct_call_pointer_param(
+    name: &str,
+    ty: &IrType,
+    context: &EmitContext,
+) -> bool {
+    context.is_raw_direct_call_pointer_param(name)
+        && emit_raw_direct_call_pointer_param_type(ty).is_some()
+        && !(is_readonly_8_bit_pointer_type(ty) && context.is_readonly_pointer_read_param(name))
+}
+
 fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
     if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
         return Ok(pointer_ty);
     }
+    if let IrTypeKind::Record {
+        fields: Some(_), ..
+    } = &ty.kind
+    {
+        return emit_value_type(ty);
+    }
     emit_scalar_type(ty)
+}
+
+fn emit_record_zero_initializer(ty: &IrType) -> Result<String, String> {
+    let IrTypeKind::Record {
+        name,
+        fields: Some(fields),
+    } = &ty.kind
+    else {
+        return Err(format!(
+            "record type {} requires complete field inventory for local zero initializer",
+            type_label(ty)
+        ));
+    };
+    if fields.is_empty() {
+        return Err(format!("record {name} has no modeled fields"));
+    }
+    let rust_name = emit_record_type_name(name)?;
+    let fields = fields
+        .iter()
+        .map(|field| {
+            let field_name = emit_identifier(&field.name, "record zero initializer field")?;
+            let value = emit_record_zero_field_value(&field.ty).map_err(|detail| {
+                format!(
+                    "record {name} field {} zero initializer {detail}",
+                    field.name
+                )
+            })?;
+            Ok(format!("{field_name}: {value}"))
+        })
+        .collect::<Result<Vec<_>, String>>()?
+        .join(", ");
+    Ok(format!("{rust_name} {{ {fields} }}"))
+}
+
+fn emit_record_zero_field_value(ty: &IrType) -> Result<String, String> {
+    if let Some(value) = emit_opaque_void_pointer_zero_value(ty) {
+        return Ok(value.to_string());
+    }
+    if is_integer_type(ty) {
+        return emit_integer_literal(0, ty);
+    }
+    if let IrTypeKind::Record {
+        fields: Some(_), ..
+    } = &ty.kind
+    {
+        return emit_record_zero_initializer(ty);
+    }
+    Err(format!("type {} is unsupported", type_label(ty)))
 }
 
 fn emit_opaque_void_pointer_type(ty: &IrType) -> Option<String> {
@@ -801,6 +1004,20 @@ fn emit_opaque_void_pointer_type(ty: &IrType) -> Option<String> {
     }
     let mutability = if pointee.is_const { "const" } else { "mut" };
     Some(format!("*{mutability} core::ffi::c_void"))
+}
+
+fn emit_opaque_void_pointer_zero_value(ty: &IrType) -> Option<&'static str> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return None;
+    };
+    if !matches!(pointee.kind, IrTypeKind::Void) {
+        return None;
+    }
+    if pointee.is_const {
+        Some("core::ptr::null()")
+    } else {
+        Some("core::ptr::null_mut()")
+    }
 }
 
 fn emit_nullable_pointer_param_type(ty: &IrType) -> Result<String, String> {
@@ -829,10 +1046,18 @@ fn emit_mutable_record_pointer_param_type(ty: &IrType) -> Result<String, String>
     ))
 }
 
-fn emit_record_definitions(function: &IrFunction) -> Result<Vec<String>, String> {
+fn emit_record_definitions(
+    function: &IrFunction,
+    context: &EmitContext,
+) -> Result<Vec<String>, String> {
     let mut records: Vec<(&str, Vec<RecordFieldUse<'_>>)> = Vec::new();
     add_record_type_inventory(&mut records, &function.return_type)?;
     for param in &function.params {
+        if context.is_raw_direct_call_pointer_param(&param.name)
+            && is_incomplete_record_pointer_type(&param.ty)
+        {
+            continue;
+        }
         if let IrTypeKind::Record { name, .. } = &param.ty.kind {
             ensure_record_entry(&mut records, name);
         }
@@ -879,6 +1104,7 @@ fn add_record_type_inventory<'a>(
     };
     for field in fields {
         add_record_field_use(records, name, &field.name, &field.ty)?;
+        add_record_type_inventory(records, &field.ty)?;
     }
     Ok(())
 }
@@ -942,7 +1168,8 @@ fn collect_record_field_uses_from_stmt<'a>(
     records: &mut Vec<(&'a str, Vec<RecordFieldUse<'a>>)>,
 ) -> Result<(), String> {
     match stmt {
-        IrStmt::Decl { init, .. } => {
+        IrStmt::Decl { ty, init, .. } => {
+            add_record_type_inventory(records, ty)?;
             if let Some(init) = init {
                 collect_record_field_uses_from_expr(init, records)?;
             }
@@ -1047,6 +1274,9 @@ fn collect_record_field_uses_from_expr<'a>(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::IncDec {
             target: operand, ..
         }
@@ -1301,14 +1531,18 @@ fn emit_stmt(
             if matches!(ty.kind, IrTypeKind::Record { .. }) {
                 let decl_ty =
                     emit_value_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
-                let Some(init) = init else {
+                let (init, zero_initialized) = if let Some(init) = init {
+                    validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
+                    let init = emit_expr(init, symbols, context)
+                        .map_err(|detail| format!("decl {name} initializer {detail}"))?;
+                    (init, false)
+                } else if context.is_zero_initialized_record_local(name) {
+                    (emit_record_zero_initializer(ty)?, true)
+                } else {
                     return Err(format!("decl {name} record initializer is required"));
                 };
-                validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
-                let init = emit_expr(init, symbols, context)
-                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
                 symbols.insert(name.clone());
-                let mut_prefix = if context.is_assigned_var(name) {
+                let mut_prefix = if zero_initialized || context.is_assigned_var(name) {
                     "mut "
                 } else {
                     ""
@@ -1461,6 +1695,11 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{line}\n"));
             }
+            if let Some(line) = emit_discarded_pointer_return_call_statement(expr, symbols, context)
+                .map_err(|detail| format!("expr {detail}"))?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
@@ -1575,6 +1814,39 @@ fn emit_stmt(
             Err(format!("unsupported statement {node}: {reason}"))
         }
     }
+}
+
+fn emit_discarded_pointer_return_call_statement(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Call {
+        callee, args, ty, ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if !matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+        return Ok(None);
+    }
+    let callee = emit_identifier(callee, "discarded pointer-return call callee")?;
+    if reserved_c_macro_or_stdlib_callee(&callee) {
+        return Err(format!(
+            "discarded pointer-return call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
+        ));
+    }
+    validate_bounded_call_args(args, context)?;
+    let args = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            emit_call_arg_expr(arg, symbols, context)
+                .map_err(|detail| format!("call arg[{index}] {detail}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(Some(format!("let _ = {callee}({args});")))
 }
 
 fn emit_do_while_stmt(
@@ -2507,6 +2779,31 @@ fn emit_expr(
                 .map_err(|detail| format!("cast expr {detail}"))?;
             Ok(format!("({expr} as {target})"))
         }
+        IrExpr::LValueToRValue { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!(
+                    "lvalue-to-rvalue target {} is unsupported",
+                    type_label(target)
+                ));
+            }
+            let source_type = expr_type(expr)
+                .ok_or_else(|| "lvalue-to-rvalue source type is unsupported".to_string())?;
+            if !is_integer_type(source_type) {
+                return Err(format!(
+                    "lvalue-to-rvalue source {} is unsupported",
+                    type_label(source_type)
+                ));
+            }
+            validate_expr_matches_type(expr, target, "lvalue-to-rvalue expr")?;
+            emit_expr(expr, symbols, context)
+                .map_err(|detail| format!("lvalue-to-rvalue expr {detail}"))
+        }
+        IrExpr::ArrayToPointerDecay { .. } => {
+            Err("array-to-pointer decay requires explicit lowering evidence".to_string())
+        }
+        IrExpr::FunctionToPointerDecay { .. } => Err(
+            "function-to-pointer decay creates a function pointer value and requires explicit function-pointer lowering evidence".to_string(),
+        ),
         IrExpr::Index {
             base, index, ty, ..
         } => emit_index_expr(base, index, ty, symbols, context),
@@ -2782,6 +3079,21 @@ fn validate_readonly_pointer_add_index_expr(expr: &IrExpr) -> Result<(), String>
             }
             validate_readonly_pointer_add_index_expr(expr)
         }
+        IrExpr::LValueToRValue { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!(
+                    "deref pointer add index lvalue-to-rvalue target {} is unsupported",
+                    type_label(target)
+                ));
+            }
+            validate_readonly_pointer_add_index_expr(expr)
+        }
+        IrExpr::ArrayToPointerDecay { .. } => {
+            Err("deref pointer add index cannot use array-to-pointer decay".to_string())
+        }
+        IrExpr::FunctionToPointerDecay { .. } => {
+            Err("deref pointer add index cannot use function-to-pointer decay".to_string())
+        }
         IrExpr::Call { callee, .. } => Err(format!(
             "deref pointer add index call expression {callee} is unsupported"
         )),
@@ -2894,16 +3206,201 @@ fn emit_call_expr(
     if !is_void_type(ty) {
         emit_scalar_type(ty).map_err(|detail| format!("call result has {detail}"))?;
     }
-    validate_bounded_call_args(args)?;
+    validate_bounded_call_args(args, context)?;
     let args = args
         .iter()
         .enumerate()
         .map(|(index, arg)| {
-            emit_expr(arg, symbols, context).map_err(|detail| format!("call arg[{index}] {detail}"))
+            emit_call_arg_expr(arg, symbols, context)
+                .map_err(|detail| format!("call arg[{index}] {detail}"))
         })
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
     Ok(format!("{callee}({args})"))
+}
+
+fn emit_call_arg_expr(
+    arg: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    match arg {
+        IrExpr::FunctionToPointerDecay { target, expr, .. } => {
+            emit_function_pointer_decay_call_arg(target, expr)
+        }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if mutable_record_pointer_pointee_type(ty).is_some() => {
+            emit_record_pointer_return_call_arg_expr(callee, args, ty, symbols, context)
+        }
+        IrExpr::Var { name, ty, .. } if emit_opaque_void_pointer_type(ty).is_some() => {
+            emit_opaque_pointer_call_arg_var(name, symbols, context)
+        }
+        IrExpr::Var { name, ty, .. }
+            if should_emit_raw_direct_call_pointer_param(name, ty, context) =>
+        {
+            emit_raw_direct_call_pointer_arg_var(name, ty, symbols, context)
+        }
+        IrExpr::AddrOf { operand, ty, .. } => {
+            emit_local_record_address_call_arg(operand, ty, symbols)
+        }
+        _ => emit_expr(arg, symbols, context),
+    }
+}
+
+fn emit_record_pointer_return_call_arg_expr(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    validate_record_pointer_return_nested_call_arg(callee, args, ty, Some(context))?;
+    let callee = emit_identifier(callee, "record pointer return call argument callee")?;
+    let args = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            emit_record_pointer_return_call_inner_arg_expr(arg, symbols, context)
+                .map_err(|detail| format!("record pointer return call arg[{index}] {detail}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .join(", ");
+    Ok(format!("{callee}({args})"))
+}
+
+fn emit_record_pointer_return_call_inner_arg_expr(
+    arg: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    match arg {
+        IrExpr::Var { name, ty, .. } if is_readonly_8_bit_pointer_type(ty) => {
+            emit_readonly_byte_pointer_const_void_call_arg_var(name, symbols, context)
+        }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if callee == "strlen" => emit_c_strlen_call_expr(args, ty, symbols, context),
+        _ => emit_call_arg_expr(arg, symbols, context),
+    }
+}
+
+fn emit_local_record_address_call_arg(
+    operand: &IrExpr,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+) -> Result<String, String> {
+    let name = validate_local_record_address_call_arg(operand, ty)?;
+    if !symbols.contains(name) {
+        return Err(format!("address-of call argument {name} is not declared"));
+    }
+    let name = emit_identifier(name, "address-of call argument")?;
+    Ok(format!("&mut {name}"))
+}
+
+fn emit_raw_direct_call_pointer_arg_var(
+    name: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "raw direct call pointer argument {name} is not declared"
+        ));
+    }
+    validate_raw_direct_call_pointer_arg(name, ty, context)?;
+    emit_identifier(name, "raw direct call pointer argument")
+}
+
+fn emit_opaque_pointer_call_arg_var(
+    name: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "opaque pointer call argument {name} is not declared"
+        ));
+    }
+    if !context.is_opaque_pointer_call_arg_param(name) {
+        return Err(format!(
+            "opaque pointer call argument {name} requires direct call argument provenance"
+        ));
+    }
+    emit_identifier(name, "opaque pointer call argument")
+}
+
+fn emit_readonly_byte_pointer_const_void_call_arg_var(
+    name: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    if !symbols.contains(name) {
+        return Err(format!(
+            "readonly byte pointer call argument {name} is not declared"
+        ));
+    }
+    let name = emit_identifier(name, "readonly byte pointer call argument")?;
+    let receiver = if context.is_nullable_pointer_param(&name) {
+        format!("{name}.unwrap()")
+    } else {
+        name
+    };
+    Ok(format!("{receiver}.as_ptr() as *const core::ffi::c_void"))
+}
+
+fn emit_function_pointer_decay_call_arg(target: &IrType, expr: &IrExpr) -> Result<String, String> {
+    let name = validate_function_pointer_decay_call_arg(target, expr)?;
+    emit_identifier(name, "function pointer decay argument")
+}
+
+fn validate_function_pointer_decay_call_arg<'a>(
+    target: &IrType,
+    expr: &'a IrExpr,
+) -> Result<&'a str, String> {
+    let Some(target_signature) = emit_function_pointer_param_type(target)? else {
+        return Err(format!(
+            "function-to-pointer decay target {} is outside the simple function pointer argument subset",
+            type_label(target)
+        ));
+    };
+    let IrTypeKind::Pointer { pointee } = &target.kind else {
+        return Err(format!(
+            "function-to-pointer decay target {} is not a function pointer",
+            type_label(target)
+        ));
+    };
+    let IrExpr::Var { name, ty, .. } = expr else {
+        return Err(
+            "function-to-pointer decay argument must be a direct function name".to_string(),
+        );
+    };
+    if !matches!(ty.kind, IrTypeKind::Function) {
+        return Err(format!(
+            "function-to-pointer decay argument {name} has unsupported source type {}",
+            type_label(ty)
+        ));
+    }
+    let source_signature = emit_function_pointer_signature_type(&ty.spelled).map_err(|detail| {
+        format!(
+            "function-to-pointer decay argument {name} source type {} is unsupported: {detail}",
+            type_label(ty)
+        )
+    })?;
+    let pointee_signature =
+        emit_function_pointer_signature_type(&pointee.spelled).map_err(|detail| {
+            format!(
+                "function-to-pointer decay target pointee {} is unsupported: {detail}",
+                type_label(pointee)
+            )
+        })?;
+    if source_signature != target_signature || source_signature != pointee_signature {
+        return Err(format!(
+            "function-to-pointer decay argument {name} signature {source_signature} does not match target {target_signature}"
+        ));
+    }
+    Ok(name)
 }
 
 fn emit_c_assert_call_expr(
@@ -2924,7 +3421,7 @@ fn emit_c_assert_call_expr(
             args.len()
         ));
     };
-    validate_bounded_call_arg(condition, false)
+    validate_bounded_call_arg_with_context(condition, false, Some(context))
         .map_err(|detail| format!("C assert condition {detail}"))?;
     let condition = emit_condition_expr(condition, symbols, context)
         .map_err(|detail| format!("C assert condition {detail}"))?;
@@ -2949,7 +3446,8 @@ fn emit_c_abs_call_expr(
             args.len()
         ));
     };
-    validate_bounded_call_arg(arg, false).map_err(|detail| format!("C abs argument {detail}"))?;
+    validate_bounded_call_arg_with_context(arg, false, Some(context))
+        .map_err(|detail| format!("C abs argument {detail}"))?;
     let arg_ty = expr_type(arg).ok_or_else(|| "C abs argument type is unsupported".to_string())?;
     if !is_c_int_type(arg_ty) {
         return Err(format!(
@@ -2968,7 +3466,7 @@ fn emit_c_strlen_call_expr(
     args: &[IrExpr],
     ty: &IrType,
     symbols: &HashSet<String>,
-    _context: &EmitContext,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let name = validate_c_strlen_call_shape(args, ty)?;
     let name = emit_identifier(name, "C strlen argument")?;
@@ -2977,8 +3475,13 @@ fn emit_c_strlen_call_expr(
             "C strlen argument {name} is not a function parameter or local binding"
         ));
     }
+    let receiver = if context.is_nullable_pointer_param(&name) {
+        format!("{name}.unwrap()")
+    } else {
+        name
+    };
     Ok(format!(
-        "{name}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
+        "{receiver}.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")"
     ))
 }
 
@@ -3273,9 +3776,9 @@ fn validate_c_memset_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,
 ) -> Result<(&'a str, u8, &'a IrExpr), String> {
-    if !is_void_type(ty) {
+    if !is_c_memset_discarded_result_type(ty) {
         return Err(format!(
-            "C memset statement model requires void result type, got {}",
+            "C memset statement model requires void or discarded void * result type, got {}",
             type_label(ty)
         ));
     }
@@ -3303,9 +3806,9 @@ fn validate_c_memcpy_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,
 ) -> Result<(&'a str, &'a str, &'a IrExpr), String> {
-    if !is_void_type(ty) {
+    if !is_c_memcpy_discarded_result_type(ty) {
         return Err(format!(
-            "C memcpy statement model requires void result type, got {}",
+            "C memcpy statement model requires void or discarded void * result type, got {}",
             type_label(ty)
         ));
     }
@@ -3404,7 +3907,7 @@ fn reserved_c_macro_or_stdlib_callee(callee: &str) -> bool {
     )
 }
 
-fn validate_bounded_call_args(args: &[IrExpr]) -> Result<(), String> {
+fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<(), String> {
     let nested_call_count = args
         .iter()
         .filter(|arg| matches!(arg, IrExpr::Call { .. }))
@@ -3415,7 +3918,7 @@ fn validate_bounded_call_args(args: &[IrExpr]) -> Result<(), String> {
         );
     }
     for (index, arg) in args.iter().enumerate() {
-        validate_bounded_call_arg(arg, true)
+        validate_bounded_call_arg_with_context(arg, true, Some(context))
             .map_err(|detail| format!("call arg[{index}] {detail}"))?;
     }
     Ok(())
@@ -3425,9 +3928,38 @@ fn validate_bounded_call_arg(
     expr: &IrExpr,
     allow_immediate_nested_call: bool,
 ) -> Result<(), String> {
+    validate_bounded_call_arg_with_context(expr, allow_immediate_nested_call, None)
+}
+
+fn validate_bounded_call_arg_with_context(
+    expr: &IrExpr,
+    allow_immediate_nested_call: bool,
+    context: Option<&EmitContext>,
+) -> Result<(), String> {
     match expr {
-        IrExpr::LitInt { ty, .. } | IrExpr::Var { ty, .. } => {
+        IrExpr::LitInt { ty, .. } => {
             if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+                if emit_opaque_void_pointer_type(ty).is_some() {
+                    return Ok(());
+                }
+                return Err(format!(
+                    "pointer value argument {} requires explicit ownership/lifetime/ABI lowering",
+                    type_label(ty)
+                ));
+            }
+            emit_scalar_type(ty)?;
+            Ok(())
+        }
+        IrExpr::Var { name, ty, .. } => {
+            if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+                if emit_opaque_void_pointer_type(ty).is_some() {
+                    return Ok(());
+                }
+                if let Some(context) = context {
+                    if validate_raw_direct_call_pointer_arg(name, ty, context).is_ok() {
+                        return Ok(());
+                    }
+                }
                 return Err(format!(
                     "pointer value argument {} requires explicit ownership/lifetime/ABI lowering",
                     type_label(ty)
@@ -3440,18 +3972,27 @@ fn validate_bounded_call_arg(
             Err("null pointer call arguments are outside the bounded call subset".to_string())
         }
         IrExpr::Binary { lhs, rhs, .. } => {
-            validate_bounded_call_arg(lhs, false)?;
-            validate_bounded_call_arg(rhs, false)
+            validate_bounded_call_arg_with_context(lhs, false, context)?;
+            validate_bounded_call_arg_with_context(rhs, false, context)
         }
-        IrExpr::Unary { operand, .. } | IrExpr::Cast { expr: operand, .. } => {
-            validate_bounded_call_arg(operand, false)
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. } => {
+            validate_bounded_call_arg_with_context(operand, false, context)
+        }
+        IrExpr::ArrayToPointerDecay { .. } => Err(
+            "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
+                .to_string(),
+        ),
+        IrExpr::FunctionToPointerDecay { target, expr, .. } => {
+            validate_function_pointer_decay_call_arg(target, expr).map(|_| ())
         }
         IrExpr::Conditional { .. } => {
             Err("conditional call arguments are outside the bounded call subset".to_string())
         }
         IrExpr::Index { base, index, .. } => {
-            validate_bounded_call_arg(base, false)?;
-            validate_bounded_call_arg(index, false)
+            validate_bounded_call_arg_with_context(base, false, context)?;
+            validate_bounded_call_arg_with_context(index, false, context)
         }
         IrExpr::Member { .. } => {
             Err("member access call arguments are outside the bounded call subset".to_string())
@@ -3461,7 +4002,9 @@ fn validate_bounded_call_arg(
         }
         IrExpr::Call {
             callee, args, ty, ..
-        } if allow_immediate_nested_call => validate_bounded_nested_call_arg(callee, args, ty),
+        } if allow_immediate_nested_call => {
+            validate_bounded_nested_call_arg(callee, args, ty, context)
+        }
         IrExpr::Call { .. } => {
             Err("nested call expressions are outside the bounded call subset".to_string())
         }
@@ -3471,8 +4014,8 @@ fn validate_bounded_call_arg(
         IrExpr::Deref { .. } => {
             Err("call arguments cannot use dereference value semantics".to_string())
         }
-        IrExpr::AddrOf { .. } => {
-            Err("call arguments cannot use address-of value semantics".to_string())
+        IrExpr::AddrOf { operand, ty, .. } => {
+            validate_local_record_address_call_arg(operand, ty).map(|_| ())
         }
         IrExpr::Unsupported { node, reason, .. } => {
             Err(format!("unsupported argument expression {node}: {reason}"))
@@ -3480,10 +4023,65 @@ fn validate_bounded_call_arg(
     }
 }
 
+fn validate_raw_direct_call_pointer_arg(
+    name: &str,
+    ty: &IrType,
+    context: &EmitContext,
+) -> Result<(), String> {
+    if !should_emit_raw_direct_call_pointer_param(name, ty, context) {
+        return Err(format!(
+            "raw direct call pointer argument {name} lacks direct call provenance"
+        ));
+    }
+    emit_raw_direct_call_pointer_param_type(ty).ok_or_else(|| {
+        format!(
+            "raw direct call pointer argument {name} has unsupported type {}",
+            type_label(ty)
+        )
+    })?;
+    Ok(())
+}
+
+fn validate_local_record_address_call_arg<'a>(
+    operand: &'a IrExpr,
+    ty: &IrType,
+) -> Result<&'a str, String> {
+    let pointee = mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
+        format!(
+            "address-of call argument target {} must be a mutable record pointer",
+            type_label(ty)
+        )
+    })?;
+    let IrExpr::Var {
+        name,
+        ty: operand_ty,
+        ..
+    } = operand
+    else {
+        return Err(
+            "address-of call argument operand must be a direct record variable".to_string(),
+        );
+    };
+    let IrTypeKind::Record { fields, .. } = &operand_ty.kind else {
+        return Err(format!(
+            "address-of call argument {name} has unsupported operand type {}",
+            type_label(operand_ty)
+        ));
+    };
+    if !matches!(fields, Some(fields) if !fields.is_empty()) {
+        return Err(format!(
+            "address-of call argument {name} requires complete record field inventory"
+        ));
+    }
+    validate_record_value_type_matches(operand_ty, pointee, "address-of call argument")?;
+    Ok(name)
+}
+
 fn validate_bounded_nested_call_arg(
     callee: &str,
     args: &[IrExpr],
     ty: &IrType,
+    context: Option<&EmitContext>,
 ) -> Result<(), String> {
     emit_identifier(callee, "nested call callee")?;
     if callee == "strlen" {
@@ -3498,12 +4096,78 @@ fn validate_bounded_nested_call_arg(
         validate_c_memcmp_call_shape(args, ty)?;
         return Ok(());
     }
+    if mutable_record_pointer_pointee_type(ty).is_some() {
+        return validate_record_pointer_return_nested_call_arg(callee, args, ty, context);
+    }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
     for (index, arg) in args.iter().enumerate() {
-        validate_bounded_call_arg(arg, false)
+        validate_bounded_call_arg_with_context(arg, false, context)
             .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
     }
     Ok(())
+}
+
+fn validate_record_pointer_return_nested_call_arg(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    context: Option<&EmitContext>,
+) -> Result<(), String> {
+    emit_identifier(callee, "record pointer return nested call callee")?;
+    let return_pointee = mutable_record_pointer_pointee_type(ty).ok_or_else(|| {
+        format!(
+            "record pointer return nested call result {} must be a mutable record pointer",
+            type_label(ty)
+        )
+    })?;
+    let Some(first_arg) = args.first() else {
+        return Err(
+            "record pointer return nested call requires an address-of local record first argument"
+                .to_string(),
+        );
+    };
+    let IrExpr::AddrOf {
+        operand,
+        ty: first_arg_ty,
+        ..
+    } = first_arg
+    else {
+        return Err(
+            "record pointer return nested call first argument must be address-of local record"
+                .to_string(),
+        );
+    };
+    let first_pointee = mutable_record_pointer_pointee_type(first_arg_ty).ok_or_else(|| {
+        format!(
+            "record pointer return nested call first argument target {} must be a mutable record pointer",
+            type_label(first_arg_ty)
+        )
+    })?;
+    validate_record_value_type_matches(
+        first_pointee,
+        return_pointee,
+        "record pointer return nested call first argument",
+    )?;
+    validate_local_record_address_call_arg(operand, first_arg_ty)
+        .map_err(|detail| format!("record pointer return nested call first argument {detail}"))?;
+    for (index, arg) in args.iter().enumerate().skip(1) {
+        if validate_record_pointer_return_call_inner_arg(arg).is_ok() {
+            continue;
+        }
+        validate_bounded_call_arg_with_context(arg, false, context)
+            .map_err(|detail| format!("record pointer return nested call arg[{index}] {detail}"))?;
+    }
+    Ok(())
+}
+
+fn validate_record_pointer_return_call_inner_arg(arg: &IrExpr) -> Result<(), String> {
+    match arg {
+        IrExpr::Var { ty, .. } if is_readonly_8_bit_pointer_type(ty) => Ok(()),
+        IrExpr::Call {
+            callee, args, ty, ..
+        } if callee == "strlen" => validate_c_strlen_call_shape(args, ty).map(|_| ()),
+        _ => Err("not a record pointer return call inner special case".to_string()),
+    }
 }
 
 fn find_call_callee(expr: &IrExpr) -> Option<&str> {
@@ -3519,7 +4183,10 @@ fn find_call_callee(expr: &IrExpr) -> Option<&str> {
         } => find_call_callee(condition)
             .or_else(|| find_call_callee(then_expr))
             .or_else(|| find_call_callee(else_expr)),
-        IrExpr::Cast { expr, .. } => find_call_callee(expr),
+        IrExpr::Cast { expr, .. }
+        | IrExpr::LValueToRValue { expr, .. }
+        | IrExpr::ArrayToPointerDecay { expr, .. }
+        | IrExpr::FunctionToPointerDecay { expr, .. } => find_call_callee(expr),
         IrExpr::Index { base, index, .. } => {
             find_call_callee(base).or_else(|| find_call_callee(index))
         }
@@ -3621,6 +4288,12 @@ fn emit_expr_with_prelude(
                 expr: format!("({} as {target})", emitted.expr),
             })
         }
+        IrExpr::ArrayToPointerDecay { .. } => Err(format!(
+            "{path} array-to-pointer decay requires explicit lowering evidence"
+        )),
+        IrExpr::FunctionToPointerDecay { .. } => Err(format!(
+            "{path} function-to-pointer decay creates a function pointer value and requires explicit function-pointer lowering evidence"
+        )),
         IrExpr::Conditional {
             condition,
             then_expr,
@@ -4361,10 +5034,32 @@ fn emit_condition_expr(
     if let Some(condition) = emit_comparison_condition_expr(expr, symbols, context)? {
         return Ok(condition);
     }
+    if let Some(condition) = emit_nullable_pointer_truthiness_condition(expr, symbols, context)? {
+        return Ok(condition);
+    }
     let ty = expr_type(expr).ok_or_else(|| "type is unsupported".to_string())?;
     let zero = zero_literal_for_type(ty)?;
     let expr = emit_expr(expr, symbols, context)?;
     Ok(format!("{expr} != {zero}"))
+}
+
+fn emit_nullable_pointer_truthiness_condition(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Var { name, ty, .. } = expr else {
+        return Ok(None);
+    };
+    if !context.is_nullable_pointer_param(name) {
+        return Ok(None);
+    }
+    if !symbols.contains(name) {
+        return Err(format!("nullable pointer param {name} is not declared"));
+    }
+    validate_nullable_pointer_type(name, ty)?;
+    let name = emit_identifier(name, "nullable pointer condition")?;
+    Ok(Some(format!("{name}.is_some()")))
 }
 
 fn emit_comparison_condition_expr(
@@ -4543,6 +5238,9 @@ fn expr_has_inc_dec(expr: &IrExpr) -> bool {
         IrExpr::Binary { lhs, rhs, .. } => expr_has_inc_dec(lhs) || expr_has_inc_dec(rhs),
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_inc_dec(operand),
         IrExpr::Conditional {
             condition,
@@ -4577,6 +5275,9 @@ fn expr_has_assign_or_comma(expr: &IrExpr) -> bool {
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_assign_or_comma(operand),
         IrExpr::Conditional {
             condition,
@@ -5095,6 +5796,14 @@ fn validate_definite_assignment_expr(
         }
         IrExpr::Cast { expr, .. } => validate_definite_assignment_expr(expr, state)
             .map_err(|detail| format!("cast expr {detail}")),
+        IrExpr::LValueToRValue { expr, .. } => validate_definite_assignment_expr(expr, state)
+            .map_err(|detail| format!("lvalue-to-rvalue expr {detail}")),
+        IrExpr::ArrayToPointerDecay { expr, .. } => validate_definite_assignment_expr(expr, state)
+            .map_err(|detail| format!("array-to-pointer decay expr {detail}")),
+        IrExpr::FunctionToPointerDecay { expr, .. } => {
+            validate_definite_assignment_expr(expr, state)
+                .map_err(|detail| format!("function-to-pointer decay expr {detail}"))
+        }
         IrExpr::Index { base, index, .. } => {
             validate_definite_assignment_expr(base, state)
                 .map_err(|detail| format!("index base {detail}"))?;
@@ -5247,6 +5956,348 @@ fn collect_assigned_vars(body: &[IrStmt]) -> HashSet<String> {
     let mut assigned_vars = HashSet::new();
     collect_assigned_vars_from_body(body, &mut assigned_vars);
     assigned_vars
+}
+
+fn collect_zero_initialized_record_locals(body: &[IrStmt]) -> Result<HashSet<String>, String> {
+    let mut declarations = HashSet::new();
+    collect_uninitialized_record_local_decls(body, &mut declarations)?;
+    if declarations.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let mut allowed_address_args = HashSet::new();
+    let mut disallowed_uses = HashSet::new();
+    collect_zero_init_record_local_uses_from_body(
+        body,
+        &declarations,
+        &mut allowed_address_args,
+        &mut disallowed_uses,
+    );
+
+    Ok(allowed_address_args
+        .difference(&disallowed_uses)
+        .cloned()
+        .collect())
+}
+
+fn collect_uninitialized_record_local_decls(
+    body: &[IrStmt],
+    declarations: &mut HashSet<String>,
+) -> Result<(), String> {
+    for stmt in body {
+        match stmt {
+            IrStmt::Decl { name, ty, init, .. } => {
+                if init.is_none() && matches!(ty.kind, IrTypeKind::Record { .. }) {
+                    declarations.insert(name.clone());
+                }
+            }
+            IrStmt::If {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_uninitialized_record_local_decls(then_body, declarations)?;
+                collect_uninitialized_record_local_decls(else_body, declarations)?;
+            }
+            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+                collect_uninitialized_record_local_decls(body, declarations)?;
+            }
+            IrStmt::For {
+                init, step, body, ..
+            } => {
+                collect_uninitialized_record_local_decls(init, declarations)?;
+                if let Some(step) = step.as_deref() {
+                    collect_uninitialized_record_local_decls(
+                        std::slice::from_ref(step),
+                        declarations,
+                    )?;
+                }
+                collect_uninitialized_record_local_decls(body, declarations)?;
+            }
+            IrStmt::Assign { .. }
+            | IrStmt::Return { .. }
+            | IrStmt::Break { .. }
+            | IrStmt::Continue { .. }
+            | IrStmt::Expr { .. }
+            | IrStmt::Unsupported { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn collect_zero_init_record_local_uses_from_body(
+    body: &[IrStmt],
+    declarations: &HashSet<String>,
+    allowed_address_args: &mut HashSet<String>,
+    disallowed_uses: &mut HashSet<String>,
+) {
+    for stmt in body {
+        collect_zero_init_record_local_uses_from_stmt(
+            stmt,
+            declarations,
+            allowed_address_args,
+            disallowed_uses,
+        );
+    }
+}
+
+fn collect_zero_init_record_local_uses_from_stmt(
+    stmt: &IrStmt,
+    declarations: &HashSet<String>,
+    allowed_address_args: &mut HashSet<String>,
+    disallowed_uses: &mut HashSet<String>,
+) {
+    match stmt {
+        IrStmt::Decl { init, .. } => {
+            if let Some(init) = init {
+                collect_zero_init_record_local_uses_from_expr(
+                    init,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                target,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                value,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_body(
+                then_body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_body(
+                else_body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_body(
+                body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            collect_zero_init_record_local_uses_from_body(
+                body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            collect_zero_init_record_local_uses_from_body(
+                init,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            if let Some(condition) = condition {
+                collect_zero_init_record_local_uses_from_expr(
+                    condition,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+            if let Some(step) = step.as_deref() {
+                collect_zero_init_record_local_uses_from_stmt(
+                    step,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+            collect_zero_init_record_local_uses_from_body(
+                body,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                collect_zero_init_record_local_uses_from_expr(
+                    value,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrStmt::Expr { expr, .. } => collect_zero_init_record_local_uses_from_expr(
+            expr,
+            declarations,
+            allowed_address_args,
+            disallowed_uses,
+        ),
+        IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+    }
+}
+
+fn collect_zero_init_record_local_uses_from_expr(
+    expr: &IrExpr,
+    declarations: &HashSet<String>,
+    allowed_address_args: &mut HashSet<String>,
+    disallowed_uses: &mut HashSet<String>,
+) {
+    match expr {
+        IrExpr::Var { name, .. } => {
+            if declarations.contains(name) {
+                disallowed_uses.insert(name.clone());
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                if let IrExpr::AddrOf { operand, ty, .. } = arg {
+                    if let Ok(name) = validate_local_record_address_call_arg(operand, ty) {
+                        if declarations.contains(name) {
+                            allowed_address_args.insert(name.to_string());
+                            continue;
+                        }
+                    }
+                }
+                collect_zero_init_record_local_uses_from_expr(
+                    arg,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                lhs,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                rhs,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                operand,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_zero_init_record_local_uses_from_expr(
+                condition,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                then_expr,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                else_expr,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_zero_init_record_local_uses_from_expr(
+                base,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+            collect_zero_init_record_local_uses_from_expr(
+                index,
+                declarations,
+                allowed_address_args,
+                disallowed_uses,
+            );
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_zero_init_record_local_uses_from_expr(
+                    element,
+                    declarations,
+                    allowed_address_args,
+                    disallowed_uses,
+                );
+            }
+        }
+        IrExpr::LitInt { .. } | IrExpr::NullPtr { .. } | IrExpr::Unsupported { .. } => {}
+    }
 }
 
 fn collect_byte_cursor_sources(body: &[IrStmt]) -> HashMap<String, String> {
@@ -5406,6 +6457,9 @@ fn expr_has_post_increment_byte_read(expr: &IrExpr, cursor: &str) -> bool {
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => expr_has_post_increment_byte_read(operand, cursor),
         IrExpr::Conditional {
             condition,
@@ -5445,6 +6499,9 @@ fn count_post_increment_byte_reads(expr: &IrExpr) -> usize {
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => count_post_increment_byte_reads(operand),
         IrExpr::Conditional {
             condition,
@@ -5617,6 +6674,9 @@ fn reject_nullable_mutable_pointer_params_in_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
         | IrExpr::Deref { ptr: operand, .. }
         | IrExpr::Member { base: operand, .. }
@@ -5691,6 +6751,11 @@ fn collect_nullable_pointer_params_from_body(
                 else_body,
                 ..
             } => {
+                collect_nullable_pointer_condition_param(
+                    condition,
+                    readonly_pointer_params,
+                    nullable_params,
+                );
                 collect_nullable_pointer_params_from_expr(
                     condition,
                     readonly_pointer_params,
@@ -5789,6 +6854,22 @@ fn collect_nullable_pointer_params_from_body(
     }
 }
 
+fn collect_nullable_pointer_condition_param(
+    condition: &IrExpr,
+    readonly_pointer_params: &HashMap<&str, &IrType>,
+    nullable_params: &mut HashSet<String>,
+) {
+    let IrExpr::Var { name, ty, .. } = condition else {
+        return;
+    };
+    if readonly_pointer_params
+        .get(name.as_str())
+        .is_some_and(|param_ty| *param_ty == ty)
+    {
+        nullable_params.insert(name.to_string());
+    }
+}
+
 fn collect_nullable_pointer_params_from_expr(
     expr: &IrExpr,
     readonly_pointer_params: &HashMap<&str, &IrType>,
@@ -5825,6 +6906,9 @@ fn collect_nullable_pointer_params_from_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => collect_nullable_pointer_params_from_expr(
             operand,
             readonly_pointer_params,
@@ -5894,6 +6978,436 @@ fn collect_nullable_pointer_params_from_expr(
         ),
         IrExpr::Deref { ptr, .. } => {
             collect_nullable_pointer_params_from_expr(ptr, readonly_pointer_params, nullable_params)
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
+fn collect_opaque_pointer_call_arg_params(body: &[IrStmt], params: &[IrParam]) -> HashSet<String> {
+    let param_types: HashMap<&str, &IrType> = params
+        .iter()
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect();
+    let mut call_arg_params = HashSet::new();
+    collect_opaque_pointer_call_arg_params_from_body(body, &param_types, &mut call_arg_params);
+    call_arg_params
+}
+
+fn collect_opaque_pointer_call_arg_params_from_body(
+    body: &[IrStmt],
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    for stmt in body {
+        collect_opaque_pointer_call_arg_params_from_stmt(stmt, param_types, call_arg_params);
+    }
+}
+
+fn collect_opaque_pointer_call_arg_params_from_stmt(
+    stmt: &IrStmt,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    match stmt {
+        IrStmt::Decl { init, .. } => {
+            if let Some(init) = init {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    init,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+        }
+        IrStmt::Assign { target, value, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(target, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(value, param_types, call_arg_params);
+        }
+        IrStmt::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_body(
+                then_body,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_body(
+                else_body,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrStmt::While {
+            condition, body, ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_body(body, param_types, call_arg_params);
+        }
+        IrStmt::DoWhile {
+            body, condition, ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_body(body, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrStmt::For {
+            init,
+            condition,
+            step,
+            body,
+            ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_body(init, param_types, call_arg_params);
+            if let Some(condition) = condition {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            if let Some(step) = step.as_deref() {
+                collect_opaque_pointer_call_arg_params_from_stmt(
+                    step,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            collect_opaque_pointer_call_arg_params_from_body(body, param_types, call_arg_params);
+        }
+        IrStmt::Return { value, .. } => {
+            if let Some(value) = value {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    value,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+        }
+        IrStmt::Expr { expr, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(expr, param_types, call_arg_params);
+        }
+        IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+    }
+}
+
+fn collect_opaque_pointer_call_arg_params_from_expr(
+    expr: &IrExpr,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    match expr {
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                if let IrExpr::Var { name, ty, .. } = arg {
+                    if let Some(param_ty) = param_types.get(name.as_str()) {
+                        if *param_ty == ty && emit_opaque_void_pointer_type(ty).is_some() {
+                            call_arg_params.insert(name.clone());
+                        }
+                    }
+                }
+                collect_opaque_pointer_call_arg_params_from_expr(arg, param_types, call_arg_params);
+            }
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(lhs, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(rhs, param_types, call_arg_params);
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(operand, param_types, call_arg_params);
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_opaque_pointer_call_arg_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_expr(
+                then_expr,
+                param_types,
+                call_arg_params,
+            );
+            collect_opaque_pointer_call_arg_params_from_expr(
+                else_expr,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_opaque_pointer_call_arg_params_from_expr(base, param_types, call_arg_params);
+            collect_opaque_pointer_call_arg_params_from_expr(index, param_types, call_arg_params);
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_opaque_pointer_call_arg_params_from_expr(
+                    element,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
+fn collect_raw_direct_call_pointer_params(body: &[IrStmt], params: &[IrParam]) -> HashSet<String> {
+    let param_types: HashMap<&str, &IrType> = params
+        .iter()
+        .map(|param| (param.name.as_str(), &param.ty))
+        .collect();
+    let mut call_arg_params = HashSet::new();
+    collect_raw_direct_call_pointer_params_from_body(body, &param_types, &mut call_arg_params);
+    call_arg_params
+}
+
+fn collect_raw_direct_call_pointer_params_from_body(
+    body: &[IrStmt],
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    for stmt in body {
+        match stmt {
+            IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_raw_direct_call_pointer_params_from_expr(
+                        init,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+            }
+            IrStmt::Assign { target, value, .. } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    target,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_expr(
+                    value,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_body(
+                    then_body,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_body(
+                    else_body,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_body(
+                    body,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_body(
+                    body,
+                    param_types,
+                    call_arg_params,
+                );
+                collect_raw_direct_call_pointer_params_from_expr(
+                    condition,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                collect_raw_direct_call_pointer_params_from_body(
+                    init,
+                    param_types,
+                    call_arg_params,
+                );
+                if let Some(condition) = condition {
+                    collect_raw_direct_call_pointer_params_from_expr(
+                        condition,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+                if let Some(step) = step.as_deref() {
+                    collect_raw_direct_call_pointer_params_from_stmt(
+                        step,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+                collect_raw_direct_call_pointer_params_from_body(
+                    body,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_raw_direct_call_pointer_params_from_expr(
+                        value,
+                        param_types,
+                        call_arg_params,
+                    );
+                }
+            }
+            IrStmt::Expr { expr, .. } => {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    expr,
+                    param_types,
+                    call_arg_params,
+                );
+            }
+            IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
+        }
+    }
+}
+
+fn collect_raw_direct_call_pointer_params_from_stmt(
+    stmt: &IrStmt,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    collect_raw_direct_call_pointer_params_from_body(
+        std::slice::from_ref(stmt),
+        param_types,
+        call_arg_params,
+    );
+}
+
+fn collect_raw_direct_call_pointer_params_from_expr(
+    expr: &IrExpr,
+    param_types: &HashMap<&str, &IrType>,
+    call_arg_params: &mut HashSet<String>,
+) {
+    match expr {
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                if let IrExpr::Var { name, ty, .. } = arg {
+                    if param_types
+                        .get(name.as_str())
+                        .is_some_and(|param_ty| *param_ty == ty)
+                        && emit_raw_direct_call_pointer_param_type(ty).is_some()
+                    {
+                        call_arg_params.insert(name.clone());
+                    }
+                }
+                collect_raw_direct_call_pointer_params_from_expr(arg, param_types, call_arg_params);
+            }
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_raw_direct_call_pointer_params_from_expr(lhs, param_types, call_arg_params);
+            collect_raw_direct_call_pointer_params_from_expr(rhs, param_types, call_arg_params);
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::IncDec {
+            target: operand, ..
+        }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. }
+        | IrExpr::Member { base: operand, .. } => {
+            collect_raw_direct_call_pointer_params_from_expr(operand, param_types, call_arg_params);
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_raw_direct_call_pointer_params_from_expr(
+                condition,
+                param_types,
+                call_arg_params,
+            );
+            collect_raw_direct_call_pointer_params_from_expr(
+                then_expr,
+                param_types,
+                call_arg_params,
+            );
+            collect_raw_direct_call_pointer_params_from_expr(
+                else_expr,
+                param_types,
+                call_arg_params,
+            );
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_raw_direct_call_pointer_params_from_expr(base, param_types, call_arg_params);
+            collect_raw_direct_call_pointer_params_from_expr(index, param_types, call_arg_params);
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_raw_direct_call_pointer_params_from_expr(
+                    element,
+                    param_types,
+                    call_arg_params,
+                );
+            }
         }
         IrExpr::LitInt { .. }
         | IrExpr::NullPtr { .. }
@@ -6545,6 +8059,9 @@ fn collect_readonly_pointer_read_params_from_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. }
         | IrExpr::Member { base: operand, .. }
         | IrExpr::IncDec {
@@ -6834,7 +8351,7 @@ fn validate_nullable_pointer_param_uses_in_stmt(
             else_body,
             ..
         } => {
-            validate_nullable_pointer_param_uses_in_expr(
+            validate_nullable_pointer_param_uses_in_condition(
                 condition,
                 nullable_params,
                 proven_nonnull_params,
@@ -6947,6 +8464,17 @@ fn validate_nullable_pointer_param_uses_in_stmt(
     Ok(())
 }
 
+fn validate_nullable_pointer_param_uses_in_condition(
+    condition: &IrExpr,
+    nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
+) -> Result<(), String> {
+    if nullable_pointer_truthiness_var(condition, nullable_params).is_some() {
+        return Ok(());
+    }
+    validate_nullable_pointer_param_uses_in_expr(condition, nullable_params, proven_nonnull_params)
+}
+
 fn validate_nullable_pointer_param_uses_in_expr(
     expr: &IrExpr,
     nullable_params: &HashSet<String>,
@@ -6973,9 +8501,16 @@ fn validate_nullable_pointer_param_uses_in_expr(
         return Ok(());
     }
     match expr {
-        IrExpr::Var { name, .. } if nullable_params.contains(name) => Err(format!(
-            "nullable pointer param {name} is only supported in null comparisons"
-        )),
+        IrExpr::Var { name, ty, .. } if nullable_params.contains(name) => {
+            if proven_nonnull_params.contains(name)
+                && readonly_pointer_slice_element_type(ty).is_some()
+            {
+                return Ok(());
+            }
+            Err(format!(
+                "nullable pointer param {name} is only supported in null comparisons"
+            ))
+        }
         IrExpr::Binary { lhs, rhs, .. } => {
             validate_nullable_pointer_param_uses_in_expr(
                 lhs,
@@ -6990,6 +8525,9 @@ fn validate_nullable_pointer_param_uses_in_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::AddrOf { operand, .. } => validate_nullable_pointer_param_uses_in_expr(
             operand,
             nullable_params,
@@ -7111,6 +8649,9 @@ fn null_comparison_nonnull_branch<'a>(
     condition: &'a IrExpr,
     nullable_params: &HashSet<String>,
 ) -> Option<NullComparisonNonnullBranch<'a>> {
+    if let Some(name) = nullable_pointer_truthiness_var(condition, nullable_params) {
+        return Some(NullComparisonNonnullBranch::Then { param: name });
+    }
     let IrExpr::Binary { op, lhs, rhs, .. } = condition else {
         return None;
     };
@@ -7125,6 +8666,16 @@ fn null_comparison_nonnull_branch<'a>(
         IrBinOp::Eq => Some(NullComparisonNonnullBranch::Else { param: name }),
         _ => None,
     }
+}
+
+fn nullable_pointer_truthiness_var<'a>(
+    condition: &'a IrExpr,
+    nullable_params: &HashSet<String>,
+) -> Option<&'a str> {
+    let IrExpr::Var { name, .. } = condition else {
+        return None;
+    };
+    nullable_params.contains(name).then_some(name.as_str())
 }
 
 fn nullable_record_pointer_arrow_read_is_proven_nonnull(
@@ -7325,7 +8876,10 @@ fn expr_type(expr: &IrExpr) -> Option<&IrType> {
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => Some(ty),
-        IrExpr::Cast { target, .. } => Some(target),
+        IrExpr::Cast { target, .. }
+        | IrExpr::LValueToRValue { target, .. }
+        | IrExpr::ArrayToPointerDecay { target, .. }
+        | IrExpr::FunctionToPointerDecay { target, .. } => Some(target),
         IrExpr::Unsupported { .. } => None,
     }
 }
@@ -7416,8 +8970,23 @@ fn mutable_record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
     }
 }
 
+fn is_incomplete_record_type(ty: &IrType) -> bool {
+    matches!(ty.kind, IrTypeKind::Record { fields: None, .. })
+}
+
+fn is_incomplete_record_pointer_type(ty: &IrType) -> bool {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } => is_incomplete_record_type(pointee),
+        _ => false,
+    }
+}
+
 fn record_pointer_pointee_type(ty: &IrType) -> Option<&IrType> {
     readonly_record_pointer_pointee_type(ty).or_else(|| mutable_record_pointer_pointee_type(ty))
+}
+
+fn is_readonly_8_bit_pointer_type(ty: &IrType) -> bool {
+    matches!(readonly_pointer_slice_element_type(ty), Some(pointee) if is_8_bit_integer_type(pointee))
 }
 
 fn is_supported_nullable_pointer_type(ty: &IrType) -> bool {
@@ -7505,6 +9074,23 @@ fn is_void_type(ty: &IrType) -> bool {
     matches!(ty.kind, IrTypeKind::Void)
 }
 
+fn is_c_memset_discarded_result_type(ty: &IrType) -> bool {
+    is_void_type(ty) || is_mutable_void_pointer(ty)
+}
+
+fn is_c_memcpy_discarded_result_type(ty: &IrType) -> bool {
+    is_void_type(ty) || is_mutable_void_pointer(ty)
+}
+
+fn is_mutable_void_pointer(ty: &IrType) -> bool {
+    match &ty.kind {
+        IrTypeKind::Pointer { pointee } => {
+            !pointee.is_const && matches!(pointee.kind, IrTypeKind::Void)
+        }
+        _ => false,
+    }
+}
+
 fn is_const_void_pointer(ty: &IrType) -> bool {
     match &ty.kind {
         IrTypeKind::Pointer { pointee } => {
@@ -7515,7 +9101,11 @@ fn is_const_void_pointer(ty: &IrType) -> bool {
 }
 
 fn is_size_t_type(ty: &IrType) -> bool {
-    ty.spelled == "size_t" || ty.canonical == "size_t"
+    is_size_t_type_name(&ty.spelled) || is_size_t_type_name(&ty.canonical)
+}
+
+fn is_size_t_type_name(name: &str) -> bool {
+    matches!(name, "size_t" | "__size_t" | "usize")
 }
 
 fn type_label(ty: &IrType) -> String {
@@ -7681,8 +9271,7 @@ fn is_8_bit_integer_type(ty: &IrType) -> bool {
 }
 
 fn is_usize(ty: &IrType) -> bool {
-    ty.spelled == "size_t"
-        || ty.canonical == "size_t"
+    is_size_t_type(ty)
         || matches!(
             ty.kind,
             IrTypeKind::Integer {
@@ -7697,10 +9286,7 @@ fn is_c_strlen_result_type(ty: &IrType) -> bool {
 }
 
 fn is_c_size_argument_type(ty: &IrType) -> bool {
-    ty.spelled == "size_t"
-        || ty.canonical == "size_t"
-        || ty.spelled == "usize"
-        || ty.canonical == "usize"
+    is_size_t_type(ty)
 }
 
 fn is_u8_pointer(ty: &IrType) -> bool {

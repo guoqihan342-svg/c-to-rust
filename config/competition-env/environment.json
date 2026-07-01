@@ -3,9 +3,6 @@
   "profile_id": "huawei-competition-ubuntu-24.04",
   "status": "required",
   "canonical_path": "config/competition-env/environment.json",
-  "compatibility_paths": [
-    "validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json"
-  ],
   "os": {
     "name": "Ubuntu",
     "version": "24.04.4 LTS",
@@ -18,6 +15,20 @@
     "pypi": "https://mirrors.tools.huawei.com/pypi/simple",
     "npm": "https://mirrors.tools.huawei.com/npm/",
     "cargo_crates_io": "sparse+http://rust.inhuawei.com/crates.io-index/"
+  },
+  "source_pins": {
+    "flashdb": {
+      "repository": "https://gitcode.com/xwxf/FlashDB.git",
+      "branch": "competition",
+      "commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "checkout_command": "git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "runner_required_flags": [
+        "--source-repository",
+        "--source-branch",
+        "--require-source-commit"
+      ],
+      "description": "Competition scoring source pin requested for FlashDB runs. Existing historical evidence may reference older commits, but new competition-targeted extraction must validate this repository, branch, and commit before generating slice specs."
+    }
   },
   "cargo_mirror_activation": {
     "method": "CARGO_HOME",
@@ -167,6 +178,17 @@
           "admission": "approved",
           "risk_basis": [
             "machine_readable_validation_and_translation_evidence"
+          ],
+          "environment_fit": [
+            "rust_1_96_compatible",
+            "uses_configured_cargo_mirror",
+            "does_not_require_go_cmake_or_default_clang"
+          ]
+        },
+        "sha2": {
+          "admission": "approved",
+          "risk_basis": [
+            "stable_hashing_for_validation_fixtures_and_evidence_identity"
           ],
           "environment_fit": [
             "rust_1_96_compatible",

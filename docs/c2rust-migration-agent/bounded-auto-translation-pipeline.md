@@ -20,7 +20,7 @@
 3. 生成或刷新 `l3-<slice>-context-pack.json`、`l3-<slice>-type-map.json`、`l3-<slice>-cfg.json`、`l3-<slice>-pointer-graph.json`。新生成的 pointer graph 使用 `schema_version=2`；只要 slice 同时存在指针读写并触发 alias-sensitive gate，`effect_graph` 必须记录 read/write effects 和每个 alias risk 对应的 `requires_noalias` 或 `may_alias` 边。
 4. 翻译器只对支持 C 子集生成 Rust draft，并写入 `l3-<slice>-auto-translation-plan.json` 与 `l3-<slice>-auto-translation-events.jsonl`。
 5. 从同一个 fixture contract 生成 C oracle harness draft 和 Rust replay test draft；无法映射输入/输出时标记 blocked。
-6. 运行 `cargo check --message-format=json`。失败时写 `l3-<slice>-rust-check.json`，再生成 PatchPlan，默认最多 3 轮局部自愈。
+6. 运行 `cargo check --message-format=json`。失败时写 `l3-<slice>-rust-check.json`，再生成 PatchPlan，默认最多 5 轮局部自愈。
 7. 运行 Rust replay、schema-aware diff、negative diff、unsafe scan、version/cache gate 和 evidence manifest gate。
 8. 只有同一 source commit、fixture hash、slice spec hash 和 build profile hash 下的 C oracle、Rust replay、diff、unsafe、version/cache 和 OpenSpec validation 都通过，才能把 candidate 升级为 accepted slice。
 
@@ -139,7 +139,7 @@ Agent 只能选择已有 accepted L1 native evidence 的 target。若 target 没
 python .\validation\tools\auto_migrate.py `
   --slice-spec .\validation\evidence\libuv\l3-ip4-addr-slice-spec.json `
   --evidence-root .\validation\evidence\libuv `
-  --max-repair-rounds 3
+  --max-repair-rounds 5
 ```
 
 该命令应生成 context pack、type map、CFG、pointer graph、Rust draft provenance、translation events、oracle/replay drafts、rust check、PatchPlan/blocked repairs 和 evidence manifest 输入。
@@ -205,7 +205,7 @@ python .\validation\tools\flashdb_l3_self_healing.py `
 python .\validation\tools\auto_migrate.py `
   --slice-spec .\validation\evidence\libuv\l3-ip4-addr-slice-spec.json `
   --only self-heal `
-  --max-repair-rounds 3
+  --max-repair-rounds 5
 ```
 
 ### Evidence search

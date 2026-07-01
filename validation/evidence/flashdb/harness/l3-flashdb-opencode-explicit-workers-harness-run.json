@@ -1,0 +1,188 @@
+{
+  "claim_boundary": {
+    "boundary": "This manifest records the OpenCode explicit multi-worker harness fanout, preflight/runtime contract audit, source pinning, context index, and merge evidence over two FlashDB accepted-evidence slices. OpenCode chat/session output is command-contract audit evidence only; it does not claim translator-generated semantic pass or whole-project FlashDB migration.",
+    "generated_draft_semantic_pass": false,
+    "non_goals": [
+      "translator-generated semantic pass",
+      "whole-project FlashDB migration",
+      "complete OpenCode autonomous runtime proof",
+      "general C coverage"
+    ],
+    "semantic_claim_source": "accepted_evidence_binding",
+    "translation_coverage_numerator": 0
+  },
+  "environment_profile": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+  },
+  "evaluate_profile_artifacts": {
+    "artifacts": {
+      "agent_index": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
+        "sha256": "47d605b241ffdb87ba58ffa746d9780c48c6f5682c421f7f4d109710b9124566"
+      },
+      "batch_profile_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
+        "sha256": "e2dc14681df9e0095ed45ce6eff22dea86cf6d4e33c5e7058c25124656a46044"
+      },
+      "competition_summary": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
+        "sha256": "34f1dbcee489f65053e70bae094b86de740b90544c4ea47b287dbf2e90411ca8"
+      },
+      "context_pack": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
+        "sha256": "9e7935b90c653479e2f5a3b0ae1cc17e6c293f542c2fdc9675bdc8e2db0e0d17"
+      },
+      "evaluate_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
+        "sha256": "a8de06977eac3c70b3e598365f48d36f0d9cbce4eb68dc027c5b49a651c92290"
+      },
+      "judge_evidence_index": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
+        "sha256": "0fe3f5bd7787f47d771b5cbfa9d6ce73d61c02b9188305c5d354b8373ff9e9c1"
+      },
+      "merge_plan": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
+        "sha256": "0217646918a9a036a41d7e3c51a275846f2c27c974e2ed10d97d603628422276"
+      },
+      "route_governance_metrics_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
+        "sha256": "d469b3fdf84761995a610b3b4762294eb7d655a73bedc964b53053d7d245a6f4"
+      },
+      "run_plan_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
+        "sha256": "53018cdde373434cfd0b5ddf292d0b281f4db032f4b78751ee31a175d02a8b03"
+      },
+      "worker_plan": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/plans/flashdb-flashdb-fdb-utils-opencode-explicit-workers-workers.json",
+        "sha256": "53b57351889c4e3d10fdacbdaaa3a7676c50c583c686c4b3e1165d86e6204ba2"
+      },
+      "workflow_metrics": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/workflow-metrics.json",
+        "sha256": "6b454a63c4299dffaec6886570d9b9daf2a25263b4d6989a121c4a4c1d780a5a"
+      }
+    },
+    "opencode_runtime_artifacts": {
+      "opencode_preflight_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/opencode-preflight-report.json",
+        "sha256": "f13668ae8ac4447d42a3c83f703bd9df811a0b1b7cf74fb4b73e2f045bb684a2"
+      },
+      "opencode_preflight_session_evidence": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/logs/opencode-preflight-session-evidence.json",
+        "sha256": "8d94ad9df9188800c33a5a6f50c2112005735f2985f55500cd7d2d4542f4773d"
+      }
+    },
+    "status": "recorded_not_tracked"
+  },
+  "harness_runtime": {
+    "checkpoint_backend": "sqlite",
+    "graph_nodes": [
+      "load_plan",
+      "fanout_workers",
+      "worker",
+      "repair_retry",
+      "merge",
+      "report"
+    ],
+    "graph_runtime": "opencode-harness-langgraph-inspired",
+    "mode": "opencode",
+    "opencode_agent_runtime": {
+      "all_contracts_executed": true,
+      "chat_output_is_evidence": false,
+      "contract_status_counts": {
+        "executed": 2
+      },
+      "semantic_gate": false,
+      "worker_count": 2
+    },
+    "retry_policy": {
+      "checkpoint": "repair_hints",
+      "enabled": false,
+      "round_cap": 5
+    }
+  },
+  "manifest_kind": "flashdb-opencode-explicit-workers-harness-run",
+  "profile": {
+    "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+    "profile_id": "flashdb-fdb-utils-opencode-explicit-workers",
+    "sha256": "b2ef01855dfa133fa5e314b854890b80647ea60662bb22d082d329aede4adf48"
+  },
+  "proof_class": "local-simulation",
+  "reproduction": {
+    "evaluate_profile_command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+    "evaluate_profile_summary_validation_command": "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
+  },
+  "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+  "schema_version": 1,
+  "source": {
+    "path": "sources/FlashDB/src/fdb_utils.c",
+    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+  },
+  "status": "passed",
+  "summary": {
+    "compiled": 2,
+    "failed": 0,
+    "final_gate": "passed",
+    "mode": "opencode",
+    "parallelism": {
+      "effective_workers": 2,
+      "max_workers": 2,
+      "result_order": "planner_order"
+    },
+    "planning_mode": "explicit_workers",
+    "semantic_pass": 2,
+    "worker_count": 2
+  },
+  "target_id": "flashdb",
+  "target_run_root": {
+    "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+    "reason": "large generated judge run artifacts are reproduced by the entrypoint command and indexed by sha256 here",
+    "status": "recorded_not_tracked"
+  },
+  "tracked_artifact_root": "validation/evidence/flashdb/harness",
+  "workers": [
+    {
+      "function": "fdb_calc_crc32",
+      "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "semantic_pass": 1,
+      "slice_id": "real-fdb-calc-crc32",
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+        "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435"
+      },
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "summary": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/summary/competition-run-summary.json",
+        "sha256": "d454f572e3db2b105d1b06e255dfd42bc36987f73b7a1aec280803b3fc62e331"
+      },
+      "summary_status": "passed",
+      "worker_id": "flashdb-opencode-worker-001-fdb-calc-crc32",
+      "worker_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/run-worker-report.json",
+        "sha256": "5cb04ca640142b5f97980d780dba1dea7ac6c1ee7266b48cfefde0fba1ab89fb"
+      }
+    },
+    {
+      "function": "fdb_blob_make",
+      "require_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "semantic_pass": 1,
+      "slice_id": "real-fdb-blob-make",
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
+        "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
+      },
+      "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "summary": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-002-fdb-blob-make/summary/competition-run-summary.json",
+        "sha256": "a28fa50d65d02edcca13f6b46d785e74ff643e40f9504d5cfb4d556ca51e799f"
+      },
+      "summary_status": "passed",
+      "worker_id": "flashdb-opencode-worker-002-fdb-blob-make",
+      "worker_report": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-002-fdb-blob-make/harness/run-worker-report.json",
+        "sha256": "2d40ac6e9565cf8b5e6e72bb622b94fc90ee06748f3f8567c0867a3e15bc9c9e"
+      }
+    }
+  ]
+}

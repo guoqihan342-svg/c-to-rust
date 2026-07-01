@@ -23,7 +23,7 @@ English: this directory tracks candidate projects for broader C-to-Rust migratio
 - `l3-template/config-profile.schema.json`: reusable schema for L3 macro/config/feature profile evidence.
 - `l3-template/config-profile.example.json`: FlashDB example profile tied to `flashDB_rust/oracle/fdb_cfg.h`.
 - `../config/competition-env/`: default standalone competition environment profile, Huawei mirror configs, and a toolchain self-check script.
-- `environment-profiles/huawei-competition-ubuntu-24.04/`: compatibility copy for older validation evidence and scripts.
+- `environment-profiles/huawei-competition-ubuntu-24.04/`: README-only historical redirect for older validation evidence path references.
 - `pointer-graph-template/`: reusable pointer dependency graph template for pointer-bearing L2/L3 migration slices.
 - `test-translation-template/`: reusable code-test translation manifest template for mapping C tests, fixtures, or oracle expectations to Rust tests and invalidation keys.
 
@@ -40,11 +40,11 @@ The verifier is intentionally lightweight. It does not clone large repositories.
 
 ## Competition Environment Profile
 
-The default competition profile is `config/competition-env/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The compatibility profile under `validation/environment-profiles/huawei-competition-ubuntu-24.04/` is kept for older evidence references. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
+The default competition profile is `config/competition-env/environment.json`. L1/L3 evidence generated on the evaluation host should record the profile path and hash. The historical `validation/environment-profiles/huawei-competition-ubuntu-24.04/` directory is README-only and kept only for older evidence path references. The profile explicitly marks Go and CMake as unavailable, so default competition gates must use Cargo, Python, gcc/g++, and GNU Make paths unless a slice records a non-default environment.
 
-中文：默认比赛环境 profile 是 `config/competition-env/environment.json`。新生成的自动翻译 `validation-profile` 必须记录 `profile_id`、路径和 SHA256，`auto-cache-metadata` 必须把同一份信息写入 `competition_environment_identity` 和 `cache_input_fields`。旧的 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 只作为历史兼容入口。
+中文：默认比赛环境 profile 是 `config/competition-env/environment.json`。新生成的自动翻译 `validation-profile` 必须记录 `profile_id`、路径和 SHA256，`auto-cache-metadata` 必须把同一份信息写入 `competition_environment_identity` 和 `cache_input_fields`。旧的 `validation/environment-profiles/huawei-competition-ubuntu-24.04/` 只保留 README-only 历史 redirect，不能作为新的可执行配置入口。
 
-English: newly generated auto-translation validation profiles must record the competition `profile_id`, path, and SHA256 from `config/competition-env/environment.json`; auto-cache metadata must carry the same value as `competition_environment_identity` and include it in `cache_input_fields`. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/` path is compatibility-only.
+English: newly generated auto-translation validation profiles must record the competition `profile_id`, path, and SHA256 from `config/competition-env/environment.json`; auto-cache metadata must carry the same value as `competition_environment_identity` and include it in `cache_input_fields`. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/` path is a README-only historical redirect and must not be used as a new executable configuration entrypoint.
 
 ## Real Source Slice Extraction
 
@@ -72,7 +72,23 @@ python validation/tools/auto_migrate.py `
 
 中文：`auto_migrate.py` 现在会为每个自动迁移 slice 生成三类一等证据：`l3-<slice>-c2rust-baseline-manifest.json`、`l3-<slice>-route-decision.json` 和 `l3-<slice>-validation-profile.json`。C2Rust baseline 只是候选上下文或交叉检查，不能替代原始 C oracle、Rust replay、schema-aware diff、negative diff、unsafe ledger 或 final verification。缺少 C2Rust 可执行文件时必须记录 `skipped` 或 `blocked`，不能伪造生成成功。
 
+中文：route-governance metrics 现在会汇总这些 C2Rust baseline manifest 的 status/output/compile-only 状态，并由 milestone scorecard 去重展示；compile 通过仍只是 candidate context，不是 semantic gate 或 translation coverage。
+
 English: `auto_migrate.py` now emits three first-class evidence files for each automatic migration slice: `l3-<slice>-c2rust-baseline-manifest.json`, `l3-<slice>-route-decision.json`, and `l3-<slice>-validation-profile.json`. The C2Rust baseline is candidate context or cross-check evidence only; it never replaces the original C oracle, Rust replay, schema-aware diff, negative diff, unsafe ledger, or final verification. Missing executable C2Rust tooling must be recorded as `skipped` or `blocked`, never as a generated success.
+
+English: route-governance metrics now summarize status/output/compile-only state from these C2Rust baseline manifests and the milestone scorecard deduplicates that view for review; compile success remains candidate context, not a semantic gate or translation coverage.
+
+中文：`judge-milestone-bundle.json` 的 `harness_architecture_summary.contract_matrix` 现在按 `plan/translate/verify/repair/report` 汇总 stage、role、artifact、validator 和边界；schema 要求矩阵行保持 `semantic_gate=false`、`chat_output_is_evidence=false`、`translation_coverage_numerator=0`。OpenCode `run-plan` graph 也会公开 `opencode_worker.opencode_variant`。
+
+English: `judge-milestone-bundle.json` now carries `harness_architecture_summary.contract_matrix`, grouping stage, role, artifact, validator, and boundary for `plan/translate/verify/repair/report`; the schema requires matrix rows to keep `semantic_gate=false`, `chat_output_is_evidence=false`, and `translation_coverage_numerator=0`. The OpenCode `run-plan` graph also exposes `opencode_worker.opencode_variant`.
+
+中文：`public-release-packet.json` 现在要求 `summary.workflow_metrics` 和 `quantitative_evaluation` 与被绑定的 `judge-milestone-bundle.json` 保持一致；这两个字段只复制 repair activity / scorecard 供评委审阅，必须保持 `semantic_gate=false` 和 `translation_coverage_numerator=0`。`validate_judge_entrypoints --require-local-artifacts` 还会校验 `context_pack.entrypoints` 的非空值是 repo-relative POSIX path，并在 `resume_manifest.workers`、`context_pack.workers`、`agent-index` worker 索引之间做一致性校验。
+
+English: `public-release-packet.json` now requires `summary.workflow_metrics` and `quantitative_evaluation` to match the bound `judge-milestone-bundle.json`; these fields only copy repair activity and scorecard data for reviewer navigation, and must keep `semantic_gate=false` and `translation_coverage_numerator=0`. `validate_judge_entrypoints --require-local-artifacts` also checks non-null `context_pack.entrypoints` values as repo-relative POSIX paths and cross-checks worker identity across `resume_manifest.workers`, `context_pack.workers`, and the `agent-index` worker map.
+
+中文：`public-release-packet.json` 还要求顶层 `progress_delta_ledger` 和 `summary.progress_delta_ledger` 与被绑定的 `judge-milestone-bundle.json` 保持一致；该账本把 capability delta、governance/evidence delta 和 workflow delta 拆开给评委审阅。当 `workflow_metrics.repair_activity` 稀疏时，`workflow_delta` 可以按 entrypoint 从已验证的 `before_after_repair_exhibit` 补齐 repair/auto-recovery/rollback 审阅计数，但固定 `semantic_gate=false`、`generated_draft_semantic_pass=false`、`translation_coverage_numerator=0`。
+
+English: `public-release-packet.json` also requires top-level `progress_delta_ledger` and `summary.progress_delta_ledger` to match the bound `judge-milestone-bundle.json`; the ledger separates capability delta, governance/evidence delta, and workflow delta for reviewer navigation. When `workflow_metrics.repair_activity` is sparse, `workflow_delta` may fill repair/auto-recovery/rollback review counts from verified `before_after_repair_exhibit` evidence by entrypoint, while staying fixed at `semantic_gate=false`, `generated_draft_semantic_pass=false`, and `translation_coverage_numerator=0`.
 
 中文：route decision 只决定候选生成路径和上下文预算；validation profile 决定本次运行必须通过的 gates。任何 Agent、C2Rust、手写规则或 Rust 编译通过的输出，只有在 selected validation profile 通过且没有 skipped required gate 时，才可以被绑定为 semantic pass。
 

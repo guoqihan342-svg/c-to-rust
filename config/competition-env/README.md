@@ -28,9 +28,14 @@
 - CMake：未找到
 - clang：默认不要求；typed IR 比赛路线需要显式安装 clang 或使用项目内置的 vendored clang
 
+## FlashDB 源码 Pin
+
+`environment.json.source_pins.flashdb` 固定比赛打分源码为 `https://gitcode.com/xwxf/FlashDB.git`、`competition` 分支、commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe`，对应检出命令为 `git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe`。新的 competition-targeted extraction 必须传 `--source-repository`、`--source-branch` 和 `--require-source-commit`，让 `extract_source_slice.py` 在生成 slice spec 前校验实际 checkout。
+
 ## 文件说明
 
 - `environment.json`：机器可读环境基线、镜像源和适配策略。
+- `bundle-manifest.json`：比赛配置目录的机器可读归档合同，hash 绑定环境 profile、镜像配置、shell 入口、planned batch profiles、judge entrypoint index、review checklist 和 OpenCode runbook；`validate_judge_entrypoints` 会校验它，但它不是 semantic gate。
 - `apt/sources.list`：Ubuntu Noble APT 镜像配置。
 - `pip/pip.conf`：pip 镜像配置。
 - `npm/.npmrc`：npm registry 配置。
@@ -38,8 +43,17 @@
 - `rust/rust-toolchain.toml`：Rust `1.96.0` 工具链声明，不在仓库根目录自动生效。
 - `env.sh`：比赛机 shell 会话环境变量入口（含本地 clang 自动探测）。
 - `toolchain-check.sh`：比赛机环境自检脚本。
-- `smoke.sh`：Linux/WSL/CI 轻量 smoke 入口，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要。
-- `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计。
+- `smoke.sh`：Linux/WSL/CI 轻量 smoke wrapper，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要；需要显式 `run-id` 或 timeout 时直接使用 Python 入口。
+- `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，在 `auto_retry=true` 时启用 `run-plan --auto-retry`，并用 `max_workers` fan-out 独立 worker。
+- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 competition environment smoke、FlashDB before/after demo、显式多 worker evaluate profile 和 OpenCode 多 worker evaluate profile。默认不传 `--entrypoint-id` 时会按配置顺序运行全部入口，并写出带 `summary` 的 `judge-entrypoints-run-report.json`；聚焦 before/after 时再加 `--entrypoint-id before_after_judge_demo`。只校验索引时可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、配置归档 bundle、OpenCode launch policy、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 smoke summary、vendored-clang verification artifact、context-pack、agent-index、resume-manifest、judge-evidence-index、route-governance metrics schema、OpenCode preflight/worker launch policy 与 worker 索引一致性。`resume-manifest.json` 是两个 `evaluate --profile` 入口的 current-state 续跑索引，绑定 SQLite ledger、context pack、agent index、worker summaries、repair hints 和 resume entrypoints；它不是 executor，也不是 semantic gate。judge-evidence-index 深校验要求 `harness_architecture.context_pack/agent_index` 显式绑定 expected artifacts 和 `evidence_artifact_refs`，防止架构图展示的上下文/agent 索引与评委索引脱节；artifact JSON portability 扫描还会拒绝 Windows、WSL 和 Linux 本机绝对路径，只有诊断 host metadata 与 merge execution trace 的白名单位置可保留。smoke summary 深校验会把 `profile_id/profile_sha256` 绑定到 `environment_profile`，把 `proof_class/run_id` 绑定到 entrypoint，并拒绝 CI/WSL/Windows 本地证据或带 `proof-class-limiting` deviation 的 summary 标成 `competition-exact`；vendored-clang verification 深校验会把 `status/reason/final_gate/clang_lane_verified` 与 smoke summary 绑定，防止 `missing_clang_path` 被误读成 clang lane verified。全量 runner 成功时还会写出 `target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json` 和同目录 `milestone-release-notes.md`；bundle 把 run report、readiness report、post-run expected artifacts、workflow metrics、route-governance metrics、OpenCode runtime、`core_translation_quality`、`harness_architecture_summary`、`claim_scope`、`proof_classes`、`publishability`、`quantitative_evaluation`、`publication_manifest`、`known_gaps`、`must_not_claim` 和 `reproduction_commands` 绑定成外部评估索引，Markdown release notes 只是该索引的人类可读 public packet。`quantitative_evaluation` 提供 workflow/route/blocked repair/unsafe 和 baseline comparison 的机器可读 scorecard，`publication_manifest` 还会集中绑定 repo commit、FlashDB source pin、judge config、competition config archive、run-report/bundle、supported subset、known gaps/non-goals 和 claim boundary。它们不是 semantic gate，也不增加 translation coverage numerator；release notes 和 resume manifest 是运行输出，不加入 `bundle-manifest.json`。
+- 非 smoke summary 深校验：启用 `--require-local-artifacts` 时，`validate_judge_entrypoints` 会在 entrypoint identity 检查后，把每个非 smoke `competition_summary` 交给 `validate_competition_run_summary.py`，防止 hash 正确但 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则或 slice counts 漂移的 summary 通过。
+- C2Rust baseline 计分边界：route-governance metrics 会从 `*-c2rust-baseline-manifest.json` 汇总 generated/skipped/output/compile 状态，milestone bundle 会按 evidence root 去重后放入 `quantitative_evaluation.baseline_comparison.raw_c2rust.c2rust_baseline_rollup`，release notes 会展示 manifest/source/compile-pass 数；这些字段不是 semantic gate，也不把 C2Rust baseline 编译成功升级为 semantic pass。
+- Harness contract matrix：`judge-milestone-bundle.json` 现在公开 `harness_architecture_summary.contract_matrix`，按 `plan/translate/verify/repair/report` 汇总 roles、artifacts、validators 和非语义边界。schema 保持每一行 `semantic_gate=false`、`chat_output_is_evidence=false`、`translation_coverage_numerator=0`；OpenCode run-plan graph contract 也会公开 `opencode_worker.opencode_variant`。
+- 公开 release packet 输出：成功的全量 runner 会生成 `target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json`，hash 绑定 run report、readiness report、milestone bundle、Markdown release notes 和 competition config archive，并由 `validation.tools.validate_public_release_packet` 校验 schema、hash、claim boundary、本机路径泄漏、packet 中复制的 `publication_manifest`、`quantitative_evaluation`、`progress_delta_ledger`、`summary.workflow_metrics`、`summary.progress_delta_ledger`、known gaps、复现命令和禁止声明是否与被绑定的 milestone bundle 一致，以及 release notes 是否等于该 bundle 渲染出的 Markdown。它只是评委发布包索引，不是 semantic gate，也不加入 `bundle-manifest.json`。
+- S4 progress delta：milestone bundle 现在生成 `progress_delta_ledger`，把 capability delta、governance/evidence delta 和 workflow repair delta 分开；当 workflow repair activity 稀疏时，该账本会按 entrypoint 从已验证的 `before_after_repair_exhibit` 补齐 repair、auto-recovery、rollback evidence 和 source 计数。public release packet 会复制该账本，release notes 会生成 `Progress Delta Ledger` 表。该视图只服务评委审阅，不改变 semantic gate、generated draft pass 或 translation coverage numerator。
+- OpenCode 诊断脱敏：worker repair diagnostics 在写入 repair hint、agent index、resume manifest 和 judge evidence 前，会把 stdout/stderr/python traceback 中的 Windows、WSL、Linux 本机绝对路径替换为 `<local-absolute-path>`；路径治理失败会作为 harness 证据 fail-closed，而不是进入公开发布包。
+- `review-checklists/`：milestone/release review gate 输入目录；`flashdb-harness-internal-review.json` 记录 harness architecture、unsafe ledger、coverage matrix、真实切片证据、公开 claim boundary 和已知拒绝项的人工 review 覆盖。`milestone_release_report.py --review-checklist ...` 会把它作为 release readiness 输入；`judge_demo.py --review-checklist ...` 会在 out-root 下生成 `summary/milestone-review-checklist.json` 副本并由 `harness/judge-evidence-index.json` 绑定原始输入与副本；review checklist 不是 semantic gate。
+- `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计；OpenCode preflight report 必须同时匹配当前 `run_id` 和 launch policy，旧 run 的 preflight 不可复用。
 
 ## Clang 策略：vendored 本地分发
 
@@ -79,7 +93,7 @@ python validation/tools/verify_vendored_clang.py \
 
 - 默认构建、测试和验证路径不能依赖 Go。
 - 默认构建、测试和验证路径不能依赖 CMake；C/C++ oracle 路径优先使用 `gcc`、`g++` 和 GNU Make。
-- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，优先用 `CLANG_PATH` 环境变量；未设置时自动搜索 repo root 下的 `tools/llvm/bin/clang-18`、`tools/llvm/bin/clang` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。`env.sh` 已包含自动探测逻辑，`toolchain-check.sh` 会在找到 clang 时执行最小 TU smoke。
+- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，`CLANG_PATH` 可以是 `PATH` 上的命令名，也可以是 repo 内路径；未设置时自动搜索 repo root 下的 `tools/llvm/bin/clang-18`、`tools/llvm/bin/clang` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。带路径分隔符的 `CLANG_PATH` 如果解析到 repo 外，会以 `invalid_clang_path_outside_repo` fail-closed。`env.sh` 已包含自动探测逻辑，`toolchain-check.sh` 会在找到 clang 时执行最小 TU smoke。
 - Cargo 华为镜像通过 `env.sh` 设置 `CARGO_HOME=config/competition-env/cargo` 激活；不要只检查 `cargo/config.toml` 存在，也不要默认修改用户全局 Cargo 配置。
 - Rust 代码必须兼容 stable Rust `1.96.0`，不得引入 nightly-only 功能。
 - Python 脚本按 Python `3.12.3` / pip `24.0` 适配。
@@ -108,16 +122,65 @@ bash config/competition-env/smoke.sh ci-approximation target/competition-smoke
 python validation/tools/run_competition_smoke.py \
   --proof-class ci-approximation \
   --run-id core-ci-smoke \
+  --timeout-seconds 600 \
   --out-root target/competition-smoke
 ```
 
-smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；`competition-exact` 会把 vendored clang verifier 作为 required gate。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
+评委入口中的 `competition_environment_smoke` 使用同一 runner，但输出到 `target/competition-smoke-flashdb-judge-entrypoint`；`competition-smoke-summary.json` 会声明 `claim_boundary.semantic_gate=false`，只证明环境和轻量 evidence gate，不声明新的 semantic pass。`validate_judge_entrypoints --require-local-artifacts` 会校验该 summary 的 `profile_id/profile_sha256/proof_class/run_id` 与 `flashdb-harness.json` 一致，并把 `vendored-clang-verification.json` 的 `status/reason/final_gate/clang_lane_verified` 与 summary 绑定，同时拒绝非 repo-relative 的 `clang.path`、expected artifact path、smoke artifact path、judge-evidence-index 架构区缺失的 context/agent refs、artifact JSON 中的 Windows/WSL/Linux 本机绝对路径，以及 `commands.jsonl.command` 中的本机绝对路径；CI/WSL/Windows 本地运行结果冒充 `competition-exact`、缺失 `COMPETITION_EXACT_HOST=1` exact-host attestation、非 CI 冒充 `ci-approximation`、非 WSL 冒充 `wsl-local-simulation`、缺 clang 却把 clang lane 标成 verified、把本机绝对 clang 路径写进评委 artifact、复用旧 command log，或在 command log 中泄露带空格的宿主 Python 可执行路径、shell fragment 内的 `/mnt/...`、`\\wsl$...` 或 `//wsl.localhost/...` 宿主路径，都会 fail-closed。
+
+smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。Python 入口默认 per-step timeout 为 600 秒；超时会写入 `timeout_policy` 和对应 step，exit code 固定为 124，且必须触发 final gate failure，`validate_judge_entrypoints --require-local-artifacts` 会拒绝缺失或漂移的 timeout policy，拒绝非 repo-relative 或包含 parent traversal 的 expected artifact/smoke artifact path，并读取 `commands.jsonl` 拒绝 command 数组中的本机绝对路径；runner 在写 command log 前会把 shell fragment 中的 Windows/Linux/WSL 宿主路径归一为 basename。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；带路径分隔符的 `CLANG_PATH` 若解析到 repo 外，会标为 `invalid_clang_path_outside_repo` 并 fail-closed；`competition-exact` 会把 vendored clang verifier 作为 required gate。缺失 required C compiler（如 `gcc`/`g++`）不是普通 proof-class 漂移，summary step 会记录 `failure_class=required_c_compiler_missing` 并 fail-closed。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认同时要求 `--confirm-competition-exact` 和 `COMPETITION_EXACT_HOST=1`，且 runner 会拒绝在非 CI 上标记 `ci-approximation`、在非 WSL 上标记 `wsl-local-simulation`。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
+
+评委一键 harness runner：
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --entrypoint-id before_after_judge_demo \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --dry-run
+```
+
+runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后才执行入口命令；命令成功后再调用本地 artifact 深校验并写出 readiness report。run report 会内嵌 `competition_config_archive`，把 `config/competition-env` 当前文件快照按 path/sha256 绑定；validator 还会校验 `bundle-manifest.json` 的目录级合同。两个 `evaluate --profile` 入口会在 `harness/resume-manifest.json` 写出 current-state 续跑索引，并由 validator 校验 repo-relative path、context/agent sha、SQLite ledger、worker_count、`resume_manifest.workers` 与 context-pack/agent-index worker 集合及 artifact 字段一致性，以及 `semantic_gate=false` / `translation_coverage_numerator=0` 边界。非 dry-run 成功执行时，它还会在 run report 同目录写出 `judge-milestone-bundle.json` 和 `milestone-release-notes.md`；bundle 会 hash 绑定 run report 和 validator-owned artifact refs，并把 focused run 标记为不可作为外部全量 milestone 发布；release notes 只读取 bundle 后渲染 Markdown，不反写 bundle hash 链。该 bundle 的一屏字段包括 `core_translation_quality`、`harness_architecture_summary`、`route_governance_metrics`、`evidence_cost_retention`、proof-class rollup、publishability、quantitative evaluation scorecard、publication manifest、unsafe reduction scope、OpenCode evidence policy、known gaps、must-not-claim 列表和复现命令；这些字段只服务评委快速审阅，不扩大语义接受范围。`quantitative_evaluation` 只从已有 rollup 派生 workflow units、outcome counts、unsafe reduction、repair activity 和 baseline comparison；public release packet 现在也会机器可读地复制该 scorecard 和 `summary.workflow_metrics.repair_activity`，并由 validator 与 bundle 比对。`publication_manifest` 是外部发布包索引，bundle 只写自身 repo-relative path，不内嵌自身 sha256，避免递归 hash。`validation/tools/milestone_release_notes.py` 把该公开索引渲染成人类可读 release notes，并在渲染前拒绝 semantic gate、translator-generated pass、coverage numerator、raw C2Rust semantic acceptance 或 OpenCode chat evidence 等越界声明。`validation/judge-milestone-bundle.schema.json` 是该公开索引的机器合同：run report 必须声明 `schema_version=1` / `report_kind=judge-entrypoints-run-report`，proof class 以 validator-owned `validation.proof_class_contract` 为准，缺失或冲突时 bundle 会 fail-closed。它只是编排证据，语义接受仍只来自 competition summary、workflow metrics、oracle evidence 和 validators。
+
+可复用 planned batch profile 入口：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
+  --run-id flashdb-fdb-utils-local \
+  --out-root target/competition-out
+```
+
+该 profile 只是把 `init-run`、`plan-source-file` 或显式 `workers[]` 计划、`run-plan --execute-merge` 固化为一条命令；语义接受仍只看最终 `competition-run-summary.json`、workflow metrics 和 validator。当前 FlashDB profile 复用已提交 accepted evidence binding，明确记录 `generated_draft_semantic_pass=false`，不能解读为重新生成 Rust draft 自身通过 semantic gate。before/after、accepted-evidence 和 demo 展示 profile 使用 `auto_retry=true` / `max_workers=4`；显式 multi-worker evaluate 与 OpenCode evaluate profile 使用 `auto_retry=false` / `max_workers=2` 来展示确定性 fan-out/fan-in。retry 只允许失败 worker 消费已落盘 repair hint 并在 5 轮上限内重试，`max_workers` 是 LangGraph 风格 worker fan-out 和 planner 顺序 fan-in；`--mode opencode` 还会对第一条 shell command 前发生的 OpenCode `database is locked` 瞬时启动锁做窄口径重试，并把 `opencode_process_retries` 写入证据，但不会绕过 contract verification、summary 或 validator。两类 retry 都不能替代 validator。
+
+当 profile 启用 `emit_route_governance_metrics_report=true` 时，`run-batch-profile` / `evaluate --profile` 还会绑定 `summary/route-governance-metrics-report.json`；`validation/route-governance-metrics.schema.json` 校验该 report 的 claim boundary、denominators、分离计数、S2 workflow 摘要和 `retention_policy`。该 report 与 `retention_policy` 是公开叙述约束和 artifact 保留合同，不是 semantic gate，也不增加 `translation_coverage_numerator`。
+
+评委 before/after demo profile：
+
+```bash
+python -B -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json \
+  --run-id competition-demo-before-after-exhibit \
+  --out-root target/competition-out-demo-before-after-exhibit
+
+python -B validation/tools/validate_competition_run_summary.py \
+  --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
+```
+
+该 profile 会生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json`，并绑定 `validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json`。它展示 accepted-evidence before/after artifact、unsafe 3→0、`auto_retry=true` 和 harness 五阶段 contract；`generated_draft_semantic_pass=false`，且不会增加 `translation_coverage_numerator`。
 
 clang typed-IR 比赛路线是显式 opt-in：
 
 ```bash
-# 方式一：显式设置 CLANG_PATH
-export CLANG_PATH="$(command -v clang)"
+# 方式一：通过 PATH 显式设置 CLANG_PATH，不把本机绝对路径写进证据
+export CLANG_PATH="clang"
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 
 # 方式二：使用项目内置 clang（env.sh 已自动探测 tools/llvm/bin/clang）
@@ -125,10 +188,12 @@ source config/competition-env/env.sh
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 ```
 
+评委证据或已提交 evidence 不应使用 `CLANG_PATH="$(command -v clang)"`：结构化 verifier 会拒绝解析到 repo 外的 path-like `CLANG_PATH`，并把 repo-local clang 路径在命令日志中归一为相对路径。
+
 只传 `--emit-clang-lowering-report` 仍是诊断模式；缺 clang 时会产出 unavailable 报告，不会把默认非 clang lane 改成失败。
 
 如果需要把包管理器配置安装到用户目录，按本目录内对应文件同步到工具默认位置；仓库不会自动修改用户全局配置。
 
 ## 与 validation 目录的关系
 
-`validation/environment-profiles/huawei-competition-ubuntu-24.04/` 是历史兼容入口。新的默认配置入口是本目录；验证 evidence 可以保留旧路径作为兼容引用，但新脚本默认应使用 `config/competition-env/environment.json`。
+`validation/environment-profiles/huawei-competition-ubuntu-24.04/` 现在只是 README-only 历史 redirect。新的默认配置入口是本目录；验证 evidence 可以保留旧路径作为历史引用，但新脚本必须使用 `config/competition-env/environment.json`。

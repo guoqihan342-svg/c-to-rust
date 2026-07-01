@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "target_id": "flashdb",
+  "slice_id": "real-fdb-calc-crc32",
+  "scan_method": "bounded_reviewed_before_after_artifact_scan",
+  "baseline": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
+    "sha256": "e22aff0680395c2f1e9089f749baff18581e661524d1149655e65747a2c27ef1",
+    "first_party_non_test_unsafe_count": 2,
+    "findings": [
+      {
+        "kind": "unsafe_fn",
+        "symbol": "fdb_calc_crc32",
+        "reason": "baseline accepts a raw pointer and size like the C slice boundary"
+      },
+      {
+        "kind": "unsafe_block",
+        "symbol": "fdb_calc_crc32",
+        "reason": "baseline dereferences buf.add(index)"
+      }
+    ]
+  },
+  "final": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-safe.rs",
+    "sha256": "5720f15bcf2969abca55b5fb6ab781bd626bb9a54eaedac0769365578aa29b40",
+    "first_party_non_test_unsafe_count": 0,
+    "findings": []
+  },
+  "unsafe_reduction": {
+    "status": "measured",
+    "baseline_total_unsafe": 2,
+    "current_total_unsafe": 0,
+    "reduced_by": 2,
+    "ratio": 0.0
+  },
+  "claim_boundary": {
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "baseline_source": "reviewed unsafe baseline derived from the real C slice signature; C2Rust baseline output is still skipped",
+    "final_semantic_evidence": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json"
+  }
+}

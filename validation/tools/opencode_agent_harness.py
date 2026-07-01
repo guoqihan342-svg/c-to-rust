@@ -10,20 +10,50 @@ and the existing validators.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
+import shlex
+import shutil
 import sqlite3
+import subprocess
+import sys
 import time
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools.extract_source_slice import find_matching, mask_comments_and_strings
+from validation.tools import route_governance_metrics_report, validate_competition_run_summary
+
 PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
 DB_REL_PATH = Path("state") / "opencode-agent-harness.sqlite3"
 SCHEMA_VERSION = 1
 PROFILE_ID = "huawei-competition-ubuntu-24.04"
+REPAIR_ROUND_CAP = 5
+REPAIR_LOG_TAIL_CHARS = 4096
+LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
+    r"(?<![A-Za-z0-9_])(?:"
+    r"[A-Za-z]:[\\/][^\s\"'`,;)]*|"
+    r"/mnt/[A-Za-z]/[^\s\"'`,;)]*|"
+    r"/home/[^\s\"'`,;)]*|/Users/[^\s\"'`,;)]*|/tmp/[^\s\"'`,;)]*|/var/[^\s\"'`,;)]*|"
+    r"\\\\wsl\$\\[^\s\"'`,;)]*|"
+    r"//wsl\$/[^\s\"'`,;)]*|"
+    r"\\\\wsl\.localhost\\[^\s\"'`,;)]*|"
+    r"//wsl\.localhost/[^\s\"'`,;)]*"
+    r")"
+)
+OPENCODE_WORKER_EVIDENCE_FIELDS = (
+    "handoff_contract",
+    "opencode_session_evidence",
+    "opencode_contract_verification",
+    "opencode_preflight_report",
+)
 
 
 def main() -> int:
@@ -46,14 +76,143 @@ def main() -> int:
     assign_parser.add_argument("--target-id", required=True)
     assign_parser.add_argument("--slice-id", required=True)
     assign_parser.add_argument("--source-repo-root", type=Path, required=True)
+    assign_parser.add_argument("--source-repository")
+    assign_parser.add_argument("--source-branch")
     assign_parser.add_argument("--source-file", required=True)
     assign_parser.add_argument("--function", required=True)
     assign_parser.add_argument("--source-commit", required=True)
+    assign_parser.add_argument("--require-source-commit")
     assign_parser.add_argument("--compiler-command-source")
     assign_parser.add_argument("--include-path", action="append", default=[])
     assign_parser.add_argument("--define", action="append", default=[])
+    assign_parser.add_argument("--reuse-accepted-evidence", action="store_true")
+    assign_parser.add_argument("--accepted-evidence-root")
+    assign_parser.add_argument("--slice-spec")
     assign_parser.add_argument("--out-root", type=Path, required=True)
     assign_parser.add_argument("--lease-ttl-seconds", type=int, default=3600)
+
+    plan_parser = subcommands.add_parser("plan-source-file")
+    plan_parser.add_argument("--db", type=Path, required=True)
+    plan_parser.add_argument("--run-id", required=True)
+    plan_parser.add_argument("--target-id", required=True)
+    plan_parser.add_argument("--source-repo-root", type=Path, required=True)
+    plan_parser.add_argument("--source-repository")
+    plan_parser.add_argument("--source-branch")
+    plan_parser.add_argument("--source-file", required=True)
+    plan_parser.add_argument("--function", action="append", dest="functions", default=[])
+    plan_parser.add_argument("--source-commit", required=True)
+    plan_parser.add_argument("--require-source-commit")
+    plan_parser.add_argument("--slice-spec", action="append", dest="slice_specs", default=[])
+    plan_parser.add_argument("--compiler-command-source")
+    plan_parser.add_argument("--include-path", action="append", default=[])
+    plan_parser.add_argument("--define", action="append", default=[])
+    plan_parser.add_argument("--reuse-accepted-evidence", action="store_true")
+    plan_parser.add_argument("--accepted-evidence-root")
+    plan_parser.add_argument("--out-root", type=Path, required=True)
+    plan_parser.add_argument("--slice-id-prefix", required=True)
+    plan_parser.add_argument("--worker-prefix", default="worker")
+    plan_parser.add_argument("--limit", type=int)
+    plan_parser.add_argument("--lease-ttl-seconds", type=int, default=3600)
+
+    run_plan_parser = subcommands.add_parser("run-plan")
+    run_plan_parser.add_argument("--db", type=Path, required=True)
+    run_plan_parser.add_argument("--run-id", required=True)
+    run_plan_parser.add_argument("--plan", type=Path, required=True)
+    run_plan_parser.add_argument("--out-root", type=Path, default=Path("target/competition-out"))
+    run_plan_parser.add_argument(
+        "--proof-class",
+        required=True,
+        choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
+    )
+    run_plan_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    run_plan_parser.add_argument("--opencode-command", default="opencode")
+    run_plan_parser.add_argument("--opencode-model")
+    run_plan_parser.add_argument("--opencode-agent")
+    run_plan_parser.add_argument("--opencode-variant", default="max")
+    run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_plan_parser.add_argument("--opencode-preflight-report", type=Path)
+    run_plan_parser.add_argument("--execute-merge", action="store_true")
+    run_plan_parser.add_argument("--auto-retry", action="store_true")
+    run_plan_parser.add_argument("--max-workers", type=int, default=1)
+
+    batch_profile_parser = subcommands.add_parser("run-batch-profile")
+    batch_profile_parser.add_argument("--profile", type=Path, required=True)
+    batch_profile_parser.add_argument("--run-id", required=True)
+    batch_profile_parser.add_argument("--out-root", type=Path, required=True)
+
+    evaluate_parser = subcommands.add_parser("evaluate")
+    evaluate_parser.add_argument("--profile", type=Path)
+    evaluate_parser.add_argument("--run-id", required=True)
+    evaluate_parser.add_argument("--target-id")
+    evaluate_parser.add_argument("--source-repo-root", type=Path)
+    evaluate_parser.add_argument("--source-repository")
+    evaluate_parser.add_argument("--source-branch")
+    evaluate_parser.add_argument("--source-file")
+    evaluate_parser.add_argument("--function", action="append", dest="functions", default=[])
+    evaluate_parser.add_argument("--source-commit")
+    evaluate_parser.add_argument("--require-source-commit")
+    evaluate_parser.add_argument("--slice-spec", action="append", dest="slice_specs", default=[])
+    evaluate_parser.add_argument("--compiler-command-source")
+    evaluate_parser.add_argument("--include-path", action="append", default=[])
+    evaluate_parser.add_argument("--define", action="append", default=[])
+    evaluate_parser.add_argument("--reuse-accepted-evidence", action="store_true")
+    evaluate_parser.add_argument("--accepted-evidence-root")
+    evaluate_parser.add_argument("--out-root", type=Path, required=True)
+    evaluate_parser.add_argument("--slice-id-prefix")
+    evaluate_parser.add_argument("--worker-prefix", default="worker")
+    evaluate_parser.add_argument("--limit", type=int)
+    evaluate_parser.add_argument(
+        "--proof-class",
+        choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
+    )
+    evaluate_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    evaluate_parser.add_argument("--opencode-command", default="opencode")
+    evaluate_parser.add_argument("--opencode-model")
+    evaluate_parser.add_argument("--opencode-agent")
+    evaluate_parser.add_argument("--opencode-variant", default="max")
+    evaluate_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    evaluate_parser.add_argument("--opencode-preflight-report", type=Path)
+    evaluate_parser.add_argument("--no-execute-merge", action="store_true")
+    evaluate_parser.add_argument("--no-auto-retry", action="store_true")
+    evaluate_parser.add_argument("--max-workers", type=int, default=1)
+
+    preflight_parser = subcommands.add_parser("opencode-preflight")
+    preflight_parser.add_argument("--run-id", required=True)
+    preflight_parser.add_argument("--out-root", type=Path, required=True)
+    preflight_parser.add_argument("--opencode-command", default="opencode")
+    preflight_parser.add_argument("--opencode-model")
+    preflight_parser.add_argument("--opencode-agent")
+    preflight_parser.add_argument("--opencode-variant", default="max")
+    preflight_parser.add_argument("--opencode-skip-permissions", action="store_true")
+
+    preflight_marker_parser = subcommands.add_parser("write-preflight-marker")
+    preflight_marker_parser.add_argument("--marker", type=Path, required=True)
+    preflight_marker_parser.add_argument("--run-id", required=True)
+
+    run_parser = subcommands.add_parser("run-worker")
+    run_parser.add_argument("--db", type=Path, required=True)
+    run_parser.add_argument("--run-id", required=True)
+    run_parser.add_argument("--worker-id", required=True)
+    run_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    run_parser.add_argument("--opencode-command", default="opencode")
+    run_parser.add_argument("--opencode-model")
+    run_parser.add_argument("--opencode-agent")
+    run_parser.add_argument("--opencode-variant", default="max")
+    run_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_parser.add_argument("--opencode-preflight-report", type=Path)
+
+    retry_parser = subcommands.add_parser("retry-worker")
+    retry_parser.add_argument("--db", type=Path, required=True)
+    retry_parser.add_argument("--run-id", required=True)
+    retry_parser.add_argument("--worker-id", required=True)
+    retry_parser.add_argument("--hint-id")
+    retry_parser.add_argument("--mode", choices=["deterministic", "opencode"], default="deterministic")
+    retry_parser.add_argument("--opencode-command", default="opencode")
+    retry_parser.add_argument("--opencode-model")
+    retry_parser.add_argument("--opencode-agent")
+    retry_parser.add_argument("--opencode-variant", default="max")
+    retry_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    retry_parser.add_argument("--opencode-preflight-report", type=Path)
 
     record_parser = subcommands.add_parser("record-worker-summary")
     record_parser.add_argument("--db", type=Path, required=True)
@@ -89,14 +248,169 @@ def main() -> int:
             target_id=args.target_id,
             slice_id=args.slice_id,
             source_repo_root=args.source_repo_root,
+            source_repository=args.source_repository,
+            source_branch=args.source_branch,
             source_file=args.source_file,
             function=args.function,
             source_commit=args.source_commit,
+            require_source_commit=args.require_source_commit,
             compiler_command_source=args.compiler_command_source,
             include_paths=args.include_path,
             defines=args.define,
+            reuse_accepted_evidence=args.reuse_accepted_evidence,
+            accepted_evidence_root=args.accepted_evidence_root,
+            slice_spec=args.slice_spec,
             out_root=args.out_root,
             lease_ttl_seconds=args.lease_ttl_seconds,
+        )
+    elif args.command == "plan-source-file":
+        result = plan_source_file(
+            db_path=args.db,
+            run_id=args.run_id,
+            target_id=args.target_id,
+            source_repo_root=args.source_repo_root,
+            source_repository=args.source_repository,
+            source_branch=args.source_branch,
+            source_file=args.source_file,
+            functions=args.functions,
+            source_commit=args.source_commit,
+            require_source_commit=args.require_source_commit,
+            slice_specs=args.slice_specs,
+            compiler_command_source=args.compiler_command_source,
+            include_paths=args.include_path,
+            defines=args.define,
+            reuse_accepted_evidence=args.reuse_accepted_evidence,
+            accepted_evidence_root=args.accepted_evidence_root,
+            out_root=args.out_root,
+            slice_id_prefix=args.slice_id_prefix,
+            worker_prefix=args.worker_prefix,
+            limit=args.limit,
+            lease_ttl_seconds=args.lease_ttl_seconds,
+        )
+    elif args.command == "run-plan":
+        result = run_plan(
+            db_path=args.db,
+            run_id=args.run_id,
+            plan_path=args.plan,
+            out_root=args.out_root,
+            proof_class=args.proof_class,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
+            execute_merge=args.execute_merge,
+            auto_retry=args.auto_retry,
+            max_workers=args.max_workers,
+        )
+    elif args.command == "run-batch-profile":
+        result = run_batch_profile(
+            profile_path=args.profile,
+            run_id=args.run_id,
+            out_root=args.out_root,
+        )
+    elif args.command == "evaluate":
+        if args.profile:
+            batch_result = run_batch_profile(
+                profile_path=args.profile,
+                run_id=args.run_id,
+                out_root=args.out_root,
+            )
+            result = write_evaluate_profile_report(
+                batch_result=batch_result,
+                profile_path=args.profile,
+                run_id=args.run_id,
+                out_root=args.out_root,
+            )
+        else:
+            missing = [
+                flag
+                for flag, value in [
+                    ("--target-id", args.target_id),
+                    ("--source-repo-root", args.source_repo_root),
+                    ("--source-file", args.source_file),
+                    ("--source-commit", args.source_commit),
+                    ("--proof-class", args.proof_class),
+                ]
+                if value is None
+            ]
+            if missing:
+                parser.error("evaluate requires " + ", ".join(missing) + " unless --profile is provided")
+            result = evaluate(
+                run_id=args.run_id,
+                target_id=args.target_id,
+                source_repo_root=args.source_repo_root,
+                source_repository=args.source_repository,
+                source_branch=args.source_branch,
+                source_file=args.source_file,
+                functions=args.functions,
+                source_commit=args.source_commit,
+                require_source_commit=args.require_source_commit,
+                slice_specs=args.slice_specs,
+                compiler_command_source=args.compiler_command_source,
+                include_paths=args.include_path,
+                defines=args.define,
+                reuse_accepted_evidence=args.reuse_accepted_evidence,
+                accepted_evidence_root=args.accepted_evidence_root,
+                out_root=args.out_root,
+                slice_id_prefix=args.slice_id_prefix,
+                worker_prefix=args.worker_prefix,
+                limit=args.limit,
+                proof_class=args.proof_class,
+                mode=args.mode,
+                opencode_command=args.opencode_command,
+                opencode_model=args.opencode_model,
+                opencode_agent=args.opencode_agent,
+                opencode_variant=args.opencode_variant,
+                opencode_skip_permissions=args.opencode_skip_permissions,
+                opencode_preflight_report=args.opencode_preflight_report,
+                execute_merge=not args.no_execute_merge,
+                auto_retry=not args.no_auto_retry,
+                max_workers=args.max_workers,
+            )
+    elif args.command == "opencode-preflight":
+        result = run_opencode_preflight(
+            out_root=args.out_root,
+            run_id=args.run_id,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+        )
+    elif args.command == "write-preflight-marker":
+        result = write_opencode_preflight_marker(
+            marker_path=args.marker,
+            run_id=args.run_id,
+        )
+    elif args.command == "run-worker":
+        result = run_worker(
+            db_path=args.db,
+            run_id=args.run_id,
+            worker_id=args.worker_id,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
+        )
+    elif args.command == "retry-worker":
+        result = retry_worker(
+            db_path=args.db,
+            run_id=args.run_id,
+            worker_id=args.worker_id,
+            hint_id=args.hint_id,
+            mode=args.mode,
+            opencode_command=args.opencode_command,
+            opencode_model=args.opencode_model,
+            opencode_agent=args.opencode_agent,
+            opencode_variant=args.opencode_variant,
+            opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_preflight_report=args.opencode_preflight_report,
         )
     elif args.command == "record-worker-summary":
         result = record_worker_summary(
@@ -122,7 +436,7 @@ def main() -> int:
         )
 
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0
+    return int(result.get("exit_code", 0)) if args.command in {"run-worker", "retry-worker", "run-plan", "run-batch-profile", "evaluate", "opencode-preflight"} else 0
 
 
 def init_run(
@@ -194,12 +508,19 @@ def assign_slice(
     target_id: str,
     slice_id: str,
     source_repo_root: Path,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
     source_file: str,
     function: str,
     source_commit: str,
+    source_sha256: str | None = None,
+    require_source_commit: str | None = None,
     compiler_command_source: str | None = None,
     include_paths: list[str] | None = None,
     defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    slice_spec: str | None = None,
     out_root: Path,
     lease_ttl_seconds: int = 3600,
     repo_root: Path = REPO_ROOT,
@@ -211,6 +532,12 @@ def assign_slice(
     compiler_command_source_rel = checked_relative_path(compiler_command_source).as_posix() if compiler_command_source else None
     include_path_values = [checked_relative_path(include_path).as_posix() for include_path in (include_paths or [])]
     define_values = list(defines or [])
+    accepted_evidence_root_rel = (
+        checked_relative_path(accepted_evidence_root).as_posix() if accepted_evidence_root else None
+    )
+    slice_spec_rel = checked_relative_path(slice_spec).as_posix() if slice_spec else None
+    slice_spec_sha256 = sha256_file(repo_path(Path(slice_spec_rel), repo_root=repo_root)) if slice_spec_rel else None
+    out_root_rel = repo_relative(out_root, repo_root=repo_root)
     resource_key = f"slice:{target_id}/{slice_id}"
     task_id = f"{run_id}:{worker_id}:{target_id}:{slice_id}"
     now = now_text()
@@ -220,7 +547,7 @@ def assign_slice(
         "run_id": run_id,
         "worker_id": worker_id,
         "role": "slice-worker",
-        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "out_root": out_root_rel,
         "lease": {
             "resource_key": resource_key,
             "ttl_seconds": lease_ttl_seconds,
@@ -236,15 +563,29 @@ def assign_slice(
         },
         "runner": {
             "command": "python validation/tools/run_competition.py",
-            "out_root": repo_relative(out_root, repo_root=repo_root),
+            "out_root": out_root_rel,
+            "reuse_accepted_evidence": reuse_accepted_evidence,
         },
     }
     if compiler_command_source_rel:
         assignment["slice"]["compiler_command_source"] = compiler_command_source_rel
+    if source_repository:
+        assignment["slice"]["source_repository"] = source_repository
+    if source_branch:
+        assignment["slice"]["source_branch"] = source_branch
+    if require_source_commit:
+        assignment["slice"]["require_source_commit"] = require_source_commit
+    if source_sha256:
+        assignment["slice"]["source_sha256"] = source_sha256
     if include_path_values:
         assignment["slice"]["include_paths"] = include_path_values
     if define_values:
         assignment["slice"]["defines"] = define_values
+    if accepted_evidence_root_rel:
+        assignment["runner"]["accepted_evidence_root"] = accepted_evidence_root_rel
+    if slice_spec_rel:
+        assignment["slice"]["slice_spec"] = slice_spec_rel
+        assignment["slice"]["slice_spec_sha256"] = slice_spec_sha256
     request = {
         "source_repo_root": source_repo_root_rel,
         "source_file": source_file_rel,
@@ -253,15 +594,29 @@ def assign_slice(
         "slice_id": slice_id,
         "source_commit": source_commit,
         "proof_class": run_proof_class(db_path, run_id),
-        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "out_root": out_root_rel,
         "run_id": f"{run_id}-{worker_id}",
     }
+    if source_repository:
+        request["source_repository"] = source_repository
+    if source_branch:
+        request["source_branch"] = source_branch
+    if require_source_commit:
+        request["require_source_commit"] = require_source_commit
+    if source_sha256:
+        request["source_sha256"] = source_sha256
     if compiler_command_source_rel:
         request["compiler_command_source"] = compiler_command_source_rel
     if include_path_values:
         request["include_paths"] = include_path_values
     if define_values:
         request["defines"] = define_values
+    if reuse_accepted_evidence:
+        request["reuse_accepted_evidence"] = True
+    if accepted_evidence_root_rel:
+        request["accepted_evidence_root"] = accepted_evidence_root_rel
+    if slice_spec_rel:
+        request["slice_specs"] = [slice_spec_rel]
 
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
@@ -271,6 +626,15 @@ def assign_slice(
         ).fetchone()
         if active_owner is not None and active_owner[0] != worker_id:
             raise SystemExit(f"active lease already exists for {resource_key}: {active_owner[0]}")
+        out_root_owner = connection.execute(
+            """
+            select agent_id from agents
+            where run_id=? and isolated_out_root=? and agent_id<>?
+            """,
+            (run_id, out_root_rel, worker_id),
+        ).fetchone()
+        if out_root_owner is not None:
+            raise SystemExit(f"isolated out_root already assigned for run {run_id}: {out_root_rel} by {out_root_owner[0]}")
 
         connection.execute(
             """
@@ -287,7 +651,7 @@ def assign_slice(
                 "opencode",
                 worker_id,
                 "slice-worker",
-                repo_relative(out_root, repo_root=repo_root),
+                out_root_rel,
                 "assigned",
                 now,
             ),
@@ -296,14 +660,17 @@ def assign_slice(
             """
             insert into slices(
               target_id, slice_id, source_repo_root_rel, source_file_rel,
-              function_name, source_commit, payload_json
+              function_name, source_commit, slice_spec_path, slice_spec_sha256,
+              payload_json
             )
-            values (?, ?, ?, ?, ?, ?, ?)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(target_id, slice_id) do update set
               source_repo_root_rel=excluded.source_repo_root_rel,
               source_file_rel=excluded.source_file_rel,
               function_name=excluded.function_name,
               source_commit=excluded.source_commit,
+              slice_spec_path=excluded.slice_spec_path,
+              slice_spec_sha256=excluded.slice_spec_sha256,
               payload_json=excluded.payload_json
             """,
             (
@@ -313,6 +680,8 @@ def assign_slice(
                 source_file_rel,
                 function,
                 source_commit,
+                slice_spec_rel,
+                slice_spec_sha256,
                 json.dumps(assignment["slice"], sort_keys=True),
             ),
         )
@@ -334,7 +703,7 @@ def assign_slice(
                 "migrate",
                 "assigned",
                 1,
-                json.dumps([repo_relative(out_root, repo_root=repo_root)], sort_keys=True),
+                json.dumps([out_root_rel], sort_keys=True),
                 now,
             ),
         )
@@ -362,6 +731,3194 @@ def assign_slice(
     return assignment
 
 
+def plan_source_file(
+    *,
+    db_path: Path,
+    run_id: str,
+    target_id: str,
+    source_repo_root: Path,
+    source_file: str,
+    source_commit: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    require_source_commit: str | None = None,
+    compiler_command_source: str | None = None,
+    include_paths: list[str] | None = None,
+    defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    functions: list[str] | None = None,
+    slice_specs: list[str] | None = None,
+    out_root: Path,
+    slice_id_prefix: str,
+    worker_prefix: str = "worker",
+    limit: int | None = None,
+    lease_ttl_seconds: int = 3600,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    source_repo_root_path = repo_path(source_repo_root, repo_root=repo_root)
+    source_repo_root_rel = repo_relative(source_repo_root_path, repo_root=repo_root)
+    source_file_rel = checked_relative_path(source_file).as_posix()
+    source_path = repo_path(source_repo_root_path / source_file_rel, repo_root=repo_root)
+    discovered_functions = discover_top_level_function_names(source_path.read_text(encoding="utf-8"))
+    slice_specs_by_function = load_slice_specs_by_function(
+        slice_specs or [],
+        target_id=target_id,
+        source_commit=source_commit,
+        repo_root=repo_root,
+    )
+    requested_functions = list(functions or [])
+    if requested_functions:
+        missing_functions = [function for function in requested_functions if function not in discovered_functions]
+        if missing_functions:
+            raise SystemExit(
+                f"requested functions not discovered in {source_file_rel}: {', '.join(missing_functions)}"
+            )
+        planned_functions = requested_functions
+    elif slice_specs_by_function:
+        planned_functions = [function for function in discovered_functions if function in slice_specs_by_function]
+    else:
+        planned_functions = discovered_functions
+    if limit is not None:
+        if limit < 1:
+            raise SystemExit("plan-source-file --limit must be positive")
+        planned_functions = planned_functions[:limit]
+    if not planned_functions:
+        raise SystemExit(f"no top-level function definitions discovered in {source_file_rel}")
+
+    source_sha256 = sha256_file(source_path)
+    units: list[dict[str, str]] = []
+    for index, function in enumerate(planned_functions, start=1):
+        function_slug = slug_id(function)
+        worker_id = f"{worker_prefix}-{index:03d}-{function_slug}"
+        slice_spec = slice_specs_by_function.get(function)
+        slice_id = str(slice_spec["slice_id"]) if slice_spec else f"{slice_id_prefix}-{function_slug}"
+        worker_out_root = out_root / "workers" / worker_id
+        assign_slice(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            target_id=target_id,
+            slice_id=slice_id,
+            source_repo_root=Path(source_repo_root_rel),
+            source_repository=source_repository,
+            source_branch=source_branch,
+            source_file=source_file_rel,
+            function=function,
+            source_commit=source_commit,
+            source_sha256=source_sha256,
+            require_source_commit=require_source_commit,
+            compiler_command_source=compiler_command_source,
+            include_paths=include_paths,
+            defines=defines,
+            reuse_accepted_evidence=reuse_accepted_evidence,
+            accepted_evidence_root=accepted_evidence_root,
+            slice_spec=str(slice_spec["path"]) if slice_spec else None,
+            out_root=worker_out_root,
+            lease_ttl_seconds=lease_ttl_seconds,
+            repo_root=repo_root,
+        )
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        units.append(
+            {
+                "worker_id": worker_id,
+                "slice_id": slice_id,
+                "function": function,
+                "out_root": repo_relative(worker_out_root, repo_root=repo_root),
+                "assignment_path": repo_relative(assignment_file_path(db_path, worker_id), repo_root=repo_root),
+                "request_path": repo_relative(request_path, repo_root=repo_root),
+                "source_repo_root": source_repo_root_rel,
+                "source_file": source_file_rel,
+                "source_commit": source_commit,
+                "source_sha256": source_sha256,
+            }
+        )
+        if require_source_commit:
+            units[-1]["require_source_commit"] = require_source_commit
+        if source_repository:
+            units[-1]["source_repository"] = source_repository
+        if source_branch:
+            units[-1]["source_branch"] = source_branch
+        if slice_spec:
+            units[-1]["slice_spec"] = str(slice_spec["path"])
+
+    plan_path = out_root / "harness" / "plans" / f"{target_id}-{slug_id(Path(source_file_rel).stem)}-workers.json"
+    plan = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "planned",
+        "run_id": run_id,
+        "target_id": target_id,
+        "source_repo_root": source_repo_root_rel,
+        "source_file": source_file_rel,
+        "source_sha256": source_sha256,
+        "source_commit": source_commit,
+        "slice_id_prefix": slice_id_prefix,
+        "worker_prefix": worker_prefix,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "units": units,
+    }
+    if require_source_commit:
+        plan["require_source_commit"] = require_source_commit
+    if source_repository:
+        plan["source_repository"] = source_repository
+    if source_branch:
+        plan["source_branch"] = source_branch
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="source-file-worker-plan",
+            path=plan_path,
+            status="planned",
+            semantic_role="worker-plan",
+            payload=plan,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
+        connection.commit()
+    return plan
+
+
+def plan_explicit_workers(
+    *,
+    db_path: Path,
+    run_id: str,
+    profile: dict[str, Any],
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    target_id = profile_required_string(profile, "target_id")
+    workers = profile_worker_list(profile)
+    units: list[dict[str, Any]] = []
+    seen_worker_ids: set[str] = set()
+    for worker in workers:
+        worker_id = profile_required_string(worker, "worker_id")
+        if worker_id in seen_worker_ids:
+            raise SystemExit(f"duplicate explicit worker_id in batch profile: {worker_id}")
+        seen_worker_ids.add(worker_id)
+        worker_target_id = profile_string(worker, "target_id", default=target_id)
+        if worker_target_id != target_id:
+            raise SystemExit(f"explicit worker target_id mismatch for {worker_id}: {worker_target_id} != {target_id}")
+        slice_id = profile_required_string(worker, "slice_id")
+        function = profile_required_string(worker, "function")
+        source_commit = profile_required_string(worker, "source_commit")
+        worker_out_root_text = profile_string(worker, "out_root")
+        worker_out_root = repo_path(Path(worker_out_root_text), repo_root=repo_root) if worker_out_root_text else out_root / "workers" / worker_id
+        source_repo_root = Path(profile_required_string(worker, "source_repo_root"))
+        source_file = profile_required_string(worker, "source_file")
+        source_repo_root_path = repo_path(source_repo_root, repo_root=repo_root)
+        source_repo_root_rel = repo_relative(source_repo_root_path, repo_root=repo_root)
+        source_file_rel = checked_relative_path(source_file).as_posix()
+        source_path = repo_path(source_repo_root_path / source_file_rel, repo_root=repo_root)
+        if not source_path.exists():
+            raise SystemExit(f"explicit worker source file not found for {worker_id}: {source_repo_root_rel}/{source_file_rel}")
+        source_sha256 = sha256_file(source_path)
+        source_repository = profile_string(worker, "source_repository", default=profile_string(profile, "source_repository"))
+        source_branch = profile_string(worker, "source_branch", default=profile_string(profile, "source_branch"))
+        slice_spec = profile_string(worker, "slice_spec")
+        if slice_spec:
+            slice_spec = load_explicit_worker_slice_spec(
+                slice_spec,
+                target_id=target_id,
+                slice_id=slice_id,
+                function=function,
+                source_commit=source_commit,
+                source_file=source_file_rel,
+                source_sha256=source_sha256,
+                source_repository=source_repository,
+                source_branch=source_branch,
+                repo_root=repo_root,
+            )
+        require_source_commit = profile_string(worker, "require_source_commit")
+        compiler_command_source = profile_string(worker, "compiler_command_source")
+        include_paths = profile_string_list(worker, "include_paths")
+        defines = profile_string_list(worker, "defines")
+        assign_slice(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            target_id=target_id,
+            slice_id=slice_id,
+            source_repo_root=source_repo_root,
+            source_repository=source_repository,
+            source_branch=source_branch,
+            source_file=source_file_rel,
+            function=function,
+            source_commit=source_commit,
+            source_sha256=source_sha256,
+            require_source_commit=require_source_commit,
+            compiler_command_source=compiler_command_source,
+            include_paths=include_paths,
+            defines=defines,
+            reuse_accepted_evidence=profile_bool(
+                worker,
+                "reuse_accepted_evidence",
+                default=profile_bool(profile, "reuse_accepted_evidence", default=False),
+            ),
+            accepted_evidence_root=profile_string(
+                worker,
+                "accepted_evidence_root",
+                default=profile_string(profile, "accepted_evidence_root"),
+            ),
+            slice_spec=slice_spec,
+            out_root=worker_out_root,
+            lease_ttl_seconds=profile_int(worker, "lease_ttl_seconds", default=profile_int(profile, "lease_ttl_seconds", default=3600)) or 3600,
+            repo_root=repo_root,
+        )
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        unit: dict[str, Any] = {
+            "worker_id": worker_id,
+            "slice_id": slice_id,
+            "function": function,
+            "out_root": repo_relative(worker_out_root, repo_root=repo_root),
+            "assignment_path": repo_relative(assignment_file_path(db_path, worker_id), repo_root=repo_root),
+            "request_path": repo_relative(request_path, repo_root=repo_root),
+            "source_repo_root": source_repo_root_rel,
+            "source_file": source_file_rel,
+            "source_commit": source_commit,
+            "source_sha256": source_sha256,
+        }
+        if source_repository:
+            unit["source_repository"] = source_repository
+        if source_branch:
+            unit["source_branch"] = source_branch
+        if require_source_commit:
+            unit["require_source_commit"] = require_source_commit
+        if compiler_command_source:
+            unit["compiler_command_source"] = compiler_command_source
+        if include_paths:
+            unit["include_paths"] = include_paths
+        if defines:
+            unit["defines"] = defines
+        if slice_spec:
+            unit["slice_spec"] = slice_spec
+        units.append(unit)
+
+    plan_path = out_root / "harness" / "plans" / f"{target_id}-{slug_id(profile_required_string(profile, 'profile_id'))}-workers.json"
+    plan = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "planned",
+        "planning_mode": "explicit_workers",
+        "run_id": run_id,
+        "target_id": target_id,
+        "worker_prefix": profile_string(profile, "worker_prefix", default="worker"),
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "units": units,
+    }
+    if profile.get("source_repository"):
+        plan["source_repository"] = profile_string(profile, "source_repository")
+    if profile.get("source_branch"):
+        plan["source_branch"] = profile_string(profile, "source_branch")
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="explicit-worker-plan",
+            path=plan_path,
+            status="planned",
+            semantic_role="worker-plan",
+            payload=plan,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="explicit_workers_planned", payload=plan)
+        connection.commit()
+    return plan
+
+
+def load_slice_specs_by_function(
+    slice_specs: list[str],
+    *,
+    target_id: str,
+    source_commit: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    specs_by_function: dict[str, dict[str, str]] = {}
+    for slice_spec in slice_specs:
+        slice_spec_rel = checked_relative_path(slice_spec).as_posix()
+        spec = load_json(repo_path(Path(slice_spec_rel), repo_root=repo_root))
+        function = spec.get("function_name")
+        if not isinstance(function, str) or not function:
+            raise SystemExit(f"slice spec missing function_name: {slice_spec_rel}")
+        spec_target_id = spec.get("target_id")
+        if spec_target_id != target_id:
+            raise SystemExit(f"slice spec target_id mismatch for {function}: {spec_target_id or 'missing'} != {target_id}")
+        source_block = spec.get("source") if isinstance(spec.get("source"), dict) else {}
+        spec_source_commit = spec.get("source_commit") or source_block.get("source_commit")
+        if spec_source_commit != source_commit:
+            raise SystemExit(
+                f"slice spec source_commit mismatch for {function}: {spec_source_commit or 'missing'} != {source_commit}"
+            )
+        slice_id = spec.get("slice_id")
+        if not isinstance(slice_id, str) or not slice_id:
+            raise SystemExit(f"slice spec missing slice_id: {slice_spec_rel}")
+        if function in specs_by_function:
+            raise SystemExit(f"duplicate slice spec for function {function}: {slice_spec_rel}")
+        specs_by_function[function] = {"path": slice_spec_rel, "slice_id": slice_id}
+    return specs_by_function
+
+
+def load_explicit_worker_slice_spec(
+    slice_spec: str,
+    *,
+    target_id: str,
+    slice_id: str,
+    function: str,
+    source_commit: str,
+    source_file: str,
+    source_sha256: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> str:
+    slice_spec_rel = checked_relative_path(slice_spec).as_posix()
+    spec = load_json(repo_path(Path(slice_spec_rel), repo_root=repo_root))
+    spec_target_id = spec.get("target_id")
+    if spec_target_id != target_id:
+        raise SystemExit(f"slice spec target_id mismatch for {function}: {spec_target_id or 'missing'} != {target_id}")
+    spec_function = spec.get("function_name")
+    if spec_function != function:
+        raise SystemExit(f"slice spec function_name mismatch for {function}: {spec_function or 'missing'} != {function}")
+    source_block = spec.get("source") if isinstance(spec.get("source"), dict) else {}
+    spec_source_commit = spec.get("source_commit") or source_block.get("source_commit")
+    if spec_source_commit != source_commit:
+        raise SystemExit(
+            f"slice spec source_commit mismatch for {function}: {spec_source_commit or 'missing'} != {source_commit}"
+        )
+    spec_repository = source_block.get("source_repository")
+    if source_repository and isinstance(spec_repository, str) and spec_repository != source_repository:
+        raise SystemExit(f"slice spec source_repository mismatch for {function}: {spec_repository} != {source_repository}")
+    spec_branch = source_block.get("source_branch")
+    if source_branch and isinstance(spec_branch, str) and spec_branch != source_branch:
+        raise SystemExit(f"slice spec source_branch mismatch for {function}: {spec_branch} != {source_branch}")
+    spec_source_sha256 = explicit_worker_slice_spec_source_sha256(spec, source_file)
+    if spec_source_sha256 is not None and spec_source_sha256 != source_sha256:
+        raise SystemExit(
+            f"slice spec source file sha256 mismatch for {function}: {spec_source_sha256} != {source_sha256}"
+        )
+    spec_slice_id = spec.get("slice_id")
+    if spec_slice_id != slice_id:
+        raise SystemExit(f"slice spec slice_id mismatch for {function}: {spec_slice_id or 'missing'} != {slice_id}")
+    return slice_spec_rel
+
+
+def explicit_worker_slice_spec_source_sha256(spec: dict[str, Any], source_file: str) -> str | None:
+    source_block = spec.get("source") if isinstance(spec.get("source"), dict) else {}
+    source_file_hashes = source_block.get("source_file_hashes")
+    if isinstance(source_file_hashes, dict):
+        value = source_file_hashes.get(source_file)
+        if isinstance(value, str) and value:
+            return value
+    c_boundary = spec.get("c_boundary") if isinstance(spec.get("c_boundary"), dict) else {}
+    files = c_boundary.get("files")
+    if isinstance(files, list):
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            if item.get("path") == source_file and isinstance(item.get("sha256"), str) and item["sha256"]:
+                return str(item["sha256"])
+    return None
+
+
+def run_batch_profile(
+    *,
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    profile_path = repo_path(profile_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    profile = load_json(profile_path)
+    acceptance_boundary = profile.get("acceptance_boundary")
+    if acceptance_boundary is not None and not isinstance(acceptance_boundary, dict):
+        raise SystemExit("batch profile field must be an object: acceptance_boundary")
+    attempt_evidence_policy = profile.get("attempt_evidence_policy")
+    if attempt_evidence_policy is not None and not isinstance(attempt_evidence_policy, dict):
+        raise SystemExit("batch profile field must be an object: attempt_evidence_policy")
+    if profile.get("schema_version") != SCHEMA_VERSION:
+        raise SystemExit(f"unsupported batch profile schema_version: {profile.get('schema_version')}")
+    profile_id = profile_required_string(profile, "profile_id")
+    proof_class = profile_required_string(profile, "proof_class")
+    if proof_class not in {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}:
+        raise SystemExit(f"unsupported proof_class in batch profile: {proof_class}")
+    mode = profile_string(profile, "mode", default="deterministic")
+    if mode not in {"deterministic", "opencode"}:
+        raise SystemExit(f"unsupported mode in batch profile: {mode}")
+    opencode_preflight_report_text = profile_string(profile, "opencode_preflight_report")
+    opencode_preflight_report = (
+        Path(opencode_preflight_report_text) if opencode_preflight_report_text is not None else None
+    )
+    if mode == "opencode" and opencode_preflight_report is None:
+        preflight_result = run_opencode_preflight(
+            out_root=out_root,
+            run_id=run_id,
+            opencode_command=profile_string(profile, "opencode_command", default="opencode") or "opencode",
+            opencode_model=profile_string(profile, "opencode_model"),
+            opencode_agent=profile_string(profile, "opencode_agent"),
+            opencode_variant=profile_string(profile, "opencode_variant", default="max") or "max",
+            opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+            command_runner=command_runner,
+            repo_root=repo_root,
+        )
+        opencode_preflight_report = Path(
+            str(preflight_result.get("report_path", out_root / "harness" / "opencode-preflight-report.json"))
+        )
+        if preflight_result.get("status") != "passed" or int(preflight_result.get("exit_code", 1)) != 0:
+            raise SystemExit(
+                "opencode preflight failed before batch profile execution: "
+                f"{repo_relative(repo_path(opencode_preflight_report, repo_root=repo_root), repo_root=repo_root)}"
+            )
+
+    db_path = init_run(
+        out_root=out_root,
+        run_id=run_id,
+        proof_class=proof_class,
+        repo_root=repo_root,
+    )
+    if profile.get("workers") is not None:
+        plan = plan_explicit_workers(
+            db_path=db_path,
+            run_id=run_id,
+            profile=profile,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
+    else:
+        plan = plan_source_file(
+            db_path=db_path,
+            run_id=run_id,
+            target_id=profile_required_string(profile, "target_id"),
+            source_repo_root=Path(profile_required_string(profile, "source_repo_root")),
+            source_repository=profile_string(profile, "source_repository"),
+            source_branch=profile_string(profile, "source_branch"),
+            source_file=profile_required_string(profile, "source_file"),
+            functions=profile_string_list(profile, "functions"),
+            source_commit=profile_required_string(profile, "source_commit"),
+            require_source_commit=profile_string(profile, "require_source_commit"),
+            slice_specs=profile_string_list(profile, "slice_specs"),
+            compiler_command_source=profile_string(profile, "compiler_command_source"),
+            include_paths=profile_string_list(profile, "include_paths"),
+            defines=profile_string_list(profile, "defines"),
+            reuse_accepted_evidence=profile_bool(profile, "reuse_accepted_evidence", default=False),
+            accepted_evidence_root=profile_string(profile, "accepted_evidence_root"),
+            out_root=out_root,
+            slice_id_prefix=profile_required_string(profile, "slice_id_prefix"),
+            worker_prefix=profile_string(profile, "worker_prefix", default="worker"),
+            limit=profile_int(profile, "limit"),
+            lease_ttl_seconds=profile_int(profile, "lease_ttl_seconds", default=3600),
+            repo_root=repo_root,
+        )
+    run_result = run_plan(
+        db_path=db_path,
+        run_id=run_id,
+        plan_path=Path(str(plan["plan_path"])),
+        out_root=out_root,
+        proof_class=proof_class,
+        mode=mode,
+        opencode_command=profile_string(profile, "opencode_command", default="opencode"),
+        opencode_model=profile_string(profile, "opencode_model"),
+        opencode_agent=profile_string(profile, "opencode_agent"),
+        opencode_variant=profile_string(profile, "opencode_variant", default="max"),
+        opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+        opencode_preflight_report=opencode_preflight_report,
+        execute_merge=profile_bool(profile, "execute_merge", default=False),
+        auto_retry=profile_bool(profile, "auto_retry", default=False),
+        max_workers=profile_int(profile, "max_workers", default=1),
+        repair_trace=attempt_evidence_policy,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    route_metrics_artifact = write_route_governance_metrics_profile_report(
+        profile=profile,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    before_after_exhibit_artifact = write_before_after_exhibit_profile_report(
+        profile=profile,
+        profile_path=profile_path,
+        run_id=run_id,
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        route_metrics_artifact=route_metrics_artifact,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "status": run_result["status"],
+        "exit_code": int(run_result["exit_code"]),
+        "profile_id": profile_id,
+        "profile_path": repo_relative(profile_path, repo_root=repo_root),
+        "profile_sha256": sha256_file(profile_path),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "db_path": repo_relative(db_path, repo_root=repo_root),
+        "proof_class": proof_class,
+        "mode": mode,
+        "worker_count": len(plan["units"]),
+        "plan_path": plan["plan_path"],
+        "plan": plan,
+        "run_plan": run_result,
+    }
+    if acceptance_boundary is not None:
+        result["acceptance_boundary"] = acceptance_boundary
+    if attempt_evidence_policy is not None:
+        result["attempt_evidence_policy"] = attempt_evidence_policy
+    if route_metrics_artifact is not None:
+        result["route_governance_metrics_report"] = route_metrics_artifact["binding"]
+    if before_after_exhibit_artifact is not None:
+        result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        result["opencode_preflight_report"] = run_result["opencode_preflight_report"]
+    report_path = out_root / "harness" / "batch-profile-report.json"
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    report_artifacts: dict[str, dict[str, Any]] = {}
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        report_artifacts["opencode_preflight_report"] = run_result["opencode_preflight_report"]
+    if route_metrics_artifact is not None:
+        report_artifacts["route_governance_metrics_report"] = route_metrics_artifact["binding"]
+    if before_after_exhibit_artifact is not None:
+        report_artifacts["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
+    context_refs = write_context_pack_and_agent_index(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=profile_required_string(profile, "target_id"),
+        proof_class=proof_class,
+        mode=mode,
+        out_root=out_root,
+        plan=plan,
+        run_result=run_result,
+        primary_report_path=report_path,
+        report_entrypoint="batch_profile_report",
+        acceptance_boundary=acceptance_boundary,
+        attempt_evidence_policy=attempt_evidence_policy,
+        report_artifacts=report_artifacts,
+        repo_root=repo_root,
+    )
+    result.update(context_refs)
+    result["judge_summary"] = build_judge_summary(
+        entrypoint="run-batch-profile",
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        context_refs=context_refs,
+        acceptance_boundary=acceptance_boundary,
+        route_metrics_artifact=route_metrics_artifact,
+        before_after_exhibit_artifact=before_after_exhibit_artifact,
+        repo_root=repo_root,
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="batch-profile-report",
+            path=report_path,
+            status=str(result["status"]),
+            semantic_role="batch-profile-report",
+            payload=result,
+            repo_root=repo_root,
+        )
+        if route_metrics_artifact is not None:
+            binding = route_metrics_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="route-governance-metrics-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="route-governance-metrics",
+                payload=route_metrics_artifact["payload"],
+                repo_root=repo_root,
+            )
+        if before_after_exhibit_artifact is not None:
+            binding = before_after_exhibit_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="before-after-exhibit-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="before-after-exhibit",
+                payload=before_after_exhibit_artifact["payload"],
+                repo_root=repo_root,
+            )
+        record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
+        connection.commit()
+    return result
+
+
+def write_evaluate_profile_report(
+    *,
+    batch_result: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    profile_path = repo_path(profile_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    report_path = out_root / "harness" / "evaluate-report.json"
+    judge_index_path = out_root / "harness" / "judge-evidence-index.json"
+    judge_index_rel = repo_relative(judge_index_path, repo_root=repo_root)
+    batch_report_path_text = batch_result.get("report_path")
+    batch_report_path: Path | None = None
+    batch_report_ref = {"path": str(batch_report_path_text or ""), "sha256": ""}
+    if isinstance(batch_report_path_text, str) and batch_report_path_text:
+        batch_report_path = repo_path(Path(batch_report_path_text), repo_root=repo_root)
+        batch_report_ref = (
+            artifact_ref(batch_report_path, repo_root=repo_root)
+            if batch_report_path.is_file()
+            else {"path": batch_report_path_text, "sha256": ""}
+        )
+    run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
+    merge_execution = (
+        run_plan.get("merge_execution") if isinstance(run_plan.get("merge_execution"), dict) else {}
+    )
+    summary_path_text = merge_execution.get("summary_path")
+    summary_validation: dict[str, Any] | None = None
+    if isinstance(summary_path_text, str) and summary_path_text:
+        summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+        if summary_path.exists():
+            summary_validation = validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "evaluate-report",
+        "entrypoint": "evaluate --profile",
+        "status": str(batch_result.get("status", "unknown")),
+        "exit_code": int(batch_result.get("exit_code", 1)),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "profile": artifact_ref(profile_path, repo_root=repo_root),
+        "profile_id": batch_result.get("profile_id"),
+        "proof_class": batch_result.get("proof_class"),
+        "mode": batch_result.get("mode"),
+        "batch_profile_report": batch_report_ref,
+        "context_pack": batch_result.get("context_pack"),
+        "agent_index": batch_result.get("agent_index"),
+        "summary_validation": summary_validation,
+        "judge_summary": evaluate_profile_judge_summary(batch_result.get("judge_summary")),
+        "sidecar_reports": {
+            "judge_evidence_index": {
+                "path": judge_index_rel,
+                "report_kind": "judge-evidence-index",
+                "status": str(batch_result.get("status", "unknown")),
+            },
+        },
+        "claim_boundary": (
+            "This evaluate wrapper is the judge-facing entrypoint for a full batch-profile run. "
+            "It indexes verified reports only; semantic acceptance remains owned by the final "
+            "competition summary, workflow metrics, and validators; it is not a new semantic gate."
+        ),
+    }
+    if "acceptance_boundary" in batch_result:
+        payload["acceptance_boundary"] = batch_result["acceptance_boundary"]
+    if "route_governance_metrics_report" in batch_result:
+        payload["route_governance_metrics_report"] = batch_result["route_governance_metrics_report"]
+    if "before_after_exhibit_report" in batch_result:
+        payload["before_after_exhibit_report"] = batch_result["before_after_exhibit_report"]
+    if isinstance(batch_result.get("opencode_preflight_report"), dict):
+        payload["opencode_preflight_report"] = batch_result["opencode_preflight_report"]
+    elif isinstance(run_plan.get("opencode_preflight_report"), dict):
+        payload["opencode_preflight_report"] = run_plan["opencode_preflight_report"]
+    architecture = payload.get("judge_summary", {}).get("harness_architecture")
+    if isinstance(architecture, dict):
+        graph = run_plan.get("graph") if isinstance(run_plan.get("graph"), dict) else {}
+        architecture.setdefault("architecture_contracts", build_architecture_contracts(graph))
+    payload["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(payload["status"]),
+        proof_class=str(payload.get("proof_class", "")),
+        mode=str(payload.get("mode", "")),
+        judge_summary=payload.get("judge_summary"),
+        acceptance_boundary=payload.get("acceptance_boundary"),
+        route_metrics=payload.get("route_governance_metrics_report"),
+        opencode_runtime=opencode_agent_runtime_evidence(run_plan, repo_root=repo_root),
+    )
+
+    payload["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    db_path: Path | None = None
+    db_path_text = batch_result.get("db_path")
+    if isinstance(db_path_text, str) and db_path_text:
+        db_path = repo_path(Path(db_path_text), repo_root=repo_root)
+        context_refs = update_evaluate_profile_context_refs(
+            db_path=db_path,
+            run_id=run_id,
+            out_root=out_root,
+            evaluate_report_path=report_path,
+            batch_profile_report_path=batch_report_ref["path"],
+            judge_evidence_index_path=judge_index_path,
+            status=str(payload["status"]),
+            repo_root=repo_root,
+        )
+        if batch_report_path is not None and batch_report_path.is_file():
+            batch_report_ref = update_batch_profile_report_context_refs(
+                batch_report_path=batch_report_path,
+                context_refs=context_refs,
+                repo_root=repo_root,
+            )
+            payload["batch_profile_report"] = batch_report_ref
+        payload.update(context_refs)
+        architecture = payload.get("judge_summary", {}).get("harness_architecture")
+        if isinstance(architecture, dict):
+            architecture["context_pack"] = context_refs["context_pack"]
+            architecture["agent_index"] = context_refs["agent_index"]
+        payload["judge_headline"] = build_judge_headline(
+            entrypoint="evaluate",
+            status=str(payload["status"]),
+            proof_class=str(payload.get("proof_class", "")),
+            mode=str(payload.get("mode", "")),
+            judge_summary=payload.get("judge_summary"),
+            acceptance_boundary=payload.get("acceptance_boundary"),
+            route_metrics=payload.get("route_governance_metrics_report"),
+            opencode_runtime=opencode_agent_runtime_evidence(run_plan, repo_root=repo_root),
+        )
+        report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="evaluate-report",
+                path=report_path,
+                status=str(payload["status"]),
+                semantic_role="evaluate-report",
+                payload=payload,
+                repo_root=repo_root,
+            )
+            if batch_report_path is not None and batch_report_path.is_file():
+                record_artifact(
+                    connection,
+                    run_id=run_id,
+                    worker_id="planner",
+                    kind="batch-profile-report",
+                    path=batch_report_path,
+                    status=str(batch_result.get("status", payload["status"])),
+                    semantic_role="batch-profile-report",
+                    payload=load_json(batch_report_path),
+                    repo_root=repo_root,
+                )
+            record_event(connection, run_id=run_id, event_type="evaluate_profile_executed", payload=payload)
+            connection.commit()
+    judge_index_artifact = write_judge_evidence_index(
+        evaluate_report=payload,
+        evaluate_report_path=report_path,
+        batch_result=batch_result,
+        profile_path=profile_path,
+        run_id=run_id,
+        out_root=out_root,
+        extra_artifact_refs={"resume_manifest": payload["resume_manifest"]}
+        if isinstance(payload.get("resume_manifest"), dict)
+        else None,
+        repo_root=repo_root,
+    )
+    if db_path is not None:
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="judge-evidence-index",
+                path=repo_path(Path(judge_index_artifact["binding"]["path"]), repo_root=repo_root),
+                status=str(judge_index_artifact["binding"]["status"]),
+                semantic_role="judge-evidence-index",
+                payload=judge_index_artifact["payload"],
+                repo_root=repo_root,
+            )
+            record_event(
+                connection,
+                run_id=run_id,
+                event_type="judge_evidence_index_written",
+                payload=judge_index_artifact["binding"],
+            )
+            connection.commit()
+    return payload
+
+
+def write_judge_evidence_index(
+    *,
+    evaluate_report: dict[str, Any],
+    evaluate_report_path: Path,
+    batch_result: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    entrypoint_name: str = "evaluate --profile",
+    primary_report_ref_name: str = "evaluate_report",
+    reproduction_commands: dict[str, str] | None = None,
+    extra_artifact_refs: dict[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    profile_path = repo_path(profile_path, repo_root=repo_root)
+    evaluate_report_path = repo_path(evaluate_report_path, repo_root=repo_root)
+    index_path = out_root / "harness" / "judge-evidence-index.json"
+    judge_summary = evaluate_report.get("judge_summary") if isinstance(evaluate_report.get("judge_summary"), dict) else {}
+    architecture = (
+        json.loads(json.dumps(judge_summary.get("harness_architecture")))
+        if isinstance(judge_summary.get("harness_architecture"), dict)
+        else {}
+    )
+    core_quality = (
+        json.loads(json.dumps(judge_summary.get("core_translation_quality")))
+        if isinstance(judge_summary.get("core_translation_quality"), dict)
+        else {}
+    )
+    if "architecture_contracts" not in architecture:
+        run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
+        graph = run_plan.get("graph") if isinstance(run_plan.get("graph"), dict) else {}
+        architecture["architecture_contracts"] = build_architecture_contracts(graph)
+    artifact_refs: dict[str, dict[str, Any]] = {}
+
+    def add_binding(name: str, value: Any) -> None:
+        binding = artifact_binding_from_value(value, repo_root=repo_root)
+        if binding is not None:
+            artifact_refs[name] = binding
+
+    def add_path(name: str, value: Any) -> None:
+        if not isinstance(value, str) or not value:
+            return
+        path = repo_path(Path(value), repo_root=repo_root)
+        artifact_refs[name] = (
+            artifact_ref(path, repo_root=repo_root)
+            if path.is_file()
+            else {"path": value, "sha256": ""}
+        )
+
+    if not primary_report_ref_name or primary_report_ref_name == "judge_evidence_index":
+        raise ValueError("primary_report_ref_name must be a non-self evidence ref name")
+    artifact_refs[primary_report_ref_name] = artifact_ref(evaluate_report_path, repo_root=repo_root)
+    artifact_refs["profile"] = artifact_ref(profile_path, repo_root=repo_root)
+    add_binding("batch_profile_report", evaluate_report.get("batch_profile_report"))
+    add_binding("context_pack", evaluate_report.get("context_pack"))
+    add_binding("agent_index", evaluate_report.get("agent_index"))
+    add_binding("route_governance_metrics_report", evaluate_report.get("route_governance_metrics_report"))
+    add_binding("before_after_exhibit_report", evaluate_report.get("before_after_exhibit_report"))
+
+    summary_validation = (
+        evaluate_report.get("summary_validation")
+        if isinstance(evaluate_report.get("summary_validation"), dict)
+        else {}
+    )
+    summary_path_text = summary_validation.get("summary") if isinstance(summary_validation, dict) else None
+    if isinstance(summary_path_text, str) and summary_path_text:
+        add_path("competition_run_summary", summary_path_text)
+        summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+        if summary_path.is_file():
+            summary = load_json(summary_path)
+            workflow_metrics_ref = summary.get("workflow_metrics")
+            if isinstance(workflow_metrics_ref, dict) and isinstance(workflow_metrics_ref.get("path"), str):
+                workflow_metrics_path = validate_competition_run_summary.resolve_summary_artifact(
+                    workflow_metrics_ref["path"],
+                    summary_path=summary_path,
+                    repo_root=repo_root,
+                )
+                if workflow_metrics_path is not None and workflow_metrics_path.is_file():
+                    artifact_refs["workflow_metrics"] = artifact_ref(workflow_metrics_path, repo_root=repo_root)
+                else:
+                    add_binding("workflow_metrics", workflow_metrics_ref)
+            else:
+                add_binding("workflow_metrics", workflow_metrics_ref)
+
+    run_plan = batch_result.get("run_plan") if isinstance(batch_result.get("run_plan"), dict) else {}
+    add_path("run_plan_report", run_plan.get("report_path"))
+    add_binding("opencode_preflight_report", evaluate_report.get("opencode_preflight_report"))
+    add_binding("opencode_preflight_report", batch_result.get("opencode_preflight_report"))
+    add_binding("opencode_preflight_report", run_plan.get("opencode_preflight_report"))
+    merge_plan = run_plan.get("merge_plan") if isinstance(run_plan.get("merge_plan"), dict) else {}
+    add_path("merge_plan", merge_plan.get("path"))
+    add_path("worker_plan", batch_result.get("plan_path"))
+    if isinstance(extra_artifact_refs, dict):
+        for name, value in sorted(extra_artifact_refs.items()):
+            if name == "judge_evidence_index":
+                raise ValueError("judge_evidence_index must not be listed as an evidence artifact ref")
+            if isinstance(value, dict):
+                binding = artifact_binding_from_value(value, repo_root=repo_root)
+                if binding is not None:
+                    artifact_refs[name] = binding
+            elif isinstance(value, str) and value:
+                add_path(name, value)
+
+    profile_rel = repo_relative(profile_path, repo_root=repo_root)
+    out_root_rel = repo_relative(out_root, repo_root=repo_root)
+    if reproduction_commands is None:
+        reproduction_commands = {
+            "evaluate_profile": (
+                "python -B -m validation.tools.opencode_agent_harness evaluate "
+                f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+            ),
+            "run_batch_profile": (
+                "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+            ),
+        }
+        if isinstance(summary_path_text, str) and summary_path_text:
+            reproduction_commands["summary_validation"] = (
+                "python -B validation/tools/validate_competition_run_summary.py "
+                f"--summary {summary_path_text}"
+            )
+    else:
+        reproduction_commands = dict(reproduction_commands)
+
+    acceptance_boundary = (
+        evaluate_report.get("acceptance_boundary")
+        if isinstance(evaluate_report.get("acceptance_boundary"), dict)
+        else {}
+    )
+    route_metrics = (
+        evaluate_report.get("route_governance_metrics_report")
+        if isinstance(evaluate_report.get("route_governance_metrics_report"), dict)
+        else {}
+    )
+    generated_draft_semantic_pass = acceptance_boundary.get(
+        "generated_draft_semantic_pass",
+        core_quality.get("generated_draft_semantic_pass", False),
+    )
+    if not isinstance(generated_draft_semantic_pass, bool):
+        generated_draft_semantic_pass = False
+    translation_coverage_numerator = route_metrics.get("translation_coverage_numerator", 0)
+    if isinstance(translation_coverage_numerator, bool):
+        translation_coverage_numerator = 0
+    try:
+        translation_coverage_numerator_int = int(translation_coverage_numerator)
+    except (TypeError, ValueError):
+        translation_coverage_numerator_int = 0
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "judge-evidence-index",
+        "entrypoint": entrypoint_name,
+        "status": str(evaluate_report.get("status", "unknown")),
+        "exit_code": int(evaluate_report.get("exit_code", 1)),
+        "run_id": run_id,
+        "out_root": out_root_rel,
+        "profile": artifact_ref(profile_path, repo_root=repo_root),
+        "profile_id": evaluate_report.get("profile_id"),
+        "proof_class": evaluate_report.get("proof_class"),
+        "mode": evaluate_report.get("mode"),
+        "harness_architecture": architecture,
+        "core_translation_quality": core_quality,
+        "evidence_artifact_refs": artifact_refs,
+        "reproduction_commands": reproduction_commands,
+        "claim_boundary": {
+            "index_is_semantic_gate": False,
+            "semantic_claim_source": core_quality.get(
+                "semantic_claim_source",
+                acceptance_boundary.get("semantic_claim_source", "unknown"),
+            ),
+            "generated_draft_semantic_pass": generated_draft_semantic_pass,
+            "translation_coverage_numerator": translation_coverage_numerator_int,
+            "boundary": (
+                "This file is a compact judge-facing index over existing verified artifacts. "
+                "It does not add a semantic acceptance gate, does not self-reference its own hash, "
+                "and does not count accepted-evidence bindings as translator-generated semantic pass."
+            ),
+        },
+    }
+    opencode_runtime = opencode_agent_runtime_evidence(run_plan, repo_root=repo_root)
+    if opencode_runtime is not None:
+        payload["opencode_agent_runtime"] = opencode_runtime
+    payload["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(payload["status"]),
+        proof_class=str(payload.get("proof_class", "")),
+        mode=str(payload.get("mode", "")),
+        judge_summary=judge_summary,
+        acceptance_boundary=acceptance_boundary,
+        claim_boundary=payload["claim_boundary"],
+        route_metrics=route_metrics,
+        opencode_runtime=opencode_runtime,
+    )
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    binding = artifact_ref(index_path, repo_root=repo_root)
+    binding.update(
+        {
+            "status": str(payload["status"]),
+            "report_kind": "judge-evidence-index",
+        }
+    )
+    return {"binding": binding, "payload": payload}
+
+
+def opencode_agent_runtime_evidence(
+    run_plan: dict[str, Any],
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    preflight = artifact_binding_from_value(run_plan.get("opencode_preflight_report"), repo_root=repo_root)
+    workers: list[dict[str, Any]] = []
+    raw_workers = run_plan.get("workers") if isinstance(run_plan.get("workers"), list) else []
+    for worker in raw_workers:
+        if not isinstance(worker, dict):
+            continue
+        runtime_entry: dict[str, Any] = {
+            "worker_id": str(worker.get("worker_id", "")),
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+        }
+        summary_binding = path_ref_from_text(worker.get("summary_path"), repo_root=repo_root)
+        if summary_binding is not None:
+            runtime_entry["summary"] = summary_binding
+        worker_report_binding = path_ref_from_text(worker.get("report_path"), repo_root=repo_root)
+        if worker_report_binding is not None:
+            runtime_entry["worker_report"] = worker_report_binding
+        logs = worker.get("logs") if isinstance(worker.get("logs"), dict) else {}
+        log_refs = {}
+        for name in ("stdout", "stderr"):
+            log_ref = path_ref_from_text(logs.get(name), repo_root=repo_root)
+            if log_ref is not None:
+                log_refs[name] = log_ref
+        if log_refs:
+            runtime_entry["logs"] = log_refs
+        for field in ("handoff_contract", "opencode_session_evidence", "opencode_preflight_report"):
+            binding = artifact_binding_from_value(worker.get(field), repo_root=repo_root)
+            if binding is not None:
+                runtime_entry[field] = binding
+        verification = worker.get("opencode_contract_verification")
+        if isinstance(verification, dict):
+            runtime_entry["opencode_contract_verification"] = json.loads(json.dumps(verification))
+            runtime_entry["contract_verification_status"] = str(verification.get("status", "unknown"))
+        if isinstance(worker.get("final_decision"), dict):
+            runtime_entry["final_decision"] = json.loads(json.dumps(worker["final_decision"]))
+        if any(field in runtime_entry for field in OPENCODE_WORKER_EVIDENCE_FIELDS):
+            workers.append(runtime_entry)
+    if preflight is None and not workers:
+        return None
+    contract_status_counts: dict[str, int] = {}
+    failed_or_missing_contract_workers = []
+    for worker in workers:
+        contract_status = str(worker.get("contract_verification_status", "missing"))
+        contract_status_counts[contract_status] = contract_status_counts.get(contract_status, 0) + 1
+        if contract_status != "executed":
+            failed_or_missing_contract_workers.append(str(worker.get("worker_id", "")))
+    payload: dict[str, Any] = {
+        "runtime": "opencode",
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "worker_count": len(workers),
+        "contract_status_counts": contract_status_counts,
+        "all_contracts_executed": bool(workers) and not failed_or_missing_contract_workers,
+        "failed_or_missing_contract_workers": failed_or_missing_contract_workers,
+        "workers": workers,
+        "boundary": (
+            "OpenCode chat/session output is indexed for command-contract audit only; "
+            "semantic acceptance remains owned by validator artifacts and final summaries."
+        ),
+    }
+    if preflight is not None:
+        payload["opencode_preflight_report"] = preflight
+    return payload
+
+
+def evaluate_profile_judge_summary(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    summary = json.loads(json.dumps(value))
+    summary["entrypoint"] = "evaluate"
+    architecture = summary.get("harness_architecture")
+    if isinstance(architecture, dict):
+        architecture["entrypoint"] = "evaluate"
+    return summary
+
+
+def update_evaluate_profile_context_refs(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    evaluate_report_path: Path,
+    batch_profile_report_path: str,
+    judge_evidence_index_path: Path,
+    status: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    context_pack_path = out_root / "harness" / "context-pack.json"
+    agent_index_path = out_root / "harness" / "agent-index.json"
+    resume_manifest_path = out_root / "harness" / "resume-manifest.json"
+    evaluate_report_rel = repo_relative(evaluate_report_path, repo_root=repo_root)
+    judge_index_rel = repo_relative(judge_evidence_index_path, repo_root=repo_root)
+    resume_manifest_rel = repo_relative(resume_manifest_path, repo_root=repo_root)
+    context_graph: dict[str, Any] = {}
+
+    if context_pack_path.exists():
+        context_pack = load_json(context_pack_path)
+        context_graph = context_pack.get("graph") if isinstance(context_pack.get("graph"), dict) else {}
+        entrypoints = context_pack.setdefault("entrypoints", {})
+        if isinstance(entrypoints, dict):
+            entrypoints["primary_report"] = evaluate_report_rel
+            entrypoints["evaluate_report"] = evaluate_report_rel
+            entrypoints["judge_evidence_index"] = judge_index_rel
+            entrypoints["resume_manifest"] = resume_manifest_rel
+            if batch_profile_report_path:
+                entrypoints["batch_profile_report"] = batch_profile_report_path
+        context_pack["context_management_contract"] = build_context_management_contract(
+            graph=context_graph,
+            db_path=db_path,
+            primary_report_path=evaluate_report_path,
+            context_pack_path=context_pack_path,
+            agent_index_path=agent_index_path,
+            report_entrypoint="evaluate_report",
+            repo_root=repo_root,
+        )
+        context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    if agent_index_path.exists():
+        agent_index = load_json(agent_index_path)
+        reports = agent_index.setdefault("reports", {})
+        if isinstance(reports, dict):
+            reports["evaluate_report"] = {
+                "path": evaluate_report_rel,
+                "report_kind": "evaluate-report",
+                "status": status,
+            }
+            reports["judge_evidence_index"] = {
+                "path": judge_index_rel,
+                "report_kind": "judge-evidence-index",
+                "status": status,
+            }
+            reports["resume_manifest"] = {
+                "path": resume_manifest_rel,
+                "report_kind": "resume-manifest",
+                "status": status,
+            }
+            if batch_profile_report_path:
+                reports["batch_profile_report"] = {
+                    "path": batch_profile_report_path,
+                    "report_kind": "batch-profile-report",
+                    "status": status,
+                }
+        agents = agent_index.get("agents") if isinstance(agent_index.get("agents"), list) else []
+        agent_index["agent_coordination_contract"] = build_agent_coordination_contract(
+            graph=context_graph,
+            db_path=db_path,
+            worker_count=len(agents),
+            mode=str(agent_index.get("mode")) if isinstance(agent_index.get("mode"), str) else None,
+            repo_root=repo_root,
+        )
+        agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    context_pack_ref = artifact_ref(context_pack_path, repo_root=repo_root)
+    agent_index_ref = artifact_ref(agent_index_path, repo_root=repo_root)
+    context_pack = load_json(context_pack_path)
+    agent_index = load_json(agent_index_path)
+    resume_manifest_ref: dict[str, str] | None = None
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        resume_manifest_payload = build_resume_manifest(
+            db_path=db_path,
+            run_id=run_id,
+            out_root=out_root,
+            status=status,
+            context_pack=context_pack,
+            context_pack_ref=context_pack_ref,
+            agent_index=agent_index,
+            agent_index_ref=agent_index_ref,
+            evaluate_report_path=evaluate_report_path,
+            batch_profile_report_path=batch_profile_report_path,
+            judge_evidence_index_path=judge_evidence_index_path,
+            resume_manifest_path=resume_manifest_path,
+            repair_hints=repair_hint_resume_summary(connection, run_id=run_id),
+            repo_root=repo_root,
+        )
+        resume_manifest_path.write_text(
+            json.dumps(resume_manifest_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        resume_manifest_ref = artifact_ref(resume_manifest_path, repo_root=repo_root)
+        resume_manifest_ref.update({"status": status, "report_kind": "resume-manifest"})
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(context_pack_id) do update set
+              artifact_path=excluded.artifact_path,
+              artifact_sha256=excluded.artifact_sha256,
+              payload_json=excluded.payload_json
+            """,
+            (
+                str(context_pack.get("context_pack_id", f"{run_id}-context-pack")),
+                run_id,
+                str(context_pack.get("target_id", "")),
+                None,
+                int(context_pack.get("budget", {}).get("depth", 1)),
+                int(context_pack.get("budget", {}).get("max_tokens", 20000)),
+                context_pack_ref["path"],
+                context_pack_ref["sha256"],
+                json.dumps(context_pack, sort_keys=True),
+            ),
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="context-pack",
+            path=context_pack_path,
+            status=status,
+            semantic_role="agent-context-pack",
+            payload=context_pack,
+            repo_root=repo_root,
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="agent-index",
+            path=agent_index_path,
+            status=status,
+            semantic_role="agent-index",
+            payload=agent_index,
+            repo_root=repo_root,
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="resume-manifest",
+            path=resume_manifest_path,
+            status=status,
+            semantic_role="resume-manifest",
+            payload=resume_manifest_payload,
+            repo_root=repo_root,
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="evaluate_profile_context_refs_updated",
+            payload={
+                "context_pack": context_pack_ref,
+                "agent_index": agent_index_ref,
+                "resume_manifest": resume_manifest_ref,
+            },
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="resume_manifest_written",
+            payload=resume_manifest_ref,
+        )
+        connection.commit()
+    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref, "resume_manifest": resume_manifest_ref}
+
+
+def repair_hint_resume_summary(connection: sqlite3.Connection, *, run_id: str) -> dict[str, Any]:
+    rows = connection.execute(
+        """
+        select hint_id, slice_id, root_cause_key, status
+        from repair_hints
+        where run_id=?
+        order by created_at, hint_id
+        """,
+        (run_id,),
+    ).fetchall()
+    hints = [
+        {
+            "hint_id": str(row[0]),
+            "slice_id": row[1],
+            "root_cause_key": str(row[2]),
+            "status": str(row[3]),
+        }
+        for row in rows
+    ]
+    return {
+        "source": "sqlite repair_hints",
+        "total_count": len(hints),
+        "open_count": sum(1 for hint in hints if hint["status"] == "open"),
+        "hints": hints,
+    }
+
+
+def build_resume_manifest(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    status: str,
+    context_pack: dict[str, Any],
+    context_pack_ref: dict[str, str],
+    agent_index: dict[str, Any],
+    agent_index_ref: dict[str, str],
+    evaluate_report_path: Path,
+    batch_profile_report_path: str,
+    judge_evidence_index_path: Path,
+    resume_manifest_path: Path,
+    repair_hints: dict[str, Any],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    context_entrypoints = (
+        json.loads(json.dumps(context_pack.get("entrypoints")))
+        if isinstance(context_pack.get("entrypoints"), dict)
+        else {}
+    )
+    context_entrypoints["resume_manifest"] = repo_relative(resume_manifest_path, repo_root=repo_root)
+    workers = resume_manifest_workers(context_pack, agent_index)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "resume-manifest",
+        "run_id": run_id,
+        "status": status,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "This manifest is a current-state resume map over on-disk harness artifacts. "
+                "It is not a semantic gate and does not treat OpenCode chat output as evidence."
+            ),
+        },
+        "ledger": {
+            "path": repo_relative(db_path, repo_root=repo_root),
+            "checkpoint_backend": "sqlite",
+            "state_role": "checkpoint-index-only",
+        },
+        "context_pack": context_pack_ref,
+        "agent_index": agent_index_ref,
+        "entrypoints": context_entrypoints,
+        "evaluate_report": {
+            "path": repo_relative(evaluate_report_path, repo_root=repo_root),
+            "status": status,
+        },
+        "batch_profile_report": {
+            "path": batch_profile_report_path,
+            "status": status,
+        }
+        if batch_profile_report_path
+        else None,
+        "expected_judge_evidence_index": repo_relative(judge_evidence_index_path, repo_root=repo_root),
+        "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+        "repair_hints": repair_hints,
+        "worker_count": len(workers),
+        "workers": workers,
+    }
+
+
+def resume_manifest_workers(context_pack: dict[str, Any], agent_index: dict[str, Any]) -> list[dict[str, Any]]:
+    agents_by_worker_id = (
+        agent_index.get("agents_by_worker_id")
+        if isinstance(agent_index.get("agents_by_worker_id"), dict)
+        else {}
+    )
+    workers = context_pack.get("workers") if isinstance(context_pack.get("workers"), list) else []
+    entries: list[dict[str, Any]] = []
+    copied_fields = [
+        "worker_id",
+        "slice_id",
+        "function",
+        "assignment_path",
+        "request_path",
+        "summary_path",
+        "report_path",
+        "out_root",
+        "source_commit",
+        "source_sha256",
+        "summary_status",
+        "recorded",
+        "exit_code",
+        "handoff_contract",
+        "opencode_session_evidence",
+        "opencode_preflight_report",
+    ]
+    for worker in workers:
+        if not isinstance(worker, dict) or not worker.get("worker_id"):
+            continue
+        worker_id = str(worker["worker_id"])
+        agent = agents_by_worker_id.get(worker_id)
+        entry = {
+            field: worker.get(field)
+            for field in copied_fields
+            if field in worker and worker.get(field) is not None
+        }
+        entry["worker_id"] = worker_id
+        if isinstance(agent, dict):
+            entry["agent_status"] = agent.get("status")
+            if "isolated_out_root" not in entry and agent.get("isolated_out_root") is not None:
+                entry["isolated_out_root"] = agent.get("isolated_out_root")
+        entries.append(entry)
+    return entries
+
+
+def update_batch_profile_report_context_refs(
+    *,
+    batch_report_path: Path,
+    context_refs: dict[str, dict[str, str]],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    report = load_json(batch_report_path)
+    report.update(context_refs)
+    architecture = report.get("judge_summary", {}).get("harness_architecture")
+    if isinstance(architecture, dict):
+        architecture["context_pack"] = context_refs["context_pack"]
+        architecture["agent_index"] = context_refs["agent_index"]
+    batch_report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return artifact_ref(batch_report_path, repo_root=repo_root)
+
+
+def evaluate(
+    *,
+    run_id: str,
+    target_id: str,
+    source_repo_root: Path,
+    source_file: str,
+    source_commit: str,
+    out_root: Path,
+    proof_class: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    functions: list[str] | None = None,
+    require_source_commit: str | None = None,
+    slice_specs: list[str] | None = None,
+    compiler_command_source: str | None = None,
+    include_paths: list[str] | None = None,
+    defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    slice_id_prefix: str | None = None,
+    worker_prefix: str = "worker",
+    limit: int | None = None,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
+    execute_merge: bool = True,
+    auto_retry: bool = True,
+    max_workers: int = 1,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if proof_class not in {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}:
+        raise SystemExit(f"unsupported proof_class: {proof_class}")
+    if mode not in {"deterministic", "opencode"}:
+        raise SystemExit(f"unsupported mode: {mode}")
+    out_root = repo_path(out_root, repo_root=repo_root)
+    if slice_id_prefix is None:
+        slice_id_prefix = f"{slug_id(target_id)}-{slug_id(Path(source_file).stem)}"
+    db_path = init_run(
+        out_root=out_root,
+        run_id=run_id,
+        proof_class=proof_class,
+        repo_root=repo_root,
+    )
+    plan = plan_source_file(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=target_id,
+        source_repo_root=source_repo_root,
+        source_repository=source_repository,
+        source_branch=source_branch,
+        source_file=source_file,
+        functions=functions or [],
+        source_commit=source_commit,
+        require_source_commit=require_source_commit,
+        slice_specs=slice_specs or [],
+        compiler_command_source=compiler_command_source,
+        include_paths=include_paths or [],
+        defines=defines or [],
+        reuse_accepted_evidence=reuse_accepted_evidence,
+        accepted_evidence_root=accepted_evidence_root,
+        out_root=out_root,
+        slice_id_prefix=slice_id_prefix,
+        worker_prefix=worker_prefix,
+        limit=limit,
+        repo_root=repo_root,
+    )
+    run_result = run_plan(
+        db_path=db_path,
+        run_id=run_id,
+        plan_path=Path(str(plan["plan_path"])),
+        out_root=out_root,
+        proof_class=proof_class,
+        mode=mode,
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        opencode_preflight_report=opencode_preflight_report,
+        execute_merge=execute_merge,
+        auto_retry=auto_retry,
+        max_workers=max_workers,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "entrypoint": "evaluate",
+        "status": run_result["status"],
+        "exit_code": int(run_result["exit_code"]),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "db_path": repo_relative(db_path, repo_root=repo_root),
+        "proof_class": proof_class,
+        "mode": mode,
+        "target_id": target_id,
+        "source_repo_root": repo_relative(repo_path(source_repo_root, repo_root=repo_root), repo_root=repo_root),
+        "source_file": source_file,
+        "source_commit": source_commit,
+        "worker_count": len(plan["units"]),
+        "plan_path": plan["plan_path"],
+        "plan": plan,
+        "run_plan": run_result,
+    }
+    if source_repository:
+        result["source_repository"] = source_repository
+    if source_branch:
+        result["source_branch"] = source_branch
+    report_path = out_root / "harness" / "evaluate-report.json"
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    context_refs = write_context_pack_and_agent_index(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=target_id,
+        proof_class=proof_class,
+        mode=mode,
+        out_root=out_root,
+        plan=plan,
+        run_result=run_result,
+        primary_report_path=report_path,
+        report_entrypoint="evaluate_report",
+        acceptance_boundary=None,
+        repo_root=repo_root,
+    )
+    result.update(context_refs)
+    result["judge_summary"] = build_judge_summary(
+        entrypoint="evaluate",
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        context_refs=context_refs,
+        acceptance_boundary=None,
+        repo_root=repo_root,
+    )
+    result["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(result["status"]),
+        proof_class=proof_class,
+        mode=mode,
+        judge_summary=result["judge_summary"],
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="evaluate-report",
+            path=report_path,
+            status=str(result["status"]),
+            semantic_role="evaluate-report",
+            payload=result,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="evaluate_executed", payload=result)
+        connection.commit()
+    return result
+
+
+def graph_checkpoint_backend(graph: dict[str, Any]) -> str:
+    backend = graph.get("checkpoint_backend")
+    return str(backend) if isinstance(backend, str) and backend else "sqlite"
+
+
+def graph_retry_round_cap(graph: dict[str, Any]) -> int:
+    retry_policy = graph.get("retry_policy") if isinstance(graph.get("retry_policy"), dict) else {}
+    try:
+        return int(retry_policy.get("round_cap", REPAIR_ROUND_CAP))
+    except (TypeError, ValueError):
+        return REPAIR_ROUND_CAP
+
+
+def build_context_management_contract(
+    *,
+    graph: dict[str, Any],
+    db_path: Path | None = None,
+    primary_report_path: Path | None = None,
+    context_pack_path: Path | None = None,
+    agent_index_path: Path | None = None,
+    report_entrypoint: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    contract: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_kind": "context-management",
+        "role": "context-index-and-resume-map",
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "evidence_policy": "on-disk-artifacts-only",
+        "managed_state": [
+            "entrypoints",
+            "source pins",
+            "worker handoffs",
+            "graph",
+            "retry policy",
+            "artifact refs",
+        ],
+        "pipeline": [
+            {
+                "stage": "plan",
+                "role": "planner",
+                "evidence": "entrypoints.worker_plan",
+            },
+            {
+                "stage": "translate",
+                "role": "worker",
+                "evidence": "workers[*].summary_path",
+                "fanout": True,
+            },
+            {
+                "stage": "verify",
+                "role": "verifier",
+                "evidence": "entrypoints.merge_summary",
+                "reduce": "merge",
+                "on_failure": "repair",
+            },
+            {
+                "stage": "repair",
+                "role": "repairer",
+                "trigger": "exit_code != 0",
+                "loopback_to": "translate",
+                "max_rounds": graph_retry_round_cap(graph),
+            },
+        ],
+        "update_rules": [
+            "all reusable paths are repo-relative",
+            "semantic acceptance remains owned by validators and final summaries",
+            "judge sidecars are path-only in context indexes to avoid hash cycles",
+        ],
+        "resume_protocol": {
+            "checkpoint_backend": graph_checkpoint_backend(graph),
+            "worker_state_source": "agent-index.agents_by_worker_id",
+            "open_repair_hint_source": "sqlite repair_hints plus worker auto_retry records",
+            "merge_precondition": "required worker summaries recorded or final summary fails closed",
+        },
+    }
+    if db_path is not None:
+        contract["resume_protocol"]["ledger_path"] = repo_relative(db_path, repo_root=repo_root)
+    if primary_report_path is not None:
+        contract["primary_report"] = repo_relative(primary_report_path, repo_root=repo_root)
+    if context_pack_path is not None:
+        contract["context_pack"] = repo_relative(context_pack_path, repo_root=repo_root)
+    if agent_index_path is not None:
+        contract["agent_index"] = repo_relative(agent_index_path, repo_root=repo_root)
+    if report_entrypoint:
+        contract["report_entrypoint"] = report_entrypoint
+    return contract
+
+
+def build_agent_coordination_contract(
+    *,
+    graph: dict[str, Any],
+    db_path: Path | None = None,
+    worker_count: int = 0,
+    mode: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    contract: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_kind": "agent-coordination",
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "coordination_state": "sqlite-ledger-and-on-disk-reports",
+        "checkpoint_backend": graph_checkpoint_backend(graph),
+        "runtime": graph.get("runtime"),
+        "mode": mode,
+        "worker_count": int(worker_count),
+        "roles": {
+            "planner": {
+                "stage": "plan",
+                "inputs": ["batch profile", "source pins", "slice specs"],
+                "outputs": ["worker plan", "assignments", "context pack", "agent index"],
+                "status_source": "planner artifacts and SQLite ledger",
+                "acceptance_authority": "none",
+            },
+            "worker": {
+                "stage": "fanout-worker",
+                "inputs": ["assignment_path", "request_path"],
+                "outputs": ["summary_path", "report_path", "attempts", "final_decision"],
+                "isolation": "per-worker out_root",
+                "status_source": "worker summary and run-worker-report",
+                "acceptance_authority": "none",
+            },
+            "repairer": {
+                "stage": "repair-retry",
+                "inputs": ["repair_hints", "failed worker summary", "stderr tail"],
+                "outputs": ["retry attempt", "auto_retry", "attempts"],
+                "status_source": "repair_hints ledger and worker attempts",
+                "acceptance_authority": "none",
+                "round_cap": graph_retry_round_cap(graph),
+            },
+            "verifier": {
+                "stage": "merge-verify",
+                "inputs": ["worker summaries", "workflow metrics", "oracle evidence"],
+                "outputs": ["competition-run-summary", "workflow-metrics"],
+                "status_source": "validate_competition_run_summary",
+                "acceptance_authority": "competition-run-summary validator",
+            },
+            "reporter": {
+                "stage": "report",
+                "inputs": ["evaluate report", "context pack", "agent index", "judge evidence index"],
+                "outputs": ["judge-facing indexes"],
+                "status_source": "on-disk artifacts with sha256 where hash-stable",
+                "acceptance_authority": "none",
+            },
+        },
+        "resume_protocol": {
+            "checkpoint_backend": graph_checkpoint_backend(graph),
+            "worker_state_source": "agent-index.agents_by_worker_id",
+            "open_repair_hint_source": "sqlite repair_hints",
+            "merge_precondition": "all required worker summaries recorded before merge",
+            "resume_entrypoints": ["run-plan --plan", "run-worker --assignment", "evaluate --profile"],
+        },
+    }
+    if db_path is not None:
+        contract["resume_protocol"]["ledger_path"] = repo_relative(db_path, repo_root=repo_root)
+    return contract
+
+
+def build_architecture_contracts(graph: dict[str, Any]) -> dict[str, Any]:
+    context_contract = build_context_management_contract(graph=graph)
+    agent_contract = build_agent_coordination_contract(graph=graph)
+    return {
+        "context_management": {
+            "contract_kind": context_contract["contract_kind"],
+            "role": context_contract["role"],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "evidence_policy": context_contract["evidence_policy"],
+            "pipeline": context_contract["pipeline"],
+            "resume_protocol": context_contract["resume_protocol"],
+        },
+        "agent_coordination": {
+            "contract_kind": agent_contract["contract_kind"],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "coordination_state": agent_contract["coordination_state"],
+            "checkpoint_backend": agent_contract["checkpoint_backend"],
+            "roles": list(agent_contract["roles"]),
+            "resume_protocol": agent_contract["resume_protocol"],
+        },
+    }
+
+
+def build_judge_summary(
+    *,
+    entrypoint: str,
+    proof_class: str,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    context_refs: dict[str, dict[str, str]],
+    acceptance_boundary: dict[str, Any] | None = None,
+    route_metrics_artifact: dict[str, Any] | None = None,
+    before_after_exhibit_artifact: dict[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
+    merge_execution = (
+        run_result.get("merge_execution")
+        if isinstance(run_result.get("merge_execution"), dict)
+        else {}
+    )
+    final_summary = load_merge_summary(merge_execution, repo_root=repo_root)
+    workflow_metrics = load_merge_workflow_metrics(merge_execution, repo_root=repo_root)
+    slices = final_summary.get("slices") if isinstance(final_summary.get("slices"), dict) else {}
+    final_gate = final_summary.get("final_gate") if isinstance(final_summary.get("final_gate"), dict) else {}
+    final_gate_status = merge_execution.get("final_gate_status") or final_gate.get("status")
+    workers = [
+        {
+            "worker_id": worker.get("worker_id"),
+            "slice_id": worker.get("slice_id"),
+            "function": worker.get("function"),
+            "summary_status": worker.get("summary_status"),
+            "exit_code": int(worker.get("exit_code", 1)),
+            "recorded": bool(worker.get("recorded")),
+            "final_decision": worker.get("final_decision"),
+        }
+        for worker in run_result.get("workers", [])
+        if isinstance(worker, dict)
+    ]
+    semantic_claim_source = "final_gate_and_worker_summaries"
+    generated_draft_semantic_pass = None
+    if isinstance(acceptance_boundary, dict):
+        semantic_claim_source = str(acceptance_boundary.get("semantic_claim_source", semantic_claim_source))
+        if "generated_draft_semantic_pass" in acceptance_boundary:
+            generated_draft_semantic_pass = bool(acceptance_boundary["generated_draft_semantic_pass"])
+
+    core_translation_quality: dict[str, Any] = {
+        "final_gate_status": final_gate_status,
+        "semantic_claim_source": semantic_claim_source,
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "semantic_pass_count": int(slices.get("semantic_pass", 0) or 0),
+        "compiled_count": int(slices.get("compiled", 0) or 0),
+        "failed_count": int(slices.get("failed", 0) or 0),
+        "workers": workers,
+    }
+    if workflow_metrics:
+        unsafe_reduction = workflow_metrics.get("unsafe_reduction")
+        if isinstance(unsafe_reduction, dict):
+            core_translation_quality["unsafe_reduction"] = unsafe_reduction
+        translation_before_after = workflow_metrics.get("translation_before_after")
+        if isinstance(translation_before_after, dict):
+            core_translation_quality["translation_before_after"] = translation_before_after
+        core_translation_quality["repair_summary"] = summarize_workflow_repair_metrics(workflow_metrics)
+    if route_metrics_artifact is not None:
+        core_translation_quality["route_governance_metrics"] = route_metrics_artifact.get("binding", {})
+    if before_after_exhibit_artifact is not None:
+        binding = before_after_exhibit_artifact.get("binding", {})
+        payload = before_after_exhibit_artifact.get("payload", {})
+        core_translation_quality["before_after_exhibit"] = binding
+        if isinstance(payload, dict):
+            translation_before_after = payload.get("translation_before_after")
+            if isinstance(translation_before_after, dict):
+                core_translation_quality["translation_before_after"] = translation_before_after
+            unsafe_reduction = summarize_before_after_unsafe_reduction(payload)
+            if unsafe_reduction is not None:
+                core_translation_quality["unsafe_reduction"] = unsafe_reduction
+
+    return {
+        "report_kind": "judge-summary",
+        "entrypoint": entrypoint,
+        "proof_class": proof_class,
+        "mode": mode,
+        "harness_architecture": {
+            "entrypoint": entrypoint,
+            "planning_mode": plan.get("planning_mode", "source_file"),
+            "pipeline": [
+                "init-run",
+                "plan-explicit-workers" if plan.get("planning_mode") == "explicit_workers" else "plan-source-file",
+                "run-plan",
+                "merge",
+                "report",
+            ],
+            "graph_runtime": graph.get("runtime"),
+            "graph_nodes": graph.get("nodes", []),
+            "parallelism": run_result.get("parallelism"),
+            "auto_retry": run_result.get("auto_retry"),
+            "retry_policy": graph.get("retry_policy"),
+            "context_pack": context_refs.get("context_pack"),
+            "agent_index": context_refs.get("agent_index"),
+            "architecture_contracts": build_architecture_contracts(graph),
+            "worker_count": len(plan.get("units", [])) if isinstance(plan.get("units"), list) else 0,
+        },
+        "core_translation_quality": core_translation_quality,
+        "claim_boundary": (
+            "This summary is an index over verified on-disk reports; semantic acceptance remains owned by "
+            "competition-run-summary.json, workflow metrics, before/after evidence, and validators."
+        ),
+    }
+
+
+def build_judge_headline(
+    *,
+    entrypoint: str,
+    status: str,
+    proof_class: str,
+    mode: str,
+    judge_summary: Any,
+    acceptance_boundary: Any = None,
+    claim_boundary: Any = None,
+    route_metrics: Any = None,
+    opencode_runtime: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    summary = judge_summary if isinstance(judge_summary, dict) else {}
+    architecture = summary.get("harness_architecture") if isinstance(summary.get("harness_architecture"), dict) else {}
+    core_quality = (
+        summary.get("core_translation_quality")
+        if isinstance(summary.get("core_translation_quality"), dict)
+        else {}
+    )
+    boundary = claim_boundary if isinstance(claim_boundary, dict) else {}
+    acceptance = acceptance_boundary if isinstance(acceptance_boundary, dict) else {}
+    route = route_metrics if isinstance(route_metrics, dict) else {}
+    retry_policy = architecture.get("retry_policy") if isinstance(architecture.get("retry_policy"), dict) else {}
+    parallelism = architecture.get("parallelism") if isinstance(architecture.get("parallelism"), dict) else {}
+    worker_count = architecture.get("worker_count")
+    if not isinstance(worker_count, int):
+        workers = core_quality.get("workers")
+        worker_count = len(workers) if isinstance(workers, list) else 0
+
+    generated_draft_semantic_pass = boundary.get(
+        "generated_draft_semantic_pass",
+        acceptance.get("generated_draft_semantic_pass", core_quality.get("generated_draft_semantic_pass", False)),
+    )
+    if not isinstance(generated_draft_semantic_pass, bool):
+        generated_draft_semantic_pass = False
+
+    translation_coverage_numerator = boundary.get(
+        "translation_coverage_numerator",
+        route.get("translation_coverage_numerator", 0),
+    )
+    if isinstance(translation_coverage_numerator, bool):
+        translation_coverage_numerator = 0
+    try:
+        translation_coverage_numerator = int(translation_coverage_numerator)
+    except (TypeError, ValueError):
+        translation_coverage_numerator = 0
+
+    opencode_enabled = opencode_runtime is not None
+    headline = {
+        "report_kind": "judge-headline",
+        "entrypoint": entrypoint,
+        "status": status,
+        "proof_class": proof_class,
+        "mode": mode,
+        "graph_runtime": architecture.get("graph_runtime"),
+        "planning_mode": architecture.get("planning_mode"),
+        "pipeline": architecture.get("pipeline", []),
+        "worker_count": worker_count,
+        "parallelism": parallelism,
+        "repair_round_cap": retry_policy.get("round_cap", REPAIR_ROUND_CAP),
+        "repair_checkpoint": retry_policy.get("checkpoint", "repair_hints"),
+        "semantic_gate": False,
+        "semantic_claim_source": boundary.get(
+            "semantic_claim_source",
+            acceptance.get("semantic_claim_source", core_quality.get("semantic_claim_source", "unknown")),
+        ),
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "translation_coverage_numerator": translation_coverage_numerator,
+        "final_gate_status": core_quality.get("final_gate_status"),
+        "semantic_pass_count": int(core_quality.get("semantic_pass_count", 0) or 0),
+        "compiled_count": int(core_quality.get("compiled_count", 0) or 0),
+        "failed_count": int(core_quality.get("failed_count", 0) or 0),
+        "context_pack": architecture.get("context_pack"),
+        "agent_index": architecture.get("agent_index"),
+        "context_index": {
+            "context_pack": architecture.get("context_pack"),
+            "agent_index": architecture.get("agent_index"),
+            "evidence_policy": "on-disk-artifacts-only",
+            "worker_state_source": "agent-index.agents_by_worker_id",
+        },
+        "opencode_runtime": {
+            "enabled": opencode_enabled,
+            "worker_count": int(opencode_runtime.get("worker_count", 0)) if opencode_runtime else 0,
+            "all_contracts_executed": bool(opencode_runtime.get("all_contracts_executed")) if opencode_runtime else False,
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+        },
+    }
+    unsafe_reduction = core_quality.get("unsafe_reduction")
+    if isinstance(unsafe_reduction, dict):
+        headline["unsafe_reduction"] = unsafe_reduction
+    repair_summary = core_quality.get("repair_summary")
+    if isinstance(repair_summary, dict):
+        headline["repair_summary"] = repair_summary
+    return headline
+
+
+def load_merge_summary(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary_path_text = merge_execution.get("summary_path")
+    if not isinstance(summary_path_text, str) or not summary_path_text:
+        return {}
+    summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+    if not summary_path.exists():
+        return {}
+    return load_json(summary_path)
+
+
+def load_merge_workflow_metrics(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary_path_text = merge_execution.get("summary_path")
+    if not isinstance(summary_path_text, str) or not summary_path_text:
+        return {}
+    summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+    if not summary_path.exists():
+        return {}
+    summary = load_json(summary_path)
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return {}
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        return {}
+    metrics_path = validate_competition_run_summary.resolve_summary_artifact(
+        metrics_ref,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if metrics_path is None or sha256_file(metrics_path) != expected_sha:
+        return {}
+    metrics = load_json(metrics_path)
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def summarize_workflow_repair_metrics(workflow_metrics: dict[str, Any]) -> dict[str, Any]:
+    per_unit_statuses = workflow_metrics.get("per_unit_statuses")
+    units = [unit for unit in per_unit_statuses if isinstance(unit, dict)] if isinstance(per_unit_statuses, list) else []
+    histories = [unit for unit in units if isinstance(unit.get("repair_history"), dict)]
+    root_cause_counts = workflow_metrics.get("root_cause_counts")
+    return {
+        "avg_repair_rounds": float(workflow_metrics.get("avg_repair_rounds", 0.0) or 0.0),
+        "auto_recovery_rate": float(workflow_metrics.get("auto_recovery_rate", 0.0) or 0.0),
+        "human_interventions": int(workflow_metrics.get("human_interventions", 0) or 0),
+        "repair_history_unit_count": len(histories),
+        "auto_recovered_units": sum(1 for unit in units if unit.get("auto_recovered") is True),
+        "root_cause_counts": root_cause_counts if isinstance(root_cause_counts, dict) else {},
+    }
+
+
+def summarize_before_after_unsafe_reduction(payload: dict[str, Any]) -> dict[str, Any] | None:
+    units = payload.get("units")
+    if not isinstance(units, list):
+        return None
+    baseline_total = 0
+    current_total = 0
+    reduced_by_total = 0
+    measured = 0
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        unsafe_reduction = unit.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            continue
+        baseline_total += int(unsafe_reduction.get("baseline_total_unsafe", 0) or 0)
+        current_total += int(unsafe_reduction.get("current_total_unsafe", 0) or 0)
+        reduced_by_total += int(unsafe_reduction.get("reduced_by", 0) or 0)
+        measured += 1
+    if measured == 0:
+        return None
+    return {
+        "status": "measured",
+        "unit_count": measured,
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": reduced_by_total,
+    }
+
+
+def write_context_pack_and_agent_index(
+    *,
+    db_path: Path,
+    run_id: str,
+    target_id: str,
+    proof_class: str,
+    mode: str,
+    out_root: Path,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    primary_report_path: Path,
+    report_entrypoint: str,
+    acceptance_boundary: dict[str, Any] | None = None,
+    attempt_evidence_policy: dict[str, Any] | None = None,
+    report_artifacts: dict[str, dict[str, Any]] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    harness_dir = out_root / "harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    context_pack_path = harness_dir / "context-pack.json"
+    agent_index_path = harness_dir / "agent-index.json"
+    worker_results_by_id = {
+        str(worker.get("worker_id")): worker
+        for worker in run_result.get("workers", [])
+        if isinstance(worker, dict) and worker.get("worker_id")
+    }
+    workers = []
+    agents = []
+    for unit in plan.get("units", []):
+        if not isinstance(unit, dict):
+            continue
+        worker_id = str(unit.get("worker_id", ""))
+        worker_result = worker_results_by_id.get(worker_id, {})
+        worker_entry = {
+            "worker_id": worker_id,
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "out_root": unit.get("out_root"),
+            "assignment_path": unit.get("assignment_path"),
+            "request_path": unit.get("request_path"),
+            "slice_spec": unit.get("slice_spec"),
+            "source_repo_root": unit.get("source_repo_root"),
+            "source_file": unit.get("source_file"),
+            "source_commit": unit.get("source_commit"),
+            "require_source_commit": unit.get("require_source_commit"),
+            "source_repository": unit.get("source_repository"),
+            "source_branch": unit.get("source_branch"),
+            "source_sha256": unit.get("source_sha256"),
+            "summary_path": worker_result.get("summary_path"),
+            "report_path": worker_result.get("report_path"),
+            "summary_status": worker_result.get("summary_status"),
+            "exit_code": int(worker_result.get("exit_code", 1)),
+            "recorded": bool(worker_result.get("recorded")),
+        }
+        if isinstance(worker_result.get("attempts"), list):
+            worker_entry["attempts"] = worker_result["attempts"]
+        if isinstance(worker_result.get("final_decision"), dict):
+            worker_entry["final_decision"] = worker_result["final_decision"]
+        copy_opencode_worker_evidence(worker_result, worker_entry)
+        agent_entry = {
+            "worker_id": worker_id,
+            "role": "slice-worker",
+            "runtime": mode,
+            "status": worker_entry["summary_status"] or "missing-summary",
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "isolated_out_root": unit.get("out_root"),
+            "assignment_path": unit.get("assignment_path"),
+            "request_path": unit.get("request_path"),
+            "source_repo_root": unit.get("source_repo_root"),
+            "source_file": unit.get("source_file"),
+            "source_commit": unit.get("source_commit"),
+            "require_source_commit": unit.get("require_source_commit"),
+            "source_repository": unit.get("source_repository"),
+            "source_branch": unit.get("source_branch"),
+            "source_sha256": unit.get("source_sha256"),
+            "summary_path": worker_result.get("summary_path"),
+            "report_path": worker_result.get("report_path"),
+            "exit_code": worker_entry["exit_code"],
+            "recorded": worker_entry["recorded"],
+        }
+        if isinstance(worker_result.get("attempts"), list):
+            agent_entry["attempts"] = worker_result["attempts"]
+        if isinstance(worker_result.get("final_decision"), dict):
+            agent_entry["final_decision"] = worker_result["final_decision"]
+        copy_opencode_worker_evidence(worker_result, agent_entry)
+        if isinstance(worker_result.get("auto_retry"), dict):
+            worker_entry["auto_retry"] = worker_result["auto_retry"]
+            agent_entry["auto_retry"] = worker_result["auto_retry"]
+        workers.append(worker_entry)
+        agents.append(agent_entry)
+    graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
+    context_pack_id = f"{run_id}-context-pack"
+    report_artifacts = dict(report_artifacts or {})
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        report_artifacts.setdefault("opencode_preflight_report", run_result["opencode_preflight_report"])
+    report_entrypoints = {
+        name: artifact.get("path")
+        for name, artifact in report_artifacts.items()
+        if isinstance(artifact, dict) and isinstance(artifact.get("path"), str)
+    }
+    context_management_contract = build_context_management_contract(
+        graph=graph,
+        db_path=db_path,
+        primary_report_path=primary_report_path,
+        context_pack_path=context_pack_path,
+        agent_index_path=agent_index_path,
+        report_entrypoint=report_entrypoint,
+        repo_root=repo_root,
+    )
+    context_pack = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "context-pack",
+        "context_pack_id": context_pack_id,
+        "run_id": run_id,
+        "target_id": target_id,
+        "proof_class": proof_class,
+        "mode": mode,
+        "status": run_result.get("status"),
+        "budget": {
+            "depth": 1,
+            "max_tokens": 20000,
+        },
+        "source": {
+            "planning_mode": plan.get("planning_mode", "source_file"),
+            "repo_root": plan.get("source_repo_root"),
+            "source_file": plan.get("source_file"),
+            "source_commit": plan.get("source_commit"),
+            "require_source_commit": plan.get("require_source_commit"),
+            "source_repository": plan.get("source_repository"),
+            "source_branch": plan.get("source_branch"),
+            "source_sha256": plan.get("source_sha256"),
+            "worker_sources": [
+                {
+                    "worker_id": worker.get("worker_id"),
+                    "slice_id": worker.get("slice_id"),
+                    "function": worker.get("function"),
+                    "source_repo_root": worker.get("source_repo_root"),
+                    "source_file": worker.get("source_file"),
+                    "source_commit": worker.get("source_commit"),
+                    "require_source_commit": worker.get("require_source_commit"),
+                    "source_repository": worker.get("source_repository"),
+                    "source_branch": worker.get("source_branch"),
+                    "source_sha256": worker.get("source_sha256"),
+                }
+                for worker in workers
+                if isinstance(worker, dict) and worker.get("source_commit")
+            ],
+        },
+        "entrypoints": {
+            "primary_report": repo_relative(primary_report_path, repo_root=repo_root),
+            report_entrypoint: repo_relative(primary_report_path, repo_root=repo_root),
+            "run_plan_report": run_result.get("report_path"),
+            "worker_plan": plan.get("plan_path"),
+            "merge_plan": run_result.get("merge_plan", {}).get("path") if isinstance(run_result.get("merge_plan"), dict) else None,
+            "merge_summary": run_result.get("merge_execution", {}).get("summary_path")
+            if isinstance(run_result.get("merge_execution"), dict)
+            else None,
+            "agent_index": repo_relative(agent_index_path, repo_root=repo_root),
+            **report_entrypoints,
+        },
+        "graph": graph,
+        "parallelism": run_result.get("parallelism"),
+        "retry_policy": graph.get("retry_policy"),
+        "workers": workers,
+        "context_management_contract": context_management_contract,
+        "acceptance_boundary": {
+            "semantic_acceptance": "final verification and worker summaries decide acceptance; this pack is an index only",
+            "candidate_sources": ["c2rust-baseline", "deterministic-worker", "opencode-worker"],
+        },
+    }
+    if acceptance_boundary is not None:
+        context_pack["acceptance_boundary"]["profile"] = acceptance_boundary
+    if attempt_evidence_policy is not None:
+        context_pack["attempt_evidence_policy"] = attempt_evidence_policy
+    if report_artifacts:
+        context_pack["report_artifacts"] = report_artifacts
+    agents_by_worker_id = {
+        str(agent["worker_id"]): agent
+        for agent in agents
+        if isinstance(agent, dict) and agent.get("worker_id")
+    }
+    agent_index = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "agent-index",
+        "run_id": run_id,
+        "target_id": target_id,
+        "proof_class": proof_class,
+        "checkpoint_backend": graph.get("checkpoint_backend", "sqlite"),
+        "agent_coordination_contract": build_agent_coordination_contract(
+            graph=graph,
+            db_path=db_path,
+            worker_count=len(workers),
+            mode=mode,
+            repo_root=repo_root,
+        ),
+        "planner": {
+            "plan_path": plan.get("plan_path"),
+            "worker_count": len(workers),
+        },
+        "agents": agents,
+        "agents_by_worker_id": agents_by_worker_id,
+        "merge": {
+            "status": run_result.get("status"),
+            "merge_plan": run_result.get("merge_plan"),
+            "merge_execution": run_result.get("merge_execution"),
+        },
+    }
+    if report_artifacts:
+        agent_index["reports"] = report_artifacts
+    if attempt_evidence_policy is not None:
+        agent_index["attempt_evidence_policy"] = attempt_evidence_policy
+    context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    context_pack_ref = {"path": repo_relative(context_pack_path, repo_root=repo_root), "sha256": sha256_file(context_pack_path)}
+    agent_index_ref = {"path": repo_relative(agent_index_path, repo_root=repo_root), "sha256": sha256_file(agent_index_path)}
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(context_pack_id) do update set
+              artifact_path=excluded.artifact_path,
+              artifact_sha256=excluded.artifact_sha256,
+              payload_json=excluded.payload_json
+            """,
+            (
+                context_pack_id,
+                run_id,
+                target_id,
+                None,
+                int(context_pack["budget"]["depth"]),
+                int(context_pack["budget"]["max_tokens"]),
+                context_pack_ref["path"],
+                context_pack_ref["sha256"],
+                json.dumps(context_pack, sort_keys=True),
+            ),
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="context-pack",
+            path=context_pack_path,
+            status=str(run_result.get("status", "unknown")),
+            semantic_role="agent-context-pack",
+            payload=context_pack,
+            repo_root=repo_root,
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="agent-index",
+            path=agent_index_path,
+            status=str(run_result.get("status", "unknown")),
+            semantic_role="agent-index",
+            payload=agent_index,
+            repo_root=repo_root,
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="context_pack_written",
+            payload={"context_pack": context_pack_ref, "agent_index": agent_index_ref},
+        )
+        connection.commit()
+    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref}
+
+
+def write_route_governance_metrics_profile_report(
+    *,
+    profile: dict[str, Any],
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    if not profile_bool(profile, "emit_route_governance_metrics_report", default=False):
+        return None
+    coverage_report_text = profile_string(profile, "route_governance_metrics_coverage_report")
+    evidence_root_text = profile_string(
+        profile,
+        "route_governance_metrics_evidence_root",
+        default="validation/evidence",
+    )
+    payload = route_governance_metrics_report.build_report(
+        repo_root,
+        coverage_report_path=Path(coverage_report_text) if coverage_report_text is not None else None,
+        evidence_root=Path(evidence_root_text or "validation/evidence"),
+        competition_summary_paths=route_governance_competition_summary_paths(out_root),
+    )
+    report_path = out_root / "summary" / "route-governance-metrics-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    s2_workflow_metrics = metrics.get("s2_workflow_metrics") if isinstance(metrics.get("s2_workflow_metrics"), dict) else {}
+    unsafe_reduction = (
+        s2_workflow_metrics.get("unsafe_reduction")
+        if isinstance(s2_workflow_metrics.get("unsafe_reduction"), dict)
+        else {}
+    )
+    translation_before_after = (
+        s2_workflow_metrics.get("translation_before_after")
+        if isinstance(s2_workflow_metrics.get("translation_before_after"), dict)
+        else {}
+    )
+    binding = {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": str(payload.get("status", "unknown")),
+        "report_kind": str(payload.get("report_kind", "route-governance-metrics")),
+        "translation_coverage_numerator": int(metrics.get("translation_coverage_numerator", 0)),
+        "accepted_evidence_semantic_pass_count": int(metrics.get("accepted_evidence_semantic_pass_count", 0)),
+        "tracked_slice_gate_contexts": int(metrics.get("tracked_slice_gate_contexts", 0)),
+        "s2_workflow_run_count": int(s2_workflow_metrics.get("run_count", 0)),
+        "s2_unsafe_reduction_status": str(unsafe_reduction.get("status", "not_measured")),
+        "s2_translation_before_after_status": str(translation_before_after.get("status", "not_provided")),
+        "s2_translation_before_after_unit_count": int(translation_before_after.get("unit_count", 0)),
+        "s2_translation_before_after_measured_unsafe_unit_count": int(
+            translation_before_after.get("measured_unsafe_unit_count", 0)
+        ),
+        "s2_translation_before_after_accepted_patch_unit_count": int(
+            translation_before_after.get("accepted_patch_unit_count", 0)
+        ),
+        "claim_boundary": str(payload.get("claim_boundary", "")),
+    }
+    return {"binding": binding, "payload": payload}
+
+
+def write_before_after_exhibit_profile_report(
+    *,
+    profile: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    proof_class: str,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    route_metrics_artifact: dict[str, Any] | None,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    if not profile_bool(profile, "emit_before_after_exhibit_report", default=False):
+        return None
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    report_path = out_root / "summary" / "before-after-exhibit.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    summary_validation = validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
+    summary = load_json(summary_path)
+    workflow_ref = summary["workflow_metrics"]
+    workflow_path = validate_competition_run_summary.resolve_summary_artifact(
+        str(workflow_ref["path"]),
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if workflow_path is None:
+        raise SystemExit("before-after exhibit requires an existing workflow metrics artifact")
+    workflow_metrics = load_json(workflow_path)
+    translation_before_after = (
+        workflow_metrics.get("translation_before_after")
+        if isinstance(workflow_metrics.get("translation_before_after"), dict)
+        else {"status": "not_provided", "unit_count": 0}
+    )
+    units = before_after_exhibit_units(workflow_metrics)
+    status = "passed" if units and translation_before_after.get("status") == "bound" else "not_provided"
+    stage_contracts = before_after_stage_contracts(
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        route_metrics_artifact=route_metrics_artifact,
+        summary=summary,
+        workflow_metrics=workflow_metrics,
+        summary_path=summary_path,
+        workflow_path=workflow_path,
+        repo_root=repo_root,
+    )
+    if (
+        profile_bool(profile, "require_repair_trace", default=False)
+        and status == "passed"
+        and stage_contracts.get("repairer", {}).get("status") != "verified"
+    ):
+        raise SystemExit(
+            "before-after exhibit requires verified repair trace when profile require_repair_trace is true"
+        )
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "before-after-exhibit",
+        "status": status,
+        "run_id": run_id,
+        "profile_id": profile_required_string(profile, "profile_id"),
+        "proof_class": proof_class,
+        "mode": mode,
+        "claim_boundary": {
+            "source": "batch_profile_acceptance_boundary",
+            "value": profile.get("acceptance_boundary", {}),
+            "boundary": (
+                "This exhibit binds before/after artifacts from a validated competition summary. "
+                "It does not convert accepted-evidence-authoritative runs into translator-generated semantic pass."
+            ),
+        },
+        "inputs": {
+            "profile": artifact_ref(profile_path, repo_root=repo_root),
+            "competition_summary": artifact_ref(summary_path, repo_root=repo_root),
+            "workflow_metrics": artifact_ref(workflow_path, repo_root=repo_root),
+            "summary_validation": summary_validation,
+        },
+        "translation_before_after": {
+            "status": str(translation_before_after.get("status", "not_provided")),
+            "unit_count": int(translation_before_after.get("unit_count", 0)),
+            "measured_unsafe_unit_count": int(translation_before_after.get("measured_unsafe_unit_count", 0)),
+            "accepted_patch_unit_count": int(translation_before_after.get("accepted_patch_unit_count", 0)),
+        },
+        "units": units,
+        "stage_contracts": stage_contracts,
+        "reproduction": {
+            "run_command": (
+                "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
+                f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
+            ),
+            "verify_command": (
+                "python -B validation/tools/validate_competition_run_summary.py "
+                f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
+            ),
+        },
+    }
+    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    binding = {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": status,
+        "report_kind": "before-after-exhibit",
+        "unit_count": len(units),
+        "measured_unsafe_unit_count": int(payload["translation_before_after"]["measured_unsafe_unit_count"]),
+        "accepted_patch_unit_count": int(payload["translation_before_after"]["accepted_patch_unit_count"]),
+    }
+    return {"binding": binding, "payload": payload}
+
+
+def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    units = []
+    for unit in workflow_metrics.get("per_unit_statuses", []):
+        if not isinstance(unit, dict):
+            continue
+        evidence = unit.get("translation_before_after")
+        if not isinstance(evidence, dict) or evidence.get("status") != "bound":
+            continue
+        exhibit_unit = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "source": str(unit.get("source", "unknown")),
+            "status": str(unit.get("status", "unknown")),
+            "baseline": evidence.get("baseline", {}),
+            "final": evidence.get("final", {}),
+            "oracle_evidence": evidence.get("oracle_evidence", {}),
+            "accepted_patch": evidence.get("accepted_patch", {}),
+            "unsafe_reduction": evidence.get("unsafe_reduction", {}),
+        }
+        if "repair_rounds" in unit:
+            exhibit_unit["repair_rounds"] = int(unit.get("repair_rounds", 0) or 0)
+        if "auto_recovered" in unit:
+            exhibit_unit["auto_recovered"] = bool(unit.get("auto_recovered"))
+        if isinstance(unit.get("root_cause_key"), str):
+            exhibit_unit["root_cause_key"] = unit["root_cause_key"]
+        if isinstance(unit.get("repair_history"), dict):
+            exhibit_unit["repair_history"] = unit["repair_history"]
+        if isinstance(evidence.get("patch_log"), dict):
+            exhibit_unit["patch_log"] = evidence["patch_log"]
+        if isinstance(evidence.get("claim_boundary"), dict):
+            exhibit_unit["claim_boundary"] = evidence["claim_boundary"]
+        units.append(exhibit_unit)
+    return units
+
+
+def before_after_stage_contracts(
+    *,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    route_metrics_artifact: dict[str, Any] | None,
+    summary: dict[str, Any],
+    workflow_metrics: dict[str, Any],
+    summary_path: Path,
+    workflow_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    run_plan = run_result
+    workers = run_plan.get("workers") if isinstance(run_plan.get("workers"), list) else []
+    merge_execution = (
+        run_plan.get("merge_execution") if isinstance(run_plan.get("merge_execution"), dict) else {}
+    )
+    workflow_metrics_ref = summary.get("workflow_metrics") if isinstance(summary.get("workflow_metrics"), dict) else {}
+    repair_histories = before_after_repair_histories(workflow_metrics)
+    repair_status = (
+        "verified"
+        if any(history.get("verified") for history in repair_histories)
+        else ("recorded" if repair_histories else "not_exercised")
+    )
+    return {
+        "planner": {
+            "stage": "planner",
+            "status": str(plan.get("status", "unknown")),
+            "plan": path_ref_from_text(plan.get("plan_path"), repo_root=repo_root),
+            "source_sha256": plan.get("source_sha256"),
+            "slice_id_prefix": plan.get("slice_id_prefix"),
+            "worker_prefix": plan.get("worker_prefix"),
+            "units": plan.get("units", []),
+        },
+        "worker": {
+            "stage": "worker",
+            "status": "passed" if workers and all(worker.get("exit_code") == 0 for worker in workers) else "unknown",
+            "mode": mode,
+            "workers": workers,
+        },
+        "verifier": {
+            "stage": "verifier",
+            "status": str(summary.get("final_gate", {}).get("status", "unknown")),
+            "summary": artifact_ref(summary_path, repo_root=repo_root),
+            "workflow_metrics": {
+                "path": str(workflow_metrics_ref.get("path", repo_relative(workflow_path, repo_root=repo_root))),
+                "sha256": str(workflow_metrics_ref.get("sha256", sha256_file(workflow_path))),
+            },
+            "semantic_pass": int(summary.get("slices", {}).get("semantic_pass", 0)),
+            "generated_draft_semantic_pass": False,
+            "semantic_claim_source": "accepted_evidence_binding",
+        },
+        "repairer": {
+            "stage": "repairer",
+            "status": repair_status,
+            "repair_round_cap": REPAIR_ROUND_CAP,
+            "observed_repair_unit_count": len(repair_histories),
+            "avg_repair_rounds": float(workflow_metrics.get("avg_repair_rounds", 0.0) or 0.0),
+            "auto_recovery_rate": float(workflow_metrics.get("auto_recovery_rate", 0.0) or 0.0),
+            "root_cause_counts": (
+                workflow_metrics["root_cause_counts"]
+                if isinstance(workflow_metrics.get("root_cause_counts"), dict)
+                else {}
+            ),
+            "histories": repair_histories,
+            "evidence_boundary": (
+                "Repair history is shown only when workflow metrics bind measured repair or retry evidence."
+            ),
+        },
+        "reporter": {
+            "stage": "reporter",
+            "status": "passed",
+            "report_path": run_plan.get("report_path"),
+            "merge_execution": merge_execution,
+            "route_governance_metrics_report": (
+                route_metrics_artifact["binding"] if route_metrics_artifact is not None else None
+            ),
+            "workflow_metrics": artifact_ref(workflow_path, repo_root=repo_root),
+        },
+    }
+
+
+def before_after_repair_histories(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    histories = []
+    for unit in workflow_metrics.get("per_unit_statuses", []):
+        if not isinstance(unit, dict) or not isinstance(unit.get("repair_history"), dict):
+            continue
+        history = unit["repair_history"]
+        item = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "source": str(unit.get("source", "unknown")),
+            "status": str(unit.get("status", "unknown")),
+            "repair_rounds": int(unit.get("repair_rounds", 0) or 0),
+            "auto_recovered": bool(unit.get("auto_recovered", False)),
+            "verified": bool(history.get("verified", False)),
+            "repair_history": history,
+        }
+        if isinstance(unit.get("root_cause_key"), str):
+            item["root_cause_key"] = unit["root_cause_key"]
+        histories.append(item)
+    return histories
+
+
+def artifact_ref(path: Path, *, repo_root: Path) -> dict[str, str]:
+    return {
+        "path": repo_relative(path, repo_root=repo_root),
+        "sha256": sha256_file(path),
+    }
+
+
+def path_ref_from_text(value: Any, *, repo_root: Path) -> dict[str, str] | None:
+    if not isinstance(value, str) or not value:
+        return None
+    path = repo_path(Path(value), repo_root=repo_root)
+    if not path.exists():
+        return {"path": value, "sha256": ""}
+    return artifact_ref(path, repo_root=repo_root)
+
+
+def artifact_binding_from_value(value: Any, *, repo_root: Path) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not isinstance(value.get("path"), str) or not value["path"]:
+        return None
+    binding = dict(value)
+    path = repo_path(Path(value["path"]), repo_root=repo_root)
+    if path.is_file():
+        binding["sha256"] = sha256_file(path)
+    else:
+        binding["sha256"] = str(value.get("sha256", ""))
+    return binding
+
+
+def route_governance_competition_summary_paths(out_root: Path) -> list[Path]:
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    if not summary_path.exists():
+        return []
+    summary = load_json(summary_path)
+    return [summary_path] if isinstance(summary.get("workflow_metrics"), dict) else []
+
+
+def profile_required_string(profile: dict[str, Any], field: str) -> str:
+    value = profile.get(field)
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"batch profile field must be a non-empty string: {field}")
+    return value
+
+
+def profile_string(profile: dict[str, Any], field: str, *, default: str | None = None) -> str | None:
+    value = profile.get(field, default)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"batch profile field must be a non-empty string: {field}")
+    return value
+
+
+def profile_string_list(profile: dict[str, Any], field: str) -> list[str]:
+    value = profile.get(field, [])
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
+        raise SystemExit(f"batch profile field must be a list of non-empty strings: {field}")
+    return list(value)
+
+
+def profile_worker_list(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    value = profile.get("workers")
+    if not isinstance(value, list) or not value:
+        raise SystemExit("batch profile field must be a non-empty array: workers")
+    workers: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise SystemExit(f"batch profile workers[{index}] must be an object")
+        workers.append(item)
+    return workers
+
+
+def profile_bool(profile: dict[str, Any], field: str, *, default: bool) -> bool:
+    value = profile.get(field, default)
+    if not isinstance(value, bool):
+        raise SystemExit(f"batch profile field must be boolean: {field}")
+    return value
+
+
+def profile_int(profile: dict[str, Any], field: str, *, default: int | None = None) -> int | None:
+    value = profile.get(field, default)
+    if value is None:
+        return None
+    if not isinstance(value, int) or value < 1:
+        raise SystemExit(f"batch profile field must be a positive integer: {field}")
+    return value
+
+
+def run_plan_attempt_from_worker_result(result: dict[str, Any]) -> dict[str, Any]:
+    attempt = repair_attempt_from_result(result)
+    copy_opencode_worker_evidence(result, attempt)
+    repair_hint = result.get("repair_hint")
+    if isinstance(repair_hint, dict):
+        if isinstance(repair_hint.get("hint_id"), str):
+            attempt["hint_id"] = repair_hint["hint_id"]
+        attempt["hint_status"] = "opened"
+    if isinstance(result.get("hint_id"), str):
+        attempt["hint_id"] = result["hint_id"]
+    if isinstance(result.get("hint_status"), str):
+        attempt["hint_status"] = result["hint_status"]
+    elif int(result.get("exit_code", 1)) == 0 and result.get("summary_status") == "passed":
+        attempt["hint_status"] = "passed"
+    for field in ("repair_round_cap", "repair_rounds", "retry_limit"):
+        if field in result:
+            attempt[field] = result[field]
+    return attempt
+
+
+def copy_opencode_worker_evidence(source: dict[str, Any], target: dict[str, Any]) -> None:
+    for field in OPENCODE_WORKER_EVIDENCE_FIELDS:
+        value = source.get(field)
+        if value is not None:
+            target[field] = value
+
+
+def run_plan_worker_final_decision(worker_result: dict[str, Any]) -> dict[str, str]:
+    if int(worker_result.get("exit_code", 1)) == 0 and worker_result.get("summary_status") == "passed":
+        return {"status": "accepted", "reason": "worker_summary_passed"}
+    auto_retry = worker_result.get("auto_retry")
+    if isinstance(auto_retry, dict) and auto_retry.get("final_hint_status") == "retry_limit_exceeded":
+        return {"status": "refused", "reason": "retry_limit_exceeded"}
+    if not worker_result.get("recorded"):
+        return {"status": "refused", "reason": "worker_summary_missing"}
+    return {"status": "refused", "reason": "worker_summary_failed"}
+
+
+def run_plan(
+    *,
+    db_path: Path,
+    run_id: str,
+    plan_path: Path,
+    out_root: Path,
+    proof_class: str,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
+    execute_merge: bool = False,
+    auto_retry: bool = False,
+    max_workers: int = 1,
+    repair_trace: dict[str, Any] | None = None,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    plan_path = repo_path(plan_path, repo_root=repo_root)
+    plan = load_json(plan_path)
+    if plan.get("run_id") != run_id:
+        raise SystemExit(f"plan run_id {plan.get('run_id')} does not match requested run_id {run_id}")
+    units = plan.get("units")
+    if not isinstance(units, list) or not units:
+        raise SystemExit("run-plan requires a planner artifact with at least one unit")
+    if max_workers < 1:
+        raise SystemExit("run-plan max_workers must be a positive integer")
+    opencode_preflight_binding = None
+    if mode == "opencode":
+        opencode_preflight_binding = validate_opencode_preflight_report(
+            opencode_preflight_report,
+            expected_run_id=run_id,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            repo_root=repo_root,
+        )
+
+    started = time.monotonic()
+    planned_units = []
+    for index, unit in enumerate(units, start=1):
+        if not isinstance(unit, dict) or not isinstance(unit.get("worker_id"), str) or not unit["worker_id"]:
+            raise SystemExit(f"run-plan unit {index} missing worker_id")
+        planned_units.append(unit)
+
+    effective_workers = min(max_workers, len(planned_units))
+
+    def execute_unit(unit: dict[str, Any]) -> dict[str, Any]:
+        result = run_worker(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=unit["worker_id"],
+            mode=mode,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_preflight_report=opencode_preflight_report,
+            repair_trace=repair_trace,
+            command_runner=command_runner,
+            repo_root=repo_root,
+        )
+        worker_result = {
+            "worker_id": unit["worker_id"],
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "exit_code": int(result.get("exit_code", 1)),
+            "process_returncode": result.get("process_returncode"),
+            "summary_status": result.get("summary_status"),
+            "summary_path": result.get("summary_path"),
+            "report_path": result.get("report_path"),
+            "logs": result.get("logs"),
+            "recorded": bool(result.get("recorded")),
+        }
+        copy_opencode_worker_evidence(result, worker_result)
+        attempt_timeline = [run_plan_attempt_from_worker_result(result)]
+        retry_results = []
+        if auto_retry and worker_result["exit_code"] != 0:
+            hint_id = None
+            repair_hint = result.get("repair_hint")
+            if isinstance(repair_hint, dict) and isinstance(repair_hint.get("hint_id"), str):
+                hint_id = repair_hint["hint_id"]
+            while True:
+                retry_result = retry_worker(
+                    db_path=db_path,
+                    run_id=run_id,
+                    worker_id=unit["worker_id"],
+                    hint_id=hint_id,
+                    mode=mode,
+                    opencode_command=opencode_command,
+                    opencode_model=opencode_model,
+                    opencode_agent=opencode_agent,
+                    opencode_variant=opencode_variant,
+                    opencode_skip_permissions=opencode_skip_permissions,
+                    opencode_preflight_report=opencode_preflight_report,
+                    repair_trace=repair_trace,
+                    command_runner=command_runner,
+                    repo_root=repo_root,
+                    keep_open_on_failure=True,
+                )
+                retry_entry = {
+                    "exit_code": int(retry_result.get("exit_code", 1)),
+                    "summary_status": retry_result.get("summary_status"),
+                    "hint_id": retry_result.get("hint_id", hint_id),
+                    "hint_status": retry_result.get("hint_status"),
+                    "summary_path": retry_result.get("summary_path"),
+                    "report_path": retry_result.get("report_path"),
+                    "logs": retry_result.get("logs"),
+                    "process_returncode": retry_result.get("process_returncode"),
+                }
+                copy_opencode_worker_evidence(retry_result, retry_entry)
+                for field in ("repair_round_cap", "repair_rounds", "retry_limit", "rollback_evidence", "diagnostics"):
+                    if field in retry_result:
+                        retry_entry[field] = retry_result[field]
+                retry_results.append(retry_entry)
+                if retry_result.get("status") != "retry_limit_exceeded":
+                    attempt_timeline.append(run_plan_attempt_from_worker_result(retry_result))
+                if retry_result.get("hint_id"):
+                    hint_id = str(retry_result["hint_id"])
+                if int(retry_result.get("exit_code", 1)) == 0:
+                    worker_result.update(
+                        {
+                            "exit_code": 0,
+                            "summary_status": retry_result.get("summary_status"),
+                            "summary_path": retry_result.get("summary_path"),
+                            "report_path": retry_result.get("report_path"),
+                            "recorded": bool(retry_result.get("recorded")),
+                        }
+                    )
+                    copy_opencode_worker_evidence(retry_result, worker_result)
+                    break
+                if retry_result.get("status") == "retry_limit_exceeded":
+                    break
+        if retry_results:
+            worker_result["auto_retry"] = {
+                "attempt_count": len(retry_results),
+                "attempts": retry_results,
+                "final_hint_status": retry_results[-1].get("hint_status"),
+            }
+        worker_result["attempts"] = attempt_timeline
+        worker_result["final_decision"] = run_plan_worker_final_decision(worker_result)
+        return worker_result
+
+    if effective_workers == 1:
+        worker_results = [execute_unit(unit) for unit in planned_units]
+    else:
+        worker_results_by_index: dict[int, dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+            futures = {
+                executor.submit(execute_unit, unit): index
+                for index, unit in enumerate(planned_units)
+            }
+            for future in as_completed(futures):
+                worker_results_by_index[futures[future]] = future.result()
+        worker_results = [worker_results_by_index[index] for index in range(len(planned_units))]
+
+    failed_workers = sum(1 for worker in worker_results if int(worker["exit_code"]) != 0)
+    ordered_summary_paths = [
+        str(worker["summary_path"])
+        for worker in worker_results
+        if worker["recorded"] and worker["summary_path"]
+    ]
+
+    merge_plan = write_merge_plan(
+        db_path=db_path,
+        run_id=run_id,
+        out_root=out_root,
+        proof_class=proof_class,
+        worker_summary_paths=ordered_summary_paths,
+        repo_root=repo_root,
+    )
+    merge_execution = None
+    merge_failed = False
+    if execute_merge:
+        unrecorded_workers = [worker["worker_id"] for worker in worker_results if not worker["recorded"]]
+        if unrecorded_workers:
+            merge_execution = {
+                "status": "skipped",
+                "reason": "unrecorded-worker-summaries",
+                "exit_code": 1,
+                "unrecorded_workers": unrecorded_workers,
+            }
+        else:
+            merge_execution = execute_merge_plan(
+                db_path=db_path,
+                run_id=run_id,
+                out_root=out_root,
+                merge_plan=merge_plan,
+                command_runner=command_runner,
+                repo_root=repo_root,
+            )
+        merge_failed = int(merge_execution["exit_code"]) != 0
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "completed" if failed_workers == 0 and not merge_failed else "failed",
+        "run_id": run_id,
+        "mode": mode,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "worker_count": len(worker_results),
+        "failed_workers": failed_workers,
+        "graph": build_run_plan_graph_contract(
+            mode=mode,
+            auto_retry=auto_retry,
+            max_workers=max_workers,
+            effective_workers=effective_workers,
+            opencode_variant=opencode_variant,
+            opencode_preflight_report=opencode_preflight_binding,
+        ),
+        "parallelism": {
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+        },
+        "auto_retry": {
+            "enabled": auto_retry,
+            "retried_worker_count": sum(1 for worker in worker_results if isinstance(worker.get("auto_retry"), dict)),
+        },
+        "exit_code": 0 if failed_workers == 0 and not merge_failed else 1,
+        "elapsed_seconds": int(time.monotonic() - started),
+        "workers": worker_results,
+        "merge_plan": merge_plan,
+    }
+    if opencode_preflight_binding is not None:
+        report["opencode_preflight_report"] = opencode_preflight_binding
+    if merge_execution is not None:
+        report["merge_execution"] = merge_execution
+    report_path = out_root / "harness" / "run-plan-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="planned-worker-batch-report",
+            path=report_path,
+            status=report["status"],
+            semantic_role="worker-batch-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="planned_workers_executed", payload=report)
+        connection.commit()
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    return result
+
+
+def build_run_plan_graph_contract(
+    *,
+    mode: str,
+    auto_retry: bool,
+    max_workers: int,
+    effective_workers: int,
+    opencode_variant: str,
+    opencode_preflight_report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    opencode_worker = {
+        "enabled": mode == "opencode",
+        "preflight_required": mode == "opencode",
+        "preflight_bound": opencode_preflight_report is not None,
+    }
+    if mode == "opencode":
+        opencode_worker["opencode_variant"] = opencode_variant
+    if opencode_preflight_report is not None:
+        opencode_worker["preflight_report"] = {
+            "path": opencode_preflight_report.get("path"),
+            "sha256": opencode_preflight_report.get("sha256"),
+            "status": opencode_preflight_report.get("status"),
+            "contract_status": opencode_preflight_report.get("contract_status"),
+            "launch_policy": opencode_preflight_report.get("launch_policy"),
+            "launch_policy_sha256": opencode_preflight_report.get("launch_policy_sha256"),
+        }
+    return {
+        "runtime": "opencode-harness-langgraph-inspired",
+        "state_schema": "run-plan-state/v1",
+        "checkpoint_backend": "sqlite",
+        "nodes": [
+            "load_plan",
+            "fanout_workers",
+            "worker",
+            "repair_retry",
+            "merge",
+            "report",
+        ],
+        "edges": [
+            {"from": "load_plan", "to": "fanout_workers", "condition": "units > 0"},
+            {"from": "fanout_workers", "to": "worker", "condition": "map(unit)"},
+            {"from": "worker", "to": "repair_retry", "condition": "exit_code != 0 and auto_retry"},
+            {"from": "repair_retry", "to": "worker", "condition": "hint_open and repair_round < 5"},
+            {"from": "fanout_workers", "to": "merge", "condition": "all_workers_recorded"},
+            {"from": "merge", "to": "report", "condition": "always"},
+        ],
+        "parallel_map": {
+            "node": "worker",
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+            "result_order": "planner_order",
+        },
+        "retry_policy": {
+            "enabled": auto_retry,
+            "round_cap": REPAIR_ROUND_CAP,
+            "checkpoint": "repair_hints",
+        },
+        "opencode_worker": opencode_worker,
+    }
+
+
+def execute_merge_plan(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    merge_plan: dict[str, Any],
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    argv = list(merge_plan.get("argv", []))
+    if not argv:
+        raise SystemExit("merge plan argv is required before execute-merge")
+    logs_dir = out_root / "harness"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = logs_dir / "run-plan-merge.stdout.log"
+    stderr_path = logs_dir / "run-plan-merge.stderr.log"
+    try:
+        completed = command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    summary_exists = summary_path.exists()
+    final_gate_status = None
+    finalized = None
+    effective_exit_code = int(completed.returncode)
+    if summary_exists:
+        summary = load_json(summary_path)
+        final_gate_status = str(summary.get("final_gate", {}).get("status", "failed"))
+        if effective_exit_code == 0 and final_gate_status != "passed":
+            effective_exit_code = 1
+        finalized = finalize_run(
+            db_path=db_path,
+            run_id=run_id,
+            status="completed" if effective_exit_code == 0 else "failed",
+            summary_path=summary_path,
+            final_gate_status=final_gate_status,
+            repo_root=repo_root,
+        )
+    elif effective_exit_code == 0:
+        effective_exit_code = 1
+
+    return {
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_exists": summary_exists,
+        "final_gate_status": final_gate_status,
+        "finalized": finalized,
+    }
+
+
 def record_worker_summary(
     *,
     db_path: Path,
@@ -372,13 +3929,24 @@ def record_worker_summary(
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     summary_path = repo_path(summary_path, repo_root=repo_root)
-    summary = load_json(summary_path)
-    status = str(summary.get("final_gate", {}).get("status", "failed"))
-    summary_hash = sha256_file(summary_path)
-    summary_rel = repo_relative(summary_path, repo_root=repo_root)
     now = now_text()
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
+        expected_summary_path = assigned_worker_summary_path(
+            connection,
+            run_id=run_id,
+            worker_id=worker_id,
+            repo_root=repo_root,
+        )
+        summary_rel = repo_relative(summary_path, repo_root=repo_root)
+        expected_summary_rel = repo_relative(expected_summary_path, repo_root=repo_root)
+        if summary_rel != expected_summary_rel:
+            raise SystemExit(
+                f"worker summary path {summary_rel} does not match assigned out_root summary {expected_summary_rel}"
+            )
+        summary = load_json(summary_path)
+        status = str(summary.get("final_gate", {}).get("status", "failed"))
+        summary_hash = sha256_file(summary_path)
         connection.execute(
             """
             insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
@@ -418,34 +3986,2158 @@ def record_worker_summary(
     return {"status": "recorded", "summary": summary_rel, "sha256": summary_hash}
 
 
+def record_artifact(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    kind: str,
+    path: Path,
+    status: str,
+    semantic_role: str,
+    payload: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, str]:
+    artifact_rel = repo_relative(path, repo_root=repo_root)
+    artifact_sha = sha256_file(path)
+    connection.execute(
+        """
+        insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(repo_rel_path) do update set
+          sha256=excluded.sha256,
+          status=excluded.status,
+          payload_json=excluded.payload_json
+        """,
+        (
+            run_id,
+            worker_id,
+            kind,
+            artifact_rel,
+            artifact_sha,
+            status,
+            semantic_role,
+            json.dumps(payload, sort_keys=True),
+            now_text(),
+        ),
+    )
+    return {"path": artifact_rel, "sha256": artifact_sha}
+
+
+def worker_attempt_request(
+    request: dict[str, Any],
+    *,
+    attempt_number: int,
+    retry_of: str | None = None,
+    repair_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    attempt_request = dict(request)
+    attempt_request["harness_attempt"] = {
+        "attempt": attempt_number,
+        "repair_round": max(0, attempt_number - 1),
+        "repair_round_cap": REPAIR_ROUND_CAP,
+    }
+    attempt_request["harness_attempt_number"] = attempt_number
+    if retry_of:
+        attempt_request["harness_retry_of"] = retry_of
+        attempt_request["harness_repair_hint_id"] = retry_of
+        attempt_request["harness_attempt"]["retry_of"] = retry_of
+    if repair_trace is not None:
+        attempt_request["harness_repair_trace"] = repair_trace
+    return attempt_request
+
+
+def run_worker_process(
+    *,
+    argv: list[str],
+    mode: str,
+    command_runner: Any,
+    repo_root: Path,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
+    retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
+    attempts: list[dict[str, Any]] = []
+    for index in range(len(retry_delays) + 1):
+        completed = run_worker_process_once(argv=argv, command_runner=command_runner, repo_root=repo_root)
+        transient_lock = mode == "opencode" and opencode_database_locked(completed)
+        attempts.append(
+            {
+                "attempt": index + 1,
+                "process_returncode": int(completed.returncode),
+                "transient_lock": transient_lock,
+                "stderr_tail": tail_text(completed.stderr or "", 512),
+            }
+        )
+        if not transient_lock or index == len(retry_delays):
+            break
+        time.sleep(retry_delays[index])
+    if len(attempts) == 1:
+        return completed, None
+    final_lock = attempts[-1]["transient_lock"] is True
+    return completed, {
+        "status": "exhausted" if final_lock else "recovered",
+        "reason": "opencode_database_locked",
+        "attempt_count": len(attempts),
+        "transient_lock_retry_count": len(attempts) - 1,
+        "max_transient_lock_retries": len(retry_delays),
+        "attempts": attempts,
+        "evidence_boundary": (
+            "OpenCode process retry only handles transient agent database locks before the worker command executes; "
+            "semantic acceptance still requires the worker summary and contract verifier."
+        ),
+        "semantic_gate": False,
+    }
+
+
+def run_worker_process_once(
+    *,
+    argv: list[str],
+    command_runner: Any,
+    repo_root: Path,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+
+
+def opencode_database_locked(completed: subprocess.CompletedProcess[str]) -> bool:
+    if int(completed.returncode) == 0:
+        return False
+    stderr = (completed.stderr or "").lower()
+    return "database is locked" in stderr
+
+
+def tail_text(value: str, max_chars: int) -> str:
+    return value[-max_chars:]
+
+
+def run_worker(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+    attempt_number: int = 1,
+    retry_of: str | None = None,
+    repair_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    started = time.monotonic()
+    assignment_path = assignment_file_path(db_path, worker_id)
+    request_path = assignment_path.with_name(f"{worker_id}-request.json")
+    if not request_path.exists():
+        raise SystemExit(f"worker request does not exist: {repo_relative(request_path, repo_root=repo_root)}")
+    request = load_json(request_path)
+    if not request.get("out_root"):
+        raise SystemExit("worker out_root is required in request")
+    request_out_root = repo_path(Path(str(request.get("out_root", ""))), repo_root=repo_root)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        assigned_out_root_rel = assigned_worker_out_root_rel(connection, run_id=run_id, worker_id=worker_id)
+    request_out_root_rel = repo_relative(request_out_root, repo_root=repo_root)
+    if request_out_root_rel != assigned_out_root_rel:
+        raise SystemExit(
+            f"worker request out_root {request_out_root_rel} does not match ledger assignment {assigned_out_root_rel}"
+        )
+    worker_out_root = repo_path(Path(assigned_out_root_rel), repo_root=repo_root)
+    summary_path = worker_out_root / "summary" / "competition-run-summary.json"
+    logs_dir = worker_out_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = worker_out_root / "harness"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    attempt_request = worker_attempt_request(
+        request,
+        attempt_number=attempt_number,
+        retry_of=retry_of,
+        repair_trace=repair_trace,
+    )
+    attempt_request_path = report_dir / f"{worker_id}-request-attempt-{attempt_number}.json"
+    attempt_request_path.write_text(json.dumps(attempt_request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    rollback_evidence = None
+    if summary_path.exists():
+        if retry_of:
+            rollback_evidence = write_worker_rollback_evidence(
+                hint_id=retry_of,
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                repo_root=repo_root,
+            )
+        summary_path.unlink()
+
+    worker_command = [
+        "python",
+        "-B",
+        "scripts/c2rust-migrator.py",
+        "--phase",
+        "migrate",
+        "--input",
+        repo_relative(attempt_request_path, repo_root=repo_root),
+    ]
+    preflight_binding = None
+    if mode == "opencode":
+        preflight_binding = validate_opencode_preflight_report(
+            opencode_preflight_report,
+            expected_run_id=run_id,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            repo_root=repo_root,
+        )
+    if mode == "deterministic":
+        argv = worker_command
+        runner_kind = "repo-local-c2rust-migrator"
+        handoff_contract = None
+        opencode_process_retries = None
+    elif mode == "opencode":
+        handoff_contract_path = report_dir / "opencode-handoff-contract.json"
+        opencode_process_retries = None
+        argv = build_opencode_run_argv(
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            worker_command=worker_command,
+            request_path=attempt_request_path,
+            summary_path=summary_path,
+            handoff_contract_path=handoff_contract_path,
+            repo_root=repo_root,
+        )
+        runner_kind = "opencode-run"
+        handoff_contract = write_opencode_handoff_contract(
+            run_id=run_id,
+            worker_id=worker_id,
+            attempt_number=attempt_number,
+            request_path=attempt_request_path,
+            assignment_request_path=request_path,
+            summary_path=summary_path,
+            contract_path=handoff_contract_path,
+            worker_command=worker_command,
+            opencode_argv=argv,
+            launch_policy=opencode_launch_policy(
+                opencode_command=opencode_command,
+                opencode_model=opencode_model,
+                opencode_agent=opencode_agent,
+                opencode_variant=opencode_variant,
+                opencode_skip_permissions=opencode_skip_permissions,
+            ),
+            repo_root=repo_root,
+        )
+    else:
+        raise SystemExit(f"unsupported worker mode: {mode}")
+
+    completed, opencode_process_retries = run_worker_process(
+        argv=argv,
+        mode=mode,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    stdout_path = logs_dir / "harness-worker-executor.stdout.log"
+    stderr_path = logs_dir / "harness-worker-executor.stderr.log"
+    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    opencode_session_evidence = None
+    if mode == "opencode":
+        opencode_session_evidence = write_opencode_session_evidence(
+            completed=completed,
+            evidence_path=logs_dir / "opencode-session-evidence.json",
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            repo_root=repo_root,
+        )
+    opencode_contract_verification = None
+    if opencode_session_evidence is not None:
+        opencode_contract_verification = verify_opencode_contract_execution(
+            session_evidence=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+            worker_command=worker_command,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+
+    synthetic_failure_root_cause = None
+    rejected_summary_evidence = None
+    opencode_contract_failed = (
+        opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") != "executed"
+        and int(completed.returncode) == 0
+    )
+    if opencode_contract_failed:
+        synthetic_failure_root_cause = "opencode_contract_not_executed"
+        if summary_path.exists():
+            rejected_summary_evidence = write_rejected_worker_summary_evidence(
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+        write_blocked_worker_summary(
+            run_id=run_id,
+            proof_class=run_proof_class(db_path, run_id),
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=synthetic_failure_root_cause,
+            process_returncode=int(completed.returncode),
+            exit_code=1,
+            elapsed_seconds=int(time.monotonic() - started),
+            summary_path=summary_path,
+            metrics_path=summary_path.parent / "workflow-metrics.json",
+            opencode_contract_verification=opencode_contract_verification,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            repo_root=repo_root,
+        )
+    elif not summary_path.exists():
+        provisional_root_cause = worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=False,
+            summary_status="missing-summary",
+            opencode_contract_verification=opencode_contract_verification,
+        )
+        if provisional_root_cause == "opencode_contract_not_executed":
+            synthetic_failure_root_cause = provisional_root_cause
+            write_blocked_worker_summary(
+                run_id=run_id,
+                proof_class=run_proof_class(db_path, run_id),
+                worker_id=worker_id,
+                request=request,
+                root_cause_key=provisional_root_cause,
+                process_returncode=int(completed.returncode),
+                exit_code=1,
+                elapsed_seconds=int(time.monotonic() - started),
+                summary_path=summary_path,
+                metrics_path=summary_path.parent / "workflow-metrics.json",
+                opencode_contract_verification=opencode_contract_verification,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                repo_root=repo_root,
+            )
+
+    recorded: dict[str, Any] | None = None
+    summary_status = "missing-summary"
+    summary_payload: dict[str, Any] | None = None
+    if summary_path.exists():
+        recorded = record_worker_summary(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        summary_payload = load_json(summary_path)
+        summary_status = str(summary_payload.get("final_gate", {}).get("status", "failed"))
+
+    effective_exit_code = int(completed.returncode)
+    if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
+        effective_exit_code = 1
+    status = "recorded" if recorded is not None else "failed"
+    report_path = report_dir / "run-worker-report.json"
+    repair_hint = None
+    if effective_exit_code != 0:
+        root_cause_key = (
+            synthetic_failure_root_cause
+            or worker_summary_root_cause(summary_payload, summary_path=summary_path, repo_root=repo_root)
+            or worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=recorded is not None,
+            summary_status=summary_status,
+            opencode_contract_verification=opencode_contract_verification,
+            )
+        )
+        diagnostics = worker_repair_diagnostics(
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            process_returncode=int(completed.returncode),
+            root_cause_key=root_cause_key,
+        )
+        repair_hint = worker_repair_hint_payload(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=root_cause_key,
+            summary_status=summary_status,
+            process_returncode=int(completed.returncode),
+            summary_path=summary_path,
+            report_path=report_path,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            repo_root=repo_root,
+            exit_code=effective_exit_code,
+            attempt_number=attempt_number,
+            diagnostics=diagnostics,
+            retry_of=retry_of,
+            rollback_evidence=rollback_evidence,
+            rejected_summary_evidence=rejected_summary_evidence,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            opencode_contract_verification=opencode_contract_verification,
+        )
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "mode": mode,
+        "runner_kind": runner_kind,
+        "request_path": repo_relative(attempt_request_path, repo_root=repo_root),
+        "assignment_request_path": repo_relative(request_path, repo_root=repo_root),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_status": summary_status,
+        "recorded": recorded is not None,
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+    }
+    if handoff_contract is not None:
+        report["handoff_contract"] = handoff_contract
+    if opencode_process_retries is not None:
+        report["opencode_process_retries"] = opencode_process_retries
+    if preflight_binding is not None:
+        report["opencode_preflight_report"] = preflight_binding
+    if opencode_session_evidence is not None:
+        report["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        report["opencode_contract_verification"] = opencode_contract_verification
+    if retry_of:
+        report["retry_of"] = retry_of
+    if rollback_evidence is not None:
+        report["rollback_evidence"] = rollback_evidence
+    if rejected_summary_evidence is not None:
+        report["rejected_summary_evidence"] = rejected_summary_evidence
+    if repair_hint is not None:
+        report["repair_hint"] = {
+            "hint_id": repair_hint["hint_id"],
+            "root_cause_key": repair_hint["root_cause_key"],
+            "status": "open",
+            "diagnostics": repair_hint["diagnostics"],
+        }
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        task_status = summary_status if recorded is not None else "failed"
+        connection.execute(
+            "update leases set status=?, heartbeat_at=? where run_id=? and lease_owner=?",
+            (task_status, now_text(), run_id, worker_id),
+        )
+        event_payload = {
+            "worker_id": worker_id,
+            "attempt": attempt_number,
+            "mode": mode,
+            "runner_kind": runner_kind,
+            "exit_code": effective_exit_code,
+            "process_returncode": int(completed.returncode),
+            "summary_path": repo_relative(summary_path, repo_root=repo_root),
+            "summary_status": summary_status,
+            "recorded": recorded is not None,
+            "report_path": repo_relative(report_path, repo_root=repo_root),
+        }
+        if retry_of:
+            event_payload["retry_of"] = retry_of
+        if rollback_evidence is not None:
+            event_payload["rollback_evidence"] = rollback_evidence
+        if rejected_summary_evidence is not None:
+            event_payload["rejected_summary_evidence"] = rejected_summary_evidence
+        if handoff_contract is not None:
+            event_payload["handoff_contract"] = handoff_contract
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-handoff-contract",
+                path=repo_path(Path(handoff_contract["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-command-contract",
+                payload=load_json(repo_path(Path(handoff_contract["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_process_retries is not None:
+            event_payload["opencode_process_retries"] = opencode_process_retries
+        if preflight_binding is not None:
+            event_payload["opencode_preflight_report"] = preflight_binding
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-preflight-report",
+                path=repo_path(Path(preflight_binding["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-preflight-evidence",
+                payload=load_json(repo_path(Path(preflight_binding["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_session_evidence is not None:
+            event_payload["opencode_session_evidence"] = opencode_session_evidence
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-session-evidence",
+                path=repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-session-evidence",
+                payload=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_contract_verification is not None:
+            event_payload["opencode_contract_verification"] = opencode_contract_verification
+        record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
+        if repair_hint is not None:
+            record_repair_hint(connection, hint=repair_hint)
+        connection.commit()
+
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    if recorded is not None:
+        result["record_worker_summary"] = recorded
+    return result
+
+
+def retry_worker(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    hint_id: str | None = None,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_preflight_report: Path | None = None,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+    keep_open_on_failure: bool = False,
+    repair_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        hint = load_open_repair_hint(connection, run_id=run_id, worker_id=worker_id, hint_id=hint_id)
+        attempts = hint.get("attempts")
+        attempt_number = len(attempts) + 1 if isinstance(attempts, list) else 2
+        repair_rounds = max(0, attempt_number - 2)
+        if repair_rounds >= REPAIR_ROUND_CAP:
+            retry_result = mark_repair_hint_retry_limit_exceeded(
+                connection,
+                hint=hint,
+                repair_rounds=repair_rounds,
+            )
+            connection.commit()
+            return retry_result
+
+    result = run_worker(
+        db_path=db_path,
+        run_id=run_id,
+        worker_id=worker_id,
+        mode=mode,
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        opencode_preflight_report=opencode_preflight_report,
+        command_runner=command_runner,
+        repo_root=repo_root,
+        attempt_number=attempt_number,
+        retry_of=str(hint["hint_id"]),
+        repair_trace=repair_trace,
+    )
+    hint_status = (
+        "revalidated_passed"
+        if int(result.get("exit_code", 1)) == 0 and result.get("summary_status") == "passed"
+        else "revalidated_failed"
+    )
+    retry_metrics_annotation = None
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        mark_repair_hint_revalidated(
+            connection,
+            hint_id=str(hint["hint_id"]),
+            status=("open" if keep_open_on_failure and hint_status != "revalidated_passed" else hint_status),
+            result=result,
+        )
+        if hint_status == "revalidated_passed":
+            retry_metrics_annotation = annotate_retry_worker_metrics(
+                connection,
+                hint_id=str(hint["hint_id"]),
+                result=result,
+                repo_root=repo_root,
+            )
+        connection.commit()
+    if retry_metrics_annotation is not None:
+        result["retry_metrics_annotation"] = retry_metrics_annotation
+        result["record_worker_summary"] = record_worker_summary(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            summary_path=repo_path(Path(str(result["summary_path"])), repo_root=repo_root),
+            repo_root=repo_root,
+        )
+
+    retry_result = dict(result)
+    retry_result["hint_id"] = hint["hint_id"]
+    retry_result["hint_status"] = hint_status
+    return retry_result
+
+
+def mark_repair_hint_retry_limit_exceeded(
+    connection: sqlite3.Connection,
+    *,
+    hint: dict[str, Any],
+    repair_rounds: int,
+) -> dict[str, Any]:
+    retry_limit = {
+        "status": "retry_limit_exceeded",
+        "max_repair_rounds": REPAIR_ROUND_CAP,
+        "observed_repair_rounds": repair_rounds,
+        "boundary": "retry-worker refuses to launch another worker after the configured repair round cap",
+    }
+    payload = dict(hint)
+    payload["status"] = "retry_limit_exceeded"
+    payload["retry_limit"] = retry_limit
+    hint_id = str(payload["hint_id"])
+    connection.execute(
+        "update repair_hints set status=?, payload_json=? where hint_id=?",
+        ("retry_limit_exceeded", json.dumps(payload, sort_keys=True), hint_id),
+    )
+    record_event(
+        connection,
+        run_id=str(payload["run_id"]),
+        event_type="repair_retry_limit_exceeded",
+        payload={
+            "hint_id": hint_id,
+            "worker_id": payload.get("worker_id"),
+            "repair_round_cap": REPAIR_ROUND_CAP,
+            "repair_rounds": repair_rounds,
+        },
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": str(payload["run_id"]),
+        "worker_id": str(payload["worker_id"]),
+        "hint_id": hint_id,
+        "hint_status": "retry_limit_exceeded",
+        "status": "retry_limit_exceeded",
+        "exit_code": 1,
+        "summary_status": str(payload.get("summary_status", "unknown")),
+        "repair_round_cap": REPAIR_ROUND_CAP,
+        "repair_rounds": repair_rounds,
+        "retry_limit": retry_limit,
+    }
+    if isinstance(payload.get("summary_path"), str):
+        result["summary_path"] = payload["summary_path"]
+    if isinstance(payload.get("worker_report_path"), str):
+        result["report_path"] = payload["worker_report_path"]
+    if isinstance(payload.get("logs"), dict):
+        result["logs"] = payload["logs"]
+    if isinstance(payload.get("diagnostics"), dict):
+        result["diagnostics"] = payload["diagnostics"]
+    return result
+
+
+def run_opencode_preflight(
+    *,
+    out_root: Path,
+    run_id: str,
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    harness_dir = out_root / "harness"
+    logs_dir = out_root / "logs"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = harness_dir / "opencode-preflight-marker.json"
+    contract_path = harness_dir / "opencode-preflight-contract.json"
+    if marker_path.exists():
+        marker_path.unlink()
+
+    marker_command = [
+        "python",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_relative(marker_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+    ]
+    launch_policy = opencode_launch_policy(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+    )
+    argv = build_opencode_preflight_argv(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        marker_command=marker_command,
+        marker_path=marker_path,
+        contract_path=contract_path,
+        repo_root=repo_root,
+    )
+    contract_binding = write_opencode_preflight_contract(
+        run_id=run_id,
+        contract_path=contract_path,
+        marker_path=marker_path,
+        marker_command=marker_command,
+        opencode_argv=argv,
+        launch_policy=launch_policy,
+        repo_root=repo_root,
+    )
+    started = time.monotonic()
+    try:
+        completed = command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+    stdout_path = logs_dir / "opencode-preflight.stdout.log"
+    stderr_path = logs_dir / "opencode-preflight.stderr.log"
+    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
+    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    session_binding = write_opencode_session_evidence(
+        completed=completed,
+        evidence_path=logs_dir / "opencode-preflight-session-evidence.json",
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+        repo_root=repo_root,
+    )
+    session_evidence = load_json(repo_path(Path(session_binding["path"]), repo_root=repo_root))
+    contract_verification = verify_opencode_contract_execution(
+        session_evidence=session_evidence,
+        worker_command=marker_command,
+        summary_path=marker_path,
+        repo_root=repo_root,
+    )
+    marker_exists = marker_path.exists()
+    preflight_passed = (
+        int(completed.returncode) == 0
+        and contract_verification.get("status") == "executed"
+        and marker_exists
+    )
+    root_cause_key = None
+    if not preflight_passed:
+        if int(completed.returncode) != 0:
+            root_cause_key = "opencode_process_failed"
+        elif contract_verification.get("status") != "executed":
+            root_cause_key = "opencode_contract_not_executed"
+        else:
+            root_cause_key = "missing_preflight_marker"
+
+    report_path = harness_dir / "opencode-preflight-report.json"
+    report: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "passed" if preflight_passed else "failed",
+        "exit_code": 0 if preflight_passed else 1,
+        "process_returncode": int(completed.returncode),
+        "elapsed_seconds": int(time.monotonic() - started),
+        "argv": argv,
+        "marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "marker_exists": marker_exists,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "handoff_contract": contract_binding,
+        "opencode_session_evidence": session_binding,
+        "contract_verification": contract_verification,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "report_path": repo_relative(report_path, repo_root=repo_root),
+        "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
+    }
+    if root_cause_key is not None:
+        report["root_cause_key"] = root_cause_key
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return report
+
+
+def validate_opencode_preflight_report(
+    report_path: Path | None,
+    *,
+    expected_run_id: str | None = None,
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if report_path is None:
+        raise SystemExit("opencode preflight report is required before --mode opencode")
+    report_path = repo_path(report_path, repo_root=repo_root)
+    if not report_path.exists():
+        raise SystemExit(f"opencode preflight report does not exist: {repo_relative(report_path, repo_root=repo_root)}")
+    report = load_json(report_path)
+    contract_verification = report.get("contract_verification")
+    contract_status = contract_verification.get("status") if isinstance(contract_verification, dict) else None
+    if (
+        report.get("status") != "passed"
+        or int(report.get("exit_code", 1)) != 0
+        or report.get("marker_exists") is not True
+        or contract_status != "executed"
+    ):
+        raise SystemExit(
+            "opencode preflight report is not passed: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    expected_launch_policy = opencode_launch_policy(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+    )
+    launch_policy = report.get("launch_policy")
+    if not isinstance(launch_policy, dict):
+        raise SystemExit(
+            "opencode preflight launch policy is missing: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    actual_launch_policy = normalize_opencode_launch_policy(launch_policy)
+    actual_launch_policy_sha256 = report.get("launch_policy_sha256")
+    if actual_launch_policy_sha256 != opencode_launch_policy_sha256(actual_launch_policy):
+        raise SystemExit(
+            "opencode preflight launch policy sha256 mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if actual_launch_policy != expected_launch_policy:
+        raise SystemExit(
+            "opencode preflight launch policy mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    report_run_id = str(report.get("run_id", ""))
+    if expected_run_id is not None and report_run_id != expected_run_id:
+        raise SystemExit(f"opencode preflight run_id mismatch: {report_run_id} != {expected_run_id}")
+    return {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": "passed",
+        "run_id": report_run_id,
+        "contract_status": "executed",
+        "launch_policy": actual_launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(actual_launch_policy),
+        "evidence_boundary": str(
+            report.get(
+                "evidence_boundary",
+                "preflight proves exact-command compliance only; it is not semantic acceptance",
+            )
+        ),
+    }
+
+
+def write_opencode_preflight_marker(
+    *,
+    marker_path: Path,
+    run_id: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    marker_path = repo_path(marker_path, repo_root=repo_root)
+    marker = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "written",
+        "created_at": now_text(),
+    }
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "status": "written",
+        "marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "sha256": sha256_file(marker_path),
+    }
+
+
+def worker_failure_root_cause(
+    *,
+    process_returncode: int,
+    recorded: bool,
+    summary_status: str,
+    opencode_contract_verification: dict[str, Any] | None = None,
+) -> str:
+    if process_returncode != 0:
+        return "worker_process_failed"
+    if (
+        opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") == "not-executed"
+        and not recorded
+    ):
+        return "opencode_contract_not_executed"
+    if not recorded:
+        return "missing_summary"
+    if summary_status != "passed":
+        return "final_gate_failed"
+    return "worker_failed"
+
+
+def worker_summary_root_cause(
+    summary: dict[str, Any] | None,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> str | None:
+    if not isinstance(summary, dict):
+        return None
+    workflow_ref = summary.get("workflow_metrics")
+    if not isinstance(workflow_ref, dict) or not isinstance(workflow_ref.get("path"), str):
+        return None
+    metrics_path = resolve_summary_artifact(str(workflow_ref["path"]), summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None or not metrics_path.exists():
+        return None
+    try:
+        metrics = load_json(metrics_path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    root_cause_counts = metrics.get("root_cause_counts")
+    if isinstance(root_cause_counts, dict):
+        for key, count in root_cause_counts.items():
+            if isinstance(key, str) and key and isinstance(count, int) and count > 0:
+                return key
+    per_unit_statuses = metrics.get("per_unit_statuses")
+    if isinstance(per_unit_statuses, list):
+        for unit in per_unit_statuses:
+            if isinstance(unit, dict) and isinstance(unit.get("root_cause_key"), str) and unit["root_cause_key"]:
+                return str(unit["root_cause_key"])
+    return None
+
+
+def worker_repair_diagnostics(
+    *,
+    stdout_path: Path,
+    stderr_path: Path,
+    process_returncode: int,
+    root_cause_key: str,
+) -> dict[str, Any]:
+    stdout_tail = redact_local_absolute_paths(file_tail(stdout_path, REPAIR_LOG_TAIL_CHARS))
+    stderr_tail = redact_local_absolute_paths(file_tail(stderr_path, REPAIR_LOG_TAIL_CHARS))
+    combined = "\n".join(part for part in [stderr_tail, stdout_tail] if part)
+    diagnostics: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "root_cause_key": root_cause_key,
+        "process_returncode": process_returncode,
+        "stdout_tail": stdout_tail,
+        "stderr_tail": stderr_tail,
+        "primary_error": {
+            "kind": "process",
+            "message": root_cause_key,
+        },
+    }
+    rustc_match = re.search(r"\berror\[(E\d+)\]:\s*(.+)", combined)
+    if rustc_match:
+        diagnostics["primary_error"] = {
+            "kind": "rustc",
+            "code": rustc_match.group(1),
+            "message": rustc_match.group(2).strip(),
+        }
+    traceback_text = extract_python_traceback(combined)
+    if traceback_text:
+        diagnostics["python_traceback"] = traceback_text
+        if diagnostics["primary_error"]["kind"] == "process":
+            last_line = next((line.strip() for line in reversed(traceback_text.splitlines()) if line.strip()), "")
+            diagnostics["primary_error"] = {
+                "kind": "python",
+                "message": last_line or "python traceback",
+            }
+    return diagnostics
+
+
+def redact_local_absolute_paths(text: str) -> str:
+    return LOCAL_ABSOLUTE_PATH_TEXT.sub("<local-absolute-path>", text)
+
+
+def file_tail(path: Path, max_chars: int) -> str:
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return text[-max_chars:]
+
+
+def extract_python_traceback(text: str) -> str:
+    marker = "Traceback (most recent call last):"
+    index = text.find(marker)
+    if index < 0:
+        return ""
+    return text[index:][-REPAIR_LOG_TAIL_CHARS:]
+
+
+def worker_repair_hint_payload(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    request: dict[str, Any],
+    root_cause_key: str,
+    summary_status: str,
+    process_returncode: int,
+    summary_path: Path,
+    report_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    repo_root: Path,
+    exit_code: int,
+    attempt_number: int,
+    diagnostics: dict[str, Any],
+    retry_of: str | None = None,
+    rollback_evidence: dict[str, Any] | None = None,
+    rejected_summary_evidence: dict[str, Any] | None = None,
+    handoff_contract: dict[str, Any] | None = None,
+    opencode_session_evidence: dict[str, Any] | None = None,
+    opencode_contract_verification: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    target_id = str(request.get("target_id", "unknown"))
+    slice_id = str(request.get("slice_id", "unknown"))
+    hint_id = f"repair:{run_id}:{worker_id}:{root_cause_key}"
+    retry_command = [
+        "python",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "retry-worker",
+        "--db",
+        repo_relative(db_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+        "--hint-id",
+        hint_id,
+    ]
+    hint = {
+        "schema_version": SCHEMA_VERSION,
+        "hint_id": hint_id,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "root_cause_key": root_cause_key,
+        "status": "open",
+        "summary_status": summary_status,
+        "process_returncode": process_returncode,
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "worker_report_path": repo_relative(report_path, repo_root=repo_root),
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "diagnostics": diagnostics,
+        "attempts": [
+            repair_attempt_payload(
+                attempt_number=attempt_number,
+                summary_status=summary_status,
+                process_returncode=process_returncode,
+                exit_code=exit_code,
+                summary_path=repo_relative(summary_path, repo_root=repo_root),
+                report_path=repo_relative(report_path, repo_root=repo_root),
+                logs={
+                    "stdout": repo_relative(stdout_path, repo_root=repo_root),
+                    "stderr": repo_relative(stderr_path, repo_root=repo_root),
+                },
+                root_cause_key=root_cause_key,
+                retry_of=retry_of,
+                rollback_evidence=rollback_evidence,
+                diagnostics=diagnostics,
+            )
+        ],
+        "retry_command": retry_command,
+        "revalidate_gate": "competition-run-summary.final_gate.status == passed",
+    }
+    if rejected_summary_evidence is not None:
+        hint["rejected_summary_evidence"] = rejected_summary_evidence
+    if handoff_contract is not None:
+        hint["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        hint["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        hint["opencode_contract_verification"] = opencode_contract_verification
+    return hint
+
+
+def repair_attempt_payload(
+    *,
+    attempt_number: int,
+    summary_status: str,
+    process_returncode: int,
+    exit_code: int,
+    summary_path: str,
+    report_path: str,
+    logs: dict[str, str],
+    root_cause_key: str | None = None,
+    retry_of: str | None = None,
+    rollback_evidence: dict[str, Any] | None = None,
+    diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    attempt = {
+        "attempt": attempt_number,
+        "summary_status": summary_status,
+        "process_returncode": process_returncode,
+        "exit_code": exit_code,
+        "summary_path": summary_path,
+        "worker_report_path": report_path,
+        "logs": logs,
+    }
+    if root_cause_key:
+        attempt["root_cause_key"] = root_cause_key
+    if retry_of:
+        attempt["retry_of"] = retry_of
+    if rollback_evidence is not None:
+        attempt["rollback_evidence"] = rollback_evidence
+    if diagnostics is not None:
+        attempt["diagnostics"] = diagnostics
+    return attempt
+
+
+def repair_attempt_from_result(result: dict[str, Any]) -> dict[str, Any]:
+    repair_hint = result.get("repair_hint")
+    root_cause_key = repair_hint.get("root_cause_key") if isinstance(repair_hint, dict) else None
+    return repair_attempt_payload(
+        attempt_number=int(result.get("attempt", 1)),
+        summary_status=str(result.get("summary_status", "unknown")),
+        process_returncode=int(result.get("process_returncode", 1)),
+        exit_code=int(result.get("exit_code", 1)),
+        summary_path=str(result.get("summary_path", "")),
+        report_path=str(result.get("report_path", "")),
+        logs=dict(result.get("logs", {})),
+        root_cause_key=str(root_cause_key) if root_cause_key else None,
+        retry_of=str(result.get("retry_of")) if result.get("retry_of") else None,
+        rollback_evidence=result.get("rollback_evidence") if isinstance(result.get("rollback_evidence"), dict) else None,
+        diagnostics=(
+            repair_hint.get("diagnostics")
+            if isinstance(repair_hint, dict) and isinstance(repair_hint.get("diagnostics"), dict)
+            else None
+        ),
+    )
+
+
+def append_repair_attempt(payload: dict[str, Any], attempt: dict[str, Any]) -> None:
+    attempts = payload.get("attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+    attempt_number = attempt.get("attempt")
+    if not any(isinstance(item, dict) and item.get("attempt") == attempt_number for item in attempts):
+        attempts.append(attempt)
+    attempts.sort(key=lambda item: int(item.get("attempt", 0)) if isinstance(item, dict) else 0)
+    payload["attempts"] = attempts
+
+
+def write_worker_rollback_evidence(
+    *,
+    hint_id: str,
+    run_id: str,
+    worker_id: str,
+    summary_path: Path,
+    report_dir: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    safe_hint_id = "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in hint_id)
+    evidence_path = report_dir / f"rollback-before-retry-{safe_hint_id}.json"
+    evidence = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "hint_id": hint_id,
+        "action": "removed_stale_summary_before_retry",
+        "removed_summary": {
+            "path": repo_relative(summary_path, repo_root=repo_root),
+            "sha256": sha256_file(summary_path),
+        },
+        "last_good": {
+            "status": "not_available",
+            "reason": "opencode harness has no accepted last-good worker summary for this failed retry",
+        },
+    }
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
+
+
+def write_rejected_worker_summary_evidence(
+    *,
+    run_id: str,
+    worker_id: str,
+    summary_path: Path,
+    report_dir: Path,
+    opencode_contract_verification: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    evidence_path = report_dir / "rejected-summary-opencode-contract.json"
+    evidence = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "action": "rejected_summary_due_to_opencode_contract",
+        "rejected_summary": {
+            "path": repo_relative(summary_path, repo_root=repo_root),
+            "sha256": sha256_file(summary_path),
+        },
+        "opencode_contract_verification": opencode_contract_verification,
+        "replacement": {
+            "status": "blocked",
+            "reason": "OpenCode did not execute the assigned worker command as the first shell command",
+        },
+    }
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
+
+
+def record_repair_hint(connection: sqlite3.Connection, *, hint: dict[str, Any]) -> None:
+    now = now_text()
+    existing = connection.execute("select payload_json from repair_hints where hint_id=?", (hint["hint_id"],)).fetchone()
+    if existing is not None:
+        existing_payload = json.loads(existing[0])
+        existing_attempts = existing_payload.get("attempts")
+        if isinstance(existing_attempts, list):
+            for attempt in existing_attempts:
+                if isinstance(attempt, dict):
+                    append_repair_attempt(hint, attempt)
+    connection.execute(
+        """
+        insert into repair_hints(hint_id, run_id, target_id, slice_id, root_cause_key, status, payload_json, created_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(hint_id) do update set
+          target_id=excluded.target_id,
+          slice_id=excluded.slice_id,
+          root_cause_key=excluded.root_cause_key,
+          status=excluded.status,
+          payload_json=excluded.payload_json,
+          created_at=excluded.created_at
+        """,
+        (
+            hint["hint_id"],
+            hint["run_id"],
+            hint["target_id"],
+            hint["slice_id"],
+            hint["root_cause_key"],
+            "open",
+            json.dumps(hint, sort_keys=True),
+            now,
+        ),
+    )
+    record_event(
+        connection,
+        run_id=str(hint["run_id"]),
+        event_type="repair_hint_recorded",
+        payload={
+            "hint_id": hint["hint_id"],
+            "worker_id": hint["worker_id"],
+            "root_cause_key": hint["root_cause_key"],
+            "attempt": hint["attempts"][-1]["attempt"] if isinstance(hint.get("attempts"), list) else None,
+            "attempt_count": len(hint["attempts"]) if isinstance(hint.get("attempts"), list) else 0,
+        },
+    )
+
+
+def load_open_repair_hint(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    hint_id: str | None,
+) -> dict[str, Any]:
+    if hint_id:
+        rows = connection.execute(
+            "select hint_id, status, payload_json from repair_hints where run_id=? and hint_id=?",
+            (run_id, hint_id),
+        ).fetchall()
+    else:
+        rows = connection.execute(
+            "select hint_id, status, payload_json from repair_hints where run_id=? and status='open' order by created_at desc",
+            (run_id,),
+        ).fetchall()
+    for row_hint_id, status, payload_json in rows:
+        payload = json.loads(payload_json)
+        if payload.get("worker_id") != worker_id:
+            continue
+        if status != "open":
+            raise SystemExit(f"repair hint is not open: {row_hint_id} ({status})")
+        return payload
+    raise SystemExit(f"no open repair hint for worker {worker_id}")
+
+
+def mark_repair_hint_revalidated(
+    connection: sqlite3.Connection,
+    *,
+    hint_id: str,
+    status: str,
+    result: dict[str, Any],
+) -> None:
+    row = connection.execute("select run_id, payload_json from repair_hints where hint_id=?", (hint_id,)).fetchone()
+    if row is None:
+        raise SystemExit(f"unknown repair hint: {hint_id}")
+    run_id, payload_json = row
+    payload = json.loads(payload_json)
+    append_repair_attempt(payload, repair_attempt_from_result(result))
+    payload["status"] = status
+    payload["revalidation"] = {
+        "exit_code": result.get("exit_code"),
+        "summary_status": result.get("summary_status"),
+        "report_path": result.get("report_path"),
+    }
+    connection.execute(
+        "update repair_hints set status=?, payload_json=? where hint_id=?",
+        (status, json.dumps(payload, sort_keys=True), hint_id),
+    )
+    attempt = repair_attempt_from_result(result)
+    record_event(
+        connection,
+        run_id=str(run_id),
+        event_type="repair_hint_revalidated",
+        payload={
+            "hint_id": hint_id,
+            "status": status,
+            "attempt": attempt["attempt"],
+            "exit_code": result.get("exit_code"),
+            "summary_status": result.get("summary_status"),
+            "retry_of": attempt.get("retry_of"),
+            "rollback_evidence": attempt.get("rollback_evidence"),
+        },
+    )
+
+
+def annotate_retry_worker_metrics(
+    connection: sqlite3.Connection,
+    *,
+    hint_id: str,
+    result: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    summary_path = repo_path(Path(str(result.get("summary_path", ""))), repo_root=repo_root)
+    if not summary_path.exists():
+        return None
+    summary = load_json(summary_path)
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return None
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        raise SystemExit("retry worker summary workflow_metrics.path and workflow_metrics.sha256 are required")
+    metrics_path = resolve_summary_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None:
+        raise SystemExit(f"retry worker summary workflow_metrics.path does not exist: {metrics_ref}")
+    if sha256_file(metrics_path) != expected_sha:
+        raise SystemExit("retry worker summary workflow_metrics.sha256 does not match artifact before annotation")
+    metrics = load_json(metrics_path)
+    units = metrics.get("per_unit_statuses")
+    if not isinstance(units, list) or len(units) != 1 or not isinstance(units[0], dict):
+        return None
+
+    row = connection.execute("select payload_json from repair_hints where hint_id=?", (hint_id,)).fetchone()
+    if row is None:
+        raise SystemExit(f"unknown repair hint for retry metrics: {hint_id}")
+    hint_payload = json.loads(row[0])
+    attempts = hint_payload.get("attempts")
+    if not isinstance(attempts, list) or len(attempts) < 2:
+        return None
+
+    repair_rounds = len(attempts) - 1
+    safe_hint_id = safe_file_component(hint_id)
+    history_path = summary_path.parent / f"retry-repair-history-{safe_hint_id}.jsonl"
+    history_events = retry_repair_history_events(hint_payload, result)
+    history_path.write_text(
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in history_events),
+        encoding="utf-8",
+    )
+    statuses = [str(event.get("status")) for event in history_events if isinstance(event.get("status"), str)]
+    rollback_ids = retry_rollback_ids(attempts)
+    repair_history = {
+        "patch_events_path": repo_relative(history_path, repo_root=repo_root),
+        "patch_events_sha256": sha256_file(history_path),
+        "statuses": statuses,
+        "rollback_ids": rollback_ids,
+        "verified": "verified" in statuses,
+    }
+
+    unit = units[0]
+    root_cause_key = hint_payload.get("root_cause_key")
+    if isinstance(root_cause_key, str) and root_cause_key:
+        unit["root_cause_key"] = root_cause_key
+        metrics["root_cause_counts"] = {root_cause_key: 1}
+    unit["repair_rounds"] = repair_rounds
+    unit["auto_recovered"] = repair_history["verified"] and result.get("summary_status") == "passed"
+    unit["repair_history"] = repair_history
+    units_total = int(metrics.get("units_total", 1)) if isinstance(metrics.get("units_total"), int) else 1
+    metrics["avg_repair_rounds"] = repair_rounds / max(1, units_total)
+    metrics["auto_recovery_rate"] = (1.0 if unit["auto_recovered"] else 0.0) / max(1, units_total)
+    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary["workflow_metrics"]["sha256"] = sha256_file(metrics_path)
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    annotation = {
+        "history_path": repo_relative(history_path, repo_root=repo_root),
+        "history_sha256": sha256_file(history_path),
+        "metrics_path": repo_relative(metrics_path, repo_root=repo_root),
+        "metrics_sha256": sha256_file(metrics_path),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_sha256": sha256_file(summary_path),
+        "repair_rounds": repair_rounds,
+        "auto_recovered": bool(unit["auto_recovered"]),
+        "unsafe_reduction": metrics.get("unsafe_reduction", {}),
+    }
+    record_artifact(
+        connection,
+        run_id=str(result["run_id"]),
+        worker_id=str(result["worker_id"]),
+        kind="retry-repair-history",
+        path=history_path,
+        status="verified" if annotation["auto_recovered"] else "recorded",
+        semantic_role="repair-history",
+        payload={"schema_version": SCHEMA_VERSION, "hint_id": hint_id, "events": history_events},
+        repo_root=repo_root,
+    )
+    record_event(
+        connection,
+        run_id=str(result["run_id"]),
+        event_type="retry_worker_metrics_annotated",
+        payload={"hint_id": hint_id, **annotation},
+    )
+    return annotation
+
+
+def retry_repair_history_events(hint_payload: dict[str, Any], result: dict[str, Any]) -> list[dict[str, Any]]:
+    events = []
+    for attempt in hint_payload.get("attempts", []):
+        if not isinstance(attempt, dict):
+            continue
+        events.append(
+            {
+                "attempt": attempt.get("attempt"),
+                "status": attempt.get("summary_status", "unknown"),
+                "exit_code": attempt.get("exit_code"),
+                "retry_of": attempt.get("retry_of"),
+                "root_cause_key": attempt.get("root_cause_key"),
+                "rollback_evidence": attempt.get("rollback_evidence"),
+            }
+        )
+    events.append(
+        {
+            "attempt": result.get("attempt"),
+            "status": "verified",
+            "summary_status": result.get("summary_status"),
+            "exit_code": result.get("exit_code"),
+            "report_path": result.get("report_path"),
+        }
+    )
+    return events
+
+
+def retry_rollback_ids(attempts: list[Any]) -> list[str]:
+    rollback_ids = []
+    for attempt in attempts:
+        if not isinstance(attempt, dict):
+            continue
+        rollback = attempt.get("rollback_evidence")
+        if not isinstance(rollback, dict):
+            continue
+        path = rollback.get("path")
+        if isinstance(path, str) and path:
+            rollback_ids.append(path)
+    return rollback_ids
+
+
+def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
+    checked_relative_path(value)
+    candidates = [
+        repo_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(repo_root.resolve())
+        except ValueError:
+            continue
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def safe_file_component(value: str) -> str:
+    return "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in value)
+
+
+def opencode_launch_policy(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+) -> dict[str, Any]:
+    return {
+        "opencode_command": opencode_command,
+        "opencode_model": opencode_model,
+        "opencode_agent": opencode_agent,
+        "opencode_variant": opencode_variant,
+        "opencode_skip_permissions": bool(opencode_skip_permissions),
+    }
+
+
+def normalize_opencode_launch_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    required_fields = {
+        "opencode_command",
+        "opencode_model",
+        "opencode_agent",
+        "opencode_variant",
+        "opencode_skip_permissions",
+    }
+    missing_fields = required_fields.difference(policy.keys())
+    if missing_fields:
+        raise SystemExit("opencode preflight launch policy is missing fields: " + ", ".join(sorted(missing_fields)))
+    return opencode_launch_policy(
+        opencode_command=str(policy.get("opencode_command", "")),
+        opencode_model=policy.get("opencode_model") if isinstance(policy.get("opencode_model"), str) else None,
+        opencode_agent=policy.get("opencode_agent") if isinstance(policy.get("opencode_agent"), str) else None,
+        opencode_variant=str(policy.get("opencode_variant", "")),
+        opencode_skip_permissions=policy.get("opencode_skip_permissions") is True,
+    )
+
+
+def opencode_launch_policy_sha256(policy: dict[str, Any]) -> str:
+    return sha256_text(json.dumps(policy, sort_keys=True))
+
+
+def build_opencode_run_argv(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+    worker_command: list[str],
+    request_path: Path,
+    summary_path: Path,
+    repo_root: Path,
+    handoff_contract_path: Path | None = None,
+) -> list[str]:
+    if not opencode_command:
+        raise SystemExit("opencode command must not be empty")
+    command_line = subprocess.list2cmdline(worker_command)
+    prompt_lines = [
+        "Execute this assigned C-to-Rust worker exactly once.",
+        "Use the shell/bash tool to run exactly the Command line string below.",
+        "The first shell/bash/powershell/cmd tool call must be exactly the Command line string.",
+        "Do not run init-run, assign-slice, retry-worker, or any other substitute harness command.",
+        "Do not inspect an existing summary before running the command.",
+        "The harness has already removed any stale expected summary before launching OpenCode.",
+        "Run the repo-local deterministic command below, then stop.",
+        "Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.",
+        "Do not explore files, spawn subagents, or infer a different slice before executing the command.",
+        "Do not run substitute diagnostics instead of the command.",
+        "Do not treat chat output as evidence; the required artifact is the competition-run-summary JSON.",
+        f"Command: {json.dumps(worker_command)}",
+        f"Command line: {command_line}",
+        f"Request: {repo_relative(request_path, repo_root=repo_root)}",
+        f"Expected summary: {repo_relative(summary_path, repo_root=repo_root)}",
+    ]
+    if handoff_contract_path is not None:
+        prompt_lines.extend(
+            [
+                "Handoff contract is audit metadata; do not inspect it before the first command.",
+                f"Handoff contract: {repo_relative(handoff_contract_path, repo_root=repo_root)}",
+            ]
+        )
+    prompt = build_opencode_prompt(prompt_lines)
+    resolved_opencode_command = resolve_subprocess_command(opencode_command)
+    argv = [
+        resolved_opencode_command,
+        "run",
+        "--dir",
+        str(repo_root),
+        "--format",
+        "json",
+        "--variant",
+        opencode_variant,
+    ]
+    if opencode_model:
+        argv.extend(["--model", opencode_model])
+    if opencode_agent:
+        argv.extend(["--agent", opencode_agent])
+    if opencode_skip_permissions:
+        argv.append("--dangerously-skip-permissions")
+    argv.append(prompt)
+    return argv
+
+
+def build_opencode_preflight_argv(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    opencode_agent: str | None,
+    opencode_variant: str,
+    opencode_skip_permissions: bool,
+    marker_command: list[str],
+    marker_path: Path,
+    contract_path: Path,
+    repo_root: Path,
+) -> list[str]:
+    if not opencode_command:
+        raise SystemExit("opencode command must not be empty")
+    command_line = subprocess.list2cmdline(marker_command)
+    prompt = build_opencode_prompt(
+        [
+            "Execute this OpenCode preflight command exactly once.",
+            "Use the shell/bash tool to run exactly the Command line string below.",
+            "The first shell/bash/powershell/cmd tool call must be exactly the Command line string.",
+            "Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.",
+            "Do not inspect repository files or infer a different task before executing the command.",
+            "Do not run init-run, assign-slice, run-worker, retry-worker, or any substitute harness command.",
+            "The required artifact is the preflight marker JSON, not chat output.",
+            f"Command: {json.dumps(marker_command)}",
+            f"Command line: {command_line}",
+            f"Expected marker: {repo_relative(marker_path, repo_root=repo_root)}",
+            "Handoff contract is audit metadata; do not inspect it before the first command.",
+            f"Handoff contract: {repo_relative(contract_path, repo_root=repo_root)}",
+        ]
+    )
+    resolved_opencode_command = resolve_subprocess_command(opencode_command)
+    argv = [
+        resolved_opencode_command,
+        "run",
+        "--dir",
+        str(repo_root),
+        "--format",
+        "json",
+        "--variant",
+        opencode_variant,
+    ]
+    if opencode_model:
+        argv.extend(["--model", opencode_model])
+    if opencode_agent:
+        argv.extend(["--agent", opencode_agent])
+    if opencode_skip_permissions:
+        argv.append("--dangerously-skip-permissions")
+    argv.append(prompt)
+    return argv
+
+
+def resolve_subprocess_command(command: str) -> str:
+    if not command:
+        raise SystemExit("opencode command must not be empty")
+    if "/" in command or "\\" in command or Path(command).is_absolute():
+        return command
+    return shutil.which(command) or command
+
+
+def build_opencode_prompt(prompt_lines: list[str]) -> str:
+    return " ".join(line.strip() for line in prompt_lines if line.strip())
+
+
+def verify_opencode_contract_execution(
+    *,
+    session_evidence: dict[str, Any],
+    worker_command: list[str],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    expected_worker_command_line = subprocess.list2cmdline(worker_command)
+    tool_trace = extract_opencode_tool_trace(session_evidence)
+    executed_shell_commands = extract_opencode_shell_commands(session_evidence)
+    exact_worker_command_seen = any(
+        command_matches_for_contract(command, expected_worker_command_line) for command in executed_shell_commands
+    )
+    first_shell_command = executed_shell_commands[0] if executed_shell_commands else ""
+    first_tool_name = str(tool_trace[0]["tool"]) if tool_trace else ""
+    first_shell_index = next(
+        (index for index, item in enumerate(tool_trace) if item.get("is_shell_command")),
+        None,
+    )
+    first_shell_tool_name = str(tool_trace[first_shell_index]["tool"]) if first_shell_index is not None else ""
+    first_shell_workdir = (
+        str(tool_trace[first_shell_index].get("workdir", "")) if first_shell_index is not None else ""
+    )
+    tools_before_first_shell = [
+        str(item["tool"]) for item in tool_trace[:first_shell_index]
+    ] if first_shell_index is not None else [str(item["tool"]) for item in tool_trace[:20]]
+    first_shell_command_matches_worker_command = (
+        bool(first_shell_command) and command_matches_for_contract(first_shell_command, expected_worker_command_line)
+    )
+    workdir_matches_repo_root = opencode_workdir_matches_repo_root(first_shell_workdir, repo_root=repo_root)
+    status = "not-observed"
+    if executed_shell_commands:
+        status = (
+            "executed"
+            if first_shell_command_matches_worker_command and workdir_matches_repo_root and not tools_before_first_shell
+            else "not-executed"
+        )
+    contract_failure_reason = ""
+    if status == "not-observed":
+        contract_failure_reason = "no_shell_command_observed"
+    elif status == "not-executed":
+        if tools_before_first_shell:
+            contract_failure_reason = "tool_before_first_shell_command"
+        elif not workdir_matches_repo_root:
+            contract_failure_reason = "opencode_workdir_mismatch"
+        else:
+            contract_failure_reason = (
+                "first_shell_command_mismatch_worker_command_seen_later"
+                if exact_worker_command_seen
+                else "first_shell_command_mismatch"
+            )
+    return {
+        "expected_worker_command_line": expected_worker_command_line,
+        "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
+        "executed_shell_command_count": len(executed_shell_commands),
+        "executed_shell_commands": executed_shell_commands[:20],
+        "first_tool_name": first_tool_name,
+        "first_shell_command": first_shell_command,
+        "first_shell_tool_name": first_shell_tool_name,
+        "first_shell_workdir_status": "repo_root" if workdir_matches_repo_root else "non_repo_root",
+        "expected_workdir_status": "repo_root",
+        "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
+        "first_shell_workdir_matches_repo_root": workdir_matches_repo_root,
+        "tools_before_first_shell": tools_before_first_shell[:20],
+        "contract_failure_reason": contract_failure_reason,
+        "worker_command_seen": exact_worker_command_seen,
+        "summary_exists": summary_path.exists(),
+        "status": status,
+    }
+
+
+def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    events = opencode_session_events(session_evidence)
+    tools: list[dict[str, Any]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        tool = str(part.get("tool", "")).lower().strip()
+        if not tool:
+            continue
+        command = ""
+        state = part.get("state")
+        if isinstance(state, dict):
+            tool_input = state.get("input")
+            if isinstance(tool_input, dict):
+                raw_command = tool_input.get("command") or tool_input.get("cmd")
+                if isinstance(raw_command, str):
+                    command = raw_command.strip()
+                raw_workdir = tool_input.get("workdir") or tool_input.get("cwd")
+                workdir = raw_workdir.strip() if isinstance(raw_workdir, str) else ""
+            else:
+                workdir = ""
+        else:
+            workdir = ""
+        tools.append(
+            {
+                "tool": tool,
+                "command": command,
+                "workdir": workdir,
+                "is_shell_command": tool in {"bash", "shell", "cmd", "powershell"} and bool(command),
+            }
+        )
+    return tools
+
+
+def opencode_workdir_matches_repo_root(workdir: str, *, repo_root: Path) -> bool:
+    if not workdir:
+        return True
+    try:
+        observed = normalize_windows_extended_path(Path(workdir).resolve())
+        expected = normalize_windows_extended_path(repo_root.resolve())
+    except OSError:
+        return False
+    return observed == expected
+
+
+def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[str]:
+    events = opencode_session_events(session_evidence)
+    commands: list[str] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        tool = str(part.get("tool", "")).lower()
+        if tool not in {"bash", "shell", "cmd", "powershell"}:
+            continue
+        state = part.get("state")
+        if not isinstance(state, dict):
+            continue
+        tool_input = state.get("input")
+        if not isinstance(tool_input, dict):
+            continue
+        command = tool_input.get("command") or tool_input.get("cmd")
+        if isinstance(command, str) and command.strip():
+            commands.append(command.strip())
+    return commands
+
+
+def opencode_session_events(session_evidence: dict[str, Any]) -> list[Any]:
+    events = session_evidence.get("session_events")
+    if isinstance(events, list):
+        return events
+    session = session_evidence.get("session")
+    if isinstance(session, list):
+        return session
+    if isinstance(session, dict):
+        if "part" in session or "type" in session:
+            return [session]
+        events = session.get("events")
+        if isinstance(events, list):
+            return events
+    return []
+
+
+def normalize_command_for_contract(command: str) -> str:
+    return " ".join(command.strip().split())
+
+
+def command_matches_for_contract(observed_command: str, expected_command: str) -> bool:
+    if normalize_command_for_contract(observed_command) == normalize_command_for_contract(expected_command):
+        return True
+    observed_argv = shell_argv_for_contract(observed_command)
+    expected_argv = shell_argv_for_contract(expected_command)
+    return bool(observed_argv) and observed_argv == expected_argv
+
+
+def shell_argv_for_contract(command: str) -> list[str]:
+    try:
+        return shlex.split(command, posix=True)
+    except ValueError:
+        return []
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def write_blocked_worker_summary(
+    *,
+    run_id: str,
+    proof_class: str,
+    worker_id: str,
+    request: dict[str, Any],
+    root_cause_key: str,
+    process_returncode: int,
+    exit_code: int,
+    elapsed_seconds: int,
+    summary_path: Path,
+    metrics_path: Path,
+    opencode_contract_verification: dict[str, Any] | None,
+    handoff_contract: dict[str, Any] | None,
+    opencode_session_evidence: dict[str, Any] | None,
+    repo_root: Path,
+) -> None:
+    target_id = str(request.get("target_id", "unknown"))
+    slice_id = str(request.get("slice_id", "unknown"))
+    unit_status = {
+        "unit_id": f"{target_id}/{slice_id}",
+        "source": "opencode-worker",
+        "status": "blocked",
+        "compiled": False,
+        "semantic_pass": False,
+        "refused": False,
+        "blocked": True,
+        "failed": False,
+        "root_cause_key": root_cause_key,
+        "process_returncode": process_returncode,
+        "exit_code": exit_code,
+        "worker_id": worker_id,
+    }
+    if opencode_contract_verification is not None:
+        unit_status["opencode_contract_verification"] = opencode_contract_verification
+    if handoff_contract is not None:
+        unit_status["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        unit_status["opencode_session_evidence"] = opencode_session_evidence
+
+    metrics = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "units_total": 1,
+        "units_converged": 0,
+        "units_baseline_only": 0,
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": None,
+            "reduced_by": None,
+            "ratio": 0.0,
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": False,
+        "always_equivalent": False,
+        "fail_closed_count": 1,
+        "root_cause_counts": {root_cause_key: 1},
+        "wall_clock_seconds": max(0, elapsed_seconds),
+        "llm_calls": 1,
+        "per_unit_statuses": [unit_status],
+    }
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "profile_id": PROFILE_ID,
+        "profile_sha256": sha256_file(repo_root / "config" / "competition-env" / "environment.json"),
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": max(0, elapsed_seconds),
+        "translator_version": "opencode-agent-harness",
+        "slices": {
+            "attempted": 1,
+            "typed_ir_generated": 0,
+            "compiled": 0,
+            "semantic_pass": 0,
+            "refused": 0,
+            "blocked": 1,
+            "failed": 0,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "workflow_metrics": {
+            "path": metrics_path.name,
+            "sha256": sha256_file(metrics_path),
+        },
+        "artifact_roots": [
+            "target/competition-out/evidence",
+            "target/competition-out/summary",
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": "blocked",
+            "validator": "opencode_agent_harness.py run-worker --mode opencode",
+        },
+    }
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_opencode_handoff_contract(
+    *,
+    run_id: str,
+    worker_id: str,
+    attempt_number: int,
+    request_path: Path,
+    summary_path: Path,
+    contract_path: Path,
+    worker_command: list[str],
+    opencode_argv: list[str],
+    launch_policy: dict[str, Any],
+    repo_root: Path,
+    assignment_request_path: Path | None = None,
+) -> dict[str, str]:
+    if not opencode_argv:
+        raise SystemExit("opencode argv must not be empty")
+    contract = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "runner_kind": "opencode-run",
+        "request_path": repo_relative(request_path, repo_root=repo_root),
+        "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "worker_command": worker_command,
+        "worker_command_line": subprocess.list2cmdline(worker_command),
+        "worker_command_sha256": sha256_text(subprocess.list2cmdline(worker_command)),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "prompt": str(opencode_argv[-1]),
+        "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
+    }
+    if assignment_request_path is not None:
+        contract["assignment_request_path"] = repo_relative(assignment_request_path, repo_root=repo_root)
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
+
+
+def write_opencode_preflight_contract(
+    *,
+    run_id: str,
+    contract_path: Path,
+    marker_path: Path,
+    marker_command: list[str],
+    opencode_argv: list[str],
+    launch_policy: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, str]:
+    if not opencode_argv:
+        raise SystemExit("opencode argv must not be empty")
+    contract = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "runner_kind": "opencode-preflight",
+        "expected_marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "worker_command": marker_command,
+        "worker_command_line": subprocess.list2cmdline(marker_command),
+        "worker_command_sha256": sha256_text(subprocess.list2cmdline(marker_command)),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "prompt": str(opencode_argv[-1]),
+        "evidence_boundary": "preflight proves exact-command compliance only; semantic acceptance requires worker summary and validators",
+    }
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
+
+
+def write_opencode_session_evidence(
+    *,
+    completed: subprocess.CompletedProcess[str],
+    evidence_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    repo_root: Path,
+) -> dict[str, str]:
+    stdout = completed.stdout or ""
+    evidence: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "process_returncode": int(completed.returncode),
+        "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
+        "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
+    }
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        events = []
+        jsonl_error = None
+        for line in stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as line_error:
+                jsonl_error = line_error
+                break
+        if events and jsonl_error is None:
+            evidence.update(
+                {
+                    "parsed": True,
+                    "format": "jsonl",
+                    "session_events": events,
+                }
+            )
+        else:
+            evidence.update(
+                {
+                    "parsed": False,
+                    "parse_error": str(jsonl_error or error),
+                    "raw_output": stdout[:20000],
+                }
+            )
+    else:
+        evidence.update(
+            {
+                "parsed": True,
+                "format": "json",
+                "session": parsed,
+            }
+        )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
+
+
 def write_merge_plan(
     *,
     db_path: Path,
     run_id: str,
     out_root: Path,
     proof_class: str,
+    worker_summary_paths: list[str] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     db_path = repo_path(db_path, repo_root=repo_root)
     out_root = repo_path(out_root, repo_root=repo_root)
-    with closing(connect(db_path)) as connection:
-        ensure_schema(connection)
-        rows = connection.execute(
-            """
-            select repo_rel_path from artifacts
-            where run_id=? and kind='competition-run-summary'
-            order by repo_rel_path
-            """,
-            (run_id,),
-        ).fetchall()
-    summaries = [row[0] for row in rows]
-    argv = ["python", "validation/tools/run_competition.py"]
+    if worker_summary_paths is None:
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            rows = connection.execute(
+                """
+                select repo_rel_path from artifacts
+                where run_id=? and kind='competition-run-summary'
+                order by repo_rel_path
+                """,
+                (run_id,),
+            ).fetchall()
+        summaries = [row[0] for row in rows]
+    else:
+        summaries = [
+            repo_relative(repo_path(Path(summary), repo_root=repo_root), repo_root=repo_root)
+            for summary in worker_summary_paths
+        ]
+    argv = ["python", "-B", "validation/tools/run_competition.py"]
     for summary in summaries:
         argv.extend(["--worker-summary", summary])
     argv.extend(["--out-root", repo_relative(out_root, repo_root=repo_root), "--proof-class", proof_class, "--run-id", run_id])
     merge_plan = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
+        "path": repo_relative(out_root / "harness" / "merge-plan.json", repo_root=repo_root),
         "worker_summaries": summaries,
         "argv": argv,
         "validator": "validation/tools/validate_competition_run_summary.py",
@@ -679,9 +6371,86 @@ def run_proof_class(db_path: Path, run_id: str) -> str:
     return str(row[0])
 
 
+def assigned_worker_out_root_rel(connection: sqlite3.Connection, *, run_id: str, worker_id: str) -> str:
+    row = connection.execute(
+        "select isolated_out_root from agents where run_id=? and agent_id=?",
+        (run_id, worker_id),
+    ).fetchone()
+    if row is None:
+        raise SystemExit(f"worker is not assigned in run {run_id}: {worker_id}")
+    return str(row[0])
+
+
+def assigned_worker_summary_path(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    repo_root: Path,
+) -> Path:
+    out_root_rel = assigned_worker_out_root_rel(connection, run_id=run_id, worker_id=worker_id)
+    return repo_path(Path(out_root_rel), repo_root=repo_root) / "summary" / "competition-run-summary.json"
+
+
+def discover_top_level_function_names(text: str) -> list[str]:
+    masked = mask_comments_and_strings(text)
+    names: list[str] = []
+    seen: set[str] = set()
+    index = 0
+    while index < len(masked):
+        if masked[index] != "{":
+            index += 1
+            continue
+        prefix = masked[:index].rstrip()
+        if not prefix.endswith(")"):
+            match_end = find_matching(masked, index, "{", "}")
+            index = match_end + 1 if match_end is not None else index + 1
+            continue
+        close_paren = len(prefix) - 1
+        open_paren = find_matching_reverse(masked, close_paren, "(", ")")
+        if open_paren is None:
+            index += 1
+            continue
+        name_match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*$", masked[:open_paren].rstrip())
+        if name_match is None:
+            index += 1
+            continue
+        name = name_match.group(1)
+        if name not in C_STATEMENT_KEYWORDS and name not in seen:
+            names.append(name)
+            seen.add(name)
+        match_end = find_matching(masked, index, "{", "}")
+        index = match_end + 1 if match_end is not None else index + 1
+    return names
+
+
+C_STATEMENT_KEYWORDS = {
+    "do",
+    "else",
+    "for",
+    "if",
+    "switch",
+    "while",
+}
+
+
+def find_matching_reverse(text: str, close_index: int, open_char: str, close_char: str) -> int | None:
+    depth = 0
+    for index in range(close_index, -1, -1):
+        char = text[index]
+        if char == close_char:
+            depth += 1
+        elif char == open_char:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
 def connect(db_path: Path) -> sqlite3.Connection:
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect(db_path, timeout=30)
     connection.execute("pragma foreign_keys = on")
+    connection.execute("pragma busy_timeout = 30000")
     return connection
 
 
@@ -698,11 +6467,20 @@ def repo_path(path: Path, *, repo_root: Path = REPO_ROOT) -> Path:
     else:
         checked_relative_path(path_text(path))
         resolved = (repo_root / path).resolve()
+    resolved = normalize_windows_extended_path(resolved)
+    repo_resolved = normalize_windows_extended_path(repo_root.resolve())
     try:
-        resolved.relative_to(repo_root.resolve())
+        resolved.relative_to(repo_resolved)
     except ValueError as error:
         raise SystemExit(f"path must stay inside repository: {path}") from error
     return resolved
+
+
+def normalize_windows_extended_path(path: Path) -> Path:
+    text = str(path)
+    if text.startswith("\\\\?\\"):
+        return Path(text[4:])
+    return path
 
 
 def checked_relative_path(value: str) -> PurePosixPath:
@@ -722,9 +6500,18 @@ def path_text(path: Path) -> str:
     return PurePosixPath(*path.parts).as_posix()
 
 
+def slug_id(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").lower()
+    if not slug:
+        raise SystemExit(f"cannot build id slug from empty value: {value!r}")
+    return slug
+
+
 def repo_relative(path: Path, *, repo_root: Path = REPO_ROOT) -> str:
+    resolved = normalize_windows_extended_path(path.resolve())
+    repo_resolved = normalize_windows_extended_path(repo_root.resolve())
     try:
-        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+        return resolved.relative_to(repo_resolved).as_posix()
     except ValueError as error:
         raise SystemExit(f"path must stay inside repository: {path}") from error
 

@@ -772,6 +772,30 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             )
         self.assertIn("selected_candidate_id", str(raised.exception))
 
+    def test_rejects_p0_route_governance_missing_summary(self) -> None:
+        module = load_validator_module()
+        candidate_generation = self._candidate_selection_record()
+        candidate_generation["selection_policy"]["stage"] = "p0_route_governance"
+        route = {"candidate_generation": candidate_generation}
+        profile = {"candidate_generation": candidate_generation}
+
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(Path("unused"), "unused", route, profile)
+
+        self.assertIn("governance_summary", str(raised.exception))
+
+        missing_set = self._candidate_selection_record()
+        missing_set["selection_policy"]["stage"] = "p0_route_governance"
+        missing_set.pop("candidate_set")
+        with self.assertRaises(SystemExit) as raised:
+            module.validate_typed_ir_candidate_binding(
+                Path("unused"),
+                "unused",
+                {"candidate_generation": missing_set},
+                {"candidate_generation": missing_set},
+            )
+        self.assertIn("governance_summary", str(raised.exception))
+
     def test_rejects_legacy_string_translator_as_selected_primary_candidate(self) -> None:
         module = load_validator_module()
         c2rust_candidate = {
@@ -933,7 +957,29 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 "correctness_role": "candidate_context_only",
                 "output": {
                     "path": output_path.as_posix(),
+                    "status": "generated",
                     "sha256": self._sha256(output_path),
+                },
+                "compile": {
+                    "status": "failed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                    "candidate_output": {
+                        "path": output_path.as_posix(),
+                        "status": "generated",
+                        "sha256": self._sha256(output_path),
+                    },
+                    "command": {
+                        "argv": ["rustc", "--crate-type", "lib", output_path.as_posix()],
+                        "working_directory": evidence_dir.as_posix(),
+                        "stdout_log": (evidence_dir / "rustc.stdout.log").as_posix(),
+                        "stderr_log": (evidence_dir / "rustc.stderr.log").as_posix(),
+                        "timeout_seconds": 120,
+                        "exit_status": "failed",
+                        "returncode": 1,
+                    },
+                    "artifact": None,
+                    "diagnostics": ["unit test compile failure placeholder"],
                 },
             }
             self._write_json(baseline_path, baseline)
@@ -1175,6 +1221,72 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("object", result.stderr + result.stdout)
 
+    def test_rejects_generated_c2rust_baseline_without_compile_status(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    "python",
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "zlib-ng" / "auto-translation" / "adler32-step"
+            baseline_path = evidence_dir / "l3-adler32-step-c2rust-baseline-manifest.json"
+            output_path = evidence_dir / "l3-adler32-step-c2rust-baseline-output.rs"
+            output_path.write_text("pub fn adler32_step(x: u32) -> u32 { x }\n", encoding="utf-8")
+            baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+            baseline["status"] = "generated"
+            baseline["reason"] = "test-forged-generated-status"
+            baseline["selected_command"] = {
+                "name": "c2rust",
+                "path": "fake-c2rust",
+                "available": True,
+                "version_status": "OK",
+                "version": "fake",
+            }
+            baseline["output"] = {
+                "path": output_path.as_posix(),
+                "status": "generated",
+                "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
+                "source_files": [],
+            }
+            baseline.pop("compile", None)
+            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "zlib-ng",
+                    "--slice-id",
+                    "adler32-step",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("compile", result.stderr + result.stdout)
+
     def test_rejects_l4_refused_route_with_generated_candidate_manifest(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -1234,6 +1346,8 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 else:
                     payload["route_decision"] = route_ref
                     payload["validation_profile"] = profile_ref
+                if file_name.endswith("auto-translation-manifest.json"):
+                    payload["status"] = "candidate_generated"
                 self._write_json(path, payload)
 
             cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
@@ -1329,6 +1443,9 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     payload["validation_profile"] = profile_ref
                 if file_name.endswith("auto-translation-manifest.json"):
                     payload["status"] = "candidate_refused"
+                    payload.setdefault("generated_artifacts", []).append(
+                        {"kind": "rust_draft", "status": "draft_generated"}
+                    )
                 self._write_json(path, payload)
 
             cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
@@ -2720,6 +2837,53 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             self.assertIn("external callee call-site binding", str(raised.exception))
 
+    def test_external_direct_callee_context_accepts_accepted_named_slice_call_site_binding(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-external-callee"
+            slice_spec, plan, context = self._external_callee_context_payloads()
+            final_path = evidence_dir / "accepted-helper-final-verification.json"
+            self._write_json(
+                final_path,
+                {
+                    "target_id": "demo",
+                    "slice_id": "helper-add-one",
+                    "semantic_pass": True,
+                    "accepted_evidence_authoritative": True,
+                    "generated_draft_semantic_pass": False,
+                },
+            )
+            accepted_binding = {
+                "target_id": "demo",
+                "slice_id": "helper-add-one",
+                "semantic_pass": True,
+                "accepted_evidence_authoritative": True,
+                "generated_draft_semantic_pass": False,
+                "final_verification_path": str(final_path),
+                "final_verification_sha256": self._sha256(final_path),
+            }
+            for callee in (
+                plan["translation_summary"]["external_direct_callees"][0],
+                context["external_direct_callees"][0],
+            ):
+                callee["stub_kind"] = "accepted_named_slice_evidence"
+                callee["accepted_named_slice_evidence"] = accepted_binding
+            context["signature_bindings"][0]["stub_kind"] = "accepted_named_slice_evidence"
+            for binding in context["call_edge_to_callee_binding"]:
+                binding["stub_kind"] = "accepted_named_slice_evidence"
+            scope = self._external_callee_manifest_scope_with_stub_kind("accepted_named_slice_evidence")
+            self._write_json(evidence_dir / f"{prefix}-auto-translation-plan.json", plan)
+            self._write_json(evidence_dir / f"{prefix}-context-pack.json", context)
+
+            module.validate_external_direct_callee_context(
+                slice_spec,
+                evidence_dir,
+                prefix,
+                scope,
+                scope,
+            )
+
     def test_external_direct_callee_context_rejects_context_direct_call_edge_drift(self) -> None:
         module = load_validator_module()
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -2932,6 +3096,8 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             ("char_width", 0, "target.char_width invalid"),
             ("short_width", "not-a-width", "target.short_width invalid"),
             ("long_long_width", -64, "target.long_long_width invalid"),
+            ("int_align", 0, "target.int_align invalid"),
+            ("pointer_align", "not-an-align", "target.pointer_align invalid"),
             ("plain_char_signed", "signed", "target.plain_char_signed invalid"),
         ]:
             with self.subTest(key=key):
@@ -3550,6 +3716,14 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             evidence_dir / f"{prefix}-negative-diff.json",
             "expected_failed",
         )
+        self._bind_manifest_ref(
+            evidence_dir,
+            prefix,
+            "rust_report",
+            evidence_dir / f"{prefix}-rust-report.json",
+            "passed",
+        )
+        self._refresh_manifest_evidence_ref_hashes(evidence_dir, prefix)
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json"
         return spec_path, out_root, evidence_dir
 
@@ -3760,15 +3934,18 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         return slice_spec, plan, context
 
     def _external_callee_manifest_scope(self) -> dict:
+        return self._external_callee_manifest_scope_with_stub_kind("compile_only")
+
+    def _external_callee_manifest_scope_with_stub_kind(self, stub_kind: str) -> dict:
         return {
             "claim_boundary": {
                 "external_callee_scope": {
-                    "stub_kind": "compile_only",
+                    "stub_kind": stub_kind,
                     "semantics_verified": False,
                 }
             },
             "external_callee_scope": {
-                "stub_kind": "compile_only",
+                "stub_kind": stub_kind,
                 "semantics_verified": False,
             },
         }
@@ -4043,6 +4220,17 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             ref["expected_failure"] = bool(payload.get("expected_failure"))
             ref["mutation_detected"] = bool(payload.get("mutation_detected") or payload.get("detected"))
         manifest["evidence"][evidence_key] = ref
+        self._write_json(manifest_path, manifest)
+
+    def _refresh_manifest_evidence_ref_hashes(self, evidence_dir: Path, prefix: str) -> None:
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for ref in manifest.get("evidence", {}).values():
+            if not isinstance(ref, dict) or not isinstance(ref.get("path"), str):
+                continue
+            resolved = self._repo_path(ref["path"])
+            if resolved.exists():
+                ref["sha256"] = self._sha256(resolved)
         self._write_json(manifest_path, manifest)
 
     def _global_dependency_spec(self) -> dict:

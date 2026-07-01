@@ -105,7 +105,7 @@ Config profile is a traceability and invalidation gate, not a full macro solver.
 
 中文：config profile 是追溯与缓存失效门禁，不是完整宏求解器。profile 变化时，受影响的 C oracle、Rust replay、diff、unsafe、performance、cache 和 summary 证据必须重新生成或显式失效。
 
-Competition environment profile is a toolchain and mirror provenance gate. A change to `config/competition-env/environment.json`, or a run performed under a different host/toolchain profile, invalidates build, oracle, replay, cache, performance, and summary claims unless those artifacts are regenerated or explicitly marked as non-competition evidence. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/environment.json` path is a compatibility reference, not the new default.
+Competition environment profile is a toolchain and mirror provenance gate. A change to `config/competition-env/environment.json`, or a run performed under a different host/toolchain profile, invalidates build, oracle, replay, cache, performance, and summary claims unless those artifacts are regenerated or explicitly marked as non-competition evidence. The older `validation/environment-profiles/huawei-competition-ubuntu-24.04/` path is a README-only historical reference, not an executable profile or the new default.
 
 Pointer dependency graph evidence is a context and risk-boundary gate, not a whole-program alias proof. Graph changes invalidate affected ContextPack, PatchPlan, C oracle, Rust replay, diff, unsafe, performance, cache, and summary evidence unless regenerated or explicitly invalidated.
 

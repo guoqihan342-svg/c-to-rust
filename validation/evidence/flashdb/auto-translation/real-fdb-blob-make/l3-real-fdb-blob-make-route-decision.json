@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
+        "sha256": "9a4b15e75e81f1b5066fa85d6c80b0682f85179b8668b32002b585105b735ea7",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -18,11 +18,9 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "kind": "legacy-string-translator",
-        "role": "compatibility_rust_draft",
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -37,7 +35,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
+          "sha256": "9a4b15e75e81f1b5066fa85d6c80b0682f85179b8668b32002b585105b735ea7",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -51,29 +49,74 @@
         "status": "skipped"
       }
     ],
-    "compatibility_sources": [
-      {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": false,
-        "selected": "legacy-string-translator",
-        "semantic_pass": false
-      }
-    ],
+    "compatibility_sources": [],
     "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": false,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L4",
+        "status": "refused"
+      },
+      "route_level": "L4",
+      "route_status": "refused",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
     "primary_candidate": {
-      "candidate_id": "primary:unknown",
+      "candidate_id": "primary:clang-lowered-typed-ir",
       "fallback": false,
-      "selected": "unknown",
+      "selected": "clang-lowered-typed-ir",
       "semantic_pass": false
     },
-    "selected_candidate_id": null,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
       "semantic_acceptance": false,
-      "stage": "post_generation_provenance"
+      "stage": "p0_route_governance"
     },
     "typed_ir": {
       "candidate_route": {
@@ -115,7 +158,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-        "sha256": "f357646f802687d833f0273230aefc06985bdf89996d9ece5152780a9db0a75c",
+        "sha256": "ab9ecd04fb7603640861a929b3e119144c3e0d5116a6ff3d392a29fb433f49f2",
         "status": "lowered"
       },
       "status": "generated",
@@ -133,14 +176,9 @@
   },
   "rationale": [
     {
-      "feature": "blocked_artifact",
-      "values": {
-        "cfg": "recorded",
-        "plan": "blocked",
-        "translator": "blocked",
-        "type_map": "blocked"
-      },
-      "weight": "hard_refuse"
+      "feature": "typed_ir_candidate_generated",
+      "route": "GenericTypedIr",
+      "weight": "generic_typed_ir"
     },
     {
       "feature": "accepted_evidence_authoritative",
@@ -176,32 +214,32 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-      "sha256": "bb7f7fa8291cbd10dbe0142cd5ec660405ded77fb385151d05fcd9dd8b56bcca",
+      "sha256": "9a4b15e75e81f1b5066fa85d6c80b0682f85179b8668b32002b585105b735ea7",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-cfg.json",
-      "sha256": "c19f8c9d7051f904598657be46121f41f8eff737f0dcbd481ac2ac6d69d35405",
+      "sha256": "e024d8ee8ce4e88b689d455879d56ac78b96719b6489ecf0bc936f9f8128c269",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-      "sha256": "f357646f802687d833f0273230aefc06985bdf89996d9ece5152780a9db0a75c",
+      "sha256": "ab9ecd04fb7603640861a929b3e119144c3e0d5116a6ff3d392a29fb433f49f2",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
-      "sha256": "4ae75a1b10b36085ebe96bae0c4f97c9c15ea7c51a3f1a693dea9f969260ece6",
+      "sha256": "05c98469ddedcf0bb138bd0588f2f0c718d293a8067b2e970bc4e746460cfd8e",
       "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-auto-translation-plan.json",
-      "status": "blocked"
+      "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-type-map.json",
-      "sha256": "979881d6198a36295280f9059d8c886316654bcae89ad3795c91df30b4cbb90b",
-      "status": "blocked"
+      "sha256": "f0b8dc0ecd2d87773eda00259a07e5634af5c847363272f5bdb773b9871b323e",
+      "status": "recorded"
     }
   },
   "status": "refused",

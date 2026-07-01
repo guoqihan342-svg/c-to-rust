@@ -1,14 +1,14 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+    "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
-    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=61c2e752bdca06aad71f44958c40185417964a2ac0f7b26ddb4f3918a046def6",
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
     "fixture_hash=real-fdb-kv-set-fixture",
-    "build_profile_hash=c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
+    "build_profile_hash=c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=not_applicable",
@@ -37,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -60,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -83,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     }
   ],
   "inputs": {
@@ -92,18 +92,25 @@
       "status": "recorded"
     },
     "external_callee_context": {
-      "blocked_count": 4,
-      "declared_count": 0,
+      "blocked_count": 0,
+      "declared_count": 4,
+      "declared_spec_count": 4,
+      "declared_spec_names": [
+        "fdb_blob_make",
+        "fdb_kv_del",
+        "fdb_kv_set_blob",
+        "strlen"
+      ],
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
-      "status": "blocked"
+      "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-pointer-graph.json",
-      "status": "not_applicable"
+      "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "sha256": "61c2e752bdca06aad71f44958c40185417964a2ac0f7b26ddb4f3918a046def6",
+      "sha256": "f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
       "status": "ready"
     },
     "type_map": {
@@ -112,22 +119,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "4fc8daac2d79f11ae1042af0212cb03b7eabfa77",
+  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
   "route_decision": {
-    "level": "L4",
+    "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "ca1be33dcfb069b4eb5ea769688c0fb6902e8610f842b6ed5a7f999250f2ab20",
-    "status": "refused"
+    "sha256": "5a23dba437bb2d6f1ec8db6c7418e28138d7b7136bb5b79a2ae10c77b3343d7d",
+    "status": "recorded"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "status": "blocked",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "status": "draft_generated",
   "target_id": "flashdb",
   "translation_source": {
-    "fallback_from": "clang-lowered-typed-ir",
-    "fallback_reason": "clang_lowered_typed_ir_unavailable",
-    "selected": "legacy-string-translator"
+    "selected": "clang-lowered-typed-ir"
   },
   "translation_summary": {
     "alias_gate": {
@@ -137,47 +142,378 @@
       "requires_noalias": false,
       "risk_level": "none"
     },
-    "call_expressions": [],
-    "external_direct_callee_blocks": [
+    "call_expressions": [
       {
-        "name": "fdb_blob_make",
-        "reason": "missing_declared_external_direct_callee",
-        "semantics_verified": false,
-        "stub_kind": "none"
+        "arguments": [
+          "db",
+          "key",
+          "fdb_blob_make(&blob, value, strlen(value))"
+        ],
+        "callee": "fdb_kv_set_blob",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-kv-set-blob",
+        "callee_source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
+        "definition_status": "real_source_bound",
+        "source_expression": "fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)))",
+        "statement_context": "return",
+        "stub_status": "compile_only"
       },
       {
-        "name": "fdb_kv_del",
-        "reason": "missing_declared_external_direct_callee",
-        "semantics_verified": false,
-        "stub_kind": "none"
+        "arguments": [
+          "&blob",
+          "value",
+          "strlen(value)"
+        ],
+        "callee": "fdb_blob_make",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-blob-make",
+        "callee_source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "definition_status": "real_source_bound",
+        "source_expression": "fdb_blob_make(&blob, value, strlen(value))",
+        "statement_context": "return",
+        "stub_status": "compile_only"
       },
       {
-        "name": "fdb_kv_set_blob",
-        "reason": "missing_declared_external_direct_callee",
-        "semantics_verified": false,
-        "stub_kind": "none"
+        "arguments": [
+          "value"
+        ],
+        "callee": "strlen",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-stdlib-strlen",
+        "callee_source_ref": "stdlib:string.h#strlen",
+        "definition_status": "stdlib_model_pending_named_slice_evidence",
+        "source_expression": "strlen(value)",
+        "statement_context": "return",
+        "stub_status": "compile_only"
       },
       {
-        "name": "strlen",
-        "reason": "missing_declared_external_direct_callee",
-        "semantics_verified": false,
-        "stub_kind": "none"
+        "arguments": [
+          "db",
+          "key"
+        ],
+        "callee": "fdb_kv_del",
+        "callee_scope": "external_direct_callee",
+        "callee_signature_id": "sig-fdb-kv-del",
+        "callee_source_ref": "src/fdb_kvdb.c#fdb_kv_del",
+        "definition_status": "real_source_bound",
+        "source_expression": "fdb_kv_del(db, key)",
+        "statement_context": "return",
+        "stub_status": "compile_only"
       }
     ],
-    "external_direct_callees": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [
+      {
+        "accepted_named_slice_evidence": {
+          "accepted_evidence_authoritative": true,
+          "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+          "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
+          "generated_draft_semantic_pass": false,
+          "kind": "accepted_named_slice_evidence",
+          "semantic_pass": true,
+          "slice_id": "real-fdb-blob-make",
+          "target_id": "flashdb"
+        },
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "fdb_blob_make_named_slice_accepted_evidence",
+        "name": "fdb_blob_make",
+        "parameters": [
+          {
+            "c_type": "fdb_blob_t",
+            "name": "blob"
+          },
+          {
+            "c_type": "const void*",
+            "name": "value_buf"
+          },
+          {
+            "c_type": "size_t",
+            "name": "buf_len"
+          }
+        ],
+        "return_type": "fdb_blob_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-blob-make",
+        "source_files": [
+          {
+            "path": "src/fdb_utils.c",
+            "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+          }
+        ],
+        "source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "stub_boundary": "accepted_named_slice_context_only",
+        "stub_generation": "not_emitted_named_slice_evidence",
+        "stub_kind": "accepted_named_slice_evidence",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "flashdb_external_direct_callee_signature_context",
+        "name": "fdb_kv_del",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "const char*",
+            "name": "key",
+            "rust_type": "*const core::ffi::c_char"
+          }
+        ],
+        "return_rust_type": "i32",
+        "return_type": "fdb_err_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-kv-del",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
+        "stub_boundary": "flashdb_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_flashdb_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "flashdb_external_direct_callee_signature_context",
+        "name": "fdb_kv_set_blob",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "const char*",
+            "name": "key",
+            "rust_type": "*const core::ffi::c_char"
+          },
+          {
+            "c_type": "fdb_blob_t",
+            "name": "blob",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "i32",
+        "return_type": "fdb_err_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-kv-set-blob",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
+        "stub_boundary": "flashdb_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_flashdb_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "stdlib_model_pending_named_slice_evidence",
+        "header_files": [],
+        "model_contract": "strlen_readonly_nul_terminated",
+        "name": "strlen",
+        "parameters": [
+          {
+            "c_type": "const char*",
+            "name": "s"
+          }
+        ],
+        "return_type": "size_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-stdlib-strlen",
+        "source_files": [
+          {
+            "path": "stdlib/string.h",
+            "sha256": "stdlib-symbolic-source"
+          }
+        ],
+        "source_ref": "stdlib:string.h#strlen",
+        "stub_boundary": "stdlib_readonly_string_model",
+        "stub_generation": "not_emitted_modeled_stdlib",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
+    "external_direct_callees": [
+      {
+        "accepted_named_slice_evidence": {
+          "accepted_evidence_authoritative": true,
+          "boundary": "This validates the named fdb_blob_make slice through accepted evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+          "final_verification_path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "final_verification_sha256": "812edc7b2f7ccafc486286c1380774414f943e472984e9e4929fdd78df003ce5",
+          "generated_draft_semantic_pass": false,
+          "kind": "accepted_named_slice_evidence",
+          "semantic_pass": true,
+          "slice_id": "real-fdb-blob-make",
+          "target_id": "flashdb"
+        },
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "fdb_blob_make_named_slice_accepted_evidence",
+        "name": "fdb_blob_make",
+        "parameters": [
+          {
+            "c_type": "fdb_blob_t",
+            "name": "blob"
+          },
+          {
+            "c_type": "const void*",
+            "name": "value_buf"
+          },
+          {
+            "c_type": "size_t",
+            "name": "buf_len"
+          }
+        ],
+        "return_type": "fdb_blob_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-blob-make",
+        "source_files": [
+          {
+            "path": "src/fdb_utils.c",
+            "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+          }
+        ],
+        "source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "stub_boundary": "accepted_named_slice_context_only",
+        "stub_generation": "not_emitted_named_slice_evidence",
+        "stub_kind": "accepted_named_slice_evidence",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "flashdb_external_direct_callee_signature_context",
+        "name": "fdb_kv_del",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "const char*",
+            "name": "key",
+            "rust_type": "*const core::ffi::c_char"
+          }
+        ],
+        "return_rust_type": "i32",
+        "return_type": "fdb_err_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-kv-del",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
+        "stub_boundary": "flashdb_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_flashdb_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "real_source_bound",
+        "header_files": [],
+        "model_contract": "flashdb_external_direct_callee_signature_context",
+        "name": "fdb_kv_set_blob",
+        "parameters": [
+          {
+            "c_type": "fdb_kvdb_t",
+            "name": "db",
+            "rust_type": "*mut core::ffi::c_void"
+          },
+          {
+            "c_type": "const char*",
+            "name": "key",
+            "rust_type": "*const core::ffi::c_char"
+          },
+          {
+            "c_type": "fdb_blob_t",
+            "name": "blob",
+            "rust_type": "*mut core::ffi::c_void"
+          }
+        ],
+        "return_rust_type": "i32",
+        "return_type": "fdb_err_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-fdb-kv-set-blob",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
+        "stub_boundary": "flashdb_external_direct_callee_context_only",
+        "stub_generation": "not_emitted_flashdb_signature_context",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      },
+      {
+        "definition_status": "stdlib_model_pending_named_slice_evidence",
+        "header_files": [],
+        "model_contract": "strlen_readonly_nul_terminated",
+        "name": "strlen",
+        "parameters": [
+          {
+            "c_type": "const char*",
+            "name": "s"
+          }
+        ],
+        "return_type": "size_t",
+        "semantics_verified": false,
+        "signature_ref": "sig-stdlib-strlen",
+        "source_files": [
+          {
+            "path": "stdlib/string.h",
+            "sha256": "stdlib-symbolic-source"
+          }
+        ],
+        "source_ref": "stdlib:string.h#strlen",
+        "stub_boundary": "stdlib_readonly_string_model",
+        "stub_generation": "not_emitted_modeled_stdlib",
+        "stub_kind": "compile_only",
+        "supported": true,
+        "unsupported_reasons": []
+      }
+    ],
     "lvalue_decision_counts": {},
     "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
-    "translation_rule_ids": [],
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "bounded-call-expression"
+    ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
-    "unsupported_node_count": 2
+    "unsupported_node_count": 0
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
-    "profile": "L4-dev",
-    "sha256": "98c525e90df22bf76efe305da5f5de48389ac4edb3029a136da681ef16354b65",
-    "status": "blocked"
+    "profile": "L1-dev",
+    "sha256": "12231c9462ce9d4b116a8b22348eac46fb226427e55670353704e9a6b3b0824a",
+    "status": "incomplete"
   },
   "verification_plan": [
     {

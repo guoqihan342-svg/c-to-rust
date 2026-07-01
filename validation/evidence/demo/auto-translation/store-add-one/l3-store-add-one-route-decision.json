@@ -17,26 +17,27 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-      "sha256": "37e039f89e738d44ff38aae926aa636c4e61e745dcd231c14860928ef78766f7",
+      "sha256": "c899ca28bfadf2d6d677986d712cec41076d681e7af30194abaf17f620f6637e",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-cfg.json",
-      "sha256": "c0ae3c548e9db490596e7a2d7a834d571234ec91e80e79a3378763bb913b8db1",
+      "sha256": "151022d6afb1356b577faab08c4c670d1ad2caa18358eff9d436c233b79c088c",
       "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
-      "sha256": "fbe02f45941ba886be265890353441dd110bb6b47295811f7ca89eccec5d3272",
+      "sha256": "2000233a77aec8dcc1be2f1d6b81b860b226e31aabd46d235819246484026ef1",
       "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-translation-plan.json",
-      "status": "draft_generated"
+      "status": "draft_generated",
+      "sha256": "145f9db46f6f7b3ee39bf7c02453b5265e16a54e96a179cab28e6d0e1f1ae9b8"
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-type-map.json",
-      "sha256": "fcab8dc2ee3d273e94b217eea3a08af07f655b07d965f072256e295109d6c84a",
+      "sha256": "be09744ffc7bce6cd43c7c00799d00ae35fffcf9424a8a7d544b2c1c2d58712d",
       "status": "recorded"
     }
   },

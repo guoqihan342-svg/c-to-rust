@@ -23,6 +23,29 @@ def resolve_schema_ref(schema: dict, node: dict) -> dict:
 
 
 class TemplateSchemaContractTests(unittest.TestCase):
+    def test_auto_translation_template_documents_five_repair_round_default(self) -> None:
+        readme_path = REPO_ROOT / "validation" / "auto-translation-template" / "README.md"
+        text = readme_path.read_text(encoding="utf-8")
+
+        self.assertIn("Default repair retry limit is five repair rounds.", text)
+        self.assertNotIn("Default repair retry limit is three rounds.", text)
+
+    def test_patch_event_schema_allows_five_repair_rounds(self) -> None:
+        template_dir = REPO_ROOT / "validation" / "auto-translation-template"
+        schema = load_json(template_dir / "patch-event.schema.json")
+        example = load_json(template_dir / "patch-event.example.json")
+
+        self.assertEqual(5, schema["properties"]["round"]["maximum"])
+
+        fifth_round = json.loads(json.dumps(example))
+        fifth_round["round"] = 5
+        jsonschema.validate(fifth_round, schema)
+
+        sixth_round = json.loads(json.dumps(example))
+        sixth_round["round"] = 6
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(sixth_round, schema)
+
     def test_pointer_graph_template_exposes_alias_and_effect_contract(self) -> None:
         schema_path = REPO_ROOT / "validation" / "pointer-graph-template" / "pointer-graph.schema.json"
         example_path = REPO_ROOT / "validation" / "pointer-graph-template" / "pointer-graph.example.json"
@@ -279,6 +302,17 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertEqual(output_ref_schema["anyOf"][0]["type"], "null")
             self.assertIn("path", output_ref_schema["anyOf"][1]["required"])
             self.assertIn("sha256", output_ref_schema["anyOf"][1]["required"])
+
+    def test_route_and_profile_schema_allow_p0_route_governance_summary(self) -> None:
+        for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
+            schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name
+            schema = load_json(schema_path)
+            generation_schema = schema["definitions"]["candidateGenerationEvidence"]
+            policy_schema = schema["definitions"]["candidateSelectionPolicy"]
+
+            self.assertIn("governance_summary", generation_schema["properties"])
+            self.assertIn("p0_route_governance", policy_schema["properties"]["stage"]["enum"])
+            self.assertIn("routeGovernanceSummary", schema["definitions"])
 
     def test_route_and_profile_candidate_set_schema_allows_legacy_compatibility_only(self) -> None:
         for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:

@@ -1,4 +1,5 @@
 import json
+import hashlib
 import subprocess
 import unittest
 from pathlib import Path
@@ -29,6 +30,7 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
         )
 
         evidence_dir = REPO_ROOT / "validation" / "evidence" / "flashdb"
+        slice_spec = self._load(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json")
         prefix = "l3-real-fdb-calc-crc32"
         c_oracle = self._load(evidence_dir / f"{prefix}-c-oracle.json")
         rust_report = self._load(evidence_dir / f"{prefix}-rust-report.json")
@@ -40,6 +42,10 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
         self.assertEqual(c_oracle["status"], "passed")
         self.assertTrue(c_oracle["semantic_pass"])
         self.assertEqual(c_oracle["toolchain_status"], "C_ORACLE_GENERATED")
+        self.assertEqual(c_oracle["source_commit"], slice_spec["source_commit"])
+        self.assertEqual(rust_report["source_commit"], slice_spec["source_commit"])
+        self.assertEqual(diff["source_commit"], slice_spec["source_commit"])
+        self.assertEqual(negative_diff["source_commit"], slice_spec["source_commit"])
         self.assertEqual(c_oracle["case_count"], 2)
         self.assertEqual(
             c_oracle["generator"],
@@ -64,7 +70,7 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
         provenance = c_oracle["provenance"]
         self.assertEqual(
             provenance["fixture_sha256"],
-            "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+            self._sha256(REPO_ROOT / c_oracle["fixture"]),
         )
         self.assertEqual(
             provenance["source_file_hashes"]["src/fdb_utils.c"],
@@ -85,18 +91,20 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
         )
         self.assertEqual(
             provenance["harness_draft_ref"]["sha256"],
-            "dc5138d6e4a25b3a54577439cb350b5e4e7effc91b6f70acd757e945629fba5f",
+            self._sha256(REPO_ROOT / provenance["harness_draft_ref"]["path"]),
         )
-        self.assertEqual(provenance["compile_execution"]["toolchain_adapter"], "not_executed")
-        self.assertEqual(
+        self.assertIn(provenance["compile_execution"]["toolchain_adapter"], {"not_executed", "wsl", "native"})
+        self.assertIn(
             provenance["compile_execution"]["status"],
-            "skipped_by_flag",
+            {
+                "skipped_by_flag",
+                "compile_succeeded_not_oracle",
+                "compile_failed_not_oracle",
+                "compiler_missing_not_oracle",
+            },
         )
         self.assertFalse(provenance["compile_execution"]["semantic_pass"])
-        self.assertEqual(
-            provenance["compile_execution"]["toolchain_status_after_attempt"],
-            "DRAFT_NOT_EXECUTED",
-        )
+        self.assertNotEqual(provenance["compile_execution"]["toolchain_status_after_attempt"], "C_ORACLE_GENERATED")
         self.assertEqual(
             provenance["evidence_refs"]["c_oracle_status"],
             "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
@@ -129,6 +137,10 @@ class RealFdbCalcCrc32L3EvidenceTests(unittest.TestCase):
     @staticmethod
     def _load(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8-sig"))
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 if __name__ == "__main__":

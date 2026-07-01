@@ -42,7 +42,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-    "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+    "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
@@ -59,10 +59,71 @@
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/l2_slices/tools/generate_external_direct_callee_oracle.py",
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 6,
+      "case_source": "fixture_contract",
+      "declared_case_count": 6,
+      "fixture_hash": "external-direct-callee-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_value",
+      "status",
+      "external_callee_call_count",
+      "external_callee_contexts",
+      "external_callee_bindings",
+      "source_calls"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": false,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-    "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+    "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
     "status": "recorded"
   },
   "rust_check_status": "passed",
@@ -80,7 +141,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+    "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
     "status": "passed"
   },
   "validation_profile_status": "passed",

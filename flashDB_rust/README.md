@@ -34,6 +34,8 @@ Boundary note / 边界说明:
 - The zero-finding unsafe scan is not a proof of production FlashDB safety, hardware safety, C ABI compatibility, or full semantic equivalence.
 - Rust skeleton 是手写 seed code 和验证脚手架；除非某个函数切片绑定 translator-generated candidate 和 accepted evidence，否则不能算自动翻译产物。
 - The Rust skeleton is handwritten seed code plus validation scaffolding. It is not counted as automatic translator output unless a specific function slice is tied to a translator-generated candidate and accepted evidence.
+- `real-fdb-blob-make` 现在已有独立 L4 accepted-evidence semantic pass，但这只绑定该函数切片的 accepted evidence；generated draft 仍不是 semantic pass，也不能扩大成整个 `flashDB_rust` 或 `fdb_kv_set` 的等价证明。
+- `real-fdb-blob-make` now has an independent L4 accepted-evidence semantic pass, but that binds only that function-slice evidence; the generated draft is still not semantic pass, and this must not be generalized to the whole `flashDB_rust` skeleton or to `fdb_kv_set` equivalence.
 
 ## Fast Verification
 

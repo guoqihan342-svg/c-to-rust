@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "report_kind": "milestone-review-checklist",
+  "status": "passed",
+  "review_id": "flashdb-harness-internal-review-20260701",
+  "reviewer": {
+    "kind": "internal",
+    "id": "codex-harness-review"
+  },
+  "checklist": {
+    "harness_architecture": {
+      "status": "passed",
+      "evidence": [
+        "config/competition-env/judge-entrypoints/flashdb-harness.json",
+        "validation/tools/validate_judge_entrypoints.py",
+        "validation/tools/run_judge_entrypoints.py"
+      ],
+      "notes": "Judge entrypoints bind one-click runner, context pack, agent index, worker plan, and hash-bound evidence indexes."
+    },
+    "unsafe_ledger": {
+      "status": "passed",
+      "evidence": [
+        "validation/unsafe-budget-ledger.json",
+        "validation/tools/unsafe_budget.py",
+        "target/competition-out-flashdb-before-after-exhibit/summary/workflow-metrics.json"
+      ],
+      "notes": "Unsafe counts are treated as budget and before/after metrics only, not as platform safety proof."
+    },
+    "test_coverage_matrix": {
+      "status": "passed",
+      "evidence": [
+        "validation/translator-coverage-matrix.json",
+        "validation/tools/translator_coverage_matrix.py",
+        "validation/tools/test_milestone_release_report.py"
+      ],
+      "notes": "Coverage numerator remains limited to translator-generated semantic-pass slices and excludes accepted-evidence-only demos."
+    },
+    "real_slice_evidence": {
+      "status": "passed",
+      "evidence": [
+        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
+        "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
+        "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json"
+      ],
+      "notes": "FlashDB real-slice artifacts are used as harness and accepted-evidence bindings, not whole-project translation claims."
+    },
+    "public_claim_boundary": {
+      "status": "passed",
+      "evidence": [
+        "README.md",
+        "README.en.md",
+        "docs/c2rust-migration-agent/future-vision-and-mvp.md"
+      ],
+      "notes": "Public docs separate candidate generation, accepted evidence, handwritten baselines, and semantic acceptance."
+    },
+    "known_refusals": {
+      "status": "passed",
+      "evidence": [
+        "docs/c2rust-migration-agent/future-vision-and-mvp.md",
+        "validation/tools/route_governance_metrics_report.py",
+        "validation/tools/evidence_governance.py"
+      ],
+      "notes": "Known refusals and blocked routes remain visible in route governance and capability-delta reports."
+    }
+  },
+  "claim_boundary": {
+    "semantic_gate": false,
+    "review_is_semantic_acceptance": false,
+    "boundary": "This checklist records internal milestone review coverage for judge-facing harness readiness. It is not a semantic gate and does not expand translation coverage."
+  }
+}

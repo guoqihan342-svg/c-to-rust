@@ -7,7 +7,7 @@
 ## 当前工作区
 
 - 工作目录：`F:\agent\crustpaper\0625ctr`
-- 当前分支：`codex/flashdb-rust-skeleton`
+- 当前分支：`codex/agent-harness-flashdb-mvp`
 - 远端仓库：`https://github.com/guoqihan342-svg/c-to-rust.git`
 - 比赛环境默认入口：`config/competition-env/environment.json`
 - 当前全局待办唯一来源：`docs/c2rust-migration-agent/future-vision-and-mvp.md`
@@ -34,6 +34,9 @@
 ## 当前能力边界
 
 - Candidate generation 不等于 semantic pass；typed IR、C2Rust、LLM 和手写规则都只是候选来源。
+- `real-fdb-calc-crc32` 和 `real-fdb-blob-make` 当前通过的是 L4 accepted-evidence authoritative 语义证据绑定；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`。
+- `fdb_kv_set` 当前只有 source/signature provenance 和 L4 refused/blocked evidence；external callee shim/model/oracle 语义未关闭。
+- OpenCode harness 当前已有 `run-worker --mode deterministic` 最小执行器和 `--mode opencode --opencode-variant max` 包装入口；SQLite 只做调度账本，不能替代落盘 evidence。
 - FlashDB 只是回归用例，不能恢复 FlashDB/crc32 专用 recognizer、模板或特判路径。
 - `flashDB_rust` 是手写安全实现/验证基线，不是自动翻译产物。
 - C2Rust baseline 若为 `skipped`、`blocked` 或无 output，不得计入 generated、compiled、accepted 或 semantic pass。
@@ -48,6 +51,8 @@ openspec validate --all --strict
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
 cargo test --manifest-path crates/c2r-translator/Cargo.toml
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python -m unittest validation.tools.test_opencode_agent_harness validation.tools.test_run_competition validation.tools.test_c2rust_migrator
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
 python validation/tools/unsafe_budget.py --max-ratio 0.10
 ```
 
@@ -55,4 +60,6 @@ python validation/tools/unsafe_budget.py --max-ratio 0.10
 
 - 2026-06-28：将长 `CONTEXT.md` 归档，根文件收敛为短 handoff。
 - 2026-06-28：开始整理文档分类索引，并补核心 translator/validation 注释。
+- 2026-06-29：在 `codex/agent-harness-flashdb-mvp` 分支同步 docs 到当前 harness/FlashDB MVP 状态：`run-worker`、accepted-evidence 复用、`real-fdb-blob-make` L4 accepted evidence、`fdb_kv_set` blocked callee 边界。
+- 2026-07-01：H4 harness 已接入真实 FlashDB `baseline_repair_gate`：`real-fdb-calc-crc32` 第 1 轮产出 baseline unsafe gate 失败证据，root cause 为 `unsafe_baseline_requires_repair`；第 2 轮必须携带 repair hint 并复验 accepted safe evidence。最新验证产物：`target/competition-out-h4-flashdb-context-index-20260701`，其中 `context-pack.json` 和 `agent-index.json` 都索引 `attempt_evidence_policy`。
 - 保留未跟踪文件：`opencode.json`，除非用户明确要求，不要提交或删除。

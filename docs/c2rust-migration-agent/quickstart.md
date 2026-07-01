@@ -49,7 +49,7 @@ cd c-to-rust
 如果需要在已有仓库上工作，确保在正确的分支：
 
 ```bash
-git checkout codex/flashdb-rust-skeleton
+git checkout codex/agent-harness-flashdb-mvp
 ```
 
 ## 3. 激活比赛环境
@@ -83,13 +83,13 @@ $env:CLANG_PATH = "C:/Program Files/LLVM/bin/clang.exe"
 
 ```bash
 # Linux/CI（不标 competition-exact）
-python validation/tools/run_competition_smoke.py --proof-class ci-approximation
+python validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
 
 # WSL/本机 Ubuntu
-python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation
+python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
 
 # 仅当在真实比赛机上运行时打开此选项
-python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact
+python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
 ```
 
 smoke 会执行：
@@ -99,7 +99,7 @@ smoke 会执行：
 - translator 覆盖矩阵检查；
 - 核心 validation 和 translator 单元测试；
 
-输出见 `target/competition-smoke/summary/competition-smoke-summary.json`。
+输出见 `target/competition-smoke/summary/competition-smoke-summary.json`。Python 入口默认每个子命令 600 秒 timeout；超时会写入 `timeout_policy` 并以 124 作为 final-gate failure。缺失 required C compiler（如 `gcc`/`g++`）会在 environment-check step 写入 `failure_class=required_c_compiler_missing`，并在所有 proof class 下 fail-closed。
 
 ## 5. 翻译第一个真实 C 切片
 
@@ -108,11 +108,14 @@ smoke 会执行：
 ```bash
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --out-root target/competition-out \
@@ -134,11 +137,14 @@ runner 自动完成：
 # Step 1: 抽取切片
 python validation/tools/extract_source_slice.py \
   --repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --out target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json
 
@@ -169,16 +175,39 @@ bash config/competition-env/toolchain-check.sh
 
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
   --out-root target/competition-out \
   --proof-class competition-exact
 ```
+
+如果要通过 OpenCode worker 包装层执行同一条单次请求，只运行已分配的 worker 一次，并要求它产出 summary：
+
+```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
+```
+
+预期 worker 输出是 `target/competition-out/workers/worker-a/summary/competition-run-summary.json`。缺少 summary 输出就是交互失败，不能算部分成功。
 
 ## 7. 多 Agent / 并行 Worker
 
@@ -203,33 +232,51 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --compiler-command-source CMakeLists.txt \
   --include-path inc \
+  --include-path tests \
   --out-root target/competition-out/workers/worker-a
 ```
+
+quickstart 主路径必须在 `target/competition-out` 下生成或验证新输出；已提交的历史 evidence 只作为诊断材料，不是默认 worker 输入。
 
 可以为 worker-b、worker-c 等分配其他独立 slice，如 `fdb_kv_set`、`fdb_blob_make` 等。
 
 ### 7.3 运行 worker
 
 ```bash
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
-```
-
-### 7.4 记录 worker 结果
-
-```bash
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
 ```
 
-### 7.5 生成合并计划并执行
+`run-worker --mode deterministic` 会调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 `competition-run-summary.json` 存在时自动执行原来的 `record-worker-summary` 入库动作。连接本机 OpenCode / DeepSeek V4 Pro 时，可用 agent 包装层执行同一个 request：
+
+```bash
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id run-demo-001-opencode-preflight \
+  --out-root target/competition-out/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo-001 \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max \
+  --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
+```
+
+### 7.4 生成合并计划并执行
 
 ```bash
 python -m validation.tools.opencode_agent_harness write-merge-plan \
@@ -274,7 +321,8 @@ target/competition-out/
 ├── workers/<worker-id>/                  # 每个 worker 隔离输出
 │   ├── evidence/
 │   ├── summary/competition-run-summary.json
-│   └── logs/commands.jsonl
+│   ├── harness/run-worker-report.json
+│   └── logs/
 ├── evidence/<target>/auto-translation/<slice>/
 │   ├── l3-<slice>-clang-lowering-report.json
 │   ├── l3-<slice>-rust-draft.rs
@@ -288,15 +336,33 @@ target/competition-out/
     └── commands.jsonl
 ```
 
+第一条 FlashDB slice 需要检查的具体 artifacts：
+
+- `target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json`
+- `target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json`
+- `target/competition-out/summary/competition-run-summary.json`
+- `target/competition-out/logs/commands.jsonl`
+
 `competition-run-summary.json` 关键字段：
 
 ```json
 {
+  "schema_version": 1,
   "run_id": "<uuid>",
   "proof_class": "local-simulation",
   "profile_id": "huawei-competition-ubuntu-24.04",
+  "profile_sha256": "<64 lowercase hex chars>",
   "clang_source": "CLANG_PATH | vendored | missing",
-  "cargo_mirror_activation": {"method": "CARGO_HOME", "path": "config/competition-env/cargo"},
+  "cargo_mirror_activation": {
+    "method": "CARGO_HOME",
+    "path": "config/competition-env/cargo",
+    "config_file": "config/competition-env/cargo/config.toml"
+  },
+  "elapsed_seconds": 0,
+  "translator_version": "<git sha or version>",
   "slices": {
     "attempted": 1,
     "typed_ir_generated": 1,
@@ -307,7 +373,16 @@ target/competition-out/
     "failed": 0
   },
   "unsafe_budget": {"status": "passed", "total_first_party_non_test_unsafe": 0, "ratio": 0.0},
-  "final_gate": {"status": "passed"}
+  "artifact_roots": [
+    "target/competition-out/slice-specs",
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs"
+  ],
+  "final_gate": {
+    "status": "passed",
+    "validator": "validation/tools/validate_competition_run_summary.py"
+  }
 }
 ```
 
@@ -354,6 +429,7 @@ echo $CARGO_HOME  # 应输出 config/competition-env/cargo
 
 **解决**：
 - 确认 GCC 可用：`gcc --version`
+- 若环境 smoke 失败，检查 `competition-smoke-summary.json` 的 `steps[].failure_class` 是否为 `required_c_compiler_missing`
 - 确认 slice spec 中的 `include_paths` 和 `defines` 正确
 - 确认 `source_commit` 对应的源码版本正确
 
@@ -405,15 +481,18 @@ source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
 # 环境 smoke
-python validation/tools/run_competition_smoke.py --proof-class local-simulation
+python validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
 
 # 翻译单 slice
 python validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
+  --source-repository https://gitcode.com/xwxf/FlashDB.git \
+  --source-branch competition \
   --source-file src/fdb_utils.c \
   --function fdb_calc_crc32 \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
-  --source-commit 93d175549da579b8abac07bd175ce4c3f9dde829 \
+  --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
+  --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe \
   --include-path inc \
   --out-root target/competition-out \
   --proof-class local-simulation
@@ -423,6 +502,29 @@ python validation/tools/validate_auto_translation_evidence.py \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
   --evidence-root target/competition-out/evidence \
   --require-semantic-pass
+
+# 评委一键入口和公开 Markdown packet
+# 本地 artifacts 存在时，这条命令还会通过 validate_competition_run_summary.py 深校验非 smoke competition summary。
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+# milestone bundle 会包含 harness_architecture_summary.contract_matrix：
+# plan/translate/verify/repair/report -> roles、artifacts、validators 和非语义边界。
+
+python -B -m validation.tools.milestone_release_notes \
+  --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
+
+# run_judge_entrypoints 在 bundle 和 release notes 后自动生成
+# target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+# 校验 schema、hash、claim boundary、本机路径泄漏、packet-to-bundle 内容一致性和 release notes 渲染一致性
+python -B -m validation.tools.validate_public_release_packet \
+  --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+
+# evaluate profile 续跑索引由入口自动生成并由 validator 深校验
+# target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
+# target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
 
 # 检查 unsafe
 python validation/tools/unsafe_budget.py --max-ratio 0.10
@@ -447,13 +549,14 @@ python -B -m unittest validation.tools.test_doc_mirror_contract
 - **FlashDB 只是回归用例**：不能写 FlashDB 专用 recognizer、模板或特判路径。`flashDB_rust` 是手写安全实现/验证基线，不是自动翻译产物。
 - **SQLite 是调度账本，不是语义证据**：最终 gate 只看落盘 evidence 和 validator，不看 SQLite 中的状态。
 - **C2Rust baseline 为 skipped/blocked 时不计入 generated/accepted/semantic pass**。
+- **C2Rust baseline compile-pass 也只是 candidate context**：route-governance 和 milestone scorecard 可以展示 manifest/source/compile-pass 数，但不能把它当作 C/Rust 等价证明或 translation coverage。
 - **Proof class 不可混用**：`ci-approximation` 的结果不能标为 `competition-exact`。
 - **文档要双语同步**：新增文档需同时维护中文主文档（`.md`）和英文镜像（`.en.md`）。中文文档第一行必须是 `英文镜像见 \`<对应文件>.en.md\`。`
 
 ## 13. 下一步
 
-1. 阅读 `CONTEXT.md` 了解当前项目状态
-2. 阅读 `future-vision-and-mvp.md` 了解路线图和当前 P0 待办
-3. 阅读 `COVERAGE.md` 了解当前 C 构造支持边界
-4. 阅读 `opencode-agent-harness-design.md` 了解多 agent 设计
-5. 阅读 `config/competition-env/opencode-single-interaction.md` 了解比赛单次交互流程
+1. 按本文第 3-5 节完成环境 smoke 和 `real-fdb-calc-crc32` 最小复现。
+2. 阅读 `future-vision-and-mvp.md` 了解路线图和当前 P0 待办。
+3. 阅读 `COVERAGE.md` 了解当前 C 构造支持边界。
+4. 阅读 `config/competition-env/opencode-single-interaction.md` 了解比赛单次交互流程。
+5. 阅读 `opencode-agent-harness-design.md` 了解多 agent 设计。

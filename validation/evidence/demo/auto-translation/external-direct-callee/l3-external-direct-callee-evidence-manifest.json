@@ -45,116 +45,117 @@
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c2rust-baseline-manifest.json",
-      "sha256": "7d9ed7d896025c451dd5b354cd849028fcf6d0061e0d9ad19b2d4de430569dc4",
+      "sha256": "d4b560bc079507d3751a91de8c9ac3688c0a92f0f9ce67d2252172e1eeea372e",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-c-oracle-status.json",
-      "sha256": "6247890501c5281332e8ea44e814edf14038a82d44ba8d9f82408614ebb076ca",
+      "sha256": "b4fa0d7bfb618a49045861ddde02375ae58327454c27e88184ae8460e591b204",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-auto-cache-metadata.json",
-      "sha256": "ad18f0005464f726fe52a5b8f07288cd91d8bb9c15e9a281ca61c17b12282764",
+      "sha256": "eb38ac02975ae5ea4349f2269bb051ed23ef8435ae5832fd33e929d190261417",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-config-profile.json",
       "profile_id": "demo-external-direct-callee-wsl-gcc",
-      "sha256": "2af9ac275953edea64e55520e0ab2c3682443f62a918e7d2d4ca4848c604f35d",
+      "sha256": "d71f4ca67b303347642f8700beea5a5947600c9fb0657c18ca1b68420f38660c",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-context-pack.json",
-      "sha256": "2c50ca0fedfe6eb8d1c7e5119cee12ae8479d6ab086979a31f60fdd242064842",
+      "sha256": "781f40a59051267b715aec29d8dc1e39b6003ea0b81daaee8f5a65798ce7646a",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-final-verification.json",
-      "sha256": "da478e1e077b07767bd79742d575556ec807661b2a8e9565c8a823e13eaf9407",
+      "sha256": "764833b73807eec90170af61b63ef91b134a3ed2992adb0df2b6bf3437efa702",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-negative-diff.json",
-      "sha256": "b3637e7f21a5dabdad615e95c3d80e2e9c03d425fa3e0982539d036d154b2d1e",
+      "sha256": "dc638e9825f9194d26f88264d3dbd715b17c1026e6f22990c74384fa0a1e9dbd",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "4efdb65de0cadb6beaf7a25e6808ef94da964a48e88162ed63da7ec5aa272968",
+      "sha256": "76924d0158f5283f765ec14a804582ac99d0ea0a0181c09108e545861cf6be60",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
       "not_applicable_reason": "slice has no pointer surface",
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-pointer-graph.json",
-      "sha256": "7f9fd18b0d448eb424e7e28ac2a62970044038dbe3d8285ba9d202a491a96a92",
+      "sha256": "afb5709cac87d4390d2adfea62d912b09b60e5bcda3b12858a1b2b45569cb225",
       "status": "not_applicable"
     },
     "route_decision": {
       "level": "L0",
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-route-decision.json",
-      "sha256": "ff2d958fdaed400a44fb1eb2bb918c4280b0cf8fec7d90bdc546bf90d010ca3d",
+      "sha256": "eb7c3f68051f7130f2ad1c214960d73dab107987888232d31d2f9ea7ded81ea1",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/rust-check.json",
-      "sha256": "a4e6aef79613c9825a86dfd1c941a977e9ce2d2a4da5674189cf4857ec45ee72",
+      "sha256": "057172979b99f95f20f8e58bea675da368d6594952cb1663634a55e4461c7aa6",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-report.json",
-      "sha256": "f7b317d658942c43d36d2ba34f1f744c4b2452fae100d4c5d0d8e1353115f780",
+      "sha256": "f1079a0bb1e3a068feffab1f10b29c6dd35ebbedff0ce9cff4b29a9b6973711d",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-diff.json",
-      "sha256": "00ec058bd71ce1135ed0f31608a723b76be963b46cc5d639767711eefd7a9e6a",
+      "sha256": "0cb2dca9eb8bbce6ca973f21016e78b19547221329d68337871bbabdecf7a96e",
       "status": "passed"
     },
     "slice_contract": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-slice-contract.json",
-      "sha256": "0191f1299e27b3d6b1f013c147cf29b576e411df35786d1516da3143de754f0d",
+      "sha256": "ddecca656801a236ac96a5c8a7c93a5acffa69c1fb80732fdec5316f973e8928",
       "status": "recorded"
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-summary.json",
-      "sha256": "0ebb3fd06ce219f4ca9da8024d824124a029a9d44c9d5439bc69aefc9bcc738f",
+      "sha256": "721baeebeb3a1d767bfce24e06b88e9c5ff8ca0fd7e099508b096acf53822d85",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-test-translation-generated.json",
-      "sha256": "632e3ddc09f0d4c6cb395a94b467de716a755cf8935b3238363adb1525719a15",
+      "sha256": "3da197402289946c568cbe2e2f24dcefa204a0799d1e1bd5d21ed281635c0adf",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-unsafe-ledger.json",
-      "sha256": "7d0b264403e36172be468a2eecf4efebb68807203434ec880d71b3793b46226b",
+      "sha256": "e4d71479560314c66f1047ccf038ae9fac9d0097fe3a9341bc5f0ded84d089ba",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-unsafe-scan.json",
-      "sha256": "9472619a97d8c74db527bb0e8feb420b66bd7a7596b1f189e9843f7ab362ce91",
+      "sha256": "6439b9ba95fbc74f1d66795a647d8708f57faa5dd99ea171ec9c72eceda06c49",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-validation-profile.json",
       "profile": "L0-dev",
-      "sha256": "ef37d6f1c592394a946f6d1e2f390b9cd1df7ba748c4f7fdeddec0d97bc65737",
+      "sha256": "87751fdf4380e3b8fe976740ea9703a7af8b3f08be154389322ed1017ffb245f",
       "status": "passed"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-version-manifest.json",
-      "sha256": "f5adbef58c3710e9115887ad81b2d6dcff515173ad231ba34537fdeb60782df2",
+      "sha256": "6923c9186c7b9c08d2ca4ed0955eef30a52361a39c22492f2cdf3534ae7ac9cd",
       "status": "recorded"
     }
   },
   "fixture": {
     "hash": "external-direct-callee-fixture",
     "operation_count": 3,
-    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json"
+    "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+    "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6"
   },
   "level": "L3",
   "repo_commit": "7e97322e7ce2df2f309eaffda3f6d50f1e63f7e8",

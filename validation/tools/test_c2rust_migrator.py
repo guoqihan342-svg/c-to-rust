@@ -12,6 +12,73 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class C2RustMigratorTest(unittest.TestCase):
+    def test_baseline_repair_gate_writes_failed_summary_from_bound_flashdb_evidence(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="c2rust-migrator-test-", dir=target_dir) as tmp:
+            out_root = Path(tmp) / "worker-a"
+            request = {
+                "slice_specs": ["validation/slice-specs/flashdb-real-fdb-calc-crc32.json"],
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                "proof_class": "local-simulation",
+                "out_root": out_root.relative_to(REPO_ROOT).as_posix(),
+                "run_id": "run-test-worker-a",
+                "harness_attempt_number": 1,
+                "harness_repair_trace": {
+                    "mode": "baseline_repair_gate",
+                    "translation_before_after": {
+                        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
+                        "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17",
+                    },
+                    "baseline_attempt": {
+                        "attempt_number": 1,
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                    },
+                    "accepted_attempt": {
+                        "min_attempt_number": 2,
+                        "require_hint_id": True,
+                    },
+                },
+            }
+
+            result = c2rust_migrator.maybe_write_harness_repair_trace_summary(request)
+
+            self.assertIsNotNone(result)
+            self.assertEqual(result["exit_code"], 0)
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertEqual(summary["slices"]["semantic_pass"], 0)
+            metrics_path = out_root / "summary" / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            self.assertEqual(metrics["root_cause_counts"], {"unsafe_baseline_requires_repair": 1})
+            unit = metrics["per_unit_statuses"][0]
+            self.assertEqual(unit["root_cause_key"], "unsafe_baseline_requires_repair")
+            self.assertEqual(unit["translation_before_after"]["unsafe_reduction"]["baseline_total_unsafe"], 2)
+            self.assertEqual(unit["translation_before_after"]["unsafe_reduction"]["current_total_unsafe"], 0)
+
+    def test_baseline_repair_gate_acceptance_attempt_requires_hint_id(self) -> None:
+        request = {
+            "harness_attempt_number": 2,
+            "harness_repair_trace": {
+                "mode": "baseline_repair_gate",
+                "translation_before_after": {
+                    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
+                    "sha256": "ede06ba22cfa5b831ff69b57d22fbb769dd8fe45d997d0c928e3881e5dd1cd17",
+                },
+                "accepted_attempt": {
+                    "min_attempt_number": 2,
+                    "require_hint_id": True,
+                },
+            },
+        }
+
+        with self.assertRaisesRegex(SystemExit, "requires harness_repair_hint_id"):
+            c2rust_migrator.maybe_write_harness_repair_trace_summary(request)
+
     def test_builds_run_competition_argv_from_direct_request(self) -> None:
         request = {
             "source_repo_root": "external/demo",
@@ -19,7 +86,10 @@ class C2RustMigratorTest(unittest.TestCase):
             "function": "add_one",
             "target_id": "demo",
             "slice_id": "demo-add-one",
+            "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+            "source_branch": "competition",
             "source_commit": "abc123",
+            "require_source_commit": "abc123",
             "compiler_command_source": "compile_commands.json",
             "include_paths": ["include", "src/include"],
             "defines": ["DEMO=1"],
@@ -33,11 +103,67 @@ class C2RustMigratorTest(unittest.TestCase):
         self.assertEqual(argv[0:2], ["python", "validation/tools/run_competition.py"])
         self.assertIn("--source-repo-root", argv)
         self.assertIn("external/demo", argv)
+        self.assertIn("--source-repository", argv)
+        self.assertIn("https://gitcode.com/xwxf/FlashDB.git", argv)
+        self.assertIn("--source-branch", argv)
+        self.assertIn("competition", argv)
+        self.assertIn("--require-source-commit", argv)
         self.assertIn("--include-path", argv)
         self.assertIn("src/include", argv)
         self.assertIn("--define", argv)
         self.assertIn("DEMO=1", argv)
         self.assertEqual(argv[-4:], ["--proof-class", "local-simulation", "--run-id", "run-test-worker-a"])
+
+    def test_builds_reuse_accepted_evidence_args_from_request(self) -> None:
+        request = {
+            "source_repo_root": "external/demo",
+            "source_file": "src/demo.c",
+            "function": "add_one",
+            "target_id": "demo",
+            "slice_id": "demo-add-one",
+            "source_commit": "abc123",
+            "proof_class": "local-simulation",
+            "out_root": "target/competition-out/workers/worker-a",
+            "reuse_accepted_evidence": True,
+            "accepted_evidence_root": "validation/evidence",
+        }
+
+        argv = c2rust_migrator.build_run_competition_argv(request)
+
+        self.assertIn("--reuse-accepted-evidence", argv)
+        self.assertIn("--accepted-evidence-root", argv)
+        self.assertIn("validation/evidence", argv)
+
+    def test_builds_run_competition_argv_from_slice_spec_request(self) -> None:
+        request = {
+            "slice_specs": ["validation/slice-specs/demo-add-one.json"],
+            "proof_class": "local-simulation",
+            "out_root": "target/competition-out/workers/worker-a",
+            "run_id": "run-test-worker-a",
+            "reuse_accepted_evidence": True,
+            "accepted_evidence_root": "validation/evidence",
+        }
+
+        argv = c2rust_migrator.build_run_competition_argv(request)
+
+        self.assertIn("--slice-spec", argv)
+        self.assertIn("validation/slice-specs/demo-add-one.json", argv)
+        self.assertNotIn("--source-file", argv)
+        self.assertIn("--reuse-accepted-evidence", argv)
+
+    def test_slice_spec_request_rejects_mismatched_required_source_commit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="c2rust-migrator-test-", dir=REPO_ROOT / "target") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text(json.dumps({"source_commit": "old-commit"}), encoding="utf-8")
+            request = {
+                "slice_specs": [spec_path.relative_to(REPO_ROOT).as_posix()],
+                "require_source_commit": "new-commit",
+                "proof_class": "local-simulation",
+                "out_root": "target/competition-out/workers/worker-a",
+            }
+
+            with self.assertRaisesRegex(SystemExit, "source_commit mismatch"):
+                c2rust_migrator.build_run_competition_argv(request)
 
     def test_builds_merge_argv_from_worker_summaries(self) -> None:
         request = {

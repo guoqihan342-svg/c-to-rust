@@ -11,6 +11,7 @@ use c_to_rust_l2_slices::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Deserialize)]
 struct SqliteVarintCase {
@@ -203,7 +204,6 @@ struct FdbCalcCrc32OracleReport {
     level: String,
     target_id: String,
     slice_id: String,
-    source_commit: String,
     source_boundary: Value,
     compared_fields: Vec<String>,
     case_count: usize,
@@ -495,6 +495,11 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
         "real-fdb slice spec",
     )?
     .clone();
+    let source_commit = required_json_value(&slice_spec, "/source_commit", "real-fdb slice spec")?.clone();
+    let fixture_sha256 = oracle_status
+        .pointer("/fixture_sha256")
+        .cloned()
+        .unwrap_or(json!(sha256_hex(&fixture_path)?));
     let global_dependencies = required_json_value(
         &oracle_status,
         "/global_linkage_requirements",
@@ -572,7 +577,7 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
             "status": "passed",
             "semantic_pass": true,
             "toolchain_status": "C_ORACLE_GENERATED",
-            "source_commit": report.source_commit,
+            "source_commit": source_commit.clone(),
             "source_boundary": report.source_boundary,
             "fixture": relative_path(&fixture_path),
             "command": "cargo run --manifest-path validation/l2_slices/Cargo.toml --bin emit_reports",
@@ -580,7 +585,7 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
             "case_count": report.case_count,
             "compared_fields": report.compared_fields,
             "provenance": {
-                "fixture_sha256": required_json_value(&oracle_status, "/fixture_sha256", "real-fdb c oracle status")?.clone(),
+                "fixture_sha256": fixture_sha256,
                 "source_file_hashes": source_file_hashes,
                 "source_span_sha256": source_span_sha256,
                 "global_dependencies": global_dependencies,
@@ -605,7 +610,7 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
             "level": report.level,
             "target_id": report.target_id,
             "slice_id": report.slice_id,
-            "source_commit": report.source_commit,
+            "source_commit": source_commit.clone(),
             "source_boundary": report.source_boundary,
             "rust_module_path": "validation/l2_slices/src/fdb_calc_crc32.rs",
             "fixture": relative_path(&fixture_path),
@@ -622,14 +627,14 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
             "level": report.level,
             "target_id": report.target_id,
             "slice_id": report.slice_id,
-            "source_commit": report.source_commit,
+            "source_commit": source_commit.clone(),
             "status": status,
             "case_count": report.case_count,
             "compared_fields": report.compared_fields,
             "first_mismatch": first_mismatch
         }),
     )?;
-    write_real_fdb_calc_crc32_negative_diff(&report, &evidence_dir)?;
+    write_real_fdb_calc_crc32_negative_diff(&report, &evidence_dir, &source_commit)?;
 
     Ok(())
 }
@@ -637,6 +642,7 @@ fn emit_real_fdb_calc_crc32(fixtures_dir: &Path, repo_root: &Path) -> Result<(),
 fn write_real_fdb_calc_crc32_negative_diff(
     report: &FdbCalcCrc32OracleReport,
     evidence_dir: &Path,
+    source_commit: &Value,
 ) -> Result<bool, Box<dyn Error>> {
     let case = report
         .cases
@@ -652,7 +658,7 @@ fn write_real_fdb_calc_crc32_negative_diff(
             "level": report.level,
             "target_id": report.target_id,
             "slice_id": report.slice_id,
-            "source_commit": report.source_commit,
+            "source_commit": source_commit.clone(),
             "status": "expected_failed",
             "expected_failure": true,
             "mutation_detected": detected,
@@ -6678,6 +6684,13 @@ fn required_json_value<'a>(
 fn write_json(path: &Path, value: &Value) -> Result<(), Box<dyn Error>> {
     fs::write(path, serde_json::to_string_pretty(value)? + "\n")?;
     Ok(())
+}
+
+fn sha256_hex(path: &Path) -> Result<String, Box<dyn Error>> {
+    let bytes = fs::read(path)?;
+    let mut digest = Sha256::new();
+    digest.update(bytes);
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 fn compare_field(

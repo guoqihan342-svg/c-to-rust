@@ -9,14 +9,14 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "c4bd1c29e20340c1c53510a03ed90a6c8632aef70c04d21cc8aa4554ff0e3fd7",
+    "build_profile_hash": "c4eed090c8b40c09645f4db0b9d0827a37845403bd7f7b94e23f30121c817138",
     "c2rust_baseline_identity": {
-      "sha256": "d2b9137dc6d1c387e29d8231a8508451952faccd1611832a0f81bd6da21dc601",
+      "sha256": "3681717c1a2ec335e9eb27f1b4e2051e75fe6a47afa41159d5de9f1b9e1468ce",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "sha256": "5bb250ceebadd54c440d4e1ed67c32dce62c0de4eb790b8339fa227cfa86d24b",
+      "sha256": "3f14942b5d4564cea99aa489c51a5014995fa1afcd89241fc4be66fce0381617",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -46,9 +46,9 @@
     ],
     "cargo_lock_hash": "c3e2e25976f5a5318d336da73d5c37af5f2b841cf5ed497eb8447bf1aa77e4e2",
     "clang_lowering_identity": {
-      "clang_path": "",
-      "clang_path_status": "not_configured",
-      "clang_version": "not_configured",
+      "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+      "clang_path_status": "configured",
+      "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
       "command": "clang -Xclang -ast-dump=json -fsyntax-only",
       "enabled": true,
       "features": [
@@ -62,6 +62,8 @@
           "value": ""
         }
       },
+      "lane": "competition-clang-lane",
+      "required": true,
       "requires_env": [
         "CLANG_PATH"
       ]
@@ -70,31 +72,31 @@
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-      "--emit-clang-dry-run",
-      "--emit-clang-lowering-report"
+      "--emit-clang-lowering-report",
+      "--competition-clang-lane"
     ],
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
     },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+        "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
         "status": "skipped"
       },
       "route_decision": {
-        "level": "L4",
+        "level": "L1",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-        "sha256": "ca1be33dcfb069b4eb5ea769688c0fb6902e8610f842b6ed5a7f999250f2ab20",
-        "status": "refused"
+        "sha256": "5a23dba437bb2d6f1ec8db6c7418e28138d7b7136bb5b79a2ae10c77b3343d7d",
+        "status": "recorded"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
-        "profile": "L4-dev",
-        "sha256": "98c525e90df22bf76efe305da5f5de48389ac4edb3029a136da681ef16354b65",
-        "status": "blocked"
+        "profile": "L1-dev",
+        "sha256": "12231c9462ce9d4b116a8b22348eac46fb226427e55670353704e9a6b3b0824a",
+        "status": "incomplete"
       }
     },
     "effect_graph_identity": {
@@ -134,12 +136,12 @@
       "summary"
     ],
     "oracle_boundary_contract_identity": {
-      "sha256": "10f2e9c48cc8ac39bb5496515e38a682b059ff4340272297ae223bab7a9ec0ca",
+      "sha256": "660f4cd0044d5c0749cfcccfeee02d3cefeee31918b48c34256d8dbb47c04b8c",
       "status": "insufficient"
     },
     "route_decision_identity": {
-      "sha256": "ca9a07ac66b73ea5d1d8276c4d2d39cada2a0da4a697edc722a2032177113249",
-      "status": "refused"
+      "sha256": "8d05b173a1e64c21463fe114ffee41359f659efa29037c023f4321d528f420a9",
+      "status": "recorded"
     },
     "scalar_ub_contract_identity": {
       "sha256": "a27cd8b42c32ef7bb5812879ef8e3c714f997d1ea323a863e241e73786019929",
@@ -155,8 +157,8 @@
       "type_map": 1
     },
     "slice_id": "real-fdb-kv-set",
-    "slice_spec_sha256": "61c2e752bdca06aad71f44958c40185417964a2ac0f7b26ddb4f3918a046def6",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "slice_spec_sha256": "f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
     },
@@ -168,21 +170,20 @@
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
     "translator_feature_set": [
-      "clang-frontend",
       "clang-lowering-report"
     ],
-    "translator_manifest_sha256": "ceda056e0f448b226a1f38ad16c496bffe7469d679774b0894e81126fefb5769",
+    "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "f43c782231a377ed40792f57730430e8f0c4ca3cb18953a970bf241a4d52a6ec",
-      "status": "blocked"
+      "sha256": "d6b86f45623135132413c865575c45375dab72f0f713e97e3201de3fc8d496ea",
+      "status": "incomplete"
     }
   },
-  "repo_commit": "4fc8daac2d79f11ae1042af0212cb03b7eabfa77",
+  "repo_commit": "88aba8575d9a380017bdf11874cad87828dcd02e",
   "schema_version": 1,
   "semantic_pass": false,
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "recorded",
   "target_id": "flashdb",
   "translator_version": "0.1.0"

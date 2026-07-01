@@ -7,8 +7,15 @@
 - OpenSpec change: `design-c2rust-migration-agent`
 - First target: FlashDB
 - Source clone: `sources/FlashDB`
-- Source commit: `93d175549da579b8abac07bd175ce4c3f9dde829`
+- Source commit: `f9d0421315c564fb890a1b14eee77b290e0d7bbe`
 - Rust output project name: `flashDB_rust`
+- Current harness branch: `codex/agent-harness-flashdb-mvp`
+- OpenCode harness: `opencode_agent_harness.py run-worker` supports `--mode deterministic`, which calls the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`, and `--mode opencode --opencode-variant max`, which wraps the same request through OpenCode. When `competition-run-summary.json` exists, the worker summary is recorded into the SQLite ledger automatically. OpenCode startup `database is locked` failures before the first shell command are retried narrowly and recorded as `opencode_process_retries`; command-contract and summary validation still fail closed.
+- Judge runner: `run_judge_entrypoints` now converges the competition smoke, before/after, explicit multi-worker, and OpenCode entrypoints into one command, then writes `judge-milestone-bundle.json`, `milestone-release-notes.md`, and `public-release-packet.json` after a successful all-entrypoints run. The two `evaluate --profile` entrypoints also write `harness/resume-manifest.json`, a current-state index over the SQLite ledger, context pack, agent index, worker summaries, repair hints, and resume entrypoints. The bundle exposes `core_translation_quality`, `harness_architecture_summary`, `claim_scope`, `proof_classes`, `publishability`, `quantitative_evaluation`, `publication_manifest`, `known_gaps`, `must_not_claim`, and reproduction commands for one-screen judge review; the Markdown release notes render a `Judge Packet Index`; the JSON public release packet hash-binds the run report, readiness report, bundle, release notes, and config archive, then the packet validator checks schema, hashes, claim boundary, local-path hygiene, packet-to-bundle consistency for the copied publication manifest, known gaps, reproduction commands, and must-not-claim coverage, plus release-notes consistency against the bound bundle rendering. `quantitative_evaluation` summarizes workflow units, accepted/blocked/repair/unsafe metrics, and the bounded comparison for raw C2Rust, C2Rust+repair, typed IR, OpenCode/LLM workers, and handwritten references; `publication_manifest` binds the repo commit, FlashDB source pin, judge config, competition config archive, run-report/readiness/bundle, supported subset, known gaps/non-goals, and claim boundary. The bundle, release notes, public release packet, and resume manifest do not replace the validator/oracle or expand semantic pass, competition-exact proof, or translation coverage.
+- C2Rust baseline status now flows into the judge scorecard: `route-governance-metrics-report.json` reads each `*-c2rust-baseline-manifest.json` status/output/compile-only result, `judge-milestone-bundle.json` deduplicates by evidence root into `raw_c2rust.c2rust_baseline_rollup`, and release notes render manifest/source/compile-pass counts. This rollup remains candidate context only, not a semantic gate.
+- Judge-entrypoint local-artifact validation now composes the existing competition summary validator for non-smoke `competition_summary` artifacts, so workflow metrics, before/after refs, repair history, unsafe accounting, final-gate rules, and slice counts are checked before a judge entrypoint can pass.
+- FlashDB accepted evidence: `real-fdb-calc-crc32` and `real-fdb-blob-make` currently pass through L4 accepted-evidence-authoritative semantic bindings. Generated Rust drafts still keep `generated_draft_semantic_pass=false`; do not describe them as accepted translator-generated drafts.
+- FlashDB blocked evidence: `fdb_kv_set` currently has source/signature provenance plus L4 refused/blocked evidence only. The `strlen`, `fdb_blob_make`, `fdb_kv_set_blob`, and `fdb_kv_del` callee shim/model/oracle semantics are not closed yet.
 - C2Rust role: baseline/oracle only, not final deliverable
 - Safety target: first-party non-test unsafe below 10%
 - Entry unsafe-claim boundary (P0-162): unsafe < 10% or 0 findings only means the current scan/ledger is within budget or has found no modeled issues. It does not prove that C ABI, FFI, flash hardware, volatile registers, RTOS, multithreading, or interrupt semantics are solved. Before any of these capabilities enter implementation, they need an unsafe ledger span, a safe/typed alternative plan, target/test evidence, and human review status.
@@ -41,9 +48,9 @@
 
 ## Document Map
 
-- Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; machine-readable status lives in `baseline-record.json`.
+- Entry and status: see `index/README.md`. The core entrypoints are `README.md` / `README.en.md`; the judge-facing before/after demo entrypoint is `judge-demo.md` / `judge-demo.en.md`; machine-readable status lives in `baseline-record.json`.
 - Architecture and contracts: see `index/architecture.md`. Covers `agent-contract.md`, `baseline-and-versioning.md`, `context-store-and-self-healing.md`, `core-translation-architecture.md` / `core-translation-architecture.en.md`, and `l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`.
-- Operations and validation: see `index/operations.md`. Covers `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
+- Operations and validation: see `index/operations.md`. Covers `quickstart.md` / `quickstart.en.md`, `opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`, `build-and-c2rust-baseline.md`, `bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`, `evidence-governance.md` / `evidence-governance.en.md`, `testing-unsafe-cache-and-milestone.md`, `full-regression-runner.md`, and `../../config/competition-env/`.
 - Coverage and roadmap: see `index/roadmap.md`. Covers `COVERAGE.md` / `COVERAGE.en.md` and `future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`.
 - FlashDB case boundary: see `index/flashdb.md`. Covers `baseline-record.json`, `build-and-c2rust-baseline.md`, `flashdb-rust-skeleton-and-milestone.md`, and `full-regression-runner.md`.
 - Archive/analysis: see `index/archive.md`. Covers `archive/context-history-2026-06-28.md` and `analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`.
@@ -60,6 +67,8 @@ Then run the Agent phase, for example:
 ```bash
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
+
+The current judge-facing demo path is `judge-demo.md`; the preferred route uses `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` to produce the FlashDB before/after exhibit, judge report, context pack, agent index, and milestone release report. That profile now exercises a real `baseline_repair_gate` for `real-fdb-calc-crc32`: attempt 1 records `unsafe_baseline_requires_repair`, and retry attempt 2 revalidates accepted safe evidence with the repair hint. The repo-local demo profile remains a fallback.
 
 ## Operating Principles
 

@@ -34,6 +34,20 @@ int c2r_clang_smoke(uint32_t value) {
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
+class InvalidClangPath(ValueError):
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+class ResolvedClang:
+    def __init__(self, *, executable: Path, command: str, display_path: str, source: str) -> None:
+        self.executable = executable
+        self.command = command
+        self.display_path = display_path
+        self.source = source
+
+
 class VendoredClangResult:
     def __init__(self, *, exit_code: int, summary_path: Path, summary: dict[str, Any]) -> None:
         self.exit_code = exit_code
@@ -82,7 +96,33 @@ def verify_vendored_clang(
     started = time.monotonic()
     clang_required = require_clang or proof_class == "competition-exact"
 
-    resolved = resolve_clang(repo_root=repo_root, environment=environment)
+    try:
+        resolved = resolve_clang(repo_root=repo_root, environment=environment)
+    except InvalidClangPath as error:
+        summary = base_summary(
+            repo_root=repo_root,
+            out_root=out_root,
+            profile=profile,
+            proof_class=proof_class,
+            started=started,
+        )
+        summary.update(
+            {
+                "status": "failed",
+                "reason": error.reason,
+                "clang": {"source": "CLANG_PATH", "path": None, "version": None},
+                "clang_required": clang_required,
+                "clang_lane_verified": False,
+                "checks": {},
+                "command_logs": [],
+                "final_gate": {
+                    "status": "failed",
+                    "reasons": [error.reason],
+                },
+            }
+        )
+        write_summary(out, summary)
+        return VendoredClangResult(exit_code=1, summary_path=out, summary=summary)
     if resolved is None:
         final_status = "failed" if clang_required else "passed"
         summary = base_summary(
@@ -110,14 +150,13 @@ def verify_vendored_clang(
         write_summary(out, summary)
         return VendoredClangResult(exit_code=1 if clang_required else 0, summary_path=out, summary=summary)
 
-    clang_path, clang_display_path, clang_source = resolved
     command_logs: list[dict[str, Any]] = []
     minimum_tu_path = out.parent / "vendored-clang-minimum-tu.c"
     minimum_tu_path.write_text(MINIMUM_TU, encoding="utf-8")
 
     version_result = run_logged_step(
         "clang-version",
-        [str(clang_path), "--version"],
+        [resolved.command, "--version"],
         command_runner=command_runner,
         repo_root=repo_root,
         out_root=out_root,
@@ -126,7 +165,7 @@ def verify_vendored_clang(
     )
     resource_result = run_logged_step(
         "resource-dir",
-        [str(clang_path), "-print-resource-dir"],
+        [resolved.command, "-print-resource-dir"],
         command_runner=command_runner,
         repo_root=repo_root,
         out_root=out_root,
@@ -135,7 +174,7 @@ def verify_vendored_clang(
     )
     include_result = run_logged_step(
         "include-search-paths",
-        [str(clang_path), "-E", "-v", str(minimum_tu_path)],
+        [resolved.command, "-E", "-v", str(minimum_tu_path)],
         command_runner=command_runner,
         repo_root=repo_root,
         out_root=out_root,
@@ -144,7 +183,7 @@ def verify_vendored_clang(
     )
     ast_result = run_logged_step(
         "minimum-tu-ast-dump",
-        [str(clang_path), "-fsyntax-only", "-Xclang", "-ast-dump=json", str(minimum_tu_path)],
+        [resolved.command, "-fsyntax-only", "-Xclang", "-ast-dump=json", str(minimum_tu_path)],
         command_runner=command_runner,
         repo_root=repo_root,
         out_root=out_root,
@@ -160,8 +199,8 @@ def verify_vendored_clang(
     contains_translation_unit = "TranslationUnitDecl" in ast_result.stdout
     checks = {
         "binary_exists": {
-            "status": "passed" if clang_path.exists() else "failed",
-            "path": clang_display_path,
+            "status": "passed" if resolved.executable.exists() else "failed",
+            "path": resolved.display_path,
         },
         "resource_dir": {
             "status": "passed" if resource_result.returncode == 0 and bool(resource_dir) else "failed",
@@ -197,8 +236,8 @@ def verify_vendored_clang(
             "status": status,
             **({"reason": ";".join(failure_reasons)} if failure_reasons else {}),
             "clang": {
-                "source": clang_source,
-                "path": clang_display_path,
+                "source": resolved.source,
+                "path": resolved.display_path,
                 "version": version,
             },
             "clang_required": clang_required,
@@ -219,23 +258,49 @@ def verify_vendored_clang(
     return VendoredClangResult(exit_code=0 if status == "passed" else 1, summary_path=out, summary=summary)
 
 
-def resolve_clang(*, repo_root: Path, environment: dict[str, str]) -> tuple[Path, str, str] | None:
+def resolve_clang(*, repo_root: Path, environment: dict[str, str]) -> ResolvedClang | None:
+    repo_root = repo_root.resolve()
     configured = environment.get("CLANG_PATH")
     if configured:
         configured_path = Path(configured)
         has_path_separator = any(separator in configured for separator in ["/", "\\"])
         if configured_path.is_absolute() or has_path_separator:
             executable = configured_path if configured_path.is_absolute() else repo_root / configured_path
+            executable = executable.resolve()
+            if not is_within_repo(executable, repo_root=repo_root):
+                raise InvalidClangPath("invalid_clang_path_outside_repo")
+            if executable.exists():
+                return ResolvedClang(
+                    executable=executable,
+                    command=str(executable),
+                    display_path=display_clang_path(executable, repo_root=repo_root),
+                    source="CLANG_PATH",
+                )
         else:
             resolved_command = shutil.which(configured, path=environment.get("PATH"))
-            executable = Path(resolved_command) if resolved_command else repo_root / configured
-        if executable.exists():
-            display_path = display_clang_path(executable, repo_root=repo_root)
-            return executable.resolve(), display_path, "CLANG_PATH"
+            executable = Path(resolved_command).resolve() if resolved_command else repo_root / configured
+            if executable.exists():
+                display_path = (
+                    display_clang_path(executable, repo_root=repo_root)
+                    if is_within_repo(executable, repo_root=repo_root)
+                    else configured
+                )
+                return ResolvedClang(
+                    executable=executable,
+                    command=configured,
+                    display_path=display_path,
+                    source="CLANG_PATH",
+                )
     for candidate in VENDORED_CLANG_CANDIDATES:
         path = repo_root / candidate
         if path.exists():
-            return path.resolve(), candidate.as_posix(), f"vendored:{candidate.as_posix()}"
+            resolved_path = path.resolve()
+            return ResolvedClang(
+                executable=resolved_path,
+                command=str(resolved_path),
+                display_path=candidate.as_posix(),
+                source=f"vendored:{candidate.as_posix()}",
+            )
     return None
 
 
@@ -249,11 +314,18 @@ def run_logged_step(
     logs_dir: Path,
     command_logs: list[dict[str, Any]],
 ) -> subprocess.CompletedProcess[str]:
-    result = command_runner(command, cwd=repo_root, text=True, capture_output=True)
+    result = command_runner(
+        command,
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
     log_path = logs_dir / "vendored-clang-commands.jsonl"
     entry = {
         "step": step,
-        "command": command,
+        "command": command_for_log(command, repo_root=repo_root, out_root=out_root),
         "returncode": result.returncode,
         "stdout": result.stdout,
         "stderr": result.stderr,
@@ -321,10 +393,31 @@ def first_line(value: str) -> str | None:
 
 
 def display_clang_path(path: Path, *, repo_root: Path) -> str:
+    resolved = path.resolve()
     try:
-        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+        return resolved.relative_to(repo_root.resolve()).as_posix()
+    except ValueError as error:
+        raise InvalidClangPath("invalid_clang_path_outside_repo") from error
+
+
+def is_within_repo(path: Path, *, repo_root: Path) -> bool:
+    try:
+        path.resolve().relative_to(repo_root.resolve())
+        return True
     except ValueError:
-        return path.resolve().as_posix()
+        return False
+
+
+def command_for_log(command: list[str], *, repo_root: Path, out_root: Path) -> list[str]:
+    return [command_argument_for_log(argument, repo_root=repo_root, out_root=out_root) for argument in command]
+
+
+def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) -> str:
+    if not argument or not any(separator in argument for separator in ["/", "\\"]):
+        return argument
+    path = Path(argument)
+    resolved = path if path.is_absolute() else repo_root / path
+    return summary_path(resolved, repo_root=repo_root, out_root=out_root)
 
 
 def summary_path(path: Path, *, repo_root: Path, out_root: Path) -> str:

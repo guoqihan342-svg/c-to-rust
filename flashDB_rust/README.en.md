@@ -8,6 +8,8 @@ This file is the English mirror for `flashDB_rust/README.md`. The Chinese source
 
 This mirror covers the FlashDB Rust skeleton documentation. It is intentionally concise for older plans, templates, and OpenSpec records so that the repository has a stable bilingual entry point without turning historical artifacts into the active backlog.
 
+Current boundary note: `real-fdb-blob-make` has an independent L4 accepted-evidence semantic pass, but that does not make the generated draft itself semantic pass and does not generalize to the whole `flashDB_rust` skeleton or to `fdb_kv_set`.
+
 ## Source Outline
 
 The Chinese source currently contains these major headings:

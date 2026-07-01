@@ -2,26 +2,19 @@
   "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
   "capability_delta": [
     {
-      "blocked_callees": [
-        "fdb_blob_make",
-        "fdb_kv_del",
-        "fdb_kv_set_blob",
-        "strlen"
-      ],
-      "construct_id": "external_direct_callee_context",
-      "delta_id": "cap-real-fdb-kv-set-external_direct_callee_context",
+      "blocked_callees": [],
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "cap-real-fdb-kv-set-typed_ir_candidate_generated",
       "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
       ],
-      "generated_candidate_status": "refused",
-      "kind": "refusal_classification",
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
       "negative_coverage": [
         {
-          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
-          "kind": "external_callee_context_regression"
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
         }
       ],
       "real_c_slice": "real-fdb-kv-set",
@@ -31,24 +24,38 @@
   "governance_delta": [
     {
       "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-      "construct_id": "external_direct_callee_context",
-      "delta_id": "gov-real-fdb-kv-set-external_direct_callee_context-evidence",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "gov-real-fdb-kv-set-typed_ir_candidate_generated-evidence",
       "evidence_refs": [
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-        "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
       ],
       "kind": "evidence_contract"
     }
   ],
-  "route_level": "L4",
-  "route_status": "refused",
+  "route_level": "L1",
+  "route_status": "recorded",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_identity": {
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_branch": "competition",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb.c": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e",
+      "src/fdb_file.c": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_root": "sources/FlashDB"
+  },
   "status": "recorded",
   "target_id": "flashdb",
   "verification_commands": [
-    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim"
+    "python -B validation/tools/validate_auto_translation_evidence.py"
   ]
 }

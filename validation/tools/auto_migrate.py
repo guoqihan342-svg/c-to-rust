@@ -75,6 +75,7 @@ CACHE_INVALIDATED_ARTIFACTS = [
     "auto_translation_manifest",
     "summary",
 ]
+REPAIR_ROUND_LIMIT = 5
 
 
 def main() -> int:
@@ -316,6 +317,132 @@ def primitive_rust_type(c_type: str) -> str | None:
     }.get(normalized)
 
 
+def compact_c_type(c_type: str) -> str:
+    return "".join(str(c_type).strip().split())
+
+
+def is_modeled_strlen_contract(
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, str]],
+) -> bool:
+    if name != "strlen":
+        return False
+    if compact_c_type(return_type) != "size_t":
+        return False
+    if len(parameters) != 1:
+        return False
+    return compact_c_type(parameters[0]["c_type"]) in {"constchar*", "charconst*"}
+
+
+def is_flashdb_kv_external_context_callee(spec: dict[str, Any], name: str) -> bool:
+    return (
+        spec.get("target_id") == "flashdb"
+        and spec.get("slice_id") == "real-fdb-kv-set"
+        and name in {"fdb_kv_del", "fdb_kv_set_blob"}
+    )
+
+
+def is_const_char_pointer_type(c_type: str) -> bool:
+    return compact_c_type(c_type) in {"constchar*", "charconst*"}
+
+
+def is_flashdb_kv_external_context_signature(
+    spec: dict[str, Any],
+    item: dict[str, Any],
+    signature: dict[str, Any],
+    name: str,
+    return_type: str,
+    parameters: list[dict[str, str]],
+) -> bool:
+    if not is_flashdb_kv_external_context_callee(spec, name):
+        return False
+    definition_status = item.get("definition_status") or signature.get("definition_status")
+    if definition_status != "real_source_bound":
+        return False
+    source_ref = str(item.get("source_ref") or signature.get("source_ref") or "")
+    if source_ref != f"src/fdb_kvdb.c#{name}":
+        return False
+    if compact_c_type(return_type) != "fdb_err_t":
+        return False
+    if name == "fdb_kv_del":
+        return (
+            len(parameters) == 2
+            and parameters[0]["name"] == "db"
+            and compact_c_type(parameters[0]["c_type"]) == "fdb_kvdb_t"
+            and parameters[1]["name"] == "key"
+            and is_const_char_pointer_type(parameters[1]["c_type"])
+        )
+    return (
+        len(parameters) == 3
+        and parameters[0]["name"] == "db"
+        and compact_c_type(parameters[0]["c_type"]) == "fdb_kvdb_t"
+        and parameters[1]["name"] == "key"
+        and is_const_char_pointer_type(parameters[1]["c_type"])
+        and parameters[2]["name"] == "blob"
+        and compact_c_type(parameters[2]["c_type"]) == "fdb_blob_t"
+    )
+
+
+def flashdb_kv_external_context_rust_type(
+    spec: dict[str, Any],
+    name: str,
+    c_type: str,
+) -> str | None:
+    primitive = primitive_rust_type(c_type)
+    if primitive is not None:
+        return primitive
+    if not is_flashdb_kv_external_context_callee(spec, name):
+        return None
+    return {
+        "fdb_err_t": "i32",
+        "fdb_kvdb_t": "*mut core::ffi::c_void",
+        "constchar*": "*const core::ffi::c_char",
+        "charconst*": "*const core::ffi::c_char",
+        "fdb_blob_t": "*mut core::ffi::c_void",
+    }.get(compact_c_type(c_type))
+
+
+def accepted_named_slice_evidence_for_callee(spec: dict[str, Any], name: str) -> dict[str, Any] | None:
+    if spec.get("target_id") != "flashdb" or name != "fdb_blob_make":
+        return None
+    final_verification = (
+        REPO_ROOT
+        / "validation"
+        / "evidence"
+        / "flashdb"
+        / "auto-translation"
+        / "real-fdb-blob-make"
+        / "l3-real-fdb-blob-make-final-verification.json"
+    )
+    if not final_verification.exists():
+        return None
+    try:
+        final = json.loads(final_verification.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if final.get("target_id") != "flashdb" or final.get("slice_id") != "real-fdb-blob-make":
+        return None
+    if final.get("semantic_pass") is not True:
+        return None
+    if final.get("accepted_evidence_authoritative") is not True:
+        return None
+    return {
+        "kind": "accepted_named_slice_evidence",
+        "target_id": "flashdb",
+        "slice_id": "real-fdb-blob-make",
+        "final_verification_path": rel(final_verification),
+        "final_verification_sha256": sha256(final_verification),
+        "semantic_pass": True,
+        "accepted_evidence_authoritative": True,
+        "generated_draft_semantic_pass": bool(final.get("generated_draft_semantic_pass") is True),
+        "boundary": (
+            "This validates the named fdb_blob_make slice through accepted evidence only; "
+            "it does not validate the fdb_kv_set caller or its generated Rust draft."
+        ),
+    }
+
+
 def declared_external_direct_callee_map(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
     c_boundary = spec.get("c_boundary", {})
     signatures = c_boundary.get("signatures", [])
@@ -357,14 +484,17 @@ def external_callee_descriptor(
 ) -> dict[str, Any]:
     name = str(item.get("name") or signature.get("function") or "")
     signature_ref = str(item.get("signature_ref") or signature.get("id") or name)
-    parameters = [
-        {
-            "name": str(param.get("name") or f"arg{index + 1}"),
-            "c_type": str(param.get("c_type") or param.get("type") or ""),
-        }
-        for index, param in enumerate(signature.get("parameters", []))
-    ]
+    parameters = []
+    for index, param in enumerate(signature.get("parameters", [])):
+        c_type = str(param.get("c_type") or param.get("type") or "")
+        parameters.append(
+            {
+                "name": str(param.get("name") or f"arg{index + 1}"),
+                "c_type": c_type,
+            }
+        )
     return_type = str(signature.get("return_type") or signature.get("returns") or "")
+    return_rust_type = None
     unsupported_reasons: list[str] = []
     if not signature:
         unsupported_reasons.append("missing_signature")
@@ -375,21 +505,66 @@ def external_callee_descriptor(
             unsupported_reasons.append(f"unsupported_parameter_type:{param['name']}")
     if not parameters:
         unsupported_reasons.append("missing_parameters")
-    return {
+    modeled_strlen = is_modeled_strlen_contract(name, return_type, parameters)
+    if modeled_strlen:
+        unsupported_reasons = []
+    accepted_named_slice = accepted_named_slice_evidence_for_callee(spec, name)
+    if accepted_named_slice:
+        unsupported_reasons = []
+    flashdb_external_compile_context = is_flashdb_kv_external_context_signature(
+        spec,
+        item,
+        signature,
+        name,
+        return_type,
+        parameters,
+    )
+    if flashdb_external_compile_context:
+        unsupported_reasons = []
+        return_rust_type = flashdb_kv_external_context_rust_type(spec, name, return_type)
+        for param in parameters:
+            rust_type = flashdb_kv_external_context_rust_type(spec, name, param["c_type"])
+            if rust_type is not None:
+                param["rust_type"] = rust_type
+    stub_kind = "compile_only"
+    stub_boundary = item.get("stub_boundary", "compile_only")
+    stub_generation = "generated_compile_only"
+    model_contract = ""
+    if modeled_strlen:
+        stub_boundary = "stdlib_readonly_string_model"
+        stub_generation = "not_emitted_modeled_stdlib"
+        model_contract = "strlen_readonly_nul_terminated"
+    if flashdb_external_compile_context:
+        stub_boundary = "flashdb_external_direct_callee_context_only"
+        stub_generation = "not_emitted_flashdb_signature_context"
+        model_contract = "flashdb_external_direct_callee_signature_context"
+    if accepted_named_slice:
+        stub_kind = "accepted_named_slice_evidence"
+        stub_boundary = "accepted_named_slice_context_only"
+        stub_generation = "not_emitted_named_slice_evidence"
+        model_contract = "fdb_blob_make_named_slice_accepted_evidence"
+    descriptor = {
         "name": name,
         "signature_ref": signature_ref,
         "source_ref": item.get("source_ref") or signature.get("source_ref") or "",
         "source_files": item.get("source_files") or source_files_for_external_callee(spec, name),
         "header_files": item.get("header_files", []),
         "definition_status": item.get("definition_status") or signature.get("definition_status") or "real_source_bound",
-        "stub_kind": "compile_only",
-        "stub_boundary": item.get("stub_boundary", "compile_only"),
+        "stub_kind": stub_kind,
+        "stub_boundary": stub_boundary,
+        "stub_generation": stub_generation,
+        "model_contract": model_contract,
         "semantics_verified": False,
         "parameters": parameters,
         "return_type": return_type,
         "supported": not unsupported_reasons,
         "unsupported_reasons": sorted(set(unsupported_reasons)),
     }
+    if return_rust_type is not None:
+        descriptor["return_rust_type"] = return_rust_type
+    if accepted_named_slice:
+        descriptor["accepted_named_slice_evidence"] = accepted_named_slice
+    return descriptor
 
 
 def source_files_for_external_callee(spec: dict[str, Any], name: str) -> list[dict[str, Any]]:
@@ -424,15 +599,7 @@ def external_direct_callee_context(
             )
             continue
         if not descriptor.get("supported"):
-            blocked.append(
-                {
-                    "name": name,
-                    "reason": "unsupported_external_direct_callee_signature",
-                    "unsupported_reasons": descriptor.get("unsupported_reasons", []),
-                    "stub_kind": "none",
-                    "semantics_verified": False,
-                }
-            )
+            blocked.append(external_callee_block_from_descriptor(name, descriptor))
             continue
         declared.append(descriptor)
 
@@ -443,10 +610,26 @@ def external_direct_callee_context(
         status = "recorded"
     return {
         "status": status,
+        "declarations": [declared_map[name] for name in sorted(declared_map)],
         "declared": declared,
         "blocked": blocked,
+        "declared_spec_count": len(declared_map),
+        "declared_spec_names": sorted(declared_map),
         "declared_count": len(declared),
         "blocked_count": len(blocked),
+    }
+
+
+def external_callee_block_from_descriptor(name: str, descriptor: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "reason": "unsupported_external_direct_callee_signature",
+        "signature_ref": descriptor.get("signature_ref", ""),
+        "source_ref": descriptor.get("source_ref", ""),
+        "definition_status": descriptor.get("definition_status", ""),
+        "unsupported_reasons": descriptor.get("unsupported_reasons", []),
+        "stub_kind": "none",
+        "semantics_verified": False,
     }
 
 
@@ -474,6 +657,8 @@ def external_context_input_ref(evidence_dir: Path, slice_id: str, context: dict[
         "path": rel(evidence_dir / f"l3-{slice_id}-context-pack.json"),
         "status": context["status"],
         "declared_count": context["declared_count"],
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
         "blocked_count": context["blocked_count"],
     }
 
@@ -522,13 +707,16 @@ def call_edge_to_callee_binding(
         if callee not in declared:
             continue
         descriptor = declared[callee]
+        stub_kind = str(descriptor.get("stub_kind") or "compile_only")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
+            continue
         bindings.append(
             {
                 "callee": callee,
                 "signature_ref": descriptor["signature_ref"],
                 "source_expression": call.get("source_expression", ""),
                 "statement_context": call.get("statement_context", ""),
-                "stub_kind": descriptor["stub_kind"],
+                "stub_kind": stub_kind,
                 "semantics_verified": False,
             }
         )
@@ -567,11 +755,27 @@ def external_stub_boundaries(context: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "callee": callee["name"],
             "stub_kind": callee["stub_kind"],
-            "allowed_use": "standalone_rust_check_only",
+            "allowed_use": (
+                "named_slice_evidence_reference_only"
+                if callee.get("stub_kind") == "accepted_named_slice_evidence"
+                else "standalone_rust_check_only"
+            ),
             "semantics_verified": False,
         }
         for callee in context.get("declared", [])
     ]
+
+
+def external_scope_stub_kind(context: dict[str, Any]) -> str:
+    kinds = {
+        str(callee.get("stub_kind") or "compile_only")
+        for callee in context.get("declared", [])
+    }
+    if not kinds:
+        return "none"
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return "mixed_context"
 
 
 def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
@@ -581,9 +785,11 @@ def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
         status = context["status"]
     return {
         "status": status,
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
         "declared_count": context["declared_count"],
         "blocked_count": context["blocked_count"],
-        "stub_kind": "compile_only" if context["declared_count"] else "none",
+        "stub_kind": external_scope_stub_kind(context),
         "semantics_verified": False,
     }
 
@@ -591,6 +797,8 @@ def external_callee_claim_scope(context: dict[str, Any]) -> dict[str, Any]:
 def rust_check_external_context(context: dict[str, Any]) -> dict[str, Any]:
     return {
         "status": context["status"],
+        "declared_spec_count": context["declared_spec_count"],
+        "declared_spec_names": context["declared_spec_names"],
         "declared_count": context["declared_count"],
         "blocked_count": context["blocked_count"],
         "declared_callees": [
@@ -598,6 +806,7 @@ def rust_check_external_context(context: dict[str, Any]) -> dict[str, Any]:
                 "name": callee["name"],
                 "signature_ref": callee["signature_ref"],
                 "stub_kind": callee["stub_kind"],
+                "binding_status": rust_check_binding_status(callee),
                 "semantics_verified": False,
             }
             for callee in context.get("declared", [])
@@ -614,6 +823,96 @@ def load_plan_call_expressions(evidence_dir: Path, slice_id: str) -> list[dict[s
     return plan.get("translation_summary", {}).get("call_expressions", [])
 
 
+def rust_check_binding_status(callee: dict[str, Any]) -> str:
+    binding = callee.get("rust_check_binding")
+    if isinstance(binding, dict) and binding.get("status"):
+        return str(binding["status"])
+    if callee.get("stub_generation") == "generated_compile_only":
+        return "generated_compile_only"
+    if str(callee.get("stub_generation") or "").startswith("not_emitted_"):
+        return "not_emitted"
+    return "unknown"
+
+
+def mark_rust_check_binding(callee: dict[str, Any], status: str, signature: str) -> None:
+    callee["rust_check_binding"] = {
+        "status": status,
+        "allowed_use": "rustc_compile_only",
+        "signature": signature,
+        "semantics_verified": False,
+    }
+
+
+def rust_check_harness_only_external_stub(callee: dict[str, Any], text: str) -> str | None:
+    name = rust_identifier(callee["name"])
+    if "FdbBlob" not in text:
+        return None
+    signatures = {
+        "fdb_blob_make": (
+            "pub fn fdb_blob_make("
+            "blob: &mut FdbBlob, "
+            "value_buf: *const core::ffi::c_void, "
+            "buf_len: usize"
+            ") -> &mut FdbBlob"
+        ),
+        "fdb_kv_set_blob": (
+            "pub fn fdb_kv_set_blob("
+            "db: *mut core::ffi::c_void, "
+            "key: *const core::ffi::c_void, "
+            "blob: &mut FdbBlob"
+            ") -> i32"
+        ),
+        "fdb_kv_del": (
+            "pub fn fdb_kv_del("
+            "db: *mut core::ffi::c_void, "
+            "key: *const core::ffi::c_void"
+            ") -> i32"
+        ),
+    }
+    signature = signatures.get(name)
+    if signature is None:
+        return None
+    if f"fn {name}(" in text:
+        mark_rust_check_binding(callee, "already_present", signature)
+        return None
+    body_lines = {
+        "fdb_blob_make": [
+            "    let _ = (value_buf, buf_len);",
+            '    unimplemented!("rust-check harness-only external callee binding: fdb_blob_make")',
+        ],
+        "fdb_kv_set_blob": [
+            "    let _ = (db, key, blob);",
+            '    unimplemented!("rust-check harness-only external callee binding: fdb_kv_set_blob")',
+        ],
+        "fdb_kv_del": [
+            "    let _ = (db, key);",
+            '    unimplemented!("rust-check harness-only external callee binding: fdb_kv_del")',
+        ],
+    }[name]
+    mark_rust_check_binding(callee, "harness_only", signature)
+    return signature + " {\n" + "\n".join(body_lines) + "\n}"
+
+
+def rust_check_external_binding_report(context: dict[str, Any]) -> dict[str, Any]:
+    bindings = [
+        {
+            "name": callee["name"],
+            "status": callee["rust_check_binding"]["status"],
+            "allowed_use": callee["rust_check_binding"]["allowed_use"],
+            "signature": callee["rust_check_binding"]["signature"],
+            "semantics_verified": False,
+        }
+        for callee in context.get("declared", [])
+        if isinstance(callee.get("rust_check_binding"), dict)
+    ]
+    return {
+        "status": "emitted" if any(item["status"] == "harness_only" for item in bindings) else "none",
+        "allowed_use": "rustc_compile_only",
+        "semantics_verified": False,
+        "bindings": bindings,
+    }
+
+
 def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> bool:
     callees = context.get("declared", [])
     if not callees:
@@ -621,16 +920,35 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
     text = draft_path.read_text(encoding="utf-8")
     stubs = []
     for callee in callees:
+        if callee.get("stub_generation") == "not_emitted_modeled_stdlib":
+            continue
+        if callee.get("stub_generation") in {
+            "not_emitted_named_slice_evidence",
+            "not_emitted_flashdb_signature_context",
+        }:
+            stub = rust_check_harness_only_external_stub(callee, text)
+            if stub is not None:
+                stubs.append(stub)
+            continue
         name = rust_identifier(callee["name"])
         params = []
         for index, param in enumerate(callee.get("parameters", [])):
             param_name = rust_identifier(param.get("name") or f"arg{index + 1}")
-            rust_type = primitive_rust_type(param.get("c_type", "")) or "i32"
+            rust_type = (
+                param.get("rust_type")
+                or primitive_rust_type(param.get("c_type", ""))
+                or "i32"
+            )
             params.append(f"{param_name}: {rust_type}")
-        return_type = primitive_rust_type(callee.get("return_type", "")) or "i32"
+        return_type = (
+            callee.get("return_rust_type")
+            or primitive_rust_type(callee.get("return_type", ""))
+            or "i32"
+        )
         signature = f"fn {name}({', '.join(params)}) -> {return_type}"
         if signature in text:
             continue
+        mark_rust_check_binding(callee, "generated_compile_only", signature)
         stubs.append(
             f'{signature} {{ unimplemented!("external callee context stub: {callee["name"]}") }}'
         )
@@ -1042,6 +1360,7 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
                 "pointer_boundary_decision_counts": pointer_boundary_decision_counts,
                 "alias_gate": alias_gate["summary"],
                 "call_expressions": call_expressions,
+                "external_direct_callee_declarations": external_callee_context["declarations"],
                 "external_direct_callees": external_callee_context["declared"],
                 "external_direct_callee_blocks": external_callee_context["blocked"],
             },
@@ -1508,6 +1827,10 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         if isinstance(item, dict)
     )
     prototype = c_function_prototype(spec)
+    oracle_harness_includes = c_oracle_harness_includes(spec)
+    oracle_harness_include_lines = "".join(
+        f"#include <{header}>\n" for header in oracle_harness_includes
+    )
     fixture_path_text = fixture_path(spec)
     fixture_binding = oracle_fixture_binding(spec)
     fixture_comments = oracle_fixture_comments(fixture_binding)
@@ -1526,7 +1849,8 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
         "/* Draft only: fixture values and oracle assertions must be reviewed before acceptance. */\n"
         "#include <stdint.h>\n"
         "#include <stddef.h>\n"
-        "#include <stdio.h>\n\n"
+        "#include <stdio.h>\n"
+        f"{oracle_harness_include_lines}\n"
         f"/* slice: {spec.get('target_id')}/{slice_id} */\n"
         f"/* function: {function_name} */\n"
         f"/* fixture input: {fixture_path_text} */\n"
@@ -1562,6 +1886,7 @@ def generate_oracle_harness_draft(spec: dict[str, Any], evidence_dir: Path, skip
             "fixture": fixture_binding,
             "source_files": source_files,
             "global_dependencies": global_requirements,
+            "oracle_harness_includes": oracle_harness_includes,
             "oracle_source_mode": c_oracle_source_mode(spec),
             "status": "draft_requires_review",
         },
@@ -1718,6 +2043,8 @@ def oracle_fixture_execution_source(
     signature = c_function_signature(spec)
     if c_oracle_signature_supports_fdb_blob_make_call(spec, signature):
         return c_oracle_fdb_blob_make_execution_source(spec, fixture_binding)
+    if c_oracle_signature_supports_fdb_kv_set_call(spec, signature):
+        return c_oracle_fdb_kv_set_execution_source(spec, fixture_binding)
     if not c_oracle_signature_supports_return_code_call(spec, signature):
         return {"declarations": "", "statements": ""}
 
@@ -1784,6 +2111,105 @@ def c_oracle_signature_supports_fdb_blob_make_call(
         for item in parameters
     ]
     return actual == expected
+
+
+def c_oracle_signature_supports_fdb_kv_set_call(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+) -> bool:
+    if required_str(spec, "function_name") != "fdb_kv_set":
+        return False
+    if normalize_c_type(str(signature.get("return_type") or "")) != "fdb_err_t":
+        return False
+    if behavior_fields(spec) != ["return_code"]:
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 3:
+        return False
+    expected = [
+        ("db", "fdb_kvdb_t"),
+        ("key", "const char *"),
+        ("value", "const char *"),
+    ]
+    actual = [
+        (str(item.get("name") or ""), normalize_c_type(str(item.get("c_type") or "")))
+        for item in parameters
+    ]
+    return actual == expected
+
+
+def c_oracle_fdb_kv_set_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_source = c_oracle_fdb_kv_set_case_execution_source(spec, case_binding)
+        if case_source is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            statements.append(
+                f"  /* TODO: fixture case {case_id} is not supported by this fdb_kv_set draft generator. */\n"
+            )
+            continue
+        statements.append(case_source["statements"])
+    return {"declarations": "", "statements": "".join(statements)}
+
+
+def c_oracle_fdb_kv_set_case_execution_source(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    if not is_uint32_value(expected_return):
+        return None
+    if case_payload.get("db_state") != "uninitialized_named":
+        return None
+
+    key = case_payload.get("key")
+    value = case_payload.get("value")
+    db_name = case_payload.get("db_name", "kvdb")
+    if not isinstance(key, str) or not isinstance(db_name, str):
+        return None
+    if value is not None and not isinstance(value, str):
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    db_name_ident = f"{case_ident}_db"
+    key_name = f"{case_ident}_key"
+    value_name = f"{case_ident}_value"
+    actual_name = f"actual_{case_ident}_return_code"
+    expected_literal = c_integer_literal("fdb_err_t", int(expected_return))
+    value_expr = value_name if value is not None else "NULL"
+    value_declaration = (
+        f"  static const char {value_name}[] = {c_string_literal(value)};\n"
+        if value is not None
+        else ""
+    )
+    statements = (
+        f"  struct fdb_kvdb {db_name_ident} = {{0}};\n"
+        f"  {db_name_ident}.parent.name = {c_string_literal(db_name)};\n"
+        f"  static const char {key_name}[] = {c_string_literal(key)};\n"
+        f"{value_declaration}"
+        f"  fdb_err_t {actual_name} = {function_name}(&{db_name_ident}, {key_name}, {value_expr});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_code mismatch: expected ' + str(int(expected_return)) + ' got %d\n')}, "
+        f"(int){actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_code matched')});\n"
+    )
+    return {"declarations": "", "statements": statements}
 
 
 def c_oracle_fdb_blob_make_execution_source(
@@ -1965,6 +2391,18 @@ def c_function_prototype(spec: dict[str, Any]) -> str:
     return f"{return_type} {function_name}({parameter_text});"
 
 
+def c_oracle_harness_includes(spec: dict[str, Any]) -> list[str]:
+    headers = []
+    for item in spec.get("build_profile", {}).get("oracle_harness_includes", []):
+        header = str(item.get("header") if isinstance(item, dict) else item).strip()
+        if not header:
+            continue
+        if any(ch in header for ch in '\r\n<>"'):
+            raise SystemExit(f"invalid oracle harness include header: {header!r}")
+        headers.append(header)
+    return list(dict.fromkeys(headers))
+
+
 def c_parameter_declaration(parameter: dict[str, Any]) -> str:
     name = str(parameter.get("name") or "arg")
     c_type = str(parameter.get("c_type") or "int").strip()
@@ -2105,6 +2543,8 @@ def c_oracle_compile_execution(
             resolved_argv,
             cwd=None if compiler_resolution.get("adapter") == "wsl" else evidence_dir,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=30,
@@ -2567,7 +3007,13 @@ def c_oracle_output_executable(argv: list[str], evidence_dir: Path) -> Path | No
     return output_path
 
 
-def truncate_text(text: str, limit: int = 4000) -> str:
+def truncate_text(text: str | bytes | None, limit: int = 4000) -> str:
+    if text is None:
+        return ""
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", errors="replace")
+    elif not isinstance(text, str):
+        text = str(text)
     if len(text) <= limit:
         return text
     return text[:limit] + "\n...[truncated]"
@@ -2977,6 +3423,17 @@ def run_generated_rust_replay(
     draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
     if rust_check.get("status") != "passed":
         return replay
+    if rust_check_has_harness_only_external_bindings(rust_check):
+        replay["status"] = "not_applicable"
+        replay["skip_reason"] = "compile_only_external_bindings_not_executable"
+        replay["not_applicable_reason"] = "compile_only_external_bindings_not_executable"
+        replay["generated_draft_replay_pass"] = False
+        replay["generated_draft_semantic_pass"] = False
+        replay["known_gaps"] = [
+            "Rust-check harness-only external callee bindings are compile-only and must not be executed as replay proof."
+        ]
+        write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+        return replay
     if not generated_rust_replay_supported(spec, evidence_dir):
         return replay
     result = run_generated_rust_replay_once(draft_path, replay_path)
@@ -3006,6 +3463,16 @@ def run_generated_rust_replay(
             mapping["status"] = "passed" if passed else "failed"
     write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
     return replay
+
+
+def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) -> bool:
+    report = rust_check.get("rust_check_harness_only_bindings")
+    if not isinstance(report, dict):
+        return False
+    return any(
+        isinstance(binding, dict) and binding.get("status") == "harness_only"
+        for binding in report.get("bindings", [])
+    )
 
 
 def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
@@ -3107,6 +3574,7 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
             "errors": [],
             "command": None,
             "external_callee_context": rust_check_external_context(external_context),
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
         }
         patch = write_no_patch_required(spec, evidence_dir, path)
     else:
@@ -3118,9 +3586,16 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
         patch = write_no_patch_required(spec, evidence_dir, path)
         final = first
         if first["returncode"] != 0:
-            patch = try_safe_self_heal(spec, evidence_dir, path, first)
-            if patch.get("self_heal_applied"):
-                final = rust_check_once(path)
+            final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, first)
+        if final["returncode"] != 0 and patch["status"] != "blocked":
+            patch = write_blocked_patch(
+                spec,
+                evidence_dir,
+                path,
+                final["errors"],
+                round_number=REPAIR_ROUND_LIMIT,
+                append_events=patch.get("self_heal_applied") is True,
+            )
         write_log_text(evidence_dir / "rust-check.stdout.log", final["stdout"])
         write_log_text(evidence_dir / "rust-check.stderr.jsonl", final["stderr"])
         payload = {
@@ -3130,14 +3605,13 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
             "error_count": len(final["errors"]),
             "errors": final["errors"],
             "external_callee_context": rust_check_external_context(external_context),
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
             "self_healing": {
                 "status": patch["status"],
                 "patch_events": patch["patch_events"],
                 "blocked_repairs": patch["blocked_repairs"],
             },
         }
-        if final["returncode"] != 0 and patch["status"] != "recorded":
-            patch = write_blocked_patch(spec, evidence_dir, path, final["errors"])
     write_json(evidence_dir / "rust-check.json", payload)
     return payload, patch
 
@@ -3215,29 +3689,56 @@ def try_safe_self_heal(
     evidence_dir: Path,
     draft_path: Path,
     first: dict[str, Any],
+    *,
+    round_number: int = 1,
+    append_events: bool = False,
 ) -> dict[str, Any]:
     text = draft_path.read_text(encoding="utf-8")
-    params = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*:", text))
-    keyword_params = sorted(params & RUST_KEYWORDS)
-    if not keyword_params:
-        return write_blocked_patch(spec, evidence_dir, draft_path, first["errors"])
+    keyword_param = next(
+        (
+            match.group(1)
+            for match in re.finditer(
+                r"(?<![#A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)\s*:",
+                text,
+            )
+            if match.group(1) in RUST_KEYWORDS
+        ),
+        None,
+    )
+    if keyword_param is None:
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
 
-    patched = text
-    for name in keyword_params:
-        patched = re.sub(rf"(?<!#)\b{re.escape(name)}\b", f"r#{name}", patched)
+    patched = re.sub(
+        rf"(?<![#A-Za-z0-9_]){re.escape(keyword_param)}(?![A-Za-z0-9_])",
+        f"r#{keyword_param}",
+        text,
+    )
     if patched == text:
-        return write_blocked_patch(spec, evidence_dir, draft_path, first["errors"])
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
 
     draft_path.write_text(patched, encoding="utf-8")
     slice_id = required_str(spec, "slice_id")
     events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
-    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
     base_event = {
         "schema_version": 1,
-        "patch_id": "patch-rust-keyword-identifiers-1",
+        "patch_id": f"patch-rust-keyword-identifiers-{round_number}",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "round": 1,
+        "round": round_number,
         "files": [{"path": rel(draft_path), "spans": [{"line_start": 1, "line_end": max(1, len(text.splitlines()))}]}],
         "reason": "Rust keyword used as generated identifier; convert to raw identifier without changing C oracle or fixture semantics.",
         "expected_error_delta": {
@@ -3252,25 +3753,83 @@ def try_safe_self_heal(
             "source_slice_boundary",
             "unsafe_budget_policy",
         ],
-        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-1",
+        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-{round_number}",
         "ai_usage": {"used": False},
         "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
     }
-    events = [
-        {**base_event, "status": "applied"},
-        {**base_event, "status": "verified"},
-    ]
-    write_text(events_path, "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
-    blocked = blocked_repairs_payload(spec, [])
-    write_json(blocked_path, blocked)
+    write_patch_events(events_path, [{**base_event, "status": "applied"}], append=append_events)
     return {
         "patch_events": rel(events_path),
-        "blocked_repairs": rel(blocked_path),
-        "blocked_repairs_status": blocked["status"],
-        "blocked_repairs_items": blocked["blocked_repairs"],
-        "status": "recorded",
+        "blocked_repairs": rel(evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"),
+        "blocked_repairs_status": "recorded",
+        "blocked_repairs_items": [],
+        "status": "applied",
         "self_heal_applied": True,
+        "_last_patch_event": base_event,
     }
+
+
+def run_safe_self_heal_loop(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    current = first
+    for round_number in range(1, REPAIR_ROUND_LIMIT + 1):
+        patch = try_safe_self_heal(
+            spec,
+            evidence_dir,
+            draft_path,
+            current,
+            round_number=round_number,
+            append_events=round_number > 1,
+        )
+        if not patch.get("self_heal_applied"):
+            return current, patch
+        current = rust_check_once(draft_path)
+        if current["returncode"] == 0:
+            return current, mark_self_heal_verified(spec, evidence_dir, patch)
+    return current, write_blocked_patch(
+        spec,
+        evidence_dir,
+        draft_path,
+        current["errors"],
+        round_number=REPAIR_ROUND_LIMIT,
+        append_events=True,
+    )
+
+
+def mark_self_heal_verified(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    base_event = patch.get("_last_patch_event")
+    if isinstance(base_event, dict):
+        write_patch_events(events_path, [{**base_event, "status": "verified"}], append=True)
+    blocked = blocked_repairs_payload(spec, [])
+    write_json(blocked_path, blocked)
+    visible_patch = dict(patch)
+    visible_patch.pop("_last_patch_event", None)
+    visible_patch.update(
+        {
+            "blocked_repairs": rel(blocked_path),
+            "blocked_repairs_status": blocked["status"],
+            "blocked_repairs_items": blocked["blocked_repairs"],
+            "status": "recorded",
+            "self_heal_applied": True,
+        }
+    )
+    return visible_patch
+
+
+def write_patch_events(events_path: Path, events: list[dict[str, Any]], *, append: bool = False) -> None:
+    previous = events_path.read_text(encoding="utf-8") if append and events_path.exists() else ""
+    write_text(events_path, previous + "".join(json.dumps(event, sort_keys=True) + "\n" for event in events))
 
 
 def write_no_patch_required(spec: dict[str, Any], evidence_dir: Path, draft_path: Path | None) -> dict[str, Any]:
@@ -3354,16 +3913,19 @@ def write_blocked_patch(
     evidence_dir: Path,
     draft_path: Path | None,
     errors: list[dict[str, Any]],
+    *,
+    round_number: int = 1,
+    append_events: bool = False,
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
     blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
     event = {
         "schema_version": 1,
-        "patch_id": "patch-blocked-1",
+        "patch_id": f"patch-blocked-{round_number}",
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "round": 1,
+        "round": round_number,
         "status": "blocked",
         "files": [{"path": rel(draft_path) if draft_path else "", "spans": [{"line_start": 1, "line_end": 1}]}],
         "reason": "No safe local compile self-healing rule matched this rustc error stack.",
@@ -3379,16 +3941,16 @@ def write_blocked_patch(
             "source_slice_boundary",
             "unsafe_budget_policy",
         ],
-        "rollback_id": f"rollback-{slice_id}-blocked-1",
+        "rollback_id": f"rollback-{slice_id}-blocked-{round_number}",
         "ai_usage": {"used": False},
         "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
     }
-    write_text(events_path, json.dumps(event, sort_keys=True) + "\n")
+    write_patch_events(events_path, [event], append=append_events)
     blocked = blocked_repairs_payload(
         spec,
         [
             {
-                "repair_id": "repair-blocked-1",
+                "repair_id": f"repair-blocked-{round_number}",
                 "blocked_reason": event["reason"],
                 "forbidden_change": "type_uncertainty",
                 "candidate_patch_id": event["patch_id"],
@@ -3405,7 +3967,7 @@ def write_blocked_patch(
         "blocked_repairs_status": blocked["status"],
         "blocked_repairs_items": blocked["blocked_repairs"],
         "status": "blocked",
-        "self_heal_applied": False,
+        "self_heal_applied": append_events,
     }
 
 
@@ -3652,6 +4214,8 @@ def emit_capability_delta_ledger(
         "schema_version": 1,
         "target_id": target_id,
         "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
         "status": "recorded",
         "route_level": route_decision.get("level"),
         "route_status": route_decision.get("status"),
@@ -3845,15 +4409,57 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
     selected = next((item for item in commands if item.get("path")), None)
     reference_tree, reference_tree_configured = resolve_c2rust_reference_tree()
     reference_status = "present" if reference_tree.exists() else "missing"
+    generation_enabled = c2rust_baseline_generation_enabled()
+    generation: dict[str, Any] = {
+        "enabled": generation_enabled,
+        "enabled_by": "C2RUST_BASELINE_GENERATION" if generation_enabled else "",
+        "compile_commands": None,
+        "command": None,
+        "generated_files": [],
+    }
+    output: dict[str, Any] | None = None
+    compile_status: dict[str, Any] | None = None
     status = "skipped"
     diagnostics: list[str] = []
     reason = "blocked_by_missing_tools"
     if selected is None:
         diagnostics.append("no executable c2rust-transpile or c2rust command found on PATH")
-    else:
+    elif not generation_enabled:
         status = "blocked"
         reason = "baseline_generation_not_enabled"
         diagnostics.append("executable C2Rust was detected but baseline generation is not enabled in this bounded MVP")
+    else:
+        compile_commands = resolve_c2rust_compile_commands(spec, slice_spec)
+        if compile_commands is None:
+            status = "blocked"
+            reason = "missing_compile_commands"
+            diagnostics.append(
+                "C2Rust baseline generation was enabled, but build_profile.compiler_command_source "
+                "does not resolve to compile_commands.json"
+            )
+        else:
+            generation["compile_commands"] = {"path": rel(compile_commands), "sha256": sha256(compile_commands)}
+            generation_result = run_c2rust_baseline_generation(
+                selected,
+                compile_commands,
+                evidence_dir,
+                prefix,
+            )
+            generation.update(generation_result["generation"])
+            diagnostics.extend(generation_result["diagnostics"])
+            output = generation_result["output"]
+            if output is None:
+                status = "blocked"
+                reason = generation_result["reason"]
+            else:
+                status = "generated"
+                reason = "generated_by_c2rust"
+                compile_status = compile_c2rust_baseline_output(
+                    c2rust_baseline_output_path(output),
+                    evidence_dir,
+                    prefix,
+                )
+                diagnostics.extend(compile_status.get("diagnostics", []))
     manifest = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -3874,7 +4480,9 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
             "cargo_toml": rel(reference_tree / "Cargo.toml") if reference_tree.exists() else "",
             "diagnostic_only": not reference_tree_configured,
         },
-        "output": None,
+        "generation": generation,
+        "output": output,
+        "compile": compile_status,
         "diagnostics": diagnostics,
         "must_not_claim": [
             "C2Rust output proves semantic equivalence",
@@ -3885,6 +4493,281 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
     manifest["must_not_claim"] = [item for item in manifest["must_not_claim"] if item]
     write_json(evidence_dir / f"{prefix}-c2rust-baseline-manifest.json", manifest)
     return manifest
+
+
+def c2rust_baseline_generation_enabled() -> bool:
+    value = os.environ.get("C2RUST_BASELINE_GENERATION", "").strip().lower()
+    return value in {"1", "true", "yes", "on", "enabled"}
+
+
+def resolve_c2rust_compile_commands(spec: dict[str, Any], slice_spec: Path) -> Path | None:
+    build_profile = spec.get("build_profile", {})
+    if not isinstance(build_profile, dict):
+        return None
+    configured = build_profile.get("compiler_command_source") or build_profile.get("compile_commands")
+    if not configured:
+        return None
+    configured_path = Path(str(configured))
+    candidates = [configured_path] if configured_path.is_absolute() else [
+        REPO_ROOT / configured_path,
+        slice_spec.parent / configured_path,
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def run_c2rust_baseline_generation(
+    selected: dict[str, Any],
+    compile_commands: Path,
+    evidence_dir: Path,
+    prefix: str,
+) -> dict[str, Any]:
+    timeout_seconds = 120
+    output_dir = evidence_dir / f"{prefix}-c2rust-baseline-generated"
+    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-stderr.log"
+    argv = c2rust_generation_argv(selected, compile_commands, output_dir)
+    generation: dict[str, Any] = {
+        "command": {
+            "argv": argv,
+            "working_directory": rel(evidence_dir),
+            "output_dir": rel(output_dir),
+            "stdout_log": rel(stdout_log),
+            "stderr_log": rel(stderr_log),
+            "timeout_seconds": timeout_seconds,
+            "exit_status": None,
+            "returncode": None,
+        },
+        "generated_files": [],
+    }
+    diagnostics: list[str] = []
+    try:
+        reset_c2rust_output_dir(evidence_dir, output_dir)
+        result = subprocess.run(
+            argv,
+            cwd=str(evidence_dir),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        generation["command"]["exit_status"] = "error"
+        generation["command"]["returncode"] = -1
+        diagnostics.append(f"C2Rust baseline generation command failed before completion: {exc}")
+        return {
+            "reason": "c2rust_generation_failed",
+            "diagnostics": diagnostics,
+            "generation": generation,
+            "output": None,
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    generation["command"]["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    generation["command"]["returncode"] = result.returncode
+    if result.returncode != 0:
+        diagnostics.append(f"C2Rust baseline generation command exited with {result.returncode}")
+        return {
+            "reason": "c2rust_generation_failed",
+            "diagnostics": diagnostics,
+            "generation": generation,
+            "output": None,
+        }
+
+    rust_files = sorted(path for path in output_dir.rglob("*.rs") if path.is_file())
+    if not rust_files:
+        diagnostics.append("C2Rust baseline generation completed but produced no Rust files")
+        return {
+            "reason": "c2rust_generation_no_rust_output",
+            "diagnostics": diagnostics,
+            "generation": generation,
+            "output": None,
+        }
+
+    generated_refs = [{"path": rel(path), "sha256": sha256(path)} for path in rust_files]
+    generation["generated_files"] = generated_refs
+    output_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rs"
+    write_text(output_path, combined_c2rust_output(rust_files))
+    return {
+        "reason": "generated_by_c2rust",
+        "diagnostics": diagnostics,
+        "generation": generation,
+        "output": {
+            "path": rel(output_path),
+            "status": "generated",
+            "sha256": sha256(output_path),
+            "source_files": generated_refs,
+        },
+    }
+
+
+def reset_c2rust_output_dir(evidence_dir: Path, output_dir: Path) -> None:
+    evidence_root = evidence_dir.resolve()
+    output_root = output_dir.resolve()
+    if output_root == evidence_root:
+        raise ValueError("refusing to use evidence root itself as C2Rust output directory")
+    try:
+        output_root.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError(f"refusing to use C2Rust output directory outside evidence root: {output_dir}") from exc
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+
+def c2rust_generation_argv(selected: dict[str, Any], compile_commands: Path, output_dir: Path) -> list[str]:
+    executable = str(selected.get("path", ""))
+    name = str(selected.get("name", ""))
+    base = [executable]
+    if name == "c2rust":
+        base.append("transpile")
+    return [
+        *base,
+        "--emit-build-files",
+        str(compile_commands),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+
+def combined_c2rust_output(rust_files: list[Path]) -> str:
+    chunks: list[str] = []
+    for path in rust_files:
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if source and not source.endswith("\n"):
+            source += "\n"
+        chunks.append(f"// c2rust generated source: {rel(path)}\n{source}")
+    return "\n".join(chunks)
+
+
+def c2rust_baseline_output_path(output: dict[str, Any]) -> Path:
+    output_path = Path(str(output.get("path", "")))
+    if output_path.is_absolute():
+        return output_path
+    return REPO_ROOT / output_path
+
+
+def compile_c2rust_baseline_output(output_path: Path, evidence_dir: Path, prefix: str) -> dict[str, Any]:
+    timeout_seconds = 120
+    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stderr.log"
+    artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+    candidate_output = {
+        "path": rel(output_path),
+        "status": "generated",
+        "sha256": sha256(output_path),
+    }
+    rustc = shutil.which("rustc")
+    command: dict[str, Any] = {
+        "argv": [],
+        "working_directory": rel(evidence_dir),
+        "stdout_log": rel(stdout_log),
+        "stderr_log": rel(stderr_log),
+        "timeout_seconds": timeout_seconds,
+        "exit_status": "not_executed",
+        "returncode": None,
+    }
+    if rustc is None:
+        write_text(stdout_log, "")
+        write_text(stderr_log, "rustc not found on PATH\n")
+        return {
+            "status": "rustc_not_found",
+            "attempted": False,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output compile check skipped because rustc was not found on PATH"],
+        }
+
+    argv = [
+        rustc,
+        "--crate-type",
+        "lib",
+        str(output_path),
+        "-o",
+        str(artifact_path),
+    ]
+    command["argv"] = argv
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=str(evidence_dir),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        write_text(stdout_log, exc.stdout or "")
+        write_text(stderr_log, exc.stderr or f"rustc timed out after {timeout_seconds} seconds\n")
+        command["exit_status"] = "timeout"
+        command["returncode"] = -1
+        return {
+            "status": "compile_timeout",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output rustc compile check timed out"],
+        }
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        command["exit_status"] = "error"
+        command["returncode"] = -1
+        return {
+            "status": "compile_error",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust baseline output rustc compile check could not start: {exc}"],
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    command["returncode"] = result.returncode
+    if result.returncode != 0:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust baseline output rustc compile check exited with {result.returncode}"],
+        }
+    if not artifact_path.exists():
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output rustc compile check passed without producing an artifact"],
+        }
+
+    return {
+        "status": "passed",
+        "attempted": True,
+        "semantic_pass": False,
+        "candidate_output": candidate_output,
+        "command": command,
+        "artifact": {
+            "path": rel(artifact_path),
+            "status": "compiled",
+            "sha256": sha256(artifact_path),
+        },
+        "diagnostics": [],
+    }
 
 
 def c2rust_command_candidates() -> list[dict[str, Any]]:
@@ -3970,6 +4853,13 @@ def emit_route_decision(
     )
     level, rationale = route_level(spec, translator_summary, type_map, cfg, pointer, plan, candidate_generation)
     translator = route_translator(level)
+    route_status = "refused" if level == "L4" else "recorded"
+    candidate_generation["governance_summary"] = route_governance_summary(
+        candidate_generation,
+        level=level,
+        route_status=route_status,
+        translator=translator,
+    )
     profile = validation_profile_name(level, "dev")
     source_artifacts = {
         "type_map": evidence_ref(evidence_dir / f"{prefix}-type-map.json", type_map.get("status", "recorded")),
@@ -3991,7 +4881,9 @@ def emit_route_decision(
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
-        "status": "refused" if level == "L4" else "recorded",
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
+        "status": route_status,
         "level": level,
         "translator": translator,
         "rationale": rationale,
@@ -4096,10 +4988,95 @@ def compatibility_source_bindings(plan: dict[str, Any]) -> list[dict[str, Any]]:
 
 def candidate_selection_policy() -> dict[str, Any]:
     return {
-        "stage": "post_generation_provenance",
+        "stage": "p0_route_governance",
         "selection_basis": "translator_artifact_primary_candidate",
         "semantic_acceptance": False,
         "full_router": False,
+    }
+
+
+def route_governance_summary(
+    candidate_generation: dict[str, Any],
+    *,
+    level: str,
+    route_status: str,
+    translator: dict[str, Any],
+) -> dict[str, Any]:
+    compatibility_sources = candidate_generation.get("compatibility_sources", [])
+    legacy_source = next(
+        (
+            source
+            for source in compatibility_sources
+            if isinstance(source, dict) and source.get("selected") == "legacy-string-translator"
+        ),
+        None,
+    )
+    legacy_summary: dict[str, Any] = {
+        "status": "not_used",
+        "selected_as_primary": False,
+    }
+    if legacy_source is not None:
+        legacy_summary = {
+            "status": "compatibility_only",
+            "candidate_id": legacy_source.get("candidate_id", "compat:legacy-string-translator"),
+            "selected_as_primary": False,
+            "fallback": bool(legacy_source.get("fallback")),
+        }
+        if legacy_source.get("fallback_from"):
+            legacy_summary["fallback_from"] = legacy_source["fallback_from"]
+        if legacy_source.get("fallback_reason"):
+            legacy_summary["fallback_reason"] = legacy_source["fallback_reason"]
+
+    return {
+        "schema_version": 1,
+        "stage": "p0_route_governance",
+        "route_level": level,
+        "route_status": route_status,
+        "candidate_generation_allowed": bool(translator.get("candidate_generation_allowed")),
+        "semantic_acceptance": False,
+        "full_router": False,
+        "hard_gates": [
+            {
+                "gate_id": "generated_candidate_semantic_acceptance",
+                "status": "deferred",
+                "reason": "generated candidates require accepted validation evidence",
+            },
+            {
+                "gate_id": "legacy_string_translator_primary_selection",
+                "status": "forbidden",
+                "reason": "legacy string translator is compatibility-only",
+            },
+            {
+                "gate_id": "c2rust_baseline_semantic_source",
+                "status": "forbidden",
+                "reason": "C2Rust baseline remains candidate_context_only",
+            },
+        ],
+        "fallback_summary": {
+            "legacy_string_translator": legacy_summary,
+        },
+        "refusal_summary": {
+            "status": "refused" if level == "L4" else "not_refused",
+            "route_level": level,
+        },
+        "validation_gate_summary": {
+            "generated_draft_semantic_pass": False,
+            "required_acceptance_gates": [
+                "c_oracle",
+                "rust_replay",
+                "schema_diff",
+                "negative_diff",
+                "unsafe_ledger",
+                "final_verification",
+            ],
+            "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline",
+        },
+        "drift_inputs": [
+            "route_decision.candidate_generation",
+            "validation_profile.candidate_generation",
+            "c2rust_baseline_manifest",
+            "auto_cache_metadata.dependent_artifacts",
+        ],
     }
 
 
@@ -4508,6 +5485,8 @@ def emit_validation_profile(
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
         "status": result,
         "profile": profile,
         "route_level": level,
@@ -4765,6 +5744,14 @@ def mark_accepted_evidence_authoritative_route(
     policy["accepted_evidence_authoritative"] = True
     policy["generated_draft_semantic_pass"] = False
     route_decision["verification_profile"] = "L4-accepted-evidence"
+    candidate_generation = route_decision.get("candidate_generation")
+    if isinstance(candidate_generation, dict):
+        candidate_generation["governance_summary"] = route_governance_summary(
+            candidate_generation,
+            level=route_decision["level"],
+            route_status=route_decision["status"],
+            translator=route_decision["translator"],
+        )
     rationale = route_decision.setdefault("rationale", [])
     if not any(item.get("feature") == "accepted_evidence_authoritative" for item in rationale):
         rationale.append({"feature": "accepted_evidence_authoritative", "weight": "override"})
@@ -5788,6 +6775,7 @@ def write_context_pack(
         "global_dependencies": global_dependency_requirements(spec),
         "source_boundary": source_boundary(spec),
         "direct_call_edges": call_expressions or [],
+        "external_direct_callee_declarations": context["declarations"],
         "external_direct_callees": context["declared"],
         "external_direct_callee_blocks": context["blocked"],
         "callee_sources": external_callee_sources(context),
@@ -6086,12 +7074,18 @@ def oracle_boundary_contract(
             "triple_or_abi": target.get("triple_or_abi") or build.get("target_triple") or build.get("abi") or "unknown",
             "endianness": target.get("endianness", build.get("endianness", "unknown")),
             "int_width": target.get("int_width", build.get("int_width", "unknown")),
+            "int_align": target.get("int_align", build.get("int_align", "unknown")),
             "char_width": target.get("char_width", build.get("char_width", "unknown")),
+            "char_align": target.get("char_align", build.get("char_align", "unknown")),
             "plain_char_signed": target.get("plain_char_signed", build.get("plain_char_signed", "unknown")),
             "short_width": target.get("short_width", build.get("short_width", "unknown")),
+            "short_align": target.get("short_align", build.get("short_align", "unknown")),
             "long_width": target.get("long_width", build.get("long_width", "unknown")),
+            "long_align": target.get("long_align", build.get("long_align", "unknown")),
             "long_long_width": target.get("long_long_width", build.get("long_long_width", "unknown")),
+            "long_long_align": target.get("long_long_align", build.get("long_long_align", "unknown")),
             "pointer_width": pointer_width,
+            "pointer_align": target.get("pointer_align", build.get("pointer_align", "unknown")),
             "word_size_bits": pointer_width,
         },
         "sanitizer_diagnostics": {
@@ -6168,7 +7162,17 @@ def oracle_boundary_insufficient_reasons(contract: dict[str, Any]) -> list[str]:
             reasons.append(f"target_{key}_missing")
         elif not positive_int_like(target.get(key)):
             reasons.append(f"target_{key}_invalid")
-    for key in ["char_width", "short_width", "long_long_width"]:
+    for key in [
+        "char_width",
+        "short_width",
+        "long_long_width",
+        "int_align",
+        "char_align",
+        "short_align",
+        "long_align",
+        "long_long_align",
+        "pointer_align",
+    ]:
         if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
             reasons.append(f"target_{key}_invalid")
     if (
@@ -6487,6 +7491,21 @@ def global_dependency_requirements(spec: dict[str, Any]) -> list[dict[str, Any]]
 
 def source_commit(spec: dict[str, Any]) -> str:
     return spec.get("source_commit") or spec.get("source", {}).get("source_commit") or "UNKNOWN0"
+
+
+def source_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    source = spec.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
+    identity: dict[str, Any] = {"source_commit": source_commit(spec)}
+    for key in ["repo_commit", "source_root", "source_repository", "source_branch"]:
+        value = source.get(key, spec.get(key))
+        if value:
+            identity[key] = value
+    source_file_hashes = source.get("source_file_hashes", spec.get("source_file_hashes"))
+    if isinstance(source_file_hashes, dict) and source_file_hashes:
+        identity["source_file_hashes"] = source_file_hashes
+    return identity
 
 
 def fixture_hash(spec: dict[str, Any]) -> str:
@@ -6920,7 +7939,7 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="\n")
 
 
 def write_log_text(path: Path, text: str) -> None:

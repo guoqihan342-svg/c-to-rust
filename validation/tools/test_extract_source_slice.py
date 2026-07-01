@@ -10,6 +10,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXTRACTOR = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
+FLASHDB_REPOSITORY = "https://gitcode.com/xwxf/FlashDB.git"
 
 
 def load_extractor_module():
@@ -19,6 +20,17 @@ def load_extractor_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def init_git_repo(root: Path, *, branch: str = "competition", remote: str | None = None) -> str:
+    subprocess.run(["git", "init", "-b", branch], cwd=root, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Codex"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=root, check=True)
+    if remote:
+        subprocess.run(["git", "remote", "add", "origin", remote], cwd=root, check=True)
+    subprocess.run(["git", "add", "."], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-m", "source fixture"], cwd=root, check=True, capture_output=True, text=True)
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
 
 
 class ExtractSourceSliceTests(unittest.TestCase):
@@ -120,6 +132,89 @@ class ExtractSourceSliceTests(unittest.TestCase):
             self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_start"], 1)
             self.assertEqual(spec["c_boundary"]["signatures"][0]["source_span"]["line_end"], 1)
             self.assertEqual(spec["source"]["source_file_hashes"]["math.c"], hashlib.sha256(src.read_bytes()).hexdigest())
+
+    def test_cli_preserves_relative_repo_root_in_generated_spec(self) -> None:
+        source_root = REPO_ROOT / "target" / "source-slice-relative-root-test" / "source"
+        out = REPO_ROOT / "target" / "source-slice-relative-root-test" / "slice.json"
+        src = source_root / "src" / "sample.c"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_text("int add_one(int value) { return value + 1; }\n", encoding="utf-8")
+
+        subprocess.run(
+            [
+                "python",
+                str(EXTRACTOR),
+                "--repo-root",
+                "target/source-slice-relative-root-test/source",
+                "--source-file",
+                "src/sample.c",
+                "--function",
+                "add_one",
+                "--target-id",
+                "unit",
+                "--slice-id",
+                "real-add-one",
+                "--out",
+                str(out),
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        spec = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(spec["source"]["source_root"], "target/source-slice-relative-root-test/source")
+
+    def test_records_and_validates_source_identity_pin(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-pin-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "sample.c"
+            src.parent.mkdir()
+            src.write_text("int add_one(int value) { return value + 1; }\n", encoding="utf-8")
+            commit = init_git_repo(root, branch="competition", remote=FLASHDB_REPOSITORY)
+
+            module = load_extractor_module()
+            spec = module.generate_slice_spec(
+                repo_root=root,
+                source_file=Path("src/sample.c"),
+                function_name="add_one",
+                target_id="flashdb",
+                slice_id="real-add-one",
+                source_repository=FLASHDB_REPOSITORY,
+                source_branch="competition",
+                require_source_commit=commit,
+            )
+
+            self.assertEqual(spec["source_commit"], commit)
+            self.assertEqual(spec["source"]["source_repository"], FLASHDB_REPOSITORY)
+            self.assertEqual(spec["source"]["source_branch"], "competition")
+            self.assertEqual(spec["source"]["source_commit"], commit)
+            self.assertIn("source.source_repository", spec["cache_invalidation_keys"])
+            self.assertIn("source.source_branch", spec["cache_invalidation_keys"])
+
+    def test_rejects_mismatched_required_source_commit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="source-slice-pin-mismatch-test-") as tmp:
+            root = Path(tmp)
+            src = root / "src" / "sample.c"
+            src.parent.mkdir()
+            src.write_text("int add_one(int value) { return value + 1; }\n", encoding="utf-8")
+            init_git_repo(root, branch="competition", remote=FLASHDB_REPOSITORY)
+
+            module = load_extractor_module()
+            with self.assertRaises(SystemExit) as raised:
+                module.generate_slice_spec(
+                    repo_root=root,
+                    source_file=Path("src/sample.c"),
+                    function_name="add_one",
+                    target_id="flashdb",
+                    slice_id="real-add-one",
+                    source_repository=FLASHDB_REPOSITORY,
+                    source_branch="competition",
+                    require_source_commit="0" * 40,
+                )
+
+            self.assertIn("source commit mismatch", str(raised.exception))
 
     def test_records_same_file_global_object_dependency_from_function_body(self) -> None:
         with tempfile.TemporaryDirectory(prefix="source-slice-global-test-") as tmp:

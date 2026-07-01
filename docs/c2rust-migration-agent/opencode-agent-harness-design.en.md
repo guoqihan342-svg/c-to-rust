@@ -84,7 +84,8 @@ target/competition-out/
     evidence/
     slice-specs/
     summary/competition-run-summary.json
-    logs/commands.jsonl
+    harness/run-worker-report.json
+    logs/
   summary/competition-run-summary.json
   logs/commands.jsonl
 ```
@@ -106,6 +107,44 @@ OpenCode can invoke the repo-local wrapper directly:
 ```bash
 python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
 ```
+
+The harness also provides a minimal executor for the reproducible path:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode deterministic
+```
+
+`run-worker --mode deterministic` invokes the same repo-local wrapper and writes stdout/stderr, return code, summary path, record status, and final task status to `workers/<worker-id>/harness/run-worker-report.json`. If the child process fails, the summary is missing, or the summary `final_gate.status` is not `passed`, the worker task must be recorded as failed and final aggregation must not treat it as passed.
+
+`run-plan --max-workers <N> --auto-retry` is the LangGraph-inspired execution shape without adding a new runtime dependency: `load_plan -> fanout_workers -> worker -> repair_retry -> merge -> report`. Independent workers run in parallel up to `max_workers`, but `run-plan-report.json.graph.parallel_map.result_order=planner_order` keeps the fan-in deterministic. A failed worker can be retried with the same assignment through the persisted `repair_hints` ledger until it revalidates or reaches `REPAIR_ROUND_CAP=5`; failed intermediate attempts stay audit-visible, while semantic acceptance still comes only from the worker summary, final aggregation, and validators.
+
+`run-worker --mode opencode` also records startup-level transient retries as `opencode_process_retries` when OpenCode itself fails with `database is locked` before the first shell command. This is intentionally narrower than repair retry: it only retries the agent process startup, keeps the exact-command verifier unchanged, and still requires the expected worker summary before any merge can pass.
+
+`evaluate` is the judge/regression-first entrypoint: one command chains `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`. It also emits two context-management artifacts:
+
+- `harness/context-pack.json`: a run-level context pack containing the source pin, graph, parallelism, entrypoints, worker summaries/reports, merge summary, and acceptance boundary; it is also written to the SQLite `context_packs` table so the next agent run or a judge can locate the evidence directly.
+- `harness/agent-index.json`: an index by `worker_id` for assignments, requests, summaries, reports, isolated output directories, and final status, so OpenCode multi-agent runs can fan in quickly.
+
+These files are indexes and context only. They are not semantic acceptance. Acceptance still comes from worker summaries, the merge summary, and validators.
+
+`run-batch-profile`, the current before/after demo and profile-regression entrypoint, writes the same `context-pack.json` / `agent-index.json` artifacts with `harness/batch-profile-report.json` as the primary report. `evaluate --profile` reuses the full batch-profile pipeline and then writes `harness/evaluate-report.json` as the judge-discoverable one-command wrapper; that wrapper only indexes batch artifacts, summary validation, and context entrypoints, and is not a new semantic gate. This gives the judge demo path and the development evaluation path the same context index for continuation and audits.
+
+When local OpenCode / DeepSeek V4 Pro is connected, OpenCode can wrap the same assignment request:
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+When reusing committed accepted evidence, `assign-slice` must record both the real source metadata and the maintained `--slice-spec`, and must pass `--reuse-accepted-evidence --accepted-evidence-root validation/evidence` explicitly. This validates committed evidence only; it does not promote the regenerated Rust draft to semantic pass.
 
 `request.json` can contain direct slice input:
 

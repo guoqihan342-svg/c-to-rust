@@ -14,7 +14,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import jsonschema
 
@@ -1487,6 +1487,8 @@ def validate_typed_ir_candidate_binding(
         route_candidate_generation,
         evidence_dir=evidence_dir,
         prefix=prefix,
+        route_level=route.get("level"),
+        route_status=route.get("status"),
     )
 
     typed_ir = route_candidate_generation.get("typed_ir")
@@ -1678,6 +1680,8 @@ def validate_candidate_selection_record(
     *,
     evidence_dir: Path | None = None,
     prefix: str | None = None,
+    route_level: Any | None = None,
+    route_status: Any | None = None,
 ) -> None:
     """Validate candidate selection provenance without accepting a candidate.
 
@@ -1710,6 +1714,12 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim semantic_acceptance")
         if selection_policy.get("full_router") is not False:
             raise SystemExit("route_decision.candidate_generation.selection_policy cannot claim full_router")
+        if selection_policy.get("stage") == "p0_route_governance":
+            governance_stage = True
+        else:
+            governance_stage = False
+    else:
+        governance_stage = False
 
     if primary_candidate is not None:
         if not isinstance(primary_candidate, dict):
@@ -1721,6 +1731,13 @@ def validate_candidate_selection_record(
             )
 
     if candidate_set is None:
+        if governance_stage or candidate_generation.get("governance_summary") is not None:
+            validate_p0_route_governance_summary(
+                candidate_generation,
+                {},
+                route_level=route_level,
+                route_status=route_status,
+            )
         if selected_candidate_id is not None or c2rust_baseline is not None:
             raise SystemExit("route_decision.candidate_generation.candidate_set missing for candidate selection record")
         return
@@ -1755,6 +1772,13 @@ def validate_candidate_selection_record(
 
     validate_legacy_string_translator_candidate_binding(candidates_by_id, selected_candidate_id)
     validate_compatibility_sources_binding(compatibility_sources, candidates_by_id)
+    if governance_stage or candidate_generation.get("governance_summary") is not None:
+        validate_p0_route_governance_summary(
+            candidate_generation,
+            candidates_by_id,
+            route_level=route_level,
+            route_status=route_status,
+        )
 
     c2rust_candidate = candidates_by_id.get("c2rust-baseline")
     if c2rust_candidate is not None and c2rust_candidate.get("correctness_role") != "candidate_context_only":
@@ -1776,6 +1800,111 @@ def validate_candidate_selection_record(
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline missing from candidate_set")
         if c2rust_baseline != c2rust_candidate:
             raise SystemExit("route_decision.candidate_generation.c2rust_baseline drifted from candidate_set")
+
+
+P0_ROUTE_REQUIRED_ACCEPTANCE_GATES = {
+    "c_oracle",
+    "rust_replay",
+    "schema_diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+}
+
+P0_ROUTE_REQUIRED_HARD_GATES = {
+    "generated_candidate_semantic_acceptance": "deferred",
+    "legacy_string_translator_primary_selection": "forbidden",
+    "c2rust_baseline_semantic_source": "forbidden",
+}
+
+
+def validate_p0_route_governance_summary(
+    candidate_generation: dict[str, Any],
+    candidates_by_id: dict[str, dict[str, Any]],
+    *,
+    route_level: Any | None,
+    route_status: Any | None,
+) -> None:
+    summary = candidate_generation.get("governance_summary")
+    if not isinstance(summary, dict):
+        raise SystemExit("route_decision.candidate_generation.governance_summary must be an object")
+    if summary.get("stage") != "p0_route_governance":
+        raise SystemExit("route_decision.candidate_generation.governance_summary.stage must be p0_route_governance")
+    if summary.get("semantic_acceptance") is not False:
+        raise SystemExit("route_decision.candidate_generation.governance_summary cannot claim semantic_acceptance")
+    if summary.get("full_router") is not False:
+        raise SystemExit("route_decision.candidate_generation.governance_summary cannot claim full_router")
+    if route_level is not None and summary.get("route_level") != route_level:
+        raise SystemExit("route_decision.candidate_generation.governance_summary route_level drift")
+    if route_status is not None and summary.get("route_status") != route_status:
+        raise SystemExit("route_decision.candidate_generation.governance_summary route_status drift")
+
+    validation_summary = summary.get("validation_gate_summary")
+    if not isinstance(validation_summary, dict):
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary must be an object"
+        )
+    if validation_summary.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary "
+            "cannot claim generated_draft_semantic_pass"
+        )
+    required_acceptance_gates = validation_summary.get("required_acceptance_gates")
+    if not isinstance(required_acceptance_gates, list):
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary."
+            "required_acceptance_gates must be a list"
+        )
+    missing_gates = P0_ROUTE_REQUIRED_ACCEPTANCE_GATES - {str(gate) for gate in required_acceptance_gates}
+    if missing_gates:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.validation_gate_summary "
+            f"missing required gates: {', '.join(sorted(missing_gates))}"
+        )
+
+    hard_gates = summary.get("hard_gates")
+    if not isinstance(hard_gates, list):
+        raise SystemExit("route_decision.candidate_generation.governance_summary.hard_gates must be a list")
+    hard_gate_by_id = {
+        gate.get("gate_id"): gate
+        for gate in hard_gates
+        if isinstance(gate, dict) and isinstance(gate.get("gate_id"), str)
+    }
+    missing_hard_gates = set(P0_ROUTE_REQUIRED_HARD_GATES) - set(hard_gate_by_id)
+    if missing_hard_gates:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.hard_gates missing: "
+            f"{', '.join(sorted(missing_hard_gates))}"
+        )
+    for gate_id, expected_status in P0_ROUTE_REQUIRED_HARD_GATES.items():
+        if hard_gate_by_id[gate_id].get("status") != expected_status:
+            raise SystemExit(
+                "route_decision.candidate_generation.governance_summary.hard_gates "
+                f"{gate_id} status drift"
+            )
+
+    fallback_summary = summary.get("fallback_summary")
+    if not isinstance(fallback_summary, dict):
+        raise SystemExit("route_decision.candidate_generation.governance_summary.fallback_summary must be an object")
+    legacy_summary = fallback_summary.get("legacy_string_translator")
+    if not isinstance(legacy_summary, dict):
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.fallback_summary."
+            "legacy_string_translator must be an object"
+        )
+    if legacy_summary.get("selected_as_primary") is not False:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.fallback_summary."
+            "legacy_string_translator cannot be selected_as_primary"
+        )
+    expected_legacy_status = (
+        "compatibility_only" if "compat:legacy-string-translator" in candidates_by_id else "not_used"
+    )
+    if legacy_summary.get("status") != expected_legacy_status:
+        raise SystemExit(
+            "route_decision.candidate_generation.governance_summary.fallback_summary."
+            "legacy_string_translator status drift"
+        )
 
 
 def validate_compatibility_sources_binding(
@@ -1876,6 +2005,7 @@ def validate_c2rust_baseline_candidate_binding(
     if baseline_status == "generated":
         if not isinstance(baseline_output, dict):
             raise SystemExit("c2rust_baseline generated status requires output object")
+        validate_c2rust_baseline_compile_status(baseline, baseline_output, manifest_path)
         expected_output = {
             "path": str(baseline_output.get("path", "")),
             "status": baseline_status,
@@ -1891,6 +2021,34 @@ def validate_c2rust_baseline_candidate_binding(
         return
     if output_ref is not None:
         raise SystemExit("route_decision.candidate_generation.c2rust_baseline output_ref drift")
+
+
+def validate_c2rust_baseline_compile_status(
+    baseline: dict[str, Any],
+    baseline_output: dict[str, Any],
+    manifest_path: Path,
+) -> None:
+    compile_status = baseline.get("compile")
+    if not isinstance(compile_status, dict):
+        raise SystemExit(f"c2rust_baseline generated status requires compile status in {manifest_path}")
+    if compile_status.get("semantic_pass") is not False:
+        raise SystemExit(f"c2rust_baseline compile status cannot claim semantic_pass in {manifest_path}")
+    candidate_output = compile_status.get("candidate_output")
+    if not isinstance(candidate_output, dict):
+        raise SystemExit(f"c2rust_baseline compile status missing candidate_output in {manifest_path}")
+    expected_candidate_output = {
+        "path": str(baseline_output.get("path", "")),
+        "status": "generated",
+        "sha256": str(baseline_output.get("sha256", "")),
+    }
+    if candidate_output != expected_candidate_output:
+        raise SystemExit(f"c2rust_baseline compile candidate_output drift in {manifest_path}")
+    require_file_ref(candidate_output, "c2rust_baseline.compile.candidate_output", require_status=True)
+    artifact = compile_status.get("artifact")
+    if compile_status.get("status") == "passed":
+        require_file_ref(artifact, "c2rust_baseline.compile.artifact", require_status=True)
+    elif artifact is not None:
+        raise SystemExit(f"c2rust_baseline compile artifact must be null unless compile passed in {manifest_path}")
 
 
 def validate_global_dependency_requirements(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
@@ -2383,7 +2541,17 @@ def validate_semantic_oracle_boundary_contract(
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} missing")
         if not positive_int_like(target.get(key)):
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
-    for key in ["char_width", "short_width", "long_long_width"]:
+    for key in [
+        "char_width",
+        "short_width",
+        "long_long_width",
+        "int_align",
+        "char_align",
+        "short_align",
+        "long_align",
+        "long_long_align",
+        "pointer_align",
+    ]:
         if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
             raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
     if (
@@ -2613,13 +2781,19 @@ def validate_external_direct_callee_context(
             raise SystemExit(f"external callee {name} signature_ref mismatch in context pack")
         validate_external_callee_signature_descriptor(name, signature, plan_callee, "translation plan")
         validate_external_callee_signature_descriptor(name, signature, context_callee, "context pack")
+        stub_kind = str(plan_callee.get("stub_kind") or "")
+        if stub_kind != str(context_callee.get("stub_kind") or ""):
+            raise SystemExit(f"external callee {name} stub_kind mismatch between translation plan and context pack")
+        contract["stub_kind"] = stub_kind
         contracts[name] = contract
         validate_external_callee_descriptor_binding(name, contract, plan_callee, "translation plan")
         validate_external_callee_descriptor_binding(name, contract, context_callee, "context pack")
-        if plan_callee.get("stub_kind") != "compile_only" or context_callee.get("stub_kind") != "compile_only":
-            raise SystemExit(f"external callee {name} must record compile_only stub boundary")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
+            raise SystemExit(f"external callee {name} has unsupported stub_kind={stub_kind}")
+        if stub_kind == "accepted_named_slice_evidence":
+            validate_external_callee_accepted_named_slice_evidence(name, plan_callee, context_callee)
         if plan_callee.get("semantics_verified") or context_callee.get("semantics_verified"):
-            raise SystemExit(f"external callee {name} compile-only stub must not claim semantics_verified")
+            raise SystemExit(f"external callee {name} context must not claim semantics_verified")
         if len(bindings.get(name, [])) != 1:
             raise SystemExit(f"external callee {name} missing signature binding in context pack")
         validate_external_callee_signature_binding(name, signature_ref, bindings[name][0])
@@ -2642,7 +2816,7 @@ def validate_external_direct_callee_context(
 
     claim_scope = manifest.get("claim_boundary", {}).get("external_callee_scope", {})
     final_scope = final_verification.get("external_callee_scope", claim_scope)
-    expected_scope_stub_kind = "compile_only" if contracts else "none"
+    expected_scope_stub_kind = external_callee_scope_stub_kind(contracts.values())
     for label, scope in [("manifest", claim_scope), ("final_verification", final_scope)]:
         if scope.get("stub_kind") != expected_scope_stub_kind:
             raise SystemExit(f"external callee {label} scope must record stub_kind={expected_scope_stub_kind}")
@@ -2701,6 +2875,58 @@ def external_callee_expected_contract(
     }
 
 
+def external_callee_scope_stub_kind(contracts: Iterable[dict[str, Any]]) -> str:
+    kinds = {str(contract.get("stub_kind") or "compile_only") for contract in contracts}
+    if not kinds:
+        return "none"
+    if len(kinds) == 1:
+        return next(iter(kinds))
+    return "mixed_context"
+
+
+def validate_external_callee_accepted_named_slice_evidence(
+    name: str,
+    plan_callee: dict[str, Any],
+    context_callee: dict[str, Any],
+) -> None:
+    plan_binding = plan_callee.get("accepted_named_slice_evidence")
+    context_binding = context_callee.get("accepted_named_slice_evidence")
+    if not isinstance(plan_binding, dict) or not isinstance(context_binding, dict):
+        raise SystemExit(f"external callee {name} accepted named-slice evidence binding missing")
+    if plan_binding != context_binding:
+        raise SystemExit(f"external callee {name} accepted named-slice evidence binding drift")
+    final_path_text = str(plan_binding.get("final_verification_path") or "")
+    final_sha = str(plan_binding.get("final_verification_sha256") or "")
+    if not final_path_text or not final_sha:
+        raise SystemExit(f"external callee {name} accepted named-slice final verification ref missing")
+    final_path = resolve_ref_path(final_path_text)
+    if not final_path.exists():
+        raise SystemExit(f"external callee {name} accepted named-slice final verification missing: {final_path}")
+    actual_sha = sha256(final_path)
+    if actual_sha != final_sha:
+        raise SystemExit(
+            f"external callee {name} accepted named-slice final verification sha mismatch: {final_sha} != {actual_sha}"
+        )
+    final = load_json(final_path)
+    if final.get("target_id") != plan_binding.get("target_id"):
+        raise SystemExit(f"external callee {name} accepted named-slice target_id mismatch")
+    if final.get("slice_id") != plan_binding.get("slice_id"):
+        raise SystemExit(f"external callee {name} accepted named-slice slice_id mismatch")
+    if final.get("semantic_pass") is not True or plan_binding.get("semantic_pass") is not True:
+        raise SystemExit(f"external callee {name} accepted named-slice evidence must have semantic_pass=true")
+    if (
+        final.get("accepted_evidence_authoritative") is not True
+        or plan_binding.get("accepted_evidence_authoritative") is not True
+    ):
+        raise SystemExit(
+            f"external callee {name} accepted named-slice evidence must be accepted_evidence_authoritative"
+        )
+    if final.get("generated_draft_semantic_pass") is True or plan_binding.get("generated_draft_semantic_pass") is True:
+        raise SystemExit(
+            f"external callee {name} accepted named-slice evidence must not accept generated draft semantics"
+        )
+
+
 def validate_external_callee_descriptor_binding(
     name: str,
     contract: dict[str, Any],
@@ -2748,9 +2974,9 @@ def validate_external_callee_signature_binding(
 ) -> None:
     if binding.get("signature_ref") != signature_ref:
         raise SystemExit(f"external callee signature binding mismatch for {name}")
-    if binding.get("stub_kind") != "compile_only":
+    if binding.get("stub_kind") not in {"compile_only", "accepted_named_slice_evidence"}:
         raise SystemExit(
-            f"external callee signature binding for {name} must record stub_kind=compile_only"
+            f"external callee signature binding for {name} must record supported stub_kind"
         )
     if binding.get("semantics_verified"):
         raise SystemExit(
@@ -2823,9 +3049,10 @@ def validate_external_callee_call_site_bindings(
                     f"external callee call-site binding signature mismatch for {callee} in {label}"
                 )
             if label == "context pack call_edge_to_callee_binding":
-                if edge.get("stub_kind") != "compile_only":
+                expected_stub_kind = str(contract.get("stub_kind") or "compile_only")
+                if edge.get("stub_kind") != expected_stub_kind:
                     raise SystemExit(
-                        f"external callee call-site binding for {callee} must record stub_kind=compile_only"
+                        f"external callee call-site binding for {callee} must record stub_kind={expected_stub_kind}"
                     )
                 if edge.get("semantics_verified"):
                     raise SystemExit(

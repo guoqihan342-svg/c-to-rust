@@ -1,72 +1,12 @@
 {
-  "blocked_repairs": [
-    {
-      "blocked_reason": "Route decision refused candidate generation for unsupported C semantics.",
-      "candidate_patch_id": "patch-route-refused-1",
-      "candidate_routes": [
-        {
-          "next_action": "extend_typed_ir_lowering_or_emitter",
-          "route": "typed_ir",
-          "status": "blocked"
-        },
-        {
-          "next_action": "generate_or_attach_baseline_output_then_run_common_validation",
-          "route": "c2rust",
-          "status": "candidate_context_only"
-        },
-        {
-          "next_action": "generate_candidate_from_bound_inputs_then_run_common_validation",
-          "route": "llm",
-          "status": "candidate_only"
-        },
-        {
-          "next_action": "write_reviewed_candidate_and_bind_it_to_oracle_diff_gates",
-          "route": "manual",
-          "status": "allowed_with_review"
-        }
-      ],
-      "forbidden_change": "unsupported_control_flow",
-      "human_action_required": true,
-      "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
-      "ir_feature_gap": {
-        "blocked_callees": [
-          "fdb_blob_make",
-          "fdb_kv_del",
-          "fdb_kv_set_blob",
-          "strlen"
-        ],
-        "evidence_refs": [
-          "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-auto-translation-plan.json",
-          "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-context-pack.json"
-        ],
-        "kind": "external_direct_callee_context",
-        "source": "auto_translation_plan.translation_summary.external_direct_callee_blocks"
-      },
-      "oracle_fixture_gap": {
-        "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
-        "status": "not_blocking"
-      },
-      "repair_id": "repair-route-refused-1",
-      "route_decision": "L4",
-      "smallest_next_test": {
-        "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
-        "expected_gate": "external direct callees are declared, stubbed, or kept blocked before candidate acceptance",
-        "kind": "external_callee_context_regression"
-      },
-      "source_span": {
-        "file": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-        "line_end": 1,
-        "line_start": 1
-      }
-    }
-  ],
+  "blocked_repairs": [],
   "cache_invalidation_keys": [
-    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "fixture_hash=real-fdb-kv-set-fixture",
     "patch_plan_schema=1"
   ],
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "status": "recorded",
+  "status": "none",
   "target_id": "flashdb"
 }

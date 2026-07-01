@@ -6,7 +6,7 @@
   ],
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc",
+    "slice_spec_sha256=d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -36,7 +36,7 @@
     },
     "rust_draft": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs",
-      "status": "blocked"
+      "status": "candidate"
     },
     "rust_report": {
       "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-rust-report.json",
@@ -56,7 +56,7 @@
     "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
   ],
   "level": "L3",
-  "repo_commit": "565f3ff4ce5dbaa6a6d621fde8dcefa2a01d13ad",
+  "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
   "rust_tests": [
     {
       "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_blob_make",

@@ -38,7 +38,7 @@
   "slice_id": "real-fdb-blob-make",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "sha256": "5a6a08851397f68e6e9ff3fe36ea5eed281fecc438f769f7c3d05cd5c56edefc"
+    "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "status": "skipped",
@@ -47,16 +47,16 @@
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "71ceb466d3b054559c7dec2ba514cc8a741161b7880c286873f082d876595770"
+      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
     },
     "diagnostic_only": true,
-    "environment_profile_hash": "71ceb466d3b054559c7dec2ba514cc8a741161b7880c286873f082d876595770",
+    "environment_profile_hash": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb",
     "os_name": "nt",
     "path_search": [
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-06-29T15:14:14Z"
+    "probed_at": "2026-06-29T22:50:39Z"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

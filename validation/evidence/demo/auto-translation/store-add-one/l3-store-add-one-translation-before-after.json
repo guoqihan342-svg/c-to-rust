@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "status": "bound",
+  "target_id": "demo",
+  "slice_id": "store-add-one",
+  "baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
+    "sha256": "34b6214df0783c6adde909f0eb18423f63f7e04d95e87b45d9fd6d3ac5d006bd"
+  },
+  "final": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs",
+    "sha256": "2dbe1e11e8e3aff43307a340d34dd66bdb82d035db6bdb73af56467c592fc771"
+  },
+  "oracle_evidence": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
+    "sha256": "1b0bce64a04c302caaccd4df7cd190d537721fd91fb7e8377f9eae4771d19f21"
+  },
+  "accepted_patch": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
+    "sha256": "414f5b94303dc5be7cbe0e4fe58e5ae09a0a5b38f54804112235bdd03d08d334"
+  },
+  "patch_log": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-safety-step-log.jsonl",
+    "sha256": "92f1d32baaeb47b869569b3c483199894756212788fa6867e82469796ed0992f"
+  },
+  "unsafe_reduction": {
+    "status": "measured",
+    "baseline_total_unsafe": 3,
+    "current_total_unsafe": 0,
+    "reduced_by": 3,
+    "ratio": 0.0
+  },
+  "unsafe_scan_evidence": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-before-after-unsafe-scan.json",
+    "sha256": "7dd34594ddca5c619370dcf61b64df181bbb92db14edbc45df320fad8cc81f77"
+  },
+  "semantic_evidence": {
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
+      "sha256": "db85df697c504d409f6f125a7383d2ab51fbd82221ffacc6d6637881a049f1c8"
+    },
+    "final_source_snapshot": {
+      "path": "validation/l2_slices/src/store_add_one.rs",
+      "sha256": "b12284e94a7e5ba1e10091ff6046847fc6e5e0755c82143d1d28ed06dcad7902"
+    }
+  },
+  "claim_boundary": {
+    "function": "store_add_one",
+    "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+    "observable_fields": [
+      "return_code",
+      "status",
+      "out0"
+    ],
+    "non_goals": [
+      "NULL out pointers",
+      "INT_MAX signed overflow",
+      "aliasing",
+      "pointer arithmetic",
+      "whole-program translation"
+    ]
+  }
+}

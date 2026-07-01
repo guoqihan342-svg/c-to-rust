@@ -43,7 +43,7 @@
 #[cfg(feature = "typed-ir")]
 use std::process::Command;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     env,
     error::Error,
     fmt,
@@ -274,6 +274,7 @@ pub enum ClangTypeKind {
     Record {
         name: String,
     },
+    Function,
     Unsupported {
         reason: String,
     },
@@ -347,6 +348,11 @@ pub enum ClangExprSkeleton {
         arg_type: ClangTypeSkeleton,
         ty: ClangTypeSkeleton,
     },
+    AlignOfType {
+        arg_type: ClangTypeSkeleton,
+        ty: ClangTypeSkeleton,
+        alignment_bits: Option<u16>,
+    },
     NullPtr {
         ty: ClangTypeSkeleton,
     },
@@ -377,12 +383,24 @@ pub enum ClangExprSkeleton {
         ptr: Box<ClangExprSkeleton>,
         ty: ClangTypeSkeleton,
     },
+    AddrOf {
+        operand: Box<ClangExprSkeleton>,
+        ty: ClangTypeSkeleton,
+    },
     Cast {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
         implicit: bool,
     },
+    LValueToRValue {
+        target: ClangTypeSkeleton,
+        expr: Box<ClangExprSkeleton>,
+    },
     ArrayToPointerDecay {
+        target: ClangTypeSkeleton,
+        expr: Box<ClangExprSkeleton>,
+    },
+    FunctionToPointerDecay {
         target: ClangTypeSkeleton,
         expr: Box<ClangExprSkeleton>,
     },
@@ -1073,6 +1091,7 @@ fn enum_type_inventory_from_ast(
 ) -> EnumTypeInventory {
     let mut inventory = EnumTypeInventory::default();
     collect_enum_type_inventory_from_ast(ast, target_abi, &mut inventory);
+    collect_typedef_enum_type_inventory_from_ast(ast, ast, target_abi, &mut inventory);
     inventory
 }
 
@@ -1104,6 +1123,96 @@ fn collect_enum_type_inventory_from_ast(
 }
 
 #[cfg(feature = "typed-ir")]
+fn collect_typedef_enum_type_inventory_from_ast(
+    node: &Value,
+    ast: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+    inventory: &mut EnumTypeInventory,
+) {
+    if string_field(node, "kind").as_deref() == Some("TypedefDecl")
+        && node.get("isImplicit").and_then(Value::as_bool) != Some(true)
+    {
+        if let Some((alias, enum_decl, allow_missing_complete_definition)) =
+            typedef_enum_alias_decl(node, ast)
+        {
+            let entry = enum_type_from_decl_with_options(
+                enum_decl,
+                &alias,
+                target_abi,
+                allow_missing_complete_definition,
+            );
+            insert_enum_type_inventory_entry(inventory, alias, entry);
+        }
+    }
+    for child in inner(node) {
+        collect_typedef_enum_type_inventory_from_ast(child, ast, target_abi, inventory);
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn insert_enum_type_inventory_entry(
+    inventory: &mut EnumTypeInventory,
+    name: String,
+    entry: Result<ClangTypeSkeleton, String>,
+) {
+    match inventory.by_name.entry(name) {
+        std::collections::btree_map::Entry::Vacant(slot) => {
+            slot.insert(entry);
+        }
+        std::collections::btree_map::Entry::Occupied(mut slot) => {
+            let _previous = slot.insert(Err(
+                "duplicate enum type name in clang AST; enum type lowering requires unique declaration provenance"
+                    .to_string(),
+            ));
+        }
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn typedef_enum_alias_decl<'a>(
+    typedef_decl: &'a Value,
+    ast: &'a Value,
+) -> Option<(String, &'a Value, bool)> {
+    let alias = string_field(typedef_decl, "name")?;
+    if !is_simple_c_identifier(&alias) {
+        return None;
+    }
+    if let Some(enum_decl) = inner(typedef_decl)
+        .iter()
+        .find(|child| string_field(child, "kind").as_deref() == Some("EnumDecl"))
+    {
+        return Some((alias, enum_decl, true));
+    }
+    let enum_decl_id = inner(typedef_decl)
+        .iter()
+        .find(|child| string_field(child, "kind").as_deref() == Some("EnumType"))
+        .and_then(|enum_type| enum_type.get("decl"))
+        .and_then(|decl| {
+            if string_field(decl, "kind").as_deref() == Some("EnumDecl") {
+                string_field(decl, "id")
+            } else {
+                None
+            }
+        })?;
+    find_decl_by_id(ast, &enum_decl_id)
+        .filter(|decl| string_field(decl, "kind").as_deref() == Some("EnumDecl"))
+        .map(|decl| {
+            let allow_missing_complete_definition = enum_decl_name(decl).is_none();
+            (alias, decl, allow_missing_complete_definition)
+        })
+}
+
+#[cfg(feature = "typed-ir")]
+fn find_decl_by_id<'a>(node: &'a Value, id: &str) -> Option<&'a Value> {
+    if string_field(node, "id").as_deref() == Some(id) {
+        return Some(node);
+    }
+    inner(node)
+        .iter()
+        .find_map(|child| find_decl_by_id(child, id))
+}
+
+#[cfg(feature = "typed-ir")]
 fn enum_decl_name(node: &Value) -> Option<String> {
     let name = string_field(node, "name")?;
     if is_simple_c_identifier(&name) {
@@ -1119,6 +1228,16 @@ fn enum_type_from_decl(
     name: &str,
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangTypeSkeleton, String> {
+    enum_type_from_decl_with_options(node, name, target_abi, false)
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_type_from_decl_with_options(
+    node: &Value,
+    name: &str,
+    target_abi: Option<&TargetAbiProfile>,
+    allow_missing_complete_definition: bool,
+) -> Result<ClangTypeSkeleton, String> {
     let Some(target_abi) = target_abi else {
         return Err(format!(
             "EnumDecl {name} requires target ABI profile evidence before enum-typed scalar lowering"
@@ -1129,10 +1248,14 @@ fn enum_type_from_decl(
             "EnumDecl {name} requires target ABI int_width=32 for the current enum-typed scalar subset"
         ));
     }
-    if node.get("completeDefinition").and_then(Value::as_bool) != Some(true) {
-        return Err(format!(
-            "EnumDecl {name} is not a complete definition; enum type lowering requires all constants"
-        ));
+    match node.get("completeDefinition").and_then(Value::as_bool) {
+        Some(true) => {}
+        None if allow_missing_complete_definition => {}
+        _ => {
+            return Err(format!(
+                "EnumDecl {name} is not a complete definition; enum type lowering requires all constants"
+            ));
+        }
     }
     if node.get("isImplicit").and_then(Value::as_bool) == Some(true) {
         return Err(format!(
@@ -1150,8 +1273,16 @@ fn enum_type_from_decl(
         ));
     }
 
-    for constant in constants {
-        let literal = enum_constant_literal_from_decl(constant)?;
+    let infer_sequential_values = allow_missing_complete_definition
+        && constants
+            .iter()
+            .all(|constant| !enum_constant_has_constant_expr(constant));
+
+    for (index, constant) in constants.iter().enumerate() {
+        let literal = enum_constant_literal_from_decl_with_inferred_value(
+            constant,
+            infer_sequential_values.then_some(index as u64),
+        )?;
         if !matches!(
             literal.ty.kind,
             ClangTypeKind::Integer {
@@ -1217,6 +1348,14 @@ fn collect_enum_constant_inventory_from_ast(node: &Value, inventory: &mut EnumCo
 
 #[cfg(feature = "typed-ir")]
 fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLiteral, String> {
+    enum_constant_literal_from_decl_with_inferred_value(node, None)
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_literal_from_decl_with_inferred_value(
+    node: &Value,
+    inferred_value: Option<u64>,
+) -> Result<ClangEnumConstantLiteral, String> {
     let name = enum_constant_decl_name(node)
         .ok_or_else(|| "EnumConstantDecl is missing name".to_string())?;
     let type_object = node
@@ -1235,14 +1374,22 @@ fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLite
         ));
     }
 
-    let constant_expr = inner(node)
+    let Some(constant_expr) = inner(node)
         .iter()
         .find(|child| string_field(child, "kind").as_deref() == Some("ConstantExpr"))
-        .ok_or_else(|| {
-            format!(
+    else {
+        let Some(value) = inferred_value else {
+            return Err(format!(
                 "EnumConstantDecl {name} is missing explicit ConstantExpr value; implicit enum values are outside the current clang lowering skeleton"
-            )
-        })?;
+            ));
+        };
+        return Ok(ClangEnumConstantLiteral {
+            name,
+            value,
+            spelling: value.to_string(),
+            ty,
+        });
+    };
     let spelling = string_field(constant_expr, "value").ok_or_else(|| {
         format!(
             "EnumConstantDecl {name} is missing explicit ConstantExpr value; computed enum constants are outside the current clang lowering skeleton"
@@ -1265,6 +1412,13 @@ fn enum_constant_literal_from_decl(node: &Value) -> Result<ClangEnumConstantLite
         spelling,
         ty,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_constant_has_constant_expr(node: &Value) -> bool {
+    inner(node)
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("ConstantExpr"))
 }
 
 #[cfg(feature = "typed-ir")]
@@ -1487,7 +1641,7 @@ fn rewrite_supported_enum_types_in_expr(
         | ClangExprSkeleton::NullPtr { ty } => {
             rewrite_supported_enum_type(ty, inventory)?;
         }
-        ClangExprSkeleton::SizeOfType { ty, .. } => {
+        ClangExprSkeleton::SizeOfType { ty, .. } | ClangExprSkeleton::AlignOfType { ty, .. } => {
             rewrite_supported_enum_type(ty, inventory)?;
         }
         ClangExprSkeleton::Binary { lhs, rhs, ty, .. } => {
@@ -1510,7 +1664,8 @@ fn rewrite_supported_enum_types_in_expr(
             rewrite_supported_enum_types_in_expr(else_expr, inventory)?;
             rewrite_supported_enum_type(ty, inventory)?;
         }
-        ClangExprSkeleton::Cast { expr, target, .. } => {
+        ClangExprSkeleton::Cast { expr, target, .. }
+        | ClangExprSkeleton::LValueToRValue { expr, target } => {
             rewrite_supported_enum_types_in_expr(expr, inventory)?;
             rewrite_supported_enum_type(target, inventory)?;
         }
@@ -1528,7 +1683,15 @@ fn rewrite_supported_enum_types_in_expr(
             rewrite_supported_enum_types_in_expr(ptr, inventory)?;
             rewrite_supported_enum_type(ty, inventory)?;
         }
+        ClangExprSkeleton::AddrOf { operand, ty } => {
+            rewrite_supported_enum_types_in_expr(operand, inventory)?;
+            rewrite_supported_enum_type(ty, inventory)?;
+        }
         ClangExprSkeleton::ArrayToPointerDecay { expr, target } => {
+            rewrite_supported_enum_types_in_expr(expr, inventory)?;
+            rewrite_supported_enum_type(target, inventory)?;
+        }
+        ClangExprSkeleton::FunctionToPointerDecay { expr, target } => {
             rewrite_supported_enum_types_in_expr(expr, inventory)?;
             rewrite_supported_enum_type(target, inventory)?;
         }
@@ -1557,24 +1720,55 @@ fn rewrite_supported_enum_type(
     ty: &mut ClangTypeSkeleton,
     inventory: &EnumTypeInventory,
 ) -> Result<(), ClangFrontendError> {
+    let candidates = enum_type_inventory_candidates(ty);
+    if candidates.is_empty() {
+        return Ok(());
+    }
+
+    for name in &candidates {
+        if let Some(entry) = inventory.by_name.get(name) {
+            match entry {
+                Ok(mapped) => {
+                    *ty = mapped.clone();
+                    return Ok(());
+                }
+                Err(reason) => {
+                    return Err(ClangFrontendError {
+                        kind: "unsupported_clang_type".to_string(),
+                        message: format!("enum {name}: {reason}"),
+                    });
+                }
+            }
+        }
+    }
+
     let Some(name) = direct_enum_type_name(ty) else {
         return Ok(());
     };
-    let entry = inventory.by_name.get(&name).ok_or_else(|| ClangFrontendError {
+    Err(ClangFrontendError {
         kind: "unsupported_clang_type".to_string(),
         message: format!(
             "enum {name} is not present in the clang enum type inventory; enum type lowering requires a complete EnumDecl"
         ),
-    })?;
-    match entry {
-        Ok(mapped) => {
-            *ty = mapped.clone();
-            Ok(())
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn enum_type_inventory_candidates(ty: &ClangTypeSkeleton) -> Vec<String> {
+    let mut candidates = Vec::new();
+    push_enum_type_inventory_candidate(&mut candidates, &ty.spelled);
+    push_enum_type_inventory_candidate(&mut candidates, &ty.canonical);
+    candidates
+}
+
+#[cfg(feature = "typed-ir")]
+fn push_enum_type_inventory_candidate(candidates: &mut Vec<String>, spelling: &str) {
+    if let Some(name) = direct_enum_name_from_spelling(spelling)
+        .or_else(|| direct_typedef_enum_alias_from_spelling(spelling))
+    {
+        if !candidates.contains(&name) {
+            candidates.push(name);
         }
-        Err(reason) => Err(ClangFrontendError {
-            kind: "unsupported_clang_type".to_string(),
-            message: format!("enum {name}: {reason}"),
-        }),
     }
 }
 
@@ -1589,6 +1783,16 @@ fn direct_enum_name_from_spelling(spelling: &str) -> Option<String> {
     let name = spelling.trim().strip_prefix("enum ")?.trim();
     if is_simple_c_identifier(name) {
         Some(name.to_string())
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_typedef_enum_alias_from_spelling(spelling: &str) -> Option<String> {
+    let alias = spelling.trim();
+    if is_simple_c_identifier(alias) {
+        Some(alias.to_string())
     } else {
         None
     }
@@ -1661,7 +1865,7 @@ fn stmt_skeleton_from_ast(stmt: &Value) -> Result<ClangStmtSkeleton, ClangFronte
         Some("ForStmt") => for_stmt_skeleton_from_ast(stmt),
         Some("UnaryOperator") => inc_dec_stmt_skeleton_from_ast(stmt, "statement"),
         Some("CallExpr") => Ok(ClangStmtSkeleton::Expr {
-            expr: expr_skeleton_from_ast(stmt)?,
+            expr: call_stmt_expr_skeleton_from_ast(stmt)?,
         }),
         Some("ReturnStmt") => {
             let value = inner(stmt)
@@ -2444,17 +2648,17 @@ fn expr_skeleton_from_ast_with_options(
     match string_field(expr, "kind").as_deref() {
         Some("ImplicitCastExpr") => {
             let cast_kind = string_field(expr, "castKind");
-            if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
-                return Ok(ClangExprSkeleton::Unsupported {
-                    node: "ImplicitCastExpr".to_string(),
-                    reason: "castKind FunctionToPointerDecay creates a function pointer value and requires explicit function-pointer lowering outside direct callee position".to_string(),
-                });
-            }
             let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
                 kind: "invalid_clang_expr".to_string(),
                 message: "ImplicitCastExpr is missing operand".to_string(),
             })?;
             let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
+            if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
+                return Ok(ClangExprSkeleton::FunctionToPointerDecay {
+                    target: expr_type(expr)?,
+                    expr: Box::new(operand),
+                });
+            }
             if cast_kind.as_deref() == Some("NullToPointer") {
                 return null_pointer_skeleton_from_cast(expr, &operand, "ImplicitCastExpr");
             }
@@ -2469,6 +2673,12 @@ fn expr_skeleton_from_ast_with_options(
                     target: expr_type(expr)?,
                     expr: Box::new(operand),
                     implicit: true,
+                });
+            }
+            if preserve_integral_casts && is_integer_lvalue_to_rvalue_cast_expr(expr) {
+                return Ok(ClangExprSkeleton::LValueToRValue {
+                    target: expr_type(expr)?,
+                    expr: Box::new(operand),
                 });
             }
             match cast_kind.as_deref() {
@@ -2668,6 +2878,48 @@ fn expr_skeleton_from_ast_with_options(
                     ty: expr_type(expr)?,
                 });
             }
+            if opcode == "&" {
+                let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_unary_operator".to_string(),
+                    message: "UnaryOperator is missing operand".to_string(),
+                })?;
+                return Ok(ClangExprSkeleton::AddrOf {
+                    operand: Box::new(expr_skeleton_from_ast_with_options(
+                        operand,
+                        preserve_integral_casts,
+                    )?),
+                    ty: expr_type(expr)?,
+                });
+            }
+            if opcode == "+" {
+                let result_ty = expr_type(expr)?;
+                if !matches!(&result_ty.kind, ClangTypeKind::Integer { .. }) {
+                    return Ok(ClangExprSkeleton::Unsupported {
+                        node: "UnaryOperator".to_string(),
+                        reason: format!(
+                            "unary plus result type {} is outside the integer promotion subset",
+                            result_ty.spelled
+                        ),
+                    });
+                }
+                let operand = inner(expr).first().ok_or_else(|| ClangFrontendError {
+                    kind: "invalid_unary_operator".to_string(),
+                    message: "UnaryOperator is missing operand".to_string(),
+                })?;
+                let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+                if let Some(operand_ty) = clang_expr_skeleton_type(&operand) {
+                    if !compound_assignment_types_match(operand_ty, &result_ty) {
+                        return Ok(ClangExprSkeleton::Unsupported {
+                            node: "UnaryOperator".to_string(),
+                            reason: format!(
+                                "unary plus operand type {} must match result type {} after clang-proven integer promotion",
+                                operand_ty.spelled, result_ty.spelled
+                            ),
+                        });
+                    }
+                }
+                return Ok(operand);
+            }
 
             let op = match opcode.as_str() {
                 "-" => ClangUnaryOperator::Neg,
@@ -2705,7 +2957,7 @@ fn expr_skeleton_from_ast_with_options(
             }
             if !matches!(
                 string_field(expr, "castKind").as_deref(),
-                Some("BitCast" | "IntegralCast" | "IntegralPromotion")
+                Some("BitCast" | "IntegralCast" | "IntegralPromotion" | "NoOp")
             ) {
                 return Ok(ClangExprSkeleton::Unsupported {
                     node: "CStyleCastExpr".to_string(),
@@ -2751,7 +3003,7 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
         kind: "invalid_unary_expr_or_type_trait_expr".to_string(),
         message: "UnaryExprOrTypeTraitExpr is missing name".to_string(),
     })?;
-    if name != "sizeof" {
+    if name != "sizeof" && name != "_Alignof" {
         return Ok(ClangExprSkeleton::Unsupported {
             node: "UnaryExprOrTypeTraitExpr".to_string(),
             reason: format!("{name} requires explicit alignment/lowering support"),
@@ -2759,15 +3011,14 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
     }
     let arg_type_object = expr.get("argType").ok_or_else(|| ClangFrontendError {
         kind: if expr.get("inner").is_some() {
-            "unsupported_sizeof_operand".to_string()
+            format!("unsupported_{name}_operand")
         } else {
             "invalid_unary_expr_or_type_trait_expr".to_string()
         },
         message: if expr.get("inner").is_some() {
-            "sizeof expression operand requires clang argType.qualType before typed IR lowering"
-                .to_string()
+            format!("{name} expression operand requires clang argType.qualType before typed IR lowering")
         } else {
-            "sizeof type operand is missing argType.qualType".to_string()
+            format!("{name} type operand is missing argType.qualType")
         },
     })?;
     if clang_type_candidate_spellings(arg_type_object)
@@ -2779,9 +3030,9 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             .or_else(|| string_field(arg_type_object, "canonicalQualType"))
             .unwrap_or_else(|| "enum".to_string());
         return Err(ClangFrontendError {
-            kind: "unsupported_sizeof_type".to_string(),
+            kind: format!("unsupported_{name}_type"),
             message: format!(
-                "sizeof({spelled}) requires explicit C layout/ABI provenance before typed IR lowering"
+                "{name}({spelled}) requires explicit C layout/ABI provenance before typed IR lowering"
             ),
         });
     }
@@ -2794,17 +3045,23 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             | ClangTypeKind::Unsupported { .. }
     ) {
         return Err(ClangFrontendError {
-            kind: "unsupported_sizeof_type".to_string(),
+            kind: format!("unsupported_{name}_type"),
             message: format!(
-                "sizeof({}) requires explicit C layout/ABI provenance before typed IR lowering",
+                "{name}({}) requires explicit C layout/ABI provenance before typed IR lowering",
                 arg_type.spelled
             ),
         });
     }
-    Ok(ClangExprSkeleton::SizeOfType {
-        arg_type,
-        ty: expr_type(expr)?,
-    })
+    let ty = expr_type(expr)?;
+    if name == "_Alignof" {
+        Ok(ClangExprSkeleton::AlignOfType {
+            arg_type,
+            ty,
+            alignment_bits: None,
+        })
+    } else {
+        Ok(ClangExprSkeleton::SizeOfType { arg_type, ty })
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3073,6 +3330,19 @@ fn inc_dec_expr_skeleton_from_ast(
 
 #[cfg(feature = "typed-ir")]
 fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    call_expr_skeleton_from_ast_with_memory_statement_args(expr, false)
+}
+
+#[cfg(feature = "typed-ir")]
+fn call_stmt_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    call_expr_skeleton_from_ast_with_memory_statement_args(expr, true)
+}
+
+#[cfg(feature = "typed-ir")]
+fn call_expr_skeleton_from_ast_with_memory_statement_args(
+    expr: &Value,
+    allow_memory_statement_args: bool,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
     let children = inner(expr);
     let Some((callee_node, arg_nodes)) = children.split_first() else {
         return Err(ClangFrontendError {
@@ -3090,8 +3360,13 @@ fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangF
         }
     };
     let mut args = Vec::with_capacity(arg_nodes.len());
-    for arg_node in arg_nodes {
-        let arg = expr_skeleton_from_ast_with_options(arg_node, true)?;
+    for (index, arg_node) in arg_nodes.iter().enumerate() {
+        let arg = match (allow_memory_statement_args, callee.as_str(), index) {
+            (true, "memset", 0) => memory_destination_arg_skeleton_from_ast(arg_node, "memset")?,
+            (true, "memcpy", 0) => memory_destination_arg_skeleton_from_ast(arg_node, "memcpy")?,
+            (true, "memcpy", 1) => memcpy_source_arg_skeleton_from_ast(arg_node)?,
+            _ => direct_call_arg_skeleton_from_ast(arg_node)?,
+        };
         args.push(arg);
     }
     if let Some(reason) = bounded_call_args_rejection_reason(&args) {
@@ -3105,6 +3380,223 @@ fn call_expr_skeleton_from_ast(expr: &Value) -> Result<ClangExprSkeleton, ClangF
         args,
         ty: expr_type(expr)?,
     })
+}
+
+#[cfg(feature = "typed-ir")]
+fn direct_call_arg_skeleton_from_ast(arg: &Value) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(arg, "castKind").as_deref() != Some("BitCast")
+    {
+        return expr_skeleton_from_ast_with_options(arg, true);
+    }
+
+    let target = expr_type(arg)?;
+    if !clang_type_is_const_void_pointer(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "direct-call argument BitCast target {} is outside the readonly byte pointer to const void * subset",
+                target.spelled
+            ),
+        });
+    }
+
+    let operand = inner(arg).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_clang_expr".to_string(),
+        message: "ImplicitCastExpr BitCast is missing operand".to_string(),
+    })?;
+    let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    match &operand {
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if clang_type_is_readonly_8_bit_pointer(ty)
+                || clang_type_is_const_char_pointer_spelling(ty) =>
+        {
+            Ok(operand)
+        }
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "direct-call argument BitCast operand {} is not a readonly 8-bit pointer",
+                ty.spelled
+            ),
+        }),
+        ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+            node: node.clone(),
+            reason: reason.clone(),
+        }),
+        _ => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: "direct-call argument BitCast operand must be a direct pointer parameter"
+                .to_string(),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn memory_destination_arg_skeleton_from_ast(
+    arg: &Value,
+    callee: &str,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(arg, "castKind").as_deref() != Some("BitCast")
+    {
+        return expr_skeleton_from_ast_with_options(arg, true);
+    }
+
+    let target = expr_type(arg)?;
+    if !clang_type_is_mutable_void_pointer(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "{callee} destination BitCast target {} is not mutable void *",
+                target.spelled
+            ),
+        });
+    }
+
+    let operand = inner(arg).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_clang_expr".to_string(),
+        message: "ImplicitCastExpr BitCast is missing operand".to_string(),
+    })?;
+    let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    match &operand {
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if clang_type_is_mutable_unsigned_8_bit_pointer(ty) =>
+        {
+            Ok(operand)
+        }
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "{callee} destination BitCast operand {} is not mutable unsigned 8-bit pointer",
+                ty.spelled
+            ),
+        }),
+        ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+            node: node.clone(),
+            reason: reason.clone(),
+        }),
+        _ => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "{callee} destination BitCast operand must be a direct pointer parameter"
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn memcpy_source_arg_skeleton_from_ast(
+    arg: &Value,
+) -> Result<ClangExprSkeleton, ClangFrontendError> {
+    if string_field(arg, "kind").as_deref() != Some("ImplicitCastExpr")
+        || string_field(arg, "castKind").as_deref() != Some("BitCast")
+    {
+        return expr_skeleton_from_ast_with_options(arg, true);
+    }
+
+    let target = expr_type(arg)?;
+    if !clang_type_is_const_void_pointer(&target) {
+        return Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "memcpy source BitCast target {} is not const void *",
+                target.spelled
+            ),
+        });
+    }
+
+    let operand = inner(arg).first().ok_or_else(|| ClangFrontendError {
+        kind: "invalid_clang_expr".to_string(),
+        message: "ImplicitCastExpr BitCast is missing operand".to_string(),
+    })?;
+    let operand = expr_skeleton_from_ast_with_options(operand, true)?;
+    match &operand {
+        ClangExprSkeleton::DeclRef { ty, .. }
+            if clang_type_is_readonly_unsigned_8_bit_pointer(ty) =>
+        {
+            Ok(operand)
+        }
+        ClangExprSkeleton::DeclRef { ty, .. } => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: format!(
+                "memcpy source BitCast operand {} is not readonly unsigned 8-bit pointer",
+                ty.spelled
+            ),
+        }),
+        ClangExprSkeleton::Unsupported { node, reason } => Ok(ClangExprSkeleton::Unsupported {
+            node: node.clone(),
+            reason: reason.clone(),
+        }),
+        _ => Ok(ClangExprSkeleton::Unsupported {
+            node: "ImplicitCastExpr".to_string(),
+            reason: "memcpy source BitCast operand must be a direct pointer parameter".to_string(),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_mutable_void_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if !clang_type_is_const(pointee) && matches!(&pointee.kind, ClangTypeKind::Void)
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_const_void_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee) && matches!(&pointee.kind, ClangTypeKind::Void)
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_mutable_unsigned_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if !clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 })
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_readonly_unsigned_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { signed: false, width: 8 })
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_readonly_8_bit_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { width: 8, .. })
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_const_char_pointer_spelling(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        (ty.spelled.trim(), ty.canonical.trim(),),
+        ("const char *", _) | (_, "const char *")
+    )
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_size_t_spelling(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        (ty.spelled.trim(), ty.canonical.trim()),
+        ("size_t", _) | (_, "size_t") | ("__size_t", _) | (_, "__size_t")
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3145,6 +3637,14 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
                 .ok_or_else(|| "callee is missing referenced function name".to_string())?;
             match string_field(referenced_decl, "kind").as_deref() {
                 Some("FunctionDecl") => Ok(name),
+                Some("ParmVarDecl") => {
+                    let ty = expr_type(callee).map_err(|error| error.message)?;
+                    if clang_type_is_function_pointer(&ty) {
+                        Ok(name)
+                    } else {
+                        Err("callee is not a direct function identifier".to_string())
+                    }
+                }
                 _ => Err("callee is not a direct function identifier".to_string()),
             }
         }
@@ -3153,6 +3653,14 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
         )),
         None => Err("callee node without kind is not a direct function identifier".to_string()),
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_type_is_function_pointer(ty: &ClangTypeSkeleton) -> bool {
+    matches!(
+        &ty.kind,
+        ClangTypeKind::Pointer { pointee, .. } if matches!(pointee.kind, ClangTypeKind::Function)
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3182,19 +3690,23 @@ fn bounded_call_arg_rejection_reason(
     match expr {
         ClangExprSkeleton::DeclRef { .. }
         | ClangExprSkeleton::IntegerLiteral { .. }
-        | ClangExprSkeleton::SizeOfType { .. } => None,
+        | ClangExprSkeleton::SizeOfType { .. }
+        | ClangExprSkeleton::AlignOfType { .. } => None,
         ClangExprSkeleton::NullPtr { .. } => {
             Some("call arguments cannot use null pointer value semantics".to_string())
         }
         ClangExprSkeleton::Binary { lhs, rhs, .. } => bounded_call_arg_rejection_reason(lhs, false)
             .or_else(|| bounded_call_arg_rejection_reason(rhs, false)),
         ClangExprSkeleton::Unary { operand, .. }
-        | ClangExprSkeleton::Cast { expr: operand, .. } => {
+        | ClangExprSkeleton::Cast { expr: operand, .. }
+        | ClangExprSkeleton::LValueToRValue { expr: operand, .. } => {
             bounded_call_arg_rejection_reason(operand, false)
         }
         ClangExprSkeleton::ArrayToPointerDecay { .. } => Some(
-            "call arguments cannot use array-to-pointer decay before explicit lowering".to_string(),
+            "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
+                .to_string(),
         ),
+        ClangExprSkeleton::FunctionToPointerDecay { .. } => None,
         ClangExprSkeleton::Conditional { .. } => {
             Some("conditional call arguments are outside the bounded call subset".to_string())
         }
@@ -3209,7 +3721,13 @@ fn bounded_call_arg_rejection_reason(
             Some("array initializer lists are outside the bounded call subset".to_string())
         }
         ClangExprSkeleton::Call { args, ty, .. } if allow_immediate_nested_call => {
+            if clang_strlen_leaf_call_arg(expr) {
+                return None;
+            }
             if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+                if clang_mutable_record_pointer_record_name(ty).is_some() {
+                    return bounded_record_pointer_constructor_call_arg_rejection_reason(args, ty);
+                }
                 return Some(format!(
                     "nested call result type {} is outside the bounded call subset",
                     ty.spelled
@@ -3231,6 +3749,7 @@ fn bounded_call_arg_rejection_reason(
         ClangExprSkeleton::Deref { .. } => {
             Some("call arguments cannot use dereference value semantics".to_string())
         }
+        ClangExprSkeleton::AddrOf { .. } => None,
         ClangExprSkeleton::Unsupported { node, reason } => {
             Some(format!("unsupported argument expression {node}: {reason}"))
         }
@@ -3238,11 +3757,138 @@ fn bounded_call_arg_rejection_reason(
 }
 
 #[cfg(feature = "typed-ir")]
+fn bounded_record_pointer_constructor_call_arg_rejection_reason(
+    args: &[ClangExprSkeleton],
+    ty: &ClangTypeSkeleton,
+) -> Option<String> {
+    let return_record = clang_mutable_record_pointer_record_name(ty)?;
+    let Some(first_arg) = args.first() else {
+        return Some(
+            "record pointer constructor call requires an address-of local record first argument"
+                .to_string(),
+        );
+    };
+    let ClangExprSkeleton::AddrOf {
+        operand,
+        ty: first_arg_ty,
+    } = first_arg
+    else {
+        return Some(
+            "record pointer constructor call first argument must be address-of local record"
+                .to_string(),
+        );
+    };
+    let Some(first_record) = clang_mutable_record_pointer_record_name(first_arg_ty) else {
+        return Some(format!(
+            "record pointer constructor call first argument target {} must be a mutable record pointer",
+            first_arg_ty.spelled
+        ));
+    };
+    if first_record != return_record {
+        return Some(format!(
+            "record pointer constructor call first argument record {first_record} does not match return record {return_record}"
+        ));
+    }
+    let ClangExprSkeleton::DeclRef { ty: operand_ty, .. } = operand.as_ref() else {
+        return Some(
+            "record pointer constructor call first argument must address a direct record variable"
+                .to_string(),
+        );
+    };
+    if !matches!(&operand_ty.kind, ClangTypeKind::Record { name } if name == return_record) {
+        return Some(format!(
+            "record pointer constructor call first argument operand {} must be record {return_record}",
+            operand_ty.spelled
+        ));
+    }
+    for (index, arg) in args.iter().enumerate().skip(1) {
+        if clang_strlen_leaf_call_arg(arg) {
+            continue;
+        }
+        if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {
+            return Some(format!(
+                "record pointer constructor call argument {index}: {reason}"
+            ));
+        }
+    }
+    None
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_strlen_leaf_call_arg(expr: &ClangExprSkeleton) -> bool {
+    let ClangExprSkeleton::Call { callee, args, ty } = expr else {
+        return false;
+    };
+    if callee != "strlen"
+        || !(matches!(&ty.kind, ClangTypeKind::Integer { .. }) || clang_type_is_size_t_spelling(ty))
+    {
+        return false;
+    }
+    let [ClangExprSkeleton::DeclRef { ty: arg_ty, .. }] = args.as_slice() else {
+        return false;
+    };
+    clang_type_is_readonly_unsigned_8_bit_pointer(arg_ty)
+        || clang_type_is_const_char_pointer_spelling(arg_ty)
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_mutable_record_pointer_record_name(ty: &ClangTypeSkeleton) -> Option<&str> {
+    let ClangTypeKind::Pointer { pointee, .. } = &ty.kind else {
+        return None;
+    };
+    if clang_type_is_const(pointee) {
+        return None;
+    }
+    let ClangTypeKind::Record { name } = &pointee.kind else {
+        return None;
+    };
+    Some(name.as_str())
+}
+
+#[cfg(feature = "typed-ir")]
 fn is_integral_conversion_cast_expr(expr: &Value) -> bool {
-    matches!(
-        string_field(expr, "castKind").as_deref(),
-        Some("IntegralCast" | "IntegralPromotion")
-    )
+    match string_field(expr, "castKind").as_deref() {
+        Some("IntegralCast" | "IntegralPromotion") => true,
+        Some("NoOp") => is_integer_noop_cast_expr(expr),
+        _ => false,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_integer_noop_cast_expr(expr: &Value) -> bool {
+    let Ok(target) = expr_type(expr) else {
+        return false;
+    };
+    if !matches!(target.kind, ClangTypeKind::Integer { .. }) {
+        return false;
+    }
+    let Some(operand) = inner(expr).first() else {
+        return false;
+    };
+    let Ok(operand_ty) = expr_type(operand) else {
+        return false;
+    };
+    matches!(operand_ty.kind, ClangTypeKind::Integer { .. })
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_integer_lvalue_to_rvalue_cast_expr(expr: &Value) -> bool {
+    if string_field(expr, "castKind").as_deref() != Some("LValueToRValue") {
+        return false;
+    }
+    let Ok(target) = expr_type(expr) else {
+        return false;
+    };
+    if !matches!(target.kind, ClangTypeKind::Integer { .. }) {
+        return false;
+    }
+    let Some(operand) = inner(expr).first() else {
+        return false;
+    };
+    let Ok(operand_ty) = expr_type(operand) else {
+        return false;
+    };
+    matches!(operand_ty.kind, ClangTypeKind::Integer { .. }) && operand_ty.kind == target.kind
 }
 
 #[cfg(feature = "typed-ir")]
@@ -3427,6 +4073,18 @@ fn type_from_qual_type_with_target_abi(
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
     let trimmed = qual_type.trim();
+    if let Some(function_pointer) = split_function_pointer_qual_type(trimmed) {
+        let function = function_type_skeleton(function_pointer.function.trim(), target_abi)?;
+        let canonical = format!("{} *", function.canonical);
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical,
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(function),
+                width: target_abi.and_then(|abi| nonzero_width(abi.pointer_width)),
+            },
+        });
+    }
     if let Some(pointer) = split_pointer_qual_type(trimmed) {
         let pointee = type_from_qual_type_with_target_abi(pointer.pointee.trim(), target_abi)?;
         let canonical = match pointer.restrict_qualifier {
@@ -3464,6 +4122,9 @@ fn type_from_qual_type_with_target_abi(
                 len,
             },
         });
+    }
+    if split_function_qual_type(trimmed).is_some() {
+        return function_type_skeleton(trimmed, target_abi);
     }
     if let Some(name) = trimmed.strip_prefix("struct ") {
         let name = name.trim();
@@ -3567,9 +4228,9 @@ fn type_from_qual_type_with_target_abi(
             },
         }),
         "char" | "short" | "unsigned short" | "long" | "unsigned long" | "long long"
-        | "unsigned long long" | "size_t" => Ok(target_dependent_integer_type_with_profile(
-            trimmed, target_abi,
-        )),
+        | "unsigned long long" | "size_t" | "__size_t" => Ok(
+            target_dependent_integer_type_with_profile(trimmed, target_abi),
+        ),
         other => Ok(ClangTypeSkeleton {
             spelled: other.to_string(),
             canonical: other.to_string(),
@@ -3659,7 +4320,37 @@ fn target_dependent_integer_width(
         "unsigned long" => nonzero_width(abi.long_width).map(|width| (false, width)),
         "long long" => nonzero_width(abi.long_long_width).map(|width| (true, width)),
         "unsigned long long" => nonzero_width(abi.long_long_width).map(|width| (false, width)),
-        "size_t" => nonzero_width(abi.pointer_width).map(|width| (false, width)),
+        "size_t" | "__size_t" => nonzero_width(abi.pointer_width).map(|width| (false, width)),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn target_dependent_integer_alignment(
+    spelling: &str,
+    target_abi: &TargetAbiProfile,
+) -> Option<u16> {
+    match spelling {
+        "char" | "signed char" | "unsigned char" => nonzero_width(target_abi.char_align),
+        "short" | "unsigned short" => nonzero_width(target_abi.short_align),
+        "int" | "unsigned int" => nonzero_width(target_abi.int_align),
+        "long" | "unsigned long" => nonzero_width(target_abi.long_align),
+        "long long" | "unsigned long long" => nonzero_width(target_abi.long_long_align),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn target_abi_alignment_bits_for_type(
+    ty: &ClangTypeSkeleton,
+    target_abi: &TargetAbiProfile,
+) -> Option<u16> {
+    match &ty.kind {
+        ClangTypeKind::Integer { .. } => {
+            target_dependent_integer_alignment(&ty.canonical, target_abi)
+                .or_else(|| target_dependent_integer_alignment(&ty.spelled, target_abi))
+        }
+        ClangTypeKind::Pointer { .. } => nonzero_width(target_abi.pointer_align),
         _ => None,
     }
 }
@@ -3771,12 +4462,14 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         ClangExprSkeleton::DeclRef { ty, .. }
         | ClangExprSkeleton::IntegerLiteral { ty, .. }
         | ClangExprSkeleton::SizeOfType { ty, .. }
+        | ClangExprSkeleton::AlignOfType { ty, .. }
         | ClangExprSkeleton::NullPtr { ty }
         | ClangExprSkeleton::Binary { ty, .. }
         | ClangExprSkeleton::Unary { ty, .. }
         | ClangExprSkeleton::Conditional { ty, .. }
         | ClangExprSkeleton::IncDec { ty, .. }
         | ClangExprSkeleton::Deref { ty, .. }
+        | ClangExprSkeleton::AddrOf { ty, .. }
         | ClangExprSkeleton::Index { ty, .. }
         | ClangExprSkeleton::ArrayLiteral { ty, .. }
         | ClangExprSkeleton::Call { ty, .. }
@@ -3784,7 +4477,9 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
             bind_target_abi_to_type(ty, target_abi);
         }
         ClangExprSkeleton::Cast { target, .. }
-        | ClangExprSkeleton::ArrayToPointerDecay { target, .. } => {
+        | ClangExprSkeleton::LValueToRValue { target, .. }
+        | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
+        | ClangExprSkeleton::FunctionToPointerDecay { target, .. } => {
             bind_target_abi_to_type(target, target_abi);
         }
         ClangExprSkeleton::Unsupported { .. } => {}
@@ -3814,14 +4509,28 @@ fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: &TargetAbiP
         ClangExprSkeleton::Deref { ptr, .. } => {
             bind_target_abi_to_expr(ptr, target_abi);
         }
-        ClangExprSkeleton::Cast { expr, .. } => {
+        ClangExprSkeleton::AddrOf { operand, .. } => {
+            bind_target_abi_to_expr(operand, target_abi);
+        }
+        ClangExprSkeleton::Cast { expr, .. } | ClangExprSkeleton::LValueToRValue { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
         }
         ClangExprSkeleton::ArrayToPointerDecay { expr, .. } => {
             bind_target_abi_to_expr(expr, target_abi);
         }
+        ClangExprSkeleton::FunctionToPointerDecay { expr, .. } => {
+            bind_target_abi_to_expr(expr, target_abi);
+        }
         ClangExprSkeleton::SizeOfType { arg_type, .. } => {
             bind_target_abi_to_type(arg_type, target_abi);
+        }
+        ClangExprSkeleton::AlignOfType {
+            arg_type,
+            alignment_bits,
+            ..
+        } => {
+            bind_target_abi_to_type(arg_type, target_abi);
+            *alignment_bits = target_abi_alignment_bits_for_type(arg_type, target_abi);
         }
         ClangExprSkeleton::Index { base, index, .. } => {
             bind_target_abi_to_expr(base, target_abi);
@@ -3865,6 +4574,86 @@ fn bind_target_abi_to_type(ty: &mut ClangTypeSkeleton, target_abi: &TargetAbiPro
 struct PointerQualType<'a> {
     pointee: &'a str,
     restrict_qualifier: Option<&'static str>,
+}
+
+#[cfg(feature = "typed-ir")]
+struct FunctionPointerQualType<'a> {
+    function: String,
+    _source: &'a str,
+}
+
+#[cfg(feature = "typed-ir")]
+fn split_function_pointer_qual_type(qual_type: &str) -> Option<FunctionPointerQualType<'_>> {
+    let trimmed = qual_type.trim();
+    let marker = "(*";
+    let marker_index = trimmed.find(marker)?;
+    let suffix = &trimmed[marker_index + marker.len()..];
+    let close_pointer = suffix.find(')')?;
+    if !suffix[..close_pointer].trim().is_empty() {
+        return None;
+    }
+    let params = suffix[close_pointer + 1..].trim();
+    if !params.starts_with('(') || !params.ends_with(')') {
+        return None;
+    }
+    let return_type = trimmed[..marker_index].trim();
+    if return_type.is_empty() || return_type.contains('(') || return_type.contains(')') {
+        return None;
+    }
+    Some(FunctionPointerQualType {
+        function: format!("{return_type} {params}"),
+        _source: trimmed,
+    })
+}
+
+#[cfg(feature = "typed-ir")]
+fn split_function_qual_type(qual_type: &str) -> Option<(&str, &str)> {
+    let trimmed = qual_type.trim();
+    let open = trimmed.find('(')?;
+    if !trimmed.ends_with(')') {
+        return None;
+    }
+    let return_type = trimmed[..open].trim();
+    let params = trimmed[open + 1..trimmed.len() - 1].trim();
+    if return_type.is_empty() {
+        return None;
+    }
+    Some((return_type, params))
+}
+
+#[cfg(feature = "typed-ir")]
+fn function_type_skeleton(
+    qual_type: &str,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    let trimmed = qual_type.trim();
+    let Some((return_type, _params)) = split_function_qual_type(trimmed) else {
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: trimmed.to_string(),
+            kind: ClangTypeKind::Unsupported {
+                reason: format!("{trimmed} is outside the current function type skeleton"),
+            },
+        });
+    };
+    let return_type = type_from_qual_type_with_target_abi(return_type, target_abi)?;
+    if matches!(return_type.kind, ClangTypeKind::Unsupported { .. }) {
+        return Ok(ClangTypeSkeleton {
+            spelled: trimmed.to_string(),
+            canonical: trimmed.to_string(),
+            kind: ClangTypeKind::Unsupported {
+                reason: format!(
+                    "function return type {} is outside the current type skeleton",
+                    return_type.spelled
+                ),
+            },
+        });
+    }
+    Ok(ClangTypeSkeleton {
+        spelled: trimmed.to_string(),
+        canonical: trimmed.to_string(),
+        kind: ClangTypeKind::Function,
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4122,7 +4911,12 @@ fn ir_expr_type_matches(expr: &IrExpr, expected: &IrType) -> bool {
         | IrExpr::Call { ty, .. }
         | IrExpr::Member { ty, .. }
         | IrExpr::AddrOf { ty, .. } => ir_types_match_for_clang(ty, expected),
-        IrExpr::Cast { target, .. } => ir_types_match_for_clang(target, expected),
+        IrExpr::Cast { target, .. }
+        | IrExpr::LValueToRValue { target, .. }
+        | IrExpr::ArrayToPointerDecay { target, .. }
+        | IrExpr::FunctionToPointerDecay { target, .. } => {
+            ir_types_match_for_clang(target, expected)
+        }
         IrExpr::Unsupported { .. } => false,
     }
 }
@@ -4153,6 +4947,20 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
         ClangExprSkeleton::SizeOfType { arg_type, ty } => {
             let value = sizeof_type_bytes(arg_type)?;
             validate_sizeof_result_fits_type(value, ty)?;
+            Ok(IrExpr::LitInt {
+                value,
+                spelling: value.to_string(),
+                ty: lower_type(ty)?,
+                source_span: None,
+            })
+        }
+        ClangExprSkeleton::AlignOfType {
+            arg_type,
+            ty,
+            alignment_bits,
+        } => {
+            let value = alignof_type_bytes(arg_type, *alignment_bits)?;
+            validate_alignof_result_fits_type(value, ty)?;
             Ok(IrExpr::LitInt {
                 value,
                 spelling: value.to_string(),
@@ -4211,6 +5019,11 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
                 source_span: None,
             })
         }
+        ClangExprSkeleton::AddrOf { operand, ty } => Ok(IrExpr::AddrOf {
+            operand: Box::new(lower_expr(operand)?),
+            ty: lower_type(ty)?,
+            source_span: None,
+        }),
         ClangExprSkeleton::Cast {
             target,
             expr,
@@ -4221,10 +5034,25 @@ fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFrontendError> {
             implicit: *implicit,
             source_span: None,
         }),
-        ClangExprSkeleton::ArrayToPointerDecay { .. } => Err(ClangFrontendError {
-            kind: "unsupported_clang_expr".to_string(),
-            message: "ImplicitCastExpr: castKind ArrayToPointerDecay is consumed only during ArraySubscriptExpr skeleton construction; ordinary expression positions require explicit typed IR lowering, which is not implemented".to_string(),
+        ClangExprSkeleton::LValueToRValue { target, expr } => Ok(IrExpr::LValueToRValue {
+            target: lower_type(target)?,
+            expr: Box::new(lower_expr(expr)?),
+            source_span: None,
         }),
+        ClangExprSkeleton::ArrayToPointerDecay { target, expr } => {
+            Ok(IrExpr::ArrayToPointerDecay {
+                target: lower_type(target)?,
+                expr: Box::new(lower_expr(expr)?),
+                source_span: None,
+            })
+        }
+        ClangExprSkeleton::FunctionToPointerDecay { target, expr } => {
+            Ok(IrExpr::FunctionToPointerDecay {
+                target: lower_type(target)?,
+                expr: Box::new(lower_expr(expr)?),
+                source_span: None,
+            })
+        }
         ClangExprSkeleton::Index { base, index, ty } => Ok(IrExpr::Index {
             base: Box::new(lower_expr(base)?),
             index: Box::new(lower_expr(index)?),
@@ -4349,18 +5177,22 @@ fn clang_expr_skeleton_type(expr: &ClangExprSkeleton) -> Option<&ClangTypeSkelet
         ClangExprSkeleton::DeclRef { ty, .. }
         | ClangExprSkeleton::IntegerLiteral { ty, .. }
         | ClangExprSkeleton::SizeOfType { ty, .. }
+        | ClangExprSkeleton::AlignOfType { ty, .. }
         | ClangExprSkeleton::NullPtr { ty }
         | ClangExprSkeleton::Binary { ty, .. }
         | ClangExprSkeleton::Unary { ty, .. }
         | ClangExprSkeleton::Conditional { ty, .. }
         | ClangExprSkeleton::IncDec { ty, .. }
         | ClangExprSkeleton::Deref { ty, .. }
+        | ClangExprSkeleton::AddrOf { ty, .. }
         | ClangExprSkeleton::Index { ty, .. }
         | ClangExprSkeleton::ArrayLiteral { ty, .. }
         | ClangExprSkeleton::Call { ty, .. }
         | ClangExprSkeleton::Member { ty, .. } => Some(ty),
         ClangExprSkeleton::Cast { target, .. }
-        | ClangExprSkeleton::ArrayToPointerDecay { target, .. } => Some(target),
+        | ClangExprSkeleton::LValueToRValue { target, .. }
+        | ClangExprSkeleton::ArrayToPointerDecay { target, .. }
+        | ClangExprSkeleton::FunctionToPointerDecay { target, .. } => Some(target),
         ClangExprSkeleton::Unsupported { .. } => None,
     }
 }
@@ -4470,6 +5302,37 @@ fn validate_sizeof_result_fits_type(
 }
 
 #[cfg(feature = "typed-ir")]
+fn validate_alignof_result_fits_type(
+    value: u64,
+    ty: &ClangTypeSkeleton,
+) -> Result<(), ClangFrontendError> {
+    let ClangTypeKind::Integer {
+        signed: false,
+        width,
+    } = ty.kind
+    else {
+        return Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof result type {} must be an ABI-bound unsigned integer before typed IR lowering",
+                ty.spelled
+            ),
+        });
+    };
+    if width >= 64 || value < (1u64 << width) {
+        Ok(())
+    } else {
+        Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof result {value} does not fit target result type {} width {width}",
+                ty.spelled
+            ),
+        })
+    }
+}
+
+#[cfg(feature = "typed-ir")]
 fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> {
     match &ty.kind {
         ClangTypeKind::Integer { width, .. } if *width > 0 && *width % 8 == 0 => {
@@ -4538,6 +5401,30 @@ fn sizeof_type_bytes(ty: &ClangTypeSkeleton) -> Result<u64, ClangFrontendError> 
             kind: "unsupported_sizeof_type".to_string(),
             message: format!(
                 "sizeof({}) requires explicit C layout/ABI provenance before typed IR lowering",
+                ty.spelled
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn alignof_type_bytes(
+    ty: &ClangTypeSkeleton,
+    alignment_bits: Option<u16>,
+) -> Result<u64, ClangFrontendError> {
+    match alignment_bits {
+        Some(bits) if bits > 0 && bits % 8 == 0 => Ok(u64::from(bits / 8)),
+        Some(bits) => Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof({}) has non-byte-addressable alignment {bits}; typed IR lowering requires explicit target alignment provenance",
+                ty.spelled
+            ),
+        }),
+        None => Err(ClangFrontendError {
+            kind: "unsupported_alignof_type".to_string(),
+            message: format!(
+                "_Alignof({}) requires target ABI alignment profile before typed IR lowering",
                 ty.spelled
             ),
         }),
@@ -4665,6 +5552,14 @@ fn lower_type(ty: &ClangTypeSkeleton) -> Result<IrType, ClangFrontendError> {
             width_bits: None,
             source_span: None,
         }),
+        ClangTypeKind::Function => Ok(IrType {
+            spelled: ty.spelled.clone(),
+            canonical: ty.canonical.clone(),
+            kind: IrTypeKind::Function,
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        }),
         ClangTypeKind::Unsupported { reason } => Err(ClangFrontendError {
             kind: "unsupported_clang_type".to_string(),
             message: reason.clone(),
@@ -4727,7 +5622,12 @@ fn collect_record_inventory_from_ast(
                 entry.insert(fields);
             }
             std::collections::btree_map::Entry::Occupied(mut entry) => {
-                entry.insert(None);
+                match (entry.get(), &fields) {
+                    (Some(existing), Some(new_fields)) if existing == new_fields => {}
+                    _ => {
+                        entry.insert(None);
+                    }
+                }
             }
         }
     }
@@ -4760,22 +5660,106 @@ fn record_inventory_entry_from_record_decl(
     }
 
     let mut fields = Vec::new();
+    let mut anonymous_records = VecDeque::new();
     for child in inner(node) {
         match string_field(child, "kind").as_deref() {
             Some("FieldDecl") => {
-                let Some(field) = record_field_from_field_decl(child, target_abi) else {
+                if let Some(field) = record_field_from_field_decl(child, target_abi) {
+                    fields.push(field);
+                    continue;
+                };
+                let Some(nested_fields) = anonymous_records.pop_front() else {
+                    return Some((name, None));
+                };
+                let Some(field) =
+                    record_field_from_anonymous_record_field_decl(&name, child, nested_fields)
+                else {
                     return Some((name, None));
                 };
                 fields.push(field);
             }
-            Some("RecordDecl") => return Some((name, None)),
+            Some("RecordDecl") => {
+                let Some(fields) = anonymous_record_fields_from_record_decl(child, target_abi)
+                else {
+                    return Some((name, None));
+                };
+                anonymous_records.push_back(fields);
+            }
             _ => {}
         }
     }
-    if fields.is_empty() {
+    if fields.is_empty() || !anonymous_records.is_empty() {
         return Some((name, None));
     }
     Some((name, Some(fields)))
+}
+
+#[cfg(feature = "typed-ir")]
+fn anonymous_record_fields_from_record_decl(
+    node: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Option<Vec<IrRecordField>> {
+    if string_field(node, "kind").as_deref() != Some("RecordDecl")
+        || string_field(node, "tagUsed").as_deref() != Some("struct")
+        || node.get("completeDefinition").and_then(Value::as_bool) != Some(true)
+        || node.get("isImplicit").and_then(Value::as_bool) == Some(true)
+        || string_field(node, "name").is_some()
+    {
+        return None;
+    }
+    if inner(node)
+        .iter()
+        .any(|child| string_field(child, "kind").as_deref() == Some("PackedAttr"))
+    {
+        return None;
+    }
+
+    let mut fields = Vec::new();
+    for child in inner(node) {
+        match string_field(child, "kind").as_deref() {
+            Some("FieldDecl") => {
+                let field = record_field_from_field_decl(child, target_abi)?;
+                fields.push(field);
+            }
+            Some("RecordDecl") => return None,
+            _ => {}
+        }
+    }
+    (!fields.is_empty()).then_some(fields)
+}
+
+#[cfg(feature = "typed-ir")]
+fn record_field_from_anonymous_record_field_decl(
+    parent_name: &str,
+    field: &Value,
+    fields: Vec<IrRecordField>,
+) -> Option<IrRecordField> {
+    let field_name = string_field(field, "name")?;
+    if !is_simple_c_identifier(&field_name) || fields.is_empty() {
+        return None;
+    }
+    let type_object = field.get("type")?;
+    let spelled = clang_type_candidate_spellings(type_object)
+        .into_iter()
+        .find(|candidate| candidate.trim_start().starts_with("struct (unnamed "))?;
+    let nested_name = format!("{parent_name}_{field_name}");
+    if !is_simple_c_identifier(&nested_name) {
+        return None;
+    }
+    Some(IrRecordField {
+        name: field_name,
+        ty: IrType {
+            spelled,
+            canonical: format!("struct {nested_name}"),
+            kind: IrTypeKind::Record {
+                name: nested_name,
+                fields: Some(fields),
+            },
+            is_const: false,
+            width_bits: None,
+            source_span: None,
+        },
+    })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4930,7 +5914,12 @@ fn attach_record_inventory_to_expr(
         | IrExpr::IncDec { ty, .. }
         | IrExpr::Deref { ty, .. }
         | IrExpr::AddrOf { ty, .. } => attach_record_inventory_to_type(ty, inventory),
-        IrExpr::Cast { target, .. } => attach_record_inventory_to_type(target, inventory),
+        IrExpr::Cast { target, .. }
+        | IrExpr::LValueToRValue { target, .. }
+        | IrExpr::ArrayToPointerDecay { target, .. }
+        | IrExpr::FunctionToPointerDecay { target, .. } => {
+            attach_record_inventory_to_type(target, inventory)
+        }
         IrExpr::Unsupported { .. } => {}
     }
 
@@ -4941,6 +5930,9 @@ fn attach_record_inventory_to_expr(
         }
         IrExpr::Unary { operand, .. }
         | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
         | IrExpr::IncDec {
             target: operand, ..
         }
@@ -5144,6 +6136,59 @@ mod tests {
         ));
     }
 
+    fn assert_lvalue_to_rvalue_decl_ref(
+        expr: &ClangExprSkeleton,
+        expected_name: &str,
+        signed: bool,
+        width: u16,
+    ) {
+        let ClangExprSkeleton::LValueToRValue {
+            target,
+            expr: operand,
+        } = expr
+        else {
+            panic!("expected LValueToRValue read of {expected_name}, got {expr:?}");
+        };
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: actual_signed,
+                width: actual_width
+            } if actual_signed == signed && actual_width == width
+        ));
+        assert!(matches!(
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == expected_name
+        ));
+    }
+
+    fn assert_ir_lvalue_to_rvalue_var(
+        expr: &IrExpr,
+        expected_name: &str,
+        signed: bool,
+        width: u16,
+    ) {
+        let IrExpr::LValueToRValue {
+            target,
+            expr: operand,
+            ..
+        } = expr
+        else {
+            panic!("expected LValueToRValue read of {expected_name}, got {expr:?}");
+        };
+        assert!(matches!(
+            target.kind,
+            IrTypeKind::Integer {
+                signed: actual_signed,
+                width: actual_width
+            } if actual_signed == signed && actual_width == width
+        ));
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == expected_name
+        ));
+    }
+
     #[test]
     fn expr_skeleton_from_ast_maps_comparison_opcodes() {
         let cases = [
@@ -5328,10 +6373,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            lhs.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
-        ));
+        assert_ir_lvalue_to_rvalue_var(lhs.as_ref(), "value", false, 32);
         assert!(matches!(
             rhs.as_ref(),
             IrExpr::Cast { target, .. }
@@ -5446,6 +6488,45 @@ mod tests {
         let skeleton = expr_skeleton_from_ast(&expr).expect("NoOp cast should preserve operand");
         assert!(matches!(
             skeleton,
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
+        ));
+    }
+
+    #[test]
+    fn c_style_noop_integer_cast_preserves_explicit_cast_node() {
+        let expr = serde_json::json!({
+            "kind": "CStyleCastExpr",
+            "castKind": "NoOp",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "uint32_t" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("C-style NoOp cast skeleton");
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = &skeleton
+        else {
+            panic!("expected explicit C-style NoOp cast, got {skeleton:?}");
+        };
+
+        assert!(!implicit);
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
             ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
@@ -5643,6 +6724,33 @@ mod tests {
     }
 
     #[test]
+    fn expr_skeleton_from_ast_rejects_non_integer_unary_plus() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "+",
+            "type": { "qualType": "float" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "float" },
+                    "referencedDecl": { "name": "value" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("unary plus skeleton");
+
+        let ClangExprSkeleton::Unsupported { node, reason } = skeleton else {
+            panic!("expected non-integer unary plus to fail closed, got {skeleton:?}");
+        };
+        assert_eq!(node, "UnaryOperator");
+        assert!(
+            reason.contains("unary plus result type float is outside the integer promotion subset"),
+            "{reason}"
+        );
+    }
+
+    #[test]
     fn expr_skeleton_from_ast_lowers_logical_not() {
         let expr = serde_json::json!({
             "kind": "UnaryOperator",
@@ -5745,10 +6853,7 @@ mod tests {
                     width: 32
                 }
             ));
-            assert!(matches!(
-                lhs.as_ref(),
-                IrExpr::Var { name, .. } if name == "value"
-            ));
+            assert_ir_lvalue_to_rvalue_var(lhs.as_ref(), "value", false, 32);
             assert!(matches!(
                 rhs.as_ref(),
                 IrExpr::Cast { target, .. }
@@ -5816,10 +6921,374 @@ mod tests {
                 width: 32
             }
         ));
+        let [arg] = args.as_slice() else {
+            panic!("expected one direct call argument, got {args:?}");
+        };
+        assert_ir_lvalue_to_rvalue_var(arg, "value", true, 32);
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_record_address_of() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "&",
+            "type": { "qualType": "struct fdb_blob *" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "struct fdb_blob" },
+                    "referencedDecl": { "name": "blob" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("address-of skeleton");
+        let ClangExprSkeleton::AddrOf { operand, ty } = &skeleton else {
+            panic!("expected address-of skeleton, got {skeleton:?}");
+        };
         assert!(matches!(
-            args.as_slice(),
-            [IrExpr::Var { name, .. }] if name == "value"
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "blob"
         ));
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+
+        let ir = lower_expr(&skeleton).expect("lower address-of skeleton");
+        let IrExpr::AddrOf { operand, ty, .. } = ir else {
+            panic!("expected IR address-of expression, got {ir:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == "blob"
+        ));
+        let IrTypeKind::Pointer { pointee } = ty.kind else {
+            panic!("expected address-of pointer type, got {ty:?}");
+        };
+        assert!(matches!(
+            &pointee.kind,
+            IrTypeKind::Record { name, .. } if name == "fdb_blob"
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_direct_call_with_record_address_arg() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(struct fdb_blob *)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (struct fdb_blob *)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "consume_blob"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "&",
+                    "type": { "qualType": "struct fdb_blob *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob" },
+                            "referencedDecl": { "name": "blob" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("direct address call skeleton");
+        let ClangExprSkeleton::Call { callee, args, .. } = &skeleton else {
+            panic!("expected direct call skeleton, got {skeleton:?}");
+        };
+        assert_eq!(callee, "consume_blob");
+        let [ClangExprSkeleton::AddrOf { operand, .. }] = args.as_slice() else {
+            panic!("expected address-of call arg, got {args:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "blob"
+        ));
+
+        let ir = lower_expr(&skeleton).expect("lower direct address call skeleton");
+        let IrExpr::Call { callee, args, .. } = ir else {
+            panic!("expected IR direct call, got {ir:?}");
+        };
+        assert_eq!(callee, "consume_blob");
+        let [IrExpr::AddrOf { operand, .. }] = args.as_slice() else {
+            panic!("expected IR address-of call arg, got {args:?}");
+        };
+        assert!(matches!(
+            operand.as_ref(),
+            IrExpr::Var { name, .. } if name == "blob"
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_allows_const_void_bitcast_direct_call_arg() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "struct fdb_blob *" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "struct fdb_blob *(*)(struct fdb_blob *, const void *, size_t)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob *(struct fdb_blob *, const void *, size_t)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "fdb_blob_make"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "&",
+                    "type": { "qualType": "struct fdb_blob *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "struct fdb_blob" },
+                            "referencedDecl": { "name": "blob" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "BitCast",
+                    "type": { "qualType": "const void *" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "const char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "const char *" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "CallExpr",
+                    "type": { "qualType": "__size_t" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "FunctionToPointerDecay",
+                            "type": { "qualType": "__size_t (*)(const char *)" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "__size_t (const char *)" },
+                                    "referencedDecl": {
+                                        "kind": "FunctionDecl",
+                                        "name": "strlen"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "const char *" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "const char *" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton =
+            expr_skeleton_from_ast(&expr).expect("record pointer constructor bitcast skeleton");
+        let ClangExprSkeleton::Call { callee, args, .. } = &skeleton else {
+            panic!("expected fdb_blob_make call skeleton, got {skeleton:?}");
+        };
+        assert_eq!(callee, "fdb_blob_make");
+        let [ClangExprSkeleton::AddrOf { .. }, ClangExprSkeleton::DeclRef { name, .. }, ClangExprSkeleton::Call {
+            callee: strlen,
+            args: strlen_args,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected address, bitcast-stripped value, and strlen args, got {args:?}");
+        };
+        assert_eq!(name, "value");
+        assert_eq!(strlen, "strlen");
+        assert!(matches!(
+            strlen_args.as_slice(),
+            [ClangExprSkeleton::DeclRef { name, .. }] if name == "value"
+        ));
+        assert_eq!(bounded_call_args_rejection_reason(&[skeleton]), None);
+    }
+
+    #[test]
+    fn bounded_call_args_allow_record_pointer_constructor_with_strlen_leaf() {
+        let i32_ty = ClangTypeSkeleton {
+            spelled: "int".to_string(),
+            canonical: "int".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: true,
+                width: 32,
+            },
+        };
+        let usize_ty = ClangTypeSkeleton {
+            spelled: "size_t".to_string(),
+            canonical: "size_t".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 64,
+            },
+        };
+        let u8_ty = ClangTypeSkeleton {
+            spelled: "const uint8_t".to_string(),
+            canonical: "const unsigned char".to_string(),
+            kind: ClangTypeKind::Integer {
+                signed: false,
+                width: 8,
+            },
+        };
+        let const_u8_ptr_ty = ClangTypeSkeleton {
+            spelled: "const uint8_t *".to_string(),
+            canonical: "const unsigned char *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(u8_ty),
+                width: Some(64),
+            },
+        };
+        let blob_ty = ClangTypeSkeleton {
+            spelled: "struct fdb_blob".to_string(),
+            canonical: "struct fdb_blob".to_string(),
+            kind: ClangTypeKind::Record {
+                name: "fdb_blob".to_string(),
+            },
+        };
+        let blob_ptr_ty = ClangTypeSkeleton {
+            spelled: "struct fdb_blob *".to_string(),
+            canonical: "struct fdb_blob *".to_string(),
+            kind: ClangTypeKind::Pointer {
+                pointee: Box::new(blob_ty.clone()),
+                width: Some(64),
+            },
+        };
+        let nested = ClangExprSkeleton::Call {
+            callee: "fdb_blob_make".to_string(),
+            args: vec![
+                ClangExprSkeleton::AddrOf {
+                    operand: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "blob".to_string(),
+                        ty: blob_ty,
+                    }),
+                    ty: blob_ptr_ty.clone(),
+                },
+                ClangExprSkeleton::DeclRef {
+                    name: "value".to_string(),
+                    ty: const_u8_ptr_ty.clone(),
+                },
+                ClangExprSkeleton::Call {
+                    callee: "strlen".to_string(),
+                    args: vec![ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: const_u8_ptr_ty,
+                    }],
+                    ty: usize_ty,
+                },
+            ],
+            ty: blob_ptr_ty,
+        };
+
+        assert_eq!(bounded_call_args_rejection_reason(&[nested]), None);
+
+        let bad_nested = ClangExprSkeleton::Call {
+            callee: "fdb_blob_make".to_string(),
+            args: vec![
+                ClangExprSkeleton::AddrOf {
+                    operand: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "blob".to_string(),
+                        ty: ClangTypeSkeleton {
+                            spelled: "struct fdb_blob".to_string(),
+                            canonical: "struct fdb_blob".to_string(),
+                            kind: ClangTypeKind::Record {
+                                name: "fdb_blob".to_string(),
+                            },
+                        },
+                    }),
+                    ty: ClangTypeSkeleton {
+                        spelled: "struct fdb_blob *".to_string(),
+                        canonical: "struct fdb_blob *".to_string(),
+                        kind: ClangTypeKind::Pointer {
+                            pointee: Box::new(ClangTypeSkeleton {
+                                spelled: "struct fdb_blob".to_string(),
+                                canonical: "struct fdb_blob".to_string(),
+                                kind: ClangTypeKind::Record {
+                                    name: "fdb_blob".to_string(),
+                                },
+                            }),
+                            width: Some(64),
+                        },
+                    },
+                },
+                ClangExprSkeleton::Call {
+                    callee: "helper_len".to_string(),
+                    args: vec![],
+                    ty: ClangTypeSkeleton {
+                        spelled: "size_t".to_string(),
+                        canonical: "size_t".to_string(),
+                        kind: ClangTypeKind::Integer {
+                            signed: false,
+                            width: 64,
+                        },
+                    },
+                },
+            ],
+            ty: ClangTypeSkeleton {
+                spelled: "struct fdb_blob *".to_string(),
+                canonical: "struct fdb_blob *".to_string(),
+                kind: ClangTypeKind::Pointer {
+                    pointee: Box::new(ClangTypeSkeleton {
+                        spelled: "struct fdb_blob".to_string(),
+                        canonical: "struct fdb_blob".to_string(),
+                        kind: ClangTypeKind::Record {
+                            name: "fdb_blob".to_string(),
+                        },
+                    }),
+                    width: Some(64),
+                },
+            },
+        };
+        let reason = bounded_call_args_rejection_reason(&[bad_nested])
+            .expect("unmodeled nested constructor call arg must fail closed");
+        assert!(
+            reason.contains("nested call expressions are outside the bounded call subset"),
+            "{reason}"
+        );
+
+        let non_nested = ClangExprSkeleton::DeclRef {
+            name: "status".to_string(),
+            ty: i32_ty,
+        };
+        assert_eq!(bounded_call_args_rejection_reason(&[non_nested]), None);
     }
 
     #[test]
@@ -5869,10 +7338,10 @@ mod tests {
             panic!("expected IR expr call statement, got {ir:?}");
         };
         assert_eq!(callee, "observe");
-        assert!(matches!(
-            args.as_slice(),
-            [IrExpr::Var { name, .. }] if name == "value"
-        ));
+        let [arg] = args.as_slice() else {
+            panic!("expected one direct call statement argument, got {args:?}");
+        };
+        assert_ir_lvalue_to_rvalue_var(arg, "value", true, 32);
     }
 
     #[test]
@@ -5946,10 +7415,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            expr.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
-        ));
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", false, 8);
     }
 
     #[test]
@@ -6023,10 +7489,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            expr.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
-        ));
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", false, 8);
     }
 
     #[test]
@@ -6091,7 +7554,7 @@ mod tests {
             }
         ));
         assert_eq!(compute_lhs_ty, compute_result_ty);
-        assert!(matches!(value, ClangExprSkeleton::DeclRef { name, .. } if name == "y"));
+        assert_lvalue_to_rvalue_decl_ref(&value, "y", true, 32);
     }
 
     #[test]
@@ -6401,7 +7864,7 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_rejects_function_pointer_call_expr() {
+    fn expr_skeleton_from_ast_lowers_function_pointer_direct_call_expr() {
         let expr = serde_json::json!({
             "kind": "CallExpr",
             "type": { "qualType": "int" },
@@ -6415,7 +7878,7 @@ mod tests {
                             "kind": "DeclRefExpr",
                             "type": { "qualType": "int (*)(int)" },
                             "referencedDecl": {
-                                "kind": "VarDecl",
+                                "kind": "ParmVarDecl",
                                 "name": "fp"
                             }
                         }
@@ -6437,16 +7900,23 @@ mod tests {
         });
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("function pointer call skeleton");
-        let error = lower_expr(&skeleton).expect_err("function pointer call must fail closed");
+        let lowered =
+            lower_expr(&skeleton).expect("function pointer direct call should lower to IR call");
 
-        assert_eq!(error.kind, "unsupported_clang_expr");
-        assert!(error
-            .message
-            .contains("callee is not a direct function identifier"));
+        let IrExpr::Call {
+            callee, args, ty, ..
+        } = lowered
+        else {
+            panic!("expected function pointer direct call IR, got {lowered:?}");
+        };
+        assert_eq!(callee, "fp");
+        assert_eq!(ty.spelled, "int");
+        assert_eq!(args.len(), 1);
+        assert!(matches!(args[0], IrExpr::LValueToRValue { .. }));
     }
 
     #[test]
-    fn expr_skeleton_from_ast_rejects_function_to_pointer_decay_value_argument() {
+    fn expr_skeleton_from_ast_preserves_function_to_pointer_decay_as_explicit_ir() {
         let expr = serde_json::json!({
             "kind": "ImplicitCastExpr",
             "castKind": "FunctionToPointerDecay",
@@ -6466,19 +7936,15 @@ mod tests {
         let skeleton =
             expr_skeleton_from_ast(&expr).expect("function-to-pointer decay value skeleton");
 
-        assert!(matches!(
-            skeleton,
-            ClangExprSkeleton::Unsupported { ref node, ref reason }
-                if node == "ImplicitCastExpr"
-                    && reason.contains("FunctionToPointerDecay")
-                    && reason.contains("function pointer value")
-                    && reason.contains("explicit function-pointer lowering")
-        ));
-        let error =
-            lower_expr(&skeleton).expect_err("function-to-pointer decay value must fail closed");
-        assert_eq!(error.kind, "unsupported_clang_expr");
-        assert!(error.message.contains("FunctionToPointerDecay"));
-        assert!(error.message.contains("function pointer value"));
+        let lowered =
+            lower_expr(&skeleton).expect("function-to-pointer decay should lower to explicit IR");
+        let lowered_json =
+            serde_json::to_value(&lowered).expect("serialize function-to-pointer decay IR");
+        let Some(decay) = lowered_json.get("FunctionToPointerDecay") else {
+            panic!("expected FunctionToPointerDecay IR node, got {lowered_json}");
+        };
+        assert_eq!(decay["target"]["spelled"], "int (*)(int)");
+        assert_eq!(decay["expr"]["Var"]["name"], "helper");
     }
 
     #[test]
@@ -6582,15 +8048,9 @@ mod tests {
         else {
             panic!("expected conditional skeleton, got {skeleton:?}");
         };
-        assert!(
-            matches!(condition.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "flag")
-        );
-        assert!(
-            matches!(then_expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "left")
-        );
-        assert!(
-            matches!(else_expr.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "right")
-        );
+        assert_lvalue_to_rvalue_decl_ref(condition.as_ref(), "flag", true, 32);
+        assert_lvalue_to_rvalue_decl_ref(then_expr.as_ref(), "left", true, 32);
+        assert_lvalue_to_rvalue_decl_ref(else_expr.as_ref(), "right", true, 32);
         assert!(matches!(
             ty.kind,
             ClangTypeKind::Integer {
@@ -6833,7 +8293,24 @@ mod tests {
         let ClangExprSkeleton::Binary { lhs, rhs, .. } = skeleton else {
             panic!("expected binary skeleton, got {skeleton:?}");
         };
-        assert!(matches!(lhs.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "value"));
+        let ClangExprSkeleton::LValueToRValue {
+            target: lhs_target,
+            expr: lhs_expr,
+        } = lhs.as_ref()
+        else {
+            panic!("expected preserved lhs LValueToRValue read, got {lhs:?}");
+        };
+        assert!(matches!(
+            lhs_target.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            lhs_expr.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
+        ));
         let ClangExprSkeleton::Cast {
             target,
             expr,
@@ -6853,6 +8330,80 @@ mod tests {
         assert!(matches!(
             expr.as_ref(),
             ClangExprSkeleton::IntegerLiteral { value: 0, .. }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_preserves_integer_noop_cast_in_value_context() {
+        let expr = serde_json::json!({
+            "kind": "BinaryOperator",
+            "opcode": "+",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "NoOp",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "kind": "IntegerLiteral",
+                    "type": { "qualType": "int" },
+                    "value": "1"
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("binary add skeleton");
+        let ClangExprSkeleton::Binary { lhs, .. } = skeleton else {
+            panic!("expected binary skeleton, got {skeleton:?}");
+        };
+        let ClangExprSkeleton::Cast {
+            target,
+            expr,
+            implicit,
+        } = lhs.as_ref()
+        else {
+            panic!("expected preserved integer NoOp cast, got {lhs:?}");
+        };
+        assert!(*implicit);
+        assert!(matches!(
+            target.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        let ClangExprSkeleton::LValueToRValue {
+            target: read_target,
+            expr: read_expr,
+        } = expr.as_ref()
+        else {
+            panic!("expected preserved integer LValueToRValue read, got {expr:?}");
+        };
+        assert!(matches!(
+            read_target.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            read_expr.as_ref(),
+            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
 
@@ -6881,16 +8432,18 @@ mod tests {
             expr.as_ref(),
             ClangExprSkeleton::DeclRef { name, .. } if name == "table"
         ));
-        let error = lower_expr(&skeleton).expect_err("array-to-pointer decay must fail closed");
-        assert_eq!(error.kind, "unsupported_clang_expr");
-        assert!(error.message.contains("ArrayToPointerDecay"));
-        assert!(error
-            .message
-            .contains("consumed only during ArraySubscriptExpr skeleton construction"));
+        let lowered = lower_expr(&skeleton).expect("array-to-pointer decay should lower to IR");
+        let lowered_json =
+            serde_json::to_value(&lowered).expect("serialize array-to-pointer decay IR");
+        let Some(decay) = lowered_json.get("ArrayToPointerDecay") else {
+            panic!("expected ArrayToPointerDecay IR node, got {lowered_json}");
+        };
+        assert_eq!(decay["target"]["spelled"], "int *");
+        assert_eq!(decay["expr"]["Var"]["name"], "table");
     }
 
     #[test]
-    fn expr_skeleton_from_ast_rejects_array_to_pointer_decay_in_pointer_arithmetic() {
+    fn expr_skeleton_from_ast_preserves_array_to_pointer_decay_in_pointer_arithmetic_ir() {
         let expr = serde_json::json!({
             "kind": "BinaryOperator",
             "opcode": "+",
@@ -6929,13 +8482,14 @@ mod tests {
             rhs.as_ref(),
             ClangExprSkeleton::IntegerLiteral { value: 1, .. }
         ));
-        let error =
-            lower_expr(&skeleton).expect_err("array decay pointer arithmetic must fail closed");
-        assert_eq!(error.kind, "unsupported_clang_expr");
-        assert!(error.message.contains("ArrayToPointerDecay"));
-        assert!(error
-            .message
-            .contains("ordinary expression positions require explicit typed IR lowering"));
+        let lowered = lower_expr(&skeleton)
+            .expect("array decay pointer arithmetic should lower to explicit IR");
+        let lowered_json =
+            serde_json::to_value(&lowered).expect("serialize array decay pointer arithmetic IR");
+        assert_eq!(
+            lowered_json["Binary"]["lhs"]["ArrayToPointerDecay"]["expr"]["Var"]["name"],
+            "table"
+        );
     }
 
     #[test]
@@ -7088,10 +8642,7 @@ mod tests {
                 width: 32
             }
         ));
-        assert!(matches!(
-            init,
-            ClangExprSkeleton::DeclRef { name, .. } if name == "crc"
-        ));
+        assert_lvalue_to_rvalue_decl_ref(&init, "crc", false, 32);
     }
 
     #[test]
@@ -7624,7 +9175,7 @@ mod tests {
         else {
             panic!("expected if skeleton, got {skeleton:?}");
         };
-        assert!(matches!(condition, ClangExprSkeleton::DeclRef { name, .. } if name == "flag"));
+        assert_lvalue_to_rvalue_decl_ref(&condition, "flag", true, 32);
         assert!(matches!(
             then_body.as_slice(),
             [ClangStmtSkeleton::Assign { .. }]
@@ -8194,6 +9745,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         for (spelling, expected_signed, expected_width) in [
@@ -8230,6 +9782,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         for (spelling, expected_signed) in [("int", true), ("unsigned int", false)] {
@@ -8257,6 +9810,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         let ty = type_from_qual_type_with_target_abi("const int *", Some(&abi))
@@ -8271,6 +9825,19 @@ mod tests {
     }
 
     #[test]
+    fn type_from_qual_type_maps_function_pointer_with_function_pointer_param() {
+        let ty = type_from_qual_type("int (*)(int (*)(int), int)")
+            .expect("function pointer type skeleton");
+
+        let ClangTypeKind::Pointer { pointee, .. } = ty.kind else {
+            panic!("expected function pointer type, got {:?}", ty.kind);
+        };
+        assert_eq!(ty.spelled, "int (*)(int (*)(int), int)");
+        assert_eq!(pointee.spelled, "int (int (*)(int), int)");
+        assert!(matches!(pointee.kind, ClangTypeKind::Function));
+    }
+
+    #[test]
     fn type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported() {
         let abi = TargetAbiProfile {
             triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
@@ -8282,6 +9849,7 @@ mod tests {
             long_width: 64,
             long_long_width: 0,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
 
         for spelling in [
@@ -8325,6 +9893,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8365,6 +9934,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8397,6 +9967,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8419,6 +9990,36 @@ mod tests {
     }
 
     #[test]
+    fn type_from_qual_type_binds_double_underscore_size_t_with_target_profile() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-pc-windows-msvc".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 32,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+
+        let ty = type_from_qual_type_with_target_abi("__size_t", Some(&abi))
+            .expect("__size_t should parse with target ABI profile");
+        assert_eq!(ty.spelled, "__size_t");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
+
+        let unbound = type_from_qual_type("__size_t").expect("__size_t should parse as unbound");
+        assert!(matches!(unbound.kind, ClangTypeKind::Unsupported { .. }));
+    }
+
+    #[test]
     fn sizeof_pointer_type_lowers_from_target_pointer_width_profile() {
         let abi = TargetAbiProfile {
             triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
@@ -8430,6 +10031,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8487,6 +10089,7 @@ mod tests {
                 long_width,
                 long_long_width: 64,
                 pointer_width: 64,
+                ..TargetAbiProfile::default()
             };
             let expr = serde_json::json!({
                 "kind": "UnaryExprOrTypeTraitExpr",
@@ -8521,6 +10124,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8593,6 +10197,7 @@ mod tests {
             long_width: 32,
             long_long_width: 64,
             pointer_width: 16,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8677,6 +10282,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
@@ -8727,7 +10333,7 @@ mod tests {
     }
 
     #[test]
-    fn alignof_type_trait_stays_fail_closed_without_alignment_profile() {
+    fn alignof_type_trait_lowers_only_with_alignment_profile() {
         let expr = serde_json::json!({
             "kind": "UnaryExprOrTypeTraitExpr",
             "type": {"qualType": "size_t"},
@@ -8737,21 +10343,48 @@ mod tests {
         });
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("_Alignof skeleton should parse");
-        let ClangExprSkeleton::Unsupported { node, reason } = &skeleton else {
-            panic!("expected _Alignof to remain unsupported, got {skeleton:?}");
+        let ClangExprSkeleton::AlignOfType {
+            arg_type,
+            alignment_bits,
+            ..
+        } = &skeleton
+        else {
+            panic!("expected _Alignof type skeleton, got {skeleton:?}");
         };
-        assert_eq!(node, "UnaryExprOrTypeTraitExpr");
-        assert!(
-            reason.contains("_Alignof") && reason.contains("alignment/lowering support"),
-            "unexpected reason: {reason}"
-        );
+        assert_eq!(arg_type.spelled, "int");
+        assert_eq!(*alignment_bits, None);
 
         let error = lower_expr(&skeleton).expect_err("_Alignof must fail closed");
-        assert_eq!(error.kind, "unsupported_clang_expr");
+        assert_eq!(error.kind, "unsupported_alignof_type");
         assert!(
             error.message.contains("_Alignof") && error.message.contains("alignment"),
             "unexpected error: {error:?}"
         );
+
+        let mut bound = skeleton.clone();
+        let target_abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            int_align: 32,
+            long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        bind_target_abi_to_expr(&mut bound, &target_abi);
+
+        let ir = lower_expr(&bound).expect("_Alignof(int) lowers with target alignment profile");
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected literal _Alignof result, got {ir:?}");
+        };
+        assert_eq!(value, 4);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
     }
 
     #[test]
@@ -9224,6 +10857,7 @@ mod tests {
             long_width: 64,
             long_long_width: 64,
             pointer_width: 64,
+            ..TargetAbiProfile::default()
         };
         let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
         let fields = inventory.get("blob").expect("blob record inventory");
@@ -9239,5 +10873,149 @@ mod tests {
         assert_eq!(fields[2].name, "size");
         assert_eq!(fields[2].ty.spelled, "size_t");
         assert_eq!(fields[2].ty.width_bits, Some(64));
+    }
+
+    #[test]
+    fn record_inventory_from_ast_keeps_duplicate_complete_record_definitions_with_same_fields() {
+        let record_decl = serde_json::json!({
+            "kind": "RecordDecl",
+            "tagUsed": "struct",
+            "name": "fdb_blob",
+            "completeDefinition": true,
+            "inner": [
+                {
+                    "kind": "FieldDecl",
+                    "name": "buf",
+                    "type": { "qualType": "void *" }
+                },
+                {
+                    "kind": "FieldDecl",
+                    "name": "size",
+                    "type": { "qualType": "size_t" }
+                }
+            ]
+        });
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                record_decl.clone(),
+                record_decl
+            ]
+        });
+
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
+        let fields = inventory
+            .get("fdb_blob")
+            .expect("identical duplicate record definitions keep inventory");
+
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].name, "buf");
+        assert_eq!(fields[1].name, "size");
+    }
+
+    #[test]
+    fn record_inventory_from_ast_keeps_anonymous_nested_integer_record_field() {
+        let ast = serde_json::json!({
+            "kind": "TranslationUnitDecl",
+            "inner": [
+                {
+                    "kind": "RecordDecl",
+                    "tagUsed": "struct",
+                    "name": "fdb_blob",
+                    "completeDefinition": true,
+                    "inner": [
+                        {
+                            "kind": "FieldDecl",
+                            "name": "buf",
+                            "type": { "qualType": "void *" }
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "size",
+                            "type": { "qualType": "size_t" }
+                        },
+                        {
+                            "kind": "RecordDecl",
+                            "tagUsed": "struct",
+                            "completeDefinition": true,
+                            "inner": [
+                                {
+                                    "kind": "FieldDecl",
+                                    "name": "meta_addr",
+                                    "type": {
+                                        "qualType": "uint32_t",
+                                        "desugaredQualType": "unsigned int"
+                                    }
+                                },
+                                {
+                                    "kind": "FieldDecl",
+                                    "name": "addr",
+                                    "type": {
+                                        "qualType": "uint32_t",
+                                        "desugaredQualType": "unsigned int"
+                                    }
+                                },
+                                {
+                                    "kind": "FieldDecl",
+                                    "name": "len",
+                                    "type": { "qualType": "size_t" }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "FieldDecl",
+                            "name": "saved",
+                            "type": {
+                                "qualType": "struct (unnamed at sources/FlashDB/inc/fdb_def.h:319:5)"
+                            }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        let inventory = record_inventory_from_ast_with_target_abi(&ast, Some(&abi));
+        let fields = inventory
+            .get("fdb_blob")
+            .expect("anonymous nested record field stays modeled");
+
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[2].name, "saved");
+        let IrTypeKind::Record {
+            name,
+            fields: Some(saved_fields),
+        } = &fields[2].ty.kind
+        else {
+            panic!("saved field should lower to a complete nested record");
+        };
+        assert_eq!(name, "fdb_blob_saved");
+        assert_eq!(saved_fields.len(), 3);
+        assert_eq!(saved_fields[0].name, "meta_addr");
+        assert_eq!(saved_fields[1].name, "addr");
+        assert_eq!(saved_fields[2].name, "len");
     }
 }

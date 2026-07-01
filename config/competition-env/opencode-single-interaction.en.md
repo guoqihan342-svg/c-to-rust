@@ -52,7 +52,7 @@ These estimates are only for planning, not acceptance criteria. Competition and 
 
 For FlashDB crc32 (the proven case): typed IR candidate generation to validation profile generation takes ~5-8 minutes.
 
-**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence.
+**Multi-slice strategy**: the same OpenCode session may process multiple independent slices in parallel. Parallel runs must give each slice/worker an isolated out-root or subdirectory, then aggregate through one summary/validator. A worker's intermediate judgment must never directly become competition evidence. For reusable file-level batches, prefer `run-batch-profile` to pin the inputs; when debugging the expanded flow, use `plan-source-file` to generate a plan, then `run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>` to execute planned workers with LangGraph-style fan-out/fan-in, retry failed workers through persisted repair hints, and run the final worker-summary aggregation. This is deterministic batch orchestration around the final runner/validator, not a replacement for it. A profile may set `emit_route_governance_metrics_report=true` to also write and bind `summary/route-governance-metrics-report.json` for public-claim boundaries and capability/refusal metrics, not as a semantic gate. If any planned worker lacks a recorded summary after the bounded retry path, final merge execution is skipped fail-closed.
 
 ## OpenCode Harness Multi-Agent + SQLite Flow
 
@@ -61,11 +61,46 @@ P0 uses `target/competition-out/state/opencode-agent-harness.sqlite3` as the Ope
 Typical flow:
 
 ```bash
+# Preferred reusable profile path:
+python -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
+  --run-id <run-id> \
+  --out-root target/competition-out
+
+# Expanded debugging path:
 python -m validation.tools.opencode_agent_harness init-run \
   --run-id <run-id> \
   --proof-class <proof-class> \
   --out-root target/competition-out
 
+# Preferred file-level batch path:
+python -m validation.tools.opencode_agent_harness plan-source-file \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --target-id <target> \
+  --source-repo-root <repo-relative-c-source-root> \
+  --source-file <repo-relative-c-file> \
+  --function <function> \
+  --source-commit <commit> \
+  --slice-spec <repo-relative-maintained-slice-spec> \
+  --reuse-accepted-evidence \
+  --accepted-evidence-root validation/evidence \
+  --slice-id-prefix <slice-prefix> \
+  --worker-prefix worker \
+  --out-root target/competition-out
+
+python -m validation.tools.opencode_agent_harness run-plan \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --plan target/competition-out/harness/plans/<target>-<source-stem>-workers.json \
+  --proof-class <proof-class> \
+  --mode deterministic \
+  --execute-merge \
+  --auto-retry \
+  --max-workers 4 \
+  --out-root target/competition-out
+
+# Manual expanded single-worker path:
 python -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
@@ -81,13 +116,37 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --define DEMO=1 \
   --out-root target/competition-out/workers/worker-a
 
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+# For committed accepted evidence reuse, add:
+#   --slice-spec <repo-relative-maintained-slice-spec>
+#   --reuse-accepted-evidence
+#   --accepted-evidence-root validation/evidence
 
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
+
+# When local OpenCode / DeepSeek V4 Pro is connected, verify exact-command preflight first:
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id <run-id> \
+  --out-root target/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
+# Use the agent wrapper only after preflight passes:
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max \
+  --opencode-skip-permissions \
+  --opencode-preflight-report target/opencode-preflight/harness/opencode-preflight-report.json
+
+`opencode-preflight` only verifies that OpenCode can make its first shell/bash/powershell/cmd tool call exactly match the harness-specified command and write the marker/report; it is not semantic acceptance. The preflight report records the run id, a structured launch policy (`opencode_command`, `opencode_model`, `opencode_agent`, `opencode_variant`, `opencode_skip_permissions`), and the policy hash. `run-worker --mode opencode` and `run-plan --mode opencode` must bind a passed preflight report with `--opencode-preflight-report <report>`, and that report's `run_id` plus launch policy must exactly match the current run and launch flags; otherwise they fail closed before launching OpenCode. `--mode opencode` writes `harness/opencode-handoff-contract.json` and `logs/opencode-session-evidence.json` under the isolated worker directory, then binds both from `harness/run-worker-report.json`, the SQLite event stream, the repair hint, and the artifact index. The contract records the exact deterministic worker command, request, expected summary, OpenCode prompt, and launch policy; the session evidence parses OpenCode `--format json` JSON/JSONL output and keeps a raw fallback when parsing fails. If OpenCode exits with `database is locked` before the first shell command, the launcher performs bounded startup retries and records `opencode_process_retries`; it still requires contract execution and the expected summary before acceptance. These artifacts prove the agent audit chain only; they do not replace `competition-run-summary.json`, the final gate, or validators.
+
+`run-plan --auto-retry` is the bounded self-healing path: a failed worker writes a repair hint, the harness retries that same worker, and the loop stops when the worker revalidates or reaches the `REPAIR_ROUND_CAP=5` limit. `--max-workers` controls parallel worker fan-out; the report preserves planner-order fan-in through `run_plan.graph.parallel_map.result_order=planner_order`. Retry success still only means the worker summary revalidated; semantic acceptance remains the final summary validator plus oracle/diff/unsafe gates.
 
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
@@ -108,15 +167,15 @@ Run the environment check first, then process real C slices. Independent slices 
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
    — Verify the environment meets the competition baseline; `env.sh` activates `CARGO_HOME=config/competition-env/cargo`, and when `toolchain-check.sh` finds clang it also validates resource-dir plus a minimal TU AST dump including `stdint.h`/`stddef.h`.
 
-2. Use direct runner arguments for a single real C source function, or prepare `target/competition-out/extract-specs/<id>-<slice>.json` with at least `repo_root`, `source_file`, `function`, `target_id`, and `slice_id`; optionally include `source_commit`, `compiler_command_source`, `include_paths`, and `defines`. `source_file` must be relative to `repo_root`.
+2. Use direct runner arguments for a single real C source function, or prepare `target/competition-out/extract-specs/<id>-<slice>.json` with at least `repo_root`, `source_file`, `function`, `target_id`, and `slice_id`; optionally include `source_repository`, `source_branch`, `source_commit`, `require_source_commit`, `compiler_command_source`, `include_paths`, and `defines`. `source_file` must be relative to `repo_root`. FlashDB competition-scoring input must bind `https://gitcode.com/xwxf/FlashDB.git`, the `competition` branch, and `f9d0421315c564fb890a1b14eee77b290e0d7bbe`.
    — Direct arguments and JSON extract specs are both parameterized inputs used by the runner to invoke `extract_source_slice.py`; do not hand-write `c_source`.
 
-3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
    — Use the unified runner for slice extraction, environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation; the runner writes generated slice specs under `target/competition-out/slice-specs/`.
    — For batch or reusable inputs, use `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` instead of the direct source arguments.
    — If independent workers have already produced summaries, pass each one with repeated `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json`; the aggregate runner does not reprocess those slices, merges their counts, and fails the final gate when any worker is failed or blocked.
 
-4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
+4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — Manual expanded real C source function slice extraction. When using runner `--extract-spec`, the runner invokes this step.
 
 5. python validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
@@ -130,11 +189,11 @@ Run the environment check first, then process real C slices. Independent slices 
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 
-9. For multi-agent parallelism, first create the SQLite ledger with `python -m validation.tools.opencode_agent_harness init-run`, then use `assign-slice` to generate assignments for each worker. Each worker writes only to `target/competition-out/workers/<worker-id>/`; after completion, record the summary with `record-worker-summary`, then generate the aggregate command with `write-merge-plan`.
+9. For multi-agent parallelism, prefer recording reusable inputs under `config/competition-env/planned-batches/*.json`, then use `run-batch-profile` to create the ledger, generate ordered assignments, execute planned workers with `max_workers`, run bounded `auto_retry=true`, and run the final worker-summary aggregation in one audited command. For debugging, expand it into `init-run`, `plan-source-file`, and `run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`. When the profile sets `emit_route_governance_metrics_report=true`, the batch also writes and binds `summary/route-governance-metrics-report.json`. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the lower-level expanded form. Run `opencode-preflight` first with the same `run_id` to prove OpenCode follows the exact-command contract; use `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` or `run-plan --mode opencode --opencode-preflight-report <report>` only after preflight passes and only when OpenCode wraps assigned requests. Preflight reports from older runs cannot be reused. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries after up to 5 repair retries skip final merge fail-closed, while OpenCode startup database-lock retries are separately recorded as `opencode_process_retries`.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
-If a command fails, record the reason and do not enter a repair loop.
+If a command fails outside the harness retry path, record the reason and do not enter a manual or unbounded repair loop.
 ```
 
 ## Agent Behavioral Constraints
@@ -142,7 +201,7 @@ If a command fails, record the reason and do not enter a repair loop.
 - **Do not modify project Rust/Python source code** (unless `blocked_repairs` evidence already exists and the original text explicitly allows repair).
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
 - **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
-- **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification.
+- **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification. Planned batch execution may preserve planner order in the report/merge input, but it cannot replace the final validator.
 - **SQLite is only a harness ledger** for assignment, lease, artifact index, and merge plans; SQLite state cannot replace evidence validation.
 - **Prefer `run_competition.py` direct source arguments or `--extract-spec` for real C slice extraction, migration, and aggregation**; `--slice-spec` remains available for already-extracted specs, and isolated worker results enter the same summary validator through repeated `--worker-summary`.
 - **If C2Rust baseline generation fails or is absent, record `skipped` or `blocked`**, never fake `generated`.

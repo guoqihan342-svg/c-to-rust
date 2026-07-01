@@ -6,7 +6,7 @@
   ],
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-    "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+    "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
     "status": "skipped"
   },
   "compared_fields": [
@@ -27,10 +27,10 @@
     "rust_report_required_status": "passed"
   },
   "route_decision": {
-    "level": "L4",
+    "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json",
-    "sha256": "ca1be33dcfb069b4eb5ea769688c0fb6902e8610f842b6ed5a7f999250f2ab20",
-    "status": "refused"
+    "sha256": "5a23dba437bb2d6f1ec8db6c7418e28138d7b7136bb5b79a2ae10c77b3343d7d",
+    "status": "recorded"
   },
   "schema_version": 1,
   "semantic_pass": false,
@@ -39,8 +39,8 @@
   "target_id": "flashdb",
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
-    "profile": "L4-dev",
-    "sha256": "98c525e90df22bf76efe305da5f5de48389ac4edb3029a136da681ef16354b65",
-    "status": "blocked"
+    "profile": "L1-dev",
+    "sha256": "12231c9462ce9d4b116a8b22348eac46fb226427e55670353704e9a6b3b0824a",
+    "status": "incomplete"
   }
 }

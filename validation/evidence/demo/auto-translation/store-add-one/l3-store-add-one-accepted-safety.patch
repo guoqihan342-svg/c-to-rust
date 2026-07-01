@@ -1,0 +1,23 @@
+diff --git a/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs b/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs
+--- a/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs
++++ b/validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs
+@@
+ pub fn store_add_one(value: i32) -> StoreAddOneReport {
+-    let mut out0 = 0;
+-    let return_code = store_add_one_raw(value, &mut out0 as *mut i32);
+     StoreAddOneReport {
+-        return_code,
++        return_code: 0,
+         status: "ok",
+-        out0,
++        out0: value + 1,
+         source_write: "out[0]",
+     }
+ }
+-
+-fn store_add_one_raw(value: i32, out: *mut i32) -> i32 {
+-    unsafe {
+-        *out.add(0) = value + 1;
+-    }
+-    0
+-}

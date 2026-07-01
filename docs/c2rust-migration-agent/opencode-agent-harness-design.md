@@ -86,7 +86,8 @@ target/competition-out/
     evidence/
     slice-specs/
     summary/competition-run-summary.json
-    logs/commands.jsonl
+    harness/run-worker-report.json
+    logs/
   summary/competition-run-summary.json
   logs/commands.jsonl
 ```
@@ -108,6 +109,44 @@ OpenCode 可以直接调用 repo-local wrapper：
 ```bash
 python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
 ```
+
+Harness 也提供最小执行器，优先用于可复现路径：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode deterministic
+```
+
+`run-worker --mode deterministic` 调用同一个 repo-local wrapper，并把 stdout/stderr、return code、summary path、record status 和最终任务状态写入 `workers/<worker-id>/harness/run-worker-report.json`。如果子进程失败、summary 缺失，或 summary 的 `final_gate.status` 不是 `passed`，worker 任务必须记录为 failed，最终合并不能把它当成通过。
+
+`run-plan --max-workers <N> --auto-retry` 是不新增运行时依赖的 LangGraph-inspired 执行形态：`load_plan -> fanout_workers -> worker -> repair_retry -> merge -> report`。独立 worker 最多并行到 `max_workers`，但 `run-plan-report.json.graph.parallel_map.result_order=planner_order` 固定 planner 顺序 fan-in。失败 worker 会通过已落盘的 `repair_hints` 账本用同一份 assignment 重试，直到重新验证通过或达到 `REPAIR_ROUND_CAP=5`；中间失败尝试保留审计记录，语义接受仍只来自 worker summary、最终聚合和 validator。
+
+`run-worker --mode opencode` 还会在 OpenCode 自身于第一条 shell command 前报 `database is locked` 时，把启动层瞬时重试记录为 `opencode_process_retries`。这比 repair retry 更窄：它只重试 agent 进程启动，不改变 exact-command verifier，且仍要求 expected worker summary 存在后才能让 merge 通过。
+
+`evaluate` 是评委/回归优先入口：一次命令串起 `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`。它额外生成两份上下文管理 artifact：
+
+- `harness/context-pack.json`：run 级上下文包，包含 source pin、graph、parallelism、entrypoints、worker summary/report、merge summary 和 acceptance boundary；同时写入 SQLite `context_packs` 表，供下一轮 agent 或评委直接定位证据。
+- `harness/agent-index.json`：按 `worker_id` 索引 assignment、request、summary、report、隔离输出目录和最终状态，供 OpenCode 多 agent 并行运行后快速 fan-in。
+
+这两份文件只是索引和上下文，不构成 semantic acceptance。最终通过仍由 worker summary、merge summary 和 validator 决定。
+
+`run-batch-profile` 作为当前 before/after demo 和 profile 回归入口，也写入同样的 `context-pack.json` / `agent-index.json`，其中 primary report 为 `harness/batch-profile-report.json`。`evaluate --profile` 会复用完整 batch-profile pipeline，再额外落 `harness/evaluate-report.json` 作为评委可发现的一键入口 wrapper；该 wrapper 只索引 batch artifacts、summary validator 和上下文入口，不是新的 semantic gate。因此评委 demo 入口和开发评测入口都能用同一种上下文索引续跑或审计。
+
+连接本机 OpenCode / DeepSeek V4 Pro 时，可以让 OpenCode 包装同一份 assignment request：
+
+```bash
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id run-demo \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max
+```
+
+复用已提交 accepted evidence 时，`assign-slice` 必须同时记录真实源信息和维护版 `--slice-spec`，并显式传 `--reuse-accepted-evidence --accepted-evidence-root validation/evidence`。这只验证已提交 evidence，不把重新生成的 Rust draft 提升为 semantic pass。
 
 `request.json` 可包含直接 slice 输入：
 

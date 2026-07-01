@@ -9,8 +9,16 @@
 - OpenSpec change：`design-c2rust-migration-agent`
 - 第一目标：FlashDB
 - 源码克隆：`sources/FlashDB`
-- 源码 commit：`93d175549da579b8abac07bd175ce4c3f9dde829`
+- 源码 commit：`f9d0421315c564fb890a1b14eee77b290e0d7bbe`
 - Rust 输出项目名：`flashDB_rust`
+- 当前 harness 分支：`codex/agent-harness-flashdb-mvp`
+- OpenCode harness：`opencode_agent_harness.py run-worker` 已支持 `--mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，也支持 `--mode opencode --opencode-variant max` 包装同一 request；`competition-run-summary.json` 存在时自动入 SQLite ledger。OpenCode 在第一条 shell command 前遇到 `database is locked` 时会做窄口径启动重试，并记录 `opencode_process_retries`；命令合同和 summary validation 仍然 fail-closed。
+- 评委 runner：`run_judge_entrypoints` 已把 competition smoke、before/after、显式多 worker 和 OpenCode 入口收敛到一条命令，并在全量通过后生成 `judge-milestone-bundle.json` 与 `milestone-release-notes.md`。两个 `evaluate --profile` 入口还会生成 `harness/resume-manifest.json`，把 SQLite ledger、context pack、agent index、worker summary、repair hints 和续跑入口收敛成 current-state 索引。bundle 输出 `core_translation_quality`、`harness_architecture_summary`、`claim_scope`、`proof_classes`、`publishability`、`quantitative_evaluation`、`publication_manifest`、`known_gaps`、`must_not_claim` 和复现命令，供评委一屏审阅；Markdown release notes 由 bundle 渲染，只作为人类可读 public packet。`quantitative_evaluation` 汇总 workflow units、accepted/blocked/repair/unsafe 指标以及 raw C2Rust、C2Rust+repair、typed-IR、OpenCode/LLM worker、handwritten reference 的边界对比；`publication_manifest` 绑定 repo commit、FlashDB source pin、judge config、competition config archive、run-report/bundle、supported subset、known gaps/non-goals 和 claim boundary。bundle、release notes、resume manifest 均不替代 validator/oracle，也不扩大 semantic pass、competition-exact proof 或 translation coverage。
+- C2Rust baseline 状态现在进入评委 scorecard：`route-governance-metrics-report.json` 读取每个 `*-c2rust-baseline-manifest.json` 的 status/output/compile-only 结果，`judge-milestone-bundle.json` 按 evidence root 去重后放进 `raw_c2rust.c2rust_baseline_rollup`，release notes 展示 manifest/source/compile-pass 数；该 rollup 仍是 candidate context only，不是 semantic gate。
+- 公开 release packet：全量评委 runner 成功后还会生成 `summary/public-release-packet.json`，hash 绑定 run report、readiness report、milestone bundle、Markdown release notes 和 competition config archive，并由 `validation.tools.validate_public_release_packet` 校验 schema、hash、claim boundary、本机路径泄漏，检查 packet 中复制的 publication manifest、known gaps、reproduction commands、must-not-claim 覆盖是否与被绑定的 bundle 一致，并要求 release notes 等于该 bundle 渲染出的 Markdown；它只是评委发布包索引，不是 semantic gate，也不增加 `translation_coverage_numerator`。
+- 评委入口本地 artifact 校验现在会对非 smoke `competition_summary` 组合既有 competition summary validator，因此 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则和 slice counts 必须先通过合同，评委入口才会通过。
+- FlashDB accepted evidence：`real-fdb-calc-crc32` 和 `real-fdb-blob-make` 当前通过 L4 accepted-evidence authoritative 语义绑定；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`，不能写成 translator-generated draft 自身已 accepted。
+- FlashDB blocked evidence：`fdb_kv_set` 当前只有 source/signature provenance 和 L4 refused/blocked evidence；`strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` callee shim/model/oracle 语义尚未关闭。
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码
 - 安全目标：first-party non-test unsafe 低于 10%
 - 入口 unsafe claim 边界（P0-162）：unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。这些能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
@@ -43,9 +51,9 @@
 
 ## 文档地图
 
-- 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，机器可读状态见 `baseline-record.json`。
+- 入口与状态：见 `index/README.md`。核心入口是 `README.md` / `README.en.md`，评委 before/after 演示入口是 `judge-demo.md` / `judge-demo.en.md`，机器可读状态见 `baseline-record.json`。
 - 架构与合约：见 `index/architecture.md`。覆盖 `agent-contract.md`、`baseline-and-versioning.md`、`context-store-and-self-healing.md`、`core-translation-architecture.md` / `core-translation-architecture.en.md`、`l0-l4-routing-and-evidence-gates.md` / `l0-l4-routing-and-evidence-gates.en.md`。
-- 运行与验证：见 `index/operations.md`。覆盖 `build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
+- 运行与验证：见 `index/operations.md`。覆盖 `quickstart.md` / `quickstart.en.md`、`opencode-agent-harness-design.md` / `opencode-agent-harness-design.en.md`、`build-and-c2rust-baseline.md`、`bounded-auto-translation-pipeline.md` / `bounded-auto-translation-pipeline.en.md`、`evidence-governance.md` / `evidence-governance.en.md`、`testing-unsafe-cache-and-milestone.md`、`full-regression-runner.md`、`../../config/competition-env/`。
 - 覆盖与路线：见 `index/roadmap.md`。覆盖 `COVERAGE.md` / `COVERAGE.en.md`、`future-vision-and-mvp.md` / `future-vision-and-mvp.en.md`。
 - FlashDB 用例边界：见 `index/flashdb.md`。覆盖 `baseline-record.json`、`build-and-c2rust-baseline.md`、`flashdb-rust-skeleton-and-milestone.md`、`full-regression-runner.md`。
 - 归档/分析：见 `index/archive.md`。覆盖 `archive/context-history-2026-06-28.md`、`analysis/translator-strengthening-analysis.md` / `analysis/translator-strengthening-analysis.en.md`。
@@ -63,6 +71,8 @@ openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```bash
 c2rust-migrator --phase index --change design-c2rust-migration-agent --input request.json
 ```
+
+当前评委展示路径见 `judge-demo.md`，首选从 `config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json` 生成真实 FlashDB before/after exhibit、judge report、context pack、agent index 和 milestone release report。该 profile 已接入 `real-fdb-calc-crc32` 的真实 `baseline_repair_gate`：第 1 轮记录 `unsafe_baseline_requires_repair`，第 2 轮携带 repair hint 复验 accepted safe evidence；repo-local demo profile 仅作为保底路径。
 
 ## 运行原则
 

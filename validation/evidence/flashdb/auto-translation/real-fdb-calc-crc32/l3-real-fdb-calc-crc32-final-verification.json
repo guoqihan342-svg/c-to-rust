@@ -3,15 +3,15 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+    "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "0c182f2c54b80db71a370f4e57ffbe0d73ed38b92983736881efdff9b45f20a4",
-      "diff": "36e33d974d77cc5c5a1cd8e1eb58b6b77f289c995b18130f94f95222e2d8c841",
-      "negative_diff": "a9af75dcb751e885593dabd02d17bab6c294cb5a46d8d304cffd51147f6d5879",
-      "rust_report": "0bffea59ef533ea88c9668e1a92e643391fdd3c2e3a3ce7156885402035777eb",
-      "unsafe_ledger": "eb162631f86bbb7b3749be30c297a3a5c314683e891aa8d991a63dca76a65026",
-      "unsafe_scan": "93f25912be2e47edd30c5f7600242963dee28b4d9a612f35451ebf80f0d5b3a3"
+      "c_oracle": "8b15e66c32350820553deafe019fe5d964ed431c7d83d173c009efc11e44ae88",
+      "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+      "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+      "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+      "unsafe_ledger": "e64539172ff12e6ad222860932850c311dff7869876b06638ecb1e8166627e3b",
+      "unsafe_scan": "87024c9614d130d8462a538070436a81c13334eb857545c5a65bd4f1820543ad"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -22,7 +22,7 @@
       "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
     },
     "slice_id": "real-fdb-calc-crc32",
-    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "status": "accepted",
     "target_id": "flashdb",
     "toolchain_status": "C_ORACLE_GENERATED"
@@ -37,26 +37,28 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+    "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "external_callee_scope": {
     "blocked_count": 0,
     "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
     "semantics_verified": false,
     "status": "not_applicable",
     "stub_kind": "none"
   },
   "fixture": {
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7"
+    "sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf"
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
   "oracle_boundary_contract": {
     "compiler": {
-      "command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+      "command_source": "CMakeLists.txt",
       "compile_commands": null,
       "defines": [],
       "flags": [],
@@ -100,10 +102,14 @@
     "schema_version": 1,
     "status": "sufficient_for_semantic_pass",
     "target": {
+      "char_width": "unknown",
       "endianness": "little",
       "int_width": 32,
+      "long_long_width": "unknown",
       "long_width": 64,
+      "plain_char_signed": "unknown",
       "pointer_width": 64,
+      "short_width": "unknown",
       "triple_or_abi": "x86_64-unknown-linux-gnu",
       "word_size_bits": 64
     },
@@ -116,7 +122,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "be6f41a032970223f7e46a95acb1b5e5ad2b6a457467fe3f62870c36f5799bbd",
+    "sha256": "186d26373be9bb59a6317a9da8e92921b4f24b88a7a7b189ac4d6f9d1aa041cb",
     "status": "refused"
   },
   "rust_check_status": "passed",
@@ -126,7 +132,7 @@
   "semantic_pass": true,
   "skipped_gates": [],
   "slice_id": "real-fdb-calc-crc32",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "passed",
   "target_id": "flashdb",
   "toolchain_status": "C_ORACLE_GENERATED",
@@ -134,7 +140,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "36cf1e56ed578b9539a75e3f40ceb613084db4ba3e5e1b7c733537e5b2832aaf",
+    "sha256": "1567d952bb1e23190ebcb8eb2047d3a1365319e507bbb92778079413f13d63b6",
     "status": "passed"
   },
   "validation_profile_status": "passed",

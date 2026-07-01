@@ -6,15 +6,21 @@
     "authoritative_evidence": false,
     "role": "diagnostic_only"
   },
-  "diagnostics": [
-    "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable"
-  ],
-  "errors": [
-    {
-      "kind": "missing_clang_path",
-      "message": "clang AST lowering requires CLANG_PATH or a vendored clang binary"
-    }
-  ],
+  "diagnostics": [],
+  "durable_evidence": {
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
+    "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f"
+  },
+  "errors": [],
   "fixture_hash": "real-fdb-kv-set-fixture",
   "frontend": "clang",
   "function_name": "fdb_kv_set",
@@ -23,14 +29,12 @@
       "-Xclang",
       "-ast-dump=json",
       "-fsyntax-only",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829\\src/fdb_kvdb.c"
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
+      "sources/FlashDB\\src/fdb_kvdb.c"
     ],
-    "clang_path": null,
-    "diagnostics": [
-      "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable"
-    ],
+    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "diagnostics": [],
     "environment": {
       "diagnostics": [
         "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
@@ -40,20 +44,928 @@
       "source": null,
       "status": "not_configured"
     },
-    "errors": [
-      {
-        "kind": "missing_clang_path",
-        "message": "clang AST lowering requires CLANG_PATH or a vendored clang binary"
-      }
-    ],
+    "errors": [],
     "frontend": "clang",
-    "function_ir": null,
+    "function_ir": {
+      "body": [
+        {
+          "Decl": {
+            "init": null,
+            "name": "blob",
+            "source_span": null,
+            "ty": {
+              "canonical": "struct fdb_blob",
+              "is_const": false,
+              "kind": {
+                "Record": {
+                  "fields": [
+                    {
+                      "name": "buf",
+                      "ty": {
+                        "canonical": "void *",
+                        "is_const": false,
+                        "kind": {
+                          "Pointer": {
+                            "pointee": {
+                              "canonical": "void",
+                              "is_const": false,
+                              "kind": "Void",
+                              "source_span": null,
+                              "spelled": "void",
+                              "width_bits": null
+                            }
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "void *",
+                        "width_bits": null
+                      }
+                    },
+                    {
+                      "name": "size",
+                      "ty": {
+                        "canonical": "size_t",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": false,
+                            "width": 64
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "size_t",
+                        "width_bits": 64
+                      }
+                    },
+                    {
+                      "name": "saved",
+                      "ty": {
+                        "canonical": "struct fdb_blob_saved",
+                        "is_const": false,
+                        "kind": {
+                          "Record": {
+                            "fields": [
+                              {
+                                "name": "meta_addr",
+                                "ty": {
+                                  "canonical": "uint32_t",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Integer": {
+                                      "signed": false,
+                                      "width": 32
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "uint32_t",
+                                  "width_bits": 32
+                                }
+                              },
+                              {
+                                "name": "addr",
+                                "ty": {
+                                  "canonical": "uint32_t",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Integer": {
+                                      "signed": false,
+                                      "width": 32
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "uint32_t",
+                                  "width_bits": 32
+                                }
+                              },
+                              {
+                                "name": "len",
+                                "ty": {
+                                  "canonical": "size_t",
+                                  "is_const": false,
+                                  "kind": {
+                                    "Integer": {
+                                      "signed": false,
+                                      "width": 64
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "spelled": "size_t",
+                                  "width_bits": 64
+                                }
+                              }
+                            ],
+                            "name": "fdb_blob_saved"
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "struct (unnamed at sources/FlashDB/inc/fdb_def.h:319:5)",
+                        "width_bits": null
+                      }
+                    }
+                  ],
+                  "name": "fdb_blob"
+                }
+              },
+              "source_span": null,
+              "spelled": "struct fdb_blob",
+              "width_bits": null
+            }
+          }
+        },
+        {
+          "If": {
+            "condition": {
+              "Var": {
+                "name": "value",
+                "source_span": null,
+                "ty": {
+                  "canonical": "char *",
+                  "is_const": false,
+                  "kind": {
+                    "Pointer": {
+                      "pointee": {
+                        "canonical": "char",
+                        "is_const": true,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 8
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "const char",
+                        "width_bits": 8
+                      }
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "const char *",
+                  "width_bits": null
+                }
+              }
+            },
+            "else_body": [
+              {
+                "Return": {
+                  "source_span": null,
+                  "value": {
+                    "Call": {
+                      "args": [
+                        {
+                          "Var": {
+                            "name": "db",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "struct fdb_kvdb *",
+                              "is_const": false,
+                              "kind": {
+                                "Pointer": {
+                                  "pointee": {
+                                    "canonical": "struct fdb_kvdb",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Record": {
+                                        "fields": null,
+                                        "name": "fdb_kvdb"
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "struct fdb_kvdb",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "struct fdb_kvdb *",
+                              "width_bits": null
+                            }
+                          }
+                        },
+                        {
+                          "Var": {
+                            "name": "key",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "char *",
+                              "is_const": false,
+                              "kind": {
+                                "Pointer": {
+                                  "pointee": {
+                                    "canonical": "char",
+                                    "is_const": true,
+                                    "kind": {
+                                      "Integer": {
+                                        "signed": true,
+                                        "width": 8
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "const char",
+                                    "width_bits": 8
+                                  }
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "const char *",
+                              "width_bits": null
+                            }
+                          }
+                        }
+                      ],
+                      "callee": "fdb_kv_del",
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "enum fdb_err_t",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "source_span": null,
+            "then_body": [
+              {
+                "Return": {
+                  "source_span": null,
+                  "value": {
+                    "Call": {
+                      "args": [
+                        {
+                          "Var": {
+                            "name": "db",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "struct fdb_kvdb *",
+                              "is_const": false,
+                              "kind": {
+                                "Pointer": {
+                                  "pointee": {
+                                    "canonical": "struct fdb_kvdb",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Record": {
+                                        "fields": null,
+                                        "name": "fdb_kvdb"
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "struct fdb_kvdb",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "struct fdb_kvdb *",
+                              "width_bits": null
+                            }
+                          }
+                        },
+                        {
+                          "Var": {
+                            "name": "key",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "char *",
+                              "is_const": false,
+                              "kind": {
+                                "Pointer": {
+                                  "pointee": {
+                                    "canonical": "char",
+                                    "is_const": true,
+                                    "kind": {
+                                      "Integer": {
+                                        "signed": true,
+                                        "width": 8
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "const char",
+                                    "width_bits": 8
+                                  }
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "const char *",
+                              "width_bits": null
+                            }
+                          }
+                        },
+                        {
+                          "Call": {
+                            "args": [
+                              {
+                                "AddrOf": {
+                                  "operand": {
+                                    "Var": {
+                                      "name": "blob",
+                                      "source_span": null,
+                                      "ty": {
+                                        "canonical": "struct fdb_blob",
+                                        "is_const": false,
+                                        "kind": {
+                                          "Record": {
+                                            "fields": [
+                                              {
+                                                "name": "buf",
+                                                "ty": {
+                                                  "canonical": "void *",
+                                                  "is_const": false,
+                                                  "kind": {
+                                                    "Pointer": {
+                                                      "pointee": {
+                                                        "canonical": "void",
+                                                        "is_const": false,
+                                                        "kind": "Void",
+                                                        "source_span": null,
+                                                        "spelled": "void",
+                                                        "width_bits": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_span": null,
+                                                  "spelled": "void *",
+                                                  "width_bits": null
+                                                }
+                                              },
+                                              {
+                                                "name": "size",
+                                                "ty": {
+                                                  "canonical": "size_t",
+                                                  "is_const": false,
+                                                  "kind": {
+                                                    "Integer": {
+                                                      "signed": false,
+                                                      "width": 64
+                                                    }
+                                                  },
+                                                  "source_span": null,
+                                                  "spelled": "size_t",
+                                                  "width_bits": 64
+                                                }
+                                              },
+                                              {
+                                                "name": "saved",
+                                                "ty": {
+                                                  "canonical": "struct fdb_blob_saved",
+                                                  "is_const": false,
+                                                  "kind": {
+                                                    "Record": {
+                                                      "fields": [
+                                                        {
+                                                          "name": "meta_addr",
+                                                          "ty": {
+                                                            "canonical": "uint32_t",
+                                                            "is_const": false,
+                                                            "kind": {
+                                                              "Integer": {
+                                                                "signed": false,
+                                                                "width": 32
+                                                              }
+                                                            },
+                                                            "source_span": null,
+                                                            "spelled": "uint32_t",
+                                                            "width_bits": 32
+                                                          }
+                                                        },
+                                                        {
+                                                          "name": "addr",
+                                                          "ty": {
+                                                            "canonical": "uint32_t",
+                                                            "is_const": false,
+                                                            "kind": {
+                                                              "Integer": {
+                                                                "signed": false,
+                                                                "width": 32
+                                                              }
+                                                            },
+                                                            "source_span": null,
+                                                            "spelled": "uint32_t",
+                                                            "width_bits": 32
+                                                          }
+                                                        },
+                                                        {
+                                                          "name": "len",
+                                                          "ty": {
+                                                            "canonical": "size_t",
+                                                            "is_const": false,
+                                                            "kind": {
+                                                              "Integer": {
+                                                                "signed": false,
+                                                                "width": 64
+                                                              }
+                                                            },
+                                                            "source_span": null,
+                                                            "spelled": "size_t",
+                                                            "width_bits": 64
+                                                          }
+                                                        }
+                                                      ],
+                                                      "name": "fdb_blob_saved"
+                                                    }
+                                                  },
+                                                  "source_span": null,
+                                                  "spelled": "struct (unnamed at sources/FlashDB/inc/fdb_def.h:319:5)",
+                                                  "width_bits": null
+                                                }
+                                              }
+                                            ],
+                                            "name": "fdb_blob"
+                                          }
+                                        },
+                                        "source_span": null,
+                                        "spelled": "struct fdb_blob",
+                                        "width_bits": null
+                                      }
+                                    }
+                                  },
+                                  "source_span": null,
+                                  "ty": {
+                                    "canonical": "struct fdb_blob *",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Pointer": {
+                                        "pointee": {
+                                          "canonical": "struct fdb_blob",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Record": {
+                                              "fields": [
+                                                {
+                                                  "name": "buf",
+                                                  "ty": {
+                                                    "canonical": "void *",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Pointer": {
+                                                        "pointee": {
+                                                          "canonical": "void",
+                                                          "is_const": false,
+                                                          "kind": "Void",
+                                                          "source_span": null,
+                                                          "spelled": "void",
+                                                          "width_bits": null
+                                                        }
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "void *",
+                                                    "width_bits": null
+                                                  }
+                                                },
+                                                {
+                                                  "name": "size",
+                                                  "ty": {
+                                                    "canonical": "size_t",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Integer": {
+                                                        "signed": false,
+                                                        "width": 64
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "size_t",
+                                                    "width_bits": 64
+                                                  }
+                                                },
+                                                {
+                                                  "name": "saved",
+                                                  "ty": {
+                                                    "canonical": "struct fdb_blob_saved",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Record": {
+                                                        "fields": [
+                                                          {
+                                                            "name": "meta_addr",
+                                                            "ty": {
+                                                              "canonical": "uint32_t",
+                                                              "is_const": false,
+                                                              "kind": {
+                                                                "Integer": {
+                                                                  "signed": false,
+                                                                  "width": 32
+                                                                }
+                                                              },
+                                                              "source_span": null,
+                                                              "spelled": "uint32_t",
+                                                              "width_bits": 32
+                                                            }
+                                                          },
+                                                          {
+                                                            "name": "addr",
+                                                            "ty": {
+                                                              "canonical": "uint32_t",
+                                                              "is_const": false,
+                                                              "kind": {
+                                                                "Integer": {
+                                                                  "signed": false,
+                                                                  "width": 32
+                                                                }
+                                                              },
+                                                              "source_span": null,
+                                                              "spelled": "uint32_t",
+                                                              "width_bits": 32
+                                                            }
+                                                          },
+                                                          {
+                                                            "name": "len",
+                                                            "ty": {
+                                                              "canonical": "size_t",
+                                                              "is_const": false,
+                                                              "kind": {
+                                                                "Integer": {
+                                                                  "signed": false,
+                                                                  "width": 64
+                                                                }
+                                                              },
+                                                              "source_span": null,
+                                                              "spelled": "size_t",
+                                                              "width_bits": 64
+                                                            }
+                                                          }
+                                                        ],
+                                                        "name": "fdb_blob_saved"
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "struct (unnamed at sources/FlashDB/inc/fdb_def.h:319:5)",
+                                                    "width_bits": null
+                                                  }
+                                                }
+                                              ],
+                                              "name": "fdb_blob"
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "struct fdb_blob",
+                                          "width_bits": null
+                                        }
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "struct fdb_blob *",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              {
+                                "Var": {
+                                  "name": "value",
+                                  "source_span": null,
+                                  "ty": {
+                                    "canonical": "char *",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Pointer": {
+                                        "pointee": {
+                                          "canonical": "char",
+                                          "is_const": true,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": true,
+                                              "width": 8
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "const char",
+                                          "width_bits": 8
+                                        }
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "const char *",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              {
+                                "Call": {
+                                  "args": [
+                                    {
+                                      "Var": {
+                                        "name": "value",
+                                        "source_span": null,
+                                        "ty": {
+                                          "canonical": "char *",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Pointer": {
+                                              "pointee": {
+                                                "canonical": "char",
+                                                "is_const": true,
+                                                "kind": {
+                                                  "Integer": {
+                                                    "signed": true,
+                                                    "width": 8
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "const char",
+                                                "width_bits": 8
+                                              }
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "const char *",
+                                          "width_bits": null
+                                        }
+                                      }
+                                    }
+                                  ],
+                                  "callee": "strlen",
+                                  "source_span": null,
+                                  "ty": {
+                                    "canonical": "__size_t",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Integer": {
+                                        "signed": false,
+                                        "width": 64
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "__size_t",
+                                    "width_bits": 64
+                                  }
+                                }
+                              }
+                            ],
+                            "callee": "fdb_blob_make",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "struct fdb_blob *",
+                              "is_const": false,
+                              "kind": {
+                                "Pointer": {
+                                  "pointee": {
+                                    "canonical": "struct fdb_blob",
+                                    "is_const": false,
+                                    "kind": {
+                                      "Record": {
+                                        "fields": [
+                                          {
+                                            "name": "buf",
+                                            "ty": {
+                                              "canonical": "void *",
+                                              "is_const": false,
+                                              "kind": {
+                                                "Pointer": {
+                                                  "pointee": {
+                                                    "canonical": "void",
+                                                    "is_const": false,
+                                                    "kind": "Void",
+                                                    "source_span": null,
+                                                    "spelled": "void",
+                                                    "width_bits": null
+                                                  }
+                                                }
+                                              },
+                                              "source_span": null,
+                                              "spelled": "void *",
+                                              "width_bits": null
+                                            }
+                                          },
+                                          {
+                                            "name": "size",
+                                            "ty": {
+                                              "canonical": "size_t",
+                                              "is_const": false,
+                                              "kind": {
+                                                "Integer": {
+                                                  "signed": false,
+                                                  "width": 64
+                                                }
+                                              },
+                                              "source_span": null,
+                                              "spelled": "size_t",
+                                              "width_bits": 64
+                                            }
+                                          },
+                                          {
+                                            "name": "saved",
+                                            "ty": {
+                                              "canonical": "struct fdb_blob_saved",
+                                              "is_const": false,
+                                              "kind": {
+                                                "Record": {
+                                                  "fields": [
+                                                    {
+                                                      "name": "meta_addr",
+                                                      "ty": {
+                                                        "canonical": "uint32_t",
+                                                        "is_const": false,
+                                                        "kind": {
+                                                          "Integer": {
+                                                            "signed": false,
+                                                            "width": 32
+                                                          }
+                                                        },
+                                                        "source_span": null,
+                                                        "spelled": "uint32_t",
+                                                        "width_bits": 32
+                                                      }
+                                                    },
+                                                    {
+                                                      "name": "addr",
+                                                      "ty": {
+                                                        "canonical": "uint32_t",
+                                                        "is_const": false,
+                                                        "kind": {
+                                                          "Integer": {
+                                                            "signed": false,
+                                                            "width": 32
+                                                          }
+                                                        },
+                                                        "source_span": null,
+                                                        "spelled": "uint32_t",
+                                                        "width_bits": 32
+                                                      }
+                                                    },
+                                                    {
+                                                      "name": "len",
+                                                      "ty": {
+                                                        "canonical": "size_t",
+                                                        "is_const": false,
+                                                        "kind": {
+                                                          "Integer": {
+                                                            "signed": false,
+                                                            "width": 64
+                                                          }
+                                                        },
+                                                        "source_span": null,
+                                                        "spelled": "size_t",
+                                                        "width_bits": 64
+                                                      }
+                                                    }
+                                                  ],
+                                                  "name": "fdb_blob_saved"
+                                                }
+                                              },
+                                              "source_span": null,
+                                              "spelled": "struct (unnamed at sources/FlashDB/inc/fdb_def.h:319:5)",
+                                              "width_bits": null
+                                            }
+                                          }
+                                        ],
+                                        "name": "fdb_blob"
+                                      }
+                                    },
+                                    "source_span": null,
+                                    "spelled": "struct fdb_blob",
+                                    "width_bits": null
+                                  }
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "struct fdb_blob *",
+                              "width_bits": null
+                            }
+                          }
+                        }
+                      ],
+                      "callee": "fdb_kv_set_blob",
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "enum fdb_err_t",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "name": "fdb_kv_set",
+      "params": [
+        {
+          "name": "db",
+          "source_span": null,
+          "ty": {
+            "canonical": "struct fdb_kvdb *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "struct fdb_kvdb",
+                  "is_const": false,
+                  "kind": {
+                    "Record": {
+                      "fields": null,
+                      "name": "fdb_kvdb"
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "struct fdb_kvdb",
+                  "width_bits": null
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "struct fdb_kvdb *",
+            "width_bits": null
+          }
+        },
+        {
+          "name": "key",
+          "source_span": null,
+          "ty": {
+            "canonical": "char *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "char",
+                  "is_const": true,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "const char",
+                  "width_bits": 8
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "const char *",
+            "width_bits": null
+          }
+        },
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "char *",
+            "is_const": false,
+            "kind": {
+              "Pointer": {
+                "pointee": {
+                  "canonical": "char",
+                  "is_const": true,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 8
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "const char",
+                  "width_bits": 8
+                }
+              }
+            },
+            "source_span": null,
+            "spelled": "const char *",
+            "width_bits": null
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "enum fdb_err_t",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
     "function_name": "fdb_kv_set",
     "globals": [],
-    "source_file": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
-    "status": "unavailable"
+    "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+    "status": "lowered"
   },
   "metadata": {
+    "clang_ast_fixture": null,
     "compile_commands": null,
     "function_source_span": {
       "byte_end": 49710,
@@ -67,21 +979,41 @@
     "source_file_hashes": {
       "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
     },
-    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829"
+    "source_root": "sources/FlashDB"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "source_file": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
-  "status": "unavailable",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "sources/FlashDB/src/fdb_kvdb.c",
+  "status": "lowered",
   "target_id": "flashdb",
   "typed_ir_candidate": {
-    "candidate_route": null,
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
     "readonly_globals": [],
-    "reason": "function_ir_missing",
     "runtime_preconditions": [],
-    "rust_draft_generated": false,
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
     "semantic_pass": false,
-    "status": "not_available"
+    "status": "generated",
+    "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f"
   }
 }

@@ -117,6 +117,7 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
     governance_delta_count = 0
     verification_command_count = 0
     blocked_callee_count = 0
+    accepted_evidence_semantic_pass_count = 0
 
     for path in ledger_files:
         payload = load_json(path)
@@ -147,6 +148,9 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
         route_status = str(payload.get("route_status", "unknown"))
         route_levels[route_level] += 1
         route_statuses[route_status] += 1
+        accepted_evidence_semantic_pass = accepted_evidence_semantic_pass_for_ledger(path, payload)
+        if accepted_evidence_semantic_pass:
+            accepted_evidence_semantic_pass_count += 1
         governance_delta_count += len(governance)
         verification_command_count += len(commands)
         ledger_summaries.append(
@@ -157,6 +161,7 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
                 "route_level": route_level,
                 "route_status": route_status,
                 "delta_count": len(deltas),
+                "accepted_evidence_semantic_pass": accepted_evidence_semantic_pass,
             }
         )
         for delta in deltas:
@@ -196,7 +201,9 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
         "delta_count": delta_count,
         "governance_delta_count": governance_delta_count,
         "verification_command_count": verification_command_count,
+        "translator_generated_semantic_pass_count": semantic_pass_count,
         "semantic_pass_count": semantic_pass_count,
+        "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
         "blocked_callee_count": blocked_callee_count,
         "generated_candidate_status": {
             status: generated_status[status] for status in sorted(generated_status)
@@ -208,8 +215,30 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
             for construct, counters in sorted(by_construct.items())
         },
         "ledgers": ledger_summaries,
-        "claim_boundary": "Capability-delta ledger entries are not semantic acceptance evidence; use semantic_pass_count and validation gates for acceptance claims.",
+        "claim_boundary": "Capability-delta ledger entries are not semantic acceptance evidence; translator_generated_semantic_pass_count is the translator-generated acceptance count, semantic_pass_count is a compatibility alias, and accepted_evidence_semantic_pass_count is reported separately without entering translation coverage.",
     }
+
+
+def accepted_evidence_semantic_pass_for_ledger(path: Path, payload: dict[str, Any]) -> bool:
+    slice_id = payload.get("slice_id")
+    if isinstance(slice_id, str) and slice_id:
+        prefix = f"l3-{slice_id}"
+        final_verification = path.with_name(f"{prefix}-final-verification.json")
+        if final_verification.exists() and is_accepted_evidence_semantic_pass(load_json(final_verification)):
+            return True
+
+    for delta in payload.get("capability_delta", []):
+        if isinstance(delta, dict) and is_accepted_evidence_semantic_pass(delta):
+            return True
+    return False
+
+
+def is_accepted_evidence_semantic_pass(payload: dict[str, Any]) -> bool:
+    return (
+        payload.get("semantic_pass") is True
+        and payload.get("accepted_evidence_authoritative") is True
+        and payload.get("generated_draft_semantic_pass") is False
+    )
 
 
 def validate_capability(repo_root: Path, capability: dict[str, Any]) -> dict[str, Any]:

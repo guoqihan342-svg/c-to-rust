@@ -54,7 +54,7 @@
 
 对 FlashDB crc32（已通过的案例）：typed IR 候选生成到 validation profile 生成约 5-8 分钟。
 
-**多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。
+**多 slice 策略**：允许同一次 OpenCode 会话中并行处理多个独立 slice。并行时必须给每个 slice/worker 分配独立 out-root 或子目录，最终由同一个 summary/validator 汇总；任一 worker 的中间结论都不能直接成为比赛 evidence。可复用文件级批量优先用 `run-batch-profile` 固化输入；调试展开时用 `plan-source-file` 生成 plan，再用 `run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>` 做 LangGraph 风格 fan-out/fan-in、让失败 worker 消费已落盘 repair hint 重试，并运行最终 worker-summary 聚合；这只是围绕最终 runner/validator 的确定性 batch 调度，不替代它。profile 可设置 `emit_route_governance_metrics_report=true`，让 batch 同步产出并绑定 `summary/route-governance-metrics-report.json`，用于公开叙述边界和能力/拒绝率指标，不替代 semantic gate。若 bounded retry 后任何 planned worker 仍缺少已记录 summary，最终 merge 会 fail-closed 跳过。
 
 ## OpenCode Harness 多 Agent + SQLite 流程
 
@@ -63,11 +63,46 @@ P0 默认使用 `target/competition-out/state/opencode-agent-harness.sqlite3` �
 典型流程：
 
 ```bash
+# 优先的可复用 profile 路径：
+python -m validation.tools.opencode_agent_harness run-batch-profile \
+  --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
+  --run-id <run-id> \
+  --out-root target/competition-out
+
+# 展开调试路径：
 python -m validation.tools.opencode_agent_harness init-run \
   --run-id <run-id> \
   --proof-class <proof-class> \
   --out-root target/competition-out
 
+# 优先的文件级批量路径：
+python -m validation.tools.opencode_agent_harness plan-source-file \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --target-id <target> \
+  --source-repo-root <repo-relative-c-source-root> \
+  --source-file <repo-relative-c-file> \
+  --function <function> \
+  --source-commit <commit> \
+  --slice-spec <repo-relative-maintained-slice-spec> \
+  --reuse-accepted-evidence \
+  --accepted-evidence-root validation/evidence \
+  --slice-id-prefix <slice-prefix> \
+  --worker-prefix worker \
+  --out-root target/competition-out
+
+python -m validation.tools.opencode_agent_harness run-plan \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --plan target/competition-out/harness/plans/<target>-<source-stem>-workers.json \
+  --proof-class <proof-class> \
+  --mode deterministic \
+  --execute-merge \
+  --auto-retry \
+  --max-workers 4 \
+  --out-root target/competition-out
+
+# 手工展开的单 worker 路径：
 python -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
@@ -83,13 +118,37 @@ python -m validation.tools.opencode_agent_harness assign-slice \
   --define DEMO=1 \
   --out-root target/competition-out/workers/worker-a
 
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+# 复用已提交 accepted evidence 时额外添加：
+#   --slice-spec <repo-relative-maintained-slice-spec>
+#   --reuse-accepted-evidence
+#   --accepted-evidence-root validation/evidence
 
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
-  --summary target/competition-out/workers/worker-a/summary/competition-run-summary.json
+  --mode deterministic
+
+# 本机连接 OpenCode / DeepSeek V4 Pro 时，先验证 exact-command preflight：
+python -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id <run-id> \
+  --out-root target/opencode-preflight \
+  --opencode-variant max \
+  --opencode-skip-permissions
+
+# preflight 通过后才改用 agent 包装层：
+python -m validation.tools.opencode_agent_harness run-worker \
+  --db target/competition-out/state/opencode-agent-harness.sqlite3 \
+  --run-id <run-id> \
+  --worker-id worker-a \
+  --mode opencode \
+  --opencode-variant max \
+  --opencode-skip-permissions \
+  --opencode-preflight-report target/opencode-preflight/harness/opencode-preflight-report.json
+
+`opencode-preflight` 只验证 OpenCode 能否把第一条 shell/bash/powershell/cmd tool call 精确执行为 harness 指定命令，并写出 marker/report；它不是语义验收。preflight report 会结构化记录 run id、launch policy（`opencode_command`、`opencode_model`、`opencode_agent`、`opencode_variant`、`opencode_skip_permissions`）及 hash；`run-worker --mode opencode` 和 `run-plan --mode opencode` 必须通过 `--opencode-preflight-report <report>` 绑定已通过、`run_id` 与当前 run 完全一致、且 launch policy 与当前启动参数完全一致的 preflight report，否则会在启动 OpenCode 前 fail-closed。`--mode opencode` 会在 worker 隔离目录写出 `harness/opencode-handoff-contract.json` 和 `logs/opencode-session-evidence.json`，并由 `harness/run-worker-report.json`、SQLite event、repair hint 和 artifact index 绑定。前者记录 exact deterministic worker command、request、expected summary、OpenCode prompt 和 launch policy；后者解析 OpenCode `--format json` 的 JSON/JSONL 输出，解析失败时也保留 raw fallback。如果 OpenCode 在第一条 shell command 前以 `database is locked` 退出，launcher 会做有限启动重试并记录 `opencode_process_retries`；接受 worker 前仍必须看到 contract executed 和 expected summary。二者只证明 agent 执行审计链路，不替代 `competition-run-summary.json`、final gate 或 validator。
+
+`run-plan --auto-retry` 是有界自愈路径：失败 worker 会写入 repair hint，harness 重新执行同一个 worker，并在 worker 重新验证通过或达到 `REPAIR_ROUND_CAP=5` 上限时停止。`--max-workers` 控制并行 worker fan-out；报告用 `run_plan.graph.parallel_map.result_order=planner_order` 固定 planner 顺序 fan-in。retry 成功只说明 worker summary 重新验证通过；语义接受仍只看最终 summary validator、oracle/diff/unsafe gates。
 
 python -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
@@ -110,15 +169,15 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 1. source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh
    — 确认环境满足比赛基线；`env.sh` 会激活 `CARGO_HOME=config/competition-env/cargo`，`toolchain-check.sh` 找到 clang 时会额外验证 resource-dir 和包含 `stdint.h`/`stddef.h` 的最小 TU AST dump。
 
-2. 单个真实 C 源函数优先使用 runner 直接参数；批量或可复用输入可准备 `target/competition-out/extract-specs/<id>-<slice>.json`，至少包含 `repo_root`、`source_file`、`function`、`target_id`、`slice_id`，可选包含 `source_commit`、`compiler_command_source`、`include_paths`、`defines`；`source_file` 必须是相对 `repo_root` 的路径。
+2. 单个真实 C 源函数优先使用 runner 直接参数；批量或可复用输入可准备 `target/competition-out/extract-specs/<id>-<slice>.json`，至少包含 `repo_root`、`source_file`、`function`、`target_id`、`slice_id`，可选包含 `source_repository`、`source_branch`、`source_commit`、`require_source_commit`、`compiler_command_source`、`include_paths`、`defines`；`source_file` 必须是相对 `repo_root` 的路径。FlashDB 比赛打分源必须绑定 `https://gitcode.com/xwxf/FlashDB.git`、`competition` 分支和 `f9d0421315c564fb890a1b14eee77b290e0d7bbe`。
    — 直接参数和 JSON extract spec 都是 runner 调用 `extract_source_slice.py` 的参数化输入；不要手写 `c_source`。
 
-3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
    — 使用统一 runner 执行 slice 抽取、环境检查、typed-IR 迁移、证据验证、unsafe、OpenSpec 和 `competition-run-summary.json` 生成；runner 会把生成的 slice spec 写入 `target/competition-out/slice-specs/`。
    — 批量或可复用输入用 `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` 替代直接 source 参数。
    — 若多个独立 worker 已分别产出 summary，可用 `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json` 重复传入汇总；汇总 runner 不会重新处理这些 slice，会合并计数并在任一 worker failed/blocked 时让最终 gate 失败。
 
-4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-commit <hash> --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
+4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — 手动展开版的真实 C 源函数切片抽取。使用 runner 的 `--extract-spec` 时该步骤由 runner 调用。
 
 5. python validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
@@ -132,11 +191,11 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
-9. 如需多 agent 并行，先用 `python -m validation.tools.opencode_agent_harness init-run` 建立 SQLite ledger，再用 `assign-slice` 给每个 worker 生成 assignment。worker 只写自己的 `target/competition-out/workers/<worker-id>/`，完成后用 `record-worker-summary` 入库，最后用 `write-merge-plan` 生成统一汇总命令。
+9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、用 `max_workers` 执行 planned workers、运行 bounded `auto_retry=true` 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用同一个 `run_id` 运行 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-preflight-report <report>`。旧 run 的 preflight report 不可复用，worker summary 仍必须通过 final runner 和 common summary validator 收敛；最多 5 轮 repair retry 后仍缺少 planned worker summary 时最终 merge 会 fail-closed 跳过，OpenCode 启动数据库锁重试则单独记录为 `opencode_process_retries`。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。运行前先用 read 工具看 CONTEXT.md 了解当前状态。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。
-遇到失败就记录原因，不进入修复循环。
+在 harness retry 路径之外遇到失败就记录原因，不进入手工或无界修复循环。
 ```
 
 ## Agent 行为约束
@@ -144,7 +203,7 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 - **不修改项目 Rust/Python 源码**（除非证据目录中已存在 `blocked_repairs` 且原文案明确允许修复）。
 - **不生成手写 `c_source` 字符串**（必须从真实 C 源文件通过 `extract_source_slice.py` 抽取）。
 - **不启动 LLM code generation**（本项目翻译只走 clang-lowered typed IR + generic emitter，不走 AI/LLM 候选生成）。
-- **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。
+- **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。planned batch 可以保留 planner 顺序写 report/merge input，但不能替代最终 validator。
 - **SQLite 只是 harness ledger**，用于 assignment、lease、artifact index 和 merge plan；不能用 SQLite 中的状态替代 evidence validator。
 - **优先使用 `run_competition.py` 直接 source 参数或 `--extract-spec` 做真实 C slice 抽取、迁移和汇总**；`--slice-spec` 仍可用于已经抽取好的 spec，多个隔离 worker 的结果通过重复 `--worker-summary` 进入同一 summary validator。
 - **C2Rust baseline 如果生成失败/不存在，记录 `skipped` 或 `blocked`**，不伪造 `generated`。

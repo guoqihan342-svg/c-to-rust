@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "profile_id": "flashdb-fdb-utils-opencode-explicit-workers",
+  "proof_class": "local-simulation",
+  "target_id": "flashdb",
+  "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+  "source_branch": "competition",
+  "reuse_accepted_evidence": true,
+  "accepted_evidence_root": "validation/evidence",
+  "worker_prefix": "flashdb-worker",
+  "mode": "opencode",
+  "opencode_command": "opencode",
+  "opencode_variant": "max",
+  "opencode_skip_permissions": true,
+  "execute_merge": true,
+  "auto_retry": false,
+  "max_workers": 2,
+  "emit_route_governance_metrics_report": true,
+  "acceptance_boundary": {
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false,
+    "claim": "FlashDB explicit multi-worker OpenCode harness smoke over two accepted-evidence slices; OpenCode chat/session output is command-contract audit evidence only"
+  },
+  "workers": [
+    {
+      "worker_id": "flashdb-opencode-worker-001-fdb-calc-crc32",
+      "target_id": "flashdb",
+      "source_repo_root": "sources/FlashDB",
+      "source_file": "src/fdb_utils.c",
+      "function": "fdb_calc_crc32",
+      "slice_id": "real-fdb-calc-crc32",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json"
+    },
+    {
+      "worker_id": "flashdb-opencode-worker-002-fdb-blob-make",
+      "target_id": "flashdb",
+      "source_repo_root": "sources/FlashDB",
+      "source_file": "src/fdb_utils.c",
+      "function": "fdb_blob_make",
+      "slice_id": "real-fdb-blob-make",
+      "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "require_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-blob-make.json"
+    }
+  ]
+}

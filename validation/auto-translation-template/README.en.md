@@ -22,3 +22,4 @@ The Chinese source currently contains these major headings:
 - Keep filenames paired as `README.md` and `README.en.md` in the same directory.
 - Keep the first line of the Chinese source pointing to `README.en.md` with the repository-standard mirror notice.
 - For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; local plans, OpenSpec tasks, and validation checklists are scoped artifacts only.
+- Generated C2Rust baseline manifests must include `compile` evidence bound to the same output path/status/sha256. The compile check is compile-only candidate evidence, not semantic acceptance.

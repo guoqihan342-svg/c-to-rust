@@ -190,6 +190,101 @@ class VerifyVendoredClangTests(unittest.TestCase):
             self.assertEqual(summary["clang"]["source"], "CLANG_PATH")
             self.assertTrue(summary["clang"]["path"].endswith(clang.name))
 
+    def test_clang_path_absolute_outside_repo_fails_closed_without_command_execution(self) -> None:
+        module = load_verify_module()
+        with tempfile.TemporaryDirectory(prefix="vendored-clang-test-") as tmp:
+            base = Path(tmp)
+            repo_root = base / "repo"
+            repo_root.mkdir()
+            write_minimal_profile(repo_root)
+            outside_clang = base / "outside" / ("clang.exe" if sys.platform == "win32" else "clang")
+            outside_clang.parent.mkdir()
+            outside_clang.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            outside_clang.chmod(0o755)
+            out_path = repo_root / "target" / "summary" / "vendored-clang-verification.json"
+            fake_runner = FakeClangRunner()
+
+            result = module.verify_vendored_clang(
+                repo_root=repo_root,
+                out=out_path,
+                proof_class="local-simulation",
+                environment={"CLANG_PATH": str(outside_clang)},
+                command_runner=fake_runner,
+            )
+
+            summary = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(result.exit_code, 1)
+            self.assertEqual(summary["status"], "failed")
+            self.assertEqual(summary["reason"], "invalid_clang_path_outside_repo")
+            self.assertEqual(summary["clang"]["source"], "CLANG_PATH")
+            self.assertIsNone(summary["clang"]["path"])
+            self.assertFalse(summary["clang_lane_verified"])
+            self.assertEqual(fake_runner.commands, [])
+
+    def test_clang_path_parent_traversal_outside_repo_fails_closed(self) -> None:
+        module = load_verify_module()
+        with tempfile.TemporaryDirectory(prefix="vendored-clang-test-") as tmp:
+            base = Path(tmp)
+            repo_root = base / "repo"
+            repo_root.mkdir()
+            write_minimal_profile(repo_root)
+            outside_clang = base / "outside" / ("clang.exe" if sys.platform == "win32" else "clang")
+            outside_clang.parent.mkdir()
+            outside_clang.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            outside_clang.chmod(0o755)
+            out_path = repo_root / "target" / "summary" / "vendored-clang-verification.json"
+
+            result = module.verify_vendored_clang(
+                repo_root=repo_root,
+                out=out_path,
+                proof_class="local-simulation",
+                environment={"CLANG_PATH": "../outside/" + outside_clang.name},
+                command_runner=FakeClangRunner(),
+            )
+
+            summary = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(result.exit_code, 1)
+            self.assertEqual(summary["status"], "failed")
+            self.assertEqual(summary["reason"], "invalid_clang_path_outside_repo")
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertIn("invalid_clang_path_outside_repo", summary["final_gate"]["reasons"])
+
+    def test_clang_path_repo_local_absolute_is_normalized_in_summary_and_command_log(self) -> None:
+        module = load_verify_module()
+        with tempfile.TemporaryDirectory(prefix="vendored-clang-test-") as tmp:
+            repo_root = Path(tmp)
+            write_minimal_profile(repo_root)
+            clang = repo_root / "tools" / "llvm" / "bin" / ("clang.exe" if sys.platform == "win32" else "clang")
+            clang.parent.mkdir(parents=True)
+            clang.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            clang.chmod(0o755)
+            out_path = repo_root / "target" / "summary" / "vendored-clang-verification.json"
+
+            result = module.verify_vendored_clang(
+                repo_root=repo_root,
+                out=out_path,
+                proof_class="local-simulation",
+                environment={"CLANG_PATH": str(clang)},
+                command_runner=FakeClangRunner(),
+            )
+
+            summary = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(summary["status"], "passed")
+            self.assertEqual(summary["clang"]["path"], f"tools/llvm/bin/{clang.name}")
+            command_log = out_path.parent.parent / "logs" / "vendored-clang-commands.jsonl"
+            command_entries = [
+                json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()
+            ]
+            logged_commands = [
+                argument
+                for entry in command_entries
+                for argument in entry["command"]
+                if isinstance(argument, str)
+            ]
+            self.assertNotIn(str(clang), logged_commands)
+            self.assertTrue(all(str(repo_root) not in argument for argument in logged_commands))
+
 
 if __name__ == "__main__":
     unittest.main()

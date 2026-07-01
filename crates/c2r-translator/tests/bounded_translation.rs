@@ -330,6 +330,7 @@ fn clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -369,6 +370,346 @@ fn clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang() {
     );
     assert!(!rust.contains("strlen(name)"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-strlen", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_memset_statement_void_pointer_return_without_clang() {
+    let ast: Value = serde_json::from_str(
+        r#"
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "clear_prefix",
+      "type": { "qualType": "void (uint8_t *, size_t)" },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "out",
+          "type": { "qualType": "uint8_t *" }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": { "qualType": "size_t" }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "CallExpr",
+              "type": { "qualType": "void *" },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": { "qualType": "void *(*)(void *, int, size_t)" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "void *(void *, int, size_t)" },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "memset"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "BitCast",
+                  "type": { "qualType": "void *" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": { "qualType": "uint8_t *" },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": { "qualType": "uint8_t *" },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "out"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "IntegerLiteral",
+                  "type": { "qualType": "int" },
+                  "value": "0"
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": { "qualType": "size_t" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "size_t" },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "count"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#,
+    )
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "clear_prefix",
+        Some(&target_abi),
+    )
+    .expect("lower clang memset statement fixture without invoking clang");
+    let [IrStmt::Expr {
+        expr: IrExpr::Call {
+            callee, args, ty, ..
+        },
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected memset expression statement, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(callee, "memset");
+    assert_eq!(args.len(), 3);
+    assert_eq!(ty.canonical, "void *");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit modeled memset statement from clang fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(!rust.contains("memset(out, 0, count)"), "{rust}");
+    assert!(
+        rust.contains("pub fn clear_prefix(mut out: &mut [u8], count: usize)"),
+        "{rust}"
+    );
+    assert!(rust.contains(".get_mut(..(count as usize))"), "{rust}");
+    assert!(rust.contains(".fill(0u8);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-memset-void-pointer",
+        rust,
+        r#"
+    let mut out = [1u8, 2, 3, 4];
+    clear_prefix(&mut out, 3);
+    assert_eq!(out, [0u8, 0, 0, 4]);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_memcpy_statement_void_pointer_return_without_clang() {
+    let ast: Value = serde_json::from_str(
+        r#"
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "copy_prefix",
+      "type": { "qualType": "void (const uint8_t *restrict, uint8_t *restrict, size_t)" },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "src",
+          "type": { "qualType": "const uint8_t *restrict" }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "out",
+          "type": { "qualType": "uint8_t *restrict" }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": { "qualType": "size_t" }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "CallExpr",
+              "type": { "qualType": "void *" },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": { "qualType": "void *(*)(void *, const void *, size_t)" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "void *(void *, const void *, size_t)" },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "memcpy"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "BitCast",
+                  "type": { "qualType": "void *" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": { "qualType": "uint8_t *restrict" },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": { "qualType": "uint8_t *restrict" },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "out"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "BitCast",
+                  "type": { "qualType": "const void *" },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": { "qualType": "const uint8_t *restrict" },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": { "qualType": "const uint8_t *restrict" },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "src"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": { "qualType": "size_t" },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": { "qualType": "size_t" },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "count"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+"#,
+    )
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "copy_prefix",
+        Some(&target_abi),
+    )
+    .expect("lower clang memcpy statement fixture without invoking clang");
+    let [IrStmt::Expr {
+        expr: IrExpr::Call {
+            callee, args, ty, ..
+        },
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected memcpy expression statement, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert_eq!(callee, "memcpy");
+    assert_eq!(args.len(), 3);
+    assert_eq!(ty.canonical, "void *");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit modeled memcpy statement from clang fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(!rust.contains("memcpy(out, src, count)"), "{rust}");
+    assert!(
+        rust.contains("pub fn copy_prefix(src: &[u8], mut out: &mut [u8], count: usize)"),
+        "{rust}"
+    );
+    assert!(rust.contains("copy_from_slice"), "{rust}");
+    assert!(
+        rust.contains("C memcpy source precondition violated"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("C memcpy destination precondition violated"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-memcpy-void-pointer",
+        rust,
+        r#"
+    let src = [1u8, 2, 3, 4];
+    let mut out = [0u8; 4];
+    copy_prefix(&src, &mut out, 3);
+    assert_eq!(out, [1u8, 2, 3, 0]);
+"#,
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -503,6 +844,7 @@ fn clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_wr
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -596,6 +938,7 @@ fn clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang() 
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -728,6 +1071,197 @@ fn clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang() {
         "{rust}"
     );
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-usual-arithmetic-cast", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/unary_integer_conversion_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let promoted = lower_function_and_globals_from_clang_ast_json_value(&ast, "promote_plus")
+        .expect("lower clang-proven unary plus integer promotion fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit: true,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = promoted.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected unary plus return to preserve IntegralPromotion as an IR cast, got {:?}",
+            promoted.function_ir.body
+        );
+    };
+    assert!(matches!(
+        target.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let IrExpr::LValueToRValue {
+        target: read_ty,
+        expr: read_expr,
+        ..
+    } = expr.as_ref()
+    else {
+        panic!("expected promoted unary plus operand to preserve LValueToRValue, got {expr:?}");
+    };
+    assert!(matches!(
+        read_ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 8
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
+        panic!("expected promoted unary plus read operand to be the original parameter, got {read_expr:?}");
+    };
+    assert_eq!(name, "value");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 8
+        }
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&promoted.function_ir, &promoted.globals)
+        .expect("emit Rust from clang-proven unary plus integer promotion fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn promote_plus(value: i8) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return (value as i32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-unary-plus-integer-promotion",
+        rust,
+        "assert_eq!(promote_plus(-7i8), -7i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/implicit_integer_noop_cast_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let identity = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_noop")
+        .expect("lower clang-proven implicit integer NoOp cast fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit: true,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = identity.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integer NoOp return to preserve an IR cast, got {:?}",
+            identity.function_ir.body
+        );
+    };
+    assert!(matches!(
+        target.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let IrExpr::LValueToRValue {
+        target: read_target,
+        expr: read_expr,
+        ..
+    } = expr.as_ref()
+    else {
+        panic!("expected NoOp cast operand to be an explicit LValueToRValue read, got {expr:?}");
+    };
+    assert!(matches!(
+        read_target.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
+        panic!("expected LValueToRValue operand to be the original parameter, got {read_expr:?}");
+    };
+    assert_eq!(name, "value");
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&identity.function_ir, &identity.globals)
+        .expect("emit Rust from clang-proven implicit integer NoOp cast fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn identity_noop(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return (value as i32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-implicit-integer-noop-cast",
+        rust,
+        "assert_eq!(identity_noop(-7i32), -7i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/lvalue_to_rvalue_integer_return_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let read_value = lower_function_and_globals_from_clang_ast_json_value(&ast, "read_value")
+        .expect("lower clang-proven integer LValueToRValue fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(expr), ..
+    }] = read_value.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integer LValueToRValue return expression, got {:?}",
+            read_value.function_ir.body
+        );
+    };
+    let lowered_json = serde_json::to_value(expr).expect("serialize return expression");
+    let Some(lvalue_to_rvalue) = lowered_json.get("LValueToRValue") else {
+        panic!("expected explicit LValueToRValue IR node, got {lowered_json}");
+    };
+    assert_eq!(lvalue_to_rvalue["target"]["kind"]["Integer"]["width"], 32);
+    assert_eq!(lvalue_to_rvalue["expr"]["Var"]["name"], "value");
+
+    let emitted = emit_rust_from_ir_with_globals(&read_value.function_ir, &read_value.globals)
+        .expect("emit Rust from clang-proven integer LValueToRValue fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn read_value(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return value;"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-integer-lvalue-to-rvalue",
+        rust,
+        "assert_eq!(read_value(-7i32), -7i32);",
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -952,6 +1486,7 @@ fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -993,6 +1528,108 @@ fn clang_ast_fixture_rejects_explicit_enum_typed_identity_without_target_abi() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_rejects_named_enum_without_complete_definition_flag() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3100",
+                "kind": "EnumDecl",
+                "name": "mode",
+                "inner": [
+                    {
+                        "id": "0x3101",
+                        "kind": "EnumConstantDecl",
+                        "name": "MODE_OK",
+                        "type": { "qualType": "int" },
+                        "inner": [
+                            {
+                                "kind": "ConstantExpr",
+                                "type": { "qualType": "int" },
+                                "value": "0",
+                                "inner": [
+                                    {
+                                        "kind": "IntegerLiteral",
+                                        "type": { "qualType": "int" },
+                                        "value": "0"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "identity_mode",
+                "type": { "qualType": "enum mode (enum mode)" },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "value",
+                        "type": { "qualType": "enum mode" }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": { "qualType": "enum mode" },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": { "qualType": "enum mode" },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "value"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "identity_mode",
+        Some(&target_abi),
+    )
+    .expect_err("named enum without completeDefinition must fail closed");
+
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(
+        error
+            .message
+            .contains("EnumDecl mode is not a complete definition"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
@@ -1007,6 +1644,7 @@ fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1070,6 +1708,475 @@ fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x2000",
+                "kind": "EnumDecl",
+                "completeDefinition": true,
+                "inner": [
+                    {
+                        "id": "0x2001",
+                        "kind": "EnumConstantDecl",
+                        "name": "FDB_NO_ERR",
+                        "type": { "qualType": "int" },
+                        "inner": [
+                            {
+                                "kind": "ConstantExpr",
+                                "type": { "qualType": "int" },
+                                "value": "0",
+                                "inner": [
+                                    {
+                                        "kind": "IntegerLiteral",
+                                        "type": { "qualType": "int" },
+                                        "value": "0"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "0x2002",
+                        "kind": "EnumConstantDecl",
+                        "name": "FDB_INIT_FAILED",
+                        "type": { "qualType": "int" },
+                        "inner": [
+                            {
+                                "kind": "ConstantExpr",
+                                "type": { "qualType": "int" },
+                                "value": "7",
+                                "inner": [
+                                    {
+                                        "kind": "IntegerLiteral",
+                                        "type": { "qualType": "int" },
+                                        "value": "7"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "kind": "TypedefDecl",
+                "name": "fdb_err_t",
+                "isReferenced": true,
+                "type": { "qualType": "enum fdb_err_t" },
+                "inner": [
+                    {
+                        "kind": "EnumType",
+                        "type": { "qualType": "enum fdb_err_t" },
+                        "decl": {
+                            "id": "0x2000",
+                            "kind": "EnumDecl",
+                            "name": ""
+                        },
+                        "isTagOwned": true
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "id_err",
+                "type": {
+                    "qualType": "fdb_err_t (fdb_err_t)"
+                },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "e",
+                        "type": {
+                            "qualType": "fdb_err_t",
+                            "desugaredQualType": "enum fdb_err_t"
+                        }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": {
+                                            "qualType": "fdb_err_t",
+                                            "desugaredQualType": "enum fdb_err_t"
+                                        },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": {
+                                                    "qualType": "fdb_err_t",
+                                                    "desugaredQualType": "enum fdb_err_t"
+                                                },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "e"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "id_err",
+        Some(&target_abi),
+    )
+    .expect("lower anonymous typedef enum alias identity fixture without invoking clang");
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        lowered.function_ir.params.as_slice(),
+        [IrParam {
+            name,
+            ty:
+                IrType {
+                    kind:
+                        IrTypeKind::Integer {
+                            signed: true,
+                            width: 32
+                        },
+                    ..
+                },
+            ..
+        }] if name == "e"
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from anonymous typedef enum alias fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
+    assert!(rust.contains("return e;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-typedef-enum-alias", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_owned_typedef_enum_alias_without_complete_definition_flag() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3000",
+                "kind": "TypedefDecl",
+                "name": "fdb_err_t",
+                "isReferenced": true,
+                "type": { "qualType": "enum fdb_err_t" },
+                "inner": [
+                    {
+                        "id": "0x3001",
+                        "kind": "EnumDecl",
+                        "inner": [
+                            {
+                                "id": "0x3002",
+                                "kind": "EnumConstantDecl",
+                                "name": "FDB_NO_ERR",
+                                "type": { "qualType": "int" },
+                                "inner": [
+                                    {
+                                        "kind": "ConstantExpr",
+                                        "type": { "qualType": "int" },
+                                        "value": "0",
+                                        "inner": [
+                                            {
+                                                "kind": "IntegerLiteral",
+                                                "type": { "qualType": "int" },
+                                                "value": "0"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "0x3003",
+                                "kind": "EnumConstantDecl",
+                                "name": "FDB_INIT_FAILED",
+                                "type": { "qualType": "int" },
+                                "inner": [
+                                    {
+                                        "kind": "ConstantExpr",
+                                        "type": { "qualType": "int" },
+                                        "value": "7",
+                                        "inner": [
+                                            {
+                                                "kind": "IntegerLiteral",
+                                                "type": { "qualType": "int" },
+                                                "value": "7"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "id_err",
+                "type": {
+                    "qualType": "fdb_err_t (fdb_err_t)"
+                },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "e",
+                        "type": {
+                            "qualType": "fdb_err_t",
+                            "desugaredQualType": "enum fdb_err_t",
+                            "typeAliasDeclId": "0x3000"
+                        }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": {
+                                            "qualType": "fdb_err_t",
+                                            "desugaredQualType": "enum fdb_err_t",
+                                            "typeAliasDeclId": "0x3000"
+                                        },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": {
+                                                    "qualType": "fdb_err_t",
+                                                    "desugaredQualType": "enum fdb_err_t",
+                                                    "typeAliasDeclId": "0x3000"
+                                                },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "e"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "id_err",
+        Some(&target_abi),
+    )
+    .expect("lower FlashDB-style owned typedef enum alias without completeDefinition flag");
+
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        lowered.function_ir.params.as_slice(),
+        [IrParam {
+            name,
+            ty:
+                IrType {
+                    kind:
+                        IrTypeKind::Integer {
+                            signed: true,
+                            width: 32
+                        },
+                    ..
+                },
+            ..
+        }] if name == "e"
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from FlashDB-style owned typedef enum alias fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
+    assert!(rust.contains("return e;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-owned-typedef-enum-alias", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_typedef_enum_alias_reference_with_implicit_values() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3201",
+                "kind": "EnumDecl",
+                "inner": [
+                    {
+                        "id": "0x3202",
+                        "kind": "EnumConstantDecl",
+                        "name": "FDB_NO_ERR",
+                        "type": { "qualType": "int" }
+                    },
+                    {
+                        "id": "0x3203",
+                        "kind": "EnumConstantDecl",
+                        "name": "FDB_INIT_FAILED",
+                        "type": { "qualType": "int" }
+                    }
+                ]
+            },
+            {
+                "id": "0x3200",
+                "kind": "TypedefDecl",
+                "name": "fdb_err_t",
+                "isReferenced": true,
+                "type": { "qualType": "enum fdb_err_t" },
+                "inner": [
+                    {
+                        "kind": "EnumType",
+                        "type": { "qualType": "enum fdb_err_t" },
+                        "decl": {
+                            "kind": "EnumDecl",
+                            "id": "0x3201"
+                        }
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "id_err",
+                "type": {
+                    "qualType": "fdb_err_t (fdb_err_t)"
+                },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "e",
+                        "type": {
+                            "qualType": "fdb_err_t",
+                            "desugaredQualType": "enum fdb_err_t",
+                            "typeAliasDeclId": "0x3200"
+                        }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": {
+                                            "qualType": "fdb_err_t",
+                                            "desugaredQualType": "enum fdb_err_t",
+                                            "typeAliasDeclId": "0x3200"
+                                        },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": {
+                                                    "qualType": "fdb_err_t",
+                                                    "desugaredQualType": "enum fdb_err_t",
+                                                    "typeAliasDeclId": "0x3200"
+                                                },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "e"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "id_err",
+        Some(&target_abi),
+    )
+    .expect("lower FlashDB-style typedef enum alias reference with implicit values");
+
+    assert!(matches!(
+        lowered.function_ir.return_type.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from FlashDB-style implicit typedef enum alias fixture");
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
+    assert!(rust.contains("return e;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-typedef-enum-alias-implicit-values",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi() {
     let ast: Value =
         serde_json::from_str(include_str!("../fixtures/clang_ast/enum_constant_ast.json"))
@@ -1084,6 +2191,7 @@ fn clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_targe
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1196,6 +2304,7 @@ fn clang_ast_fixture_rejects_sizeof_enum_without_layout_abi() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1265,32 +2374,135 @@ fn clang_ast_fixture_rejects_pointer_value_call_and_return_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_rejects_function_decay_value_argument_without_clang() {
+fn clang_ast_fixture_replays_function_name_decay_argument_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../fixtures/clang_ast/function_decay_boundary_ast.json"
     ))
     .expect("fixture JSON");
 
-    let error =
+    let lowered =
         lower_function_and_globals_from_clang_ast_json_value(&ast, "call_with_function_value")
-            .expect_err("function-to-pointer decay outside the callee position must fail closed");
+            .expect("function-to-pointer decay argument should stay visible in typed IR");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust for bounded function name decay argument");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn call_with_function_value(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return apply(helper, value);"), "{rust}");
+    let rust_with_helpers = format!(
+        "fn helper(value: i32) -> i32 {{ value + 1 }}\nfn apply(func: fn(i32) -> i32, value: i32) -> i32 {{ func(value) }}\n{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-function-name-decay-argument",
+        &rust_with_helpers,
+        "assert_eq!(call_with_function_value(41i32), 42i32);",
+    );
+}
 
-    assert_eq!(error.kind, "unsupported_clang_expr");
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_function_pointer_parameter_call_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/function_pointer_call_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "call_fn")
+        .expect("lower function pointer parameter call fixture without invoking clang");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust for bounded function pointer parameter call");
+    let rust = &emitted.rust;
     assert!(
-        error.message.contains("FunctionToPointerDecay"),
-        "{:?}",
-        error.message
+        rust.contains("pub fn call_fn(fp: fn(i32) -> i32, value: i32) -> i32"),
+        "{rust}"
     );
-    assert!(
-        error.message.contains("function pointer value"),
-        "{:?}",
-        error.message
+    assert!(rust.contains("return fp(value);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-function-pointer-param-call",
+        rust,
+        "fn inc(value: i32) -> i32 { value + 1 }\nassert_eq!(call_fn(inc, 41i32), 42i32);",
     );
-    assert!(
-        error.message.contains("explicit function-pointer lowering"),
-        "{:?}",
-        error.message
-    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence() {
+    let i32_ty = ir_i32();
+    let function_ty = ir_function_type("int (int)");
+    let function_pointer_ty =
+        ir_pointer("int (*)(int)", "int (*)(int)", function_ty.clone(), false);
+    let decay_expr: IrExpr = serde_json::from_value(serde_json::json!({
+        "FunctionToPointerDecay": {
+            "target": serde_json::to_value(&function_pointer_ty).unwrap(),
+            "expr": serde_json::to_value(ir_var("helper", function_ty)).unwrap(),
+            "source_span": null
+        }
+    }))
+    .expect("deserialize explicit function-to-pointer decay IR node");
+    let ir = IrFunction {
+        name: "bad_function_decay_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Expr {
+                expr: decay_expr,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("function-to-pointer decay must stay fail closed");
+    assert!(error.reason.contains("function-to-pointer decay"));
+    assert!(error.reason.contains("function pointer value"));
+    assert!(error.reason.contains("explicit function-pointer lowering"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_pointer_lvalue_to_rvalue_without_lowering_evidence() {
+    let i32_ty = ir_i32();
+    let ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
+    let lvalue_to_rvalue_expr: IrExpr = serde_json::from_value(serde_json::json!({
+        "LValueToRValue": {
+            "target": serde_json::to_value(&ptr_ty).unwrap(),
+            "expr": serde_json::to_value(ir_var("values", ptr_ty.clone())).unwrap(),
+            "source_span": null
+        }
+    }))
+    .expect("deserialize explicit pointer lvalue-to-rvalue IR node");
+    let ir = IrFunction {
+        name: "bad_pointer_lvalue_read".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "values".to_string(),
+            ty: ptr_ty,
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Expr {
+                expr: lvalue_to_rvalue_expr,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("pointer lvalue-to-rvalue must stay fail closed");
+    assert!(error.reason.contains("lvalue-to-rvalue target"));
+    assert!(error.reason.contains("const int *"));
+    assert!(error.reason.contains("unsupported"));
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -1331,6 +2543,7 @@ fn clang_ast_fixture_binds_size_t_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1368,6 +2581,7 @@ fn clang_ast_fixture_replays_sizeof_int_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1405,6 +2619,7 @@ fn clang_ast_fixture_replays_sizeof_expression_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1442,6 +2657,7 @@ fn clang_ast_fixture_replays_sizeof_pointer_with_target_abi_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1479,6 +2695,7 @@ fn clang_ast_fixture_replays_sizeof_int_array_with_target_abi_profile() {
         long_width: 32,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1538,6 +2755,7 @@ fn clang_ast_fixture_rejects_alignof_int_without_alignment_profile() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
@@ -1547,12 +2765,51 @@ fn clang_ast_fixture_rejects_alignof_int_without_alignment_profile() {
     )
     .expect_err("_Alignof must fail closed without target alignment profile");
 
-    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert_eq!(error.kind, "unsupported_alignof_type");
     assert!(
         error.message.contains("_Alignof") && error.message.contains("alignment"),
         "{}",
         error.message
     );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_alignof_int_with_target_alignment_profile() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../fixtures/clang_ast/target_abi_width_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        int_align: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "alignof_int_bytes",
+        Some(&target_abi),
+    )
+    .expect("lower _Alignof(int) fixture with target alignment profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from _Alignof(int) fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn alignof_int_bytes() -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("return 4usize;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-alignof-int", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
@@ -1593,6 +2850,7 @@ fn clang_ast_fixture_binds_extended_target_abi_integer_widths() {
         long_width: 64,
         long_long_width: 64,
         pointer_width: 64,
+        ..TargetAbiProfile::default()
     };
 
     for (function, signature) in [
@@ -1838,6 +3096,57 @@ fn clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang() {
     );
 }
 
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_array_to_pointer_decay_without_lowering_evidence() {
+    let i32_ty = ir_i32();
+    let array_ty = ir_array(i32_ty.clone(), 4);
+    let pointer_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let decay_expr: IrExpr = serde_json::from_value(serde_json::json!({
+        "ArrayToPointerDecay": {
+            "target": serde_json::to_value(&pointer_ty).unwrap(),
+            "expr": serde_json::to_value(ir_var("table", array_ty.clone())).unwrap(),
+            "source_span": null
+        }
+    }))
+    .expect("deserialize explicit array-to-pointer decay IR node");
+    let ir = IrFunction {
+        name: "bad_array_decay_value".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: array_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1", i32_ty.clone()),
+                        ir_lit(2, "2", i32_ty.clone()),
+                        ir_lit(3, "3", i32_ty.clone()),
+                        ir_lit(4, "4", i32_ty.clone()),
+                    ],
+                    ty: array_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: decay_expr,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("array-to-pointer decay must stay fail closed");
+    assert!(error.reason.contains("array-to-pointer decay"));
+    assert!(error.reason.contains("explicit lowering evidence"));
+}
+
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 fn clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang() {
@@ -1846,13 +3155,19 @@ fn clang_ast_fixture_rejects_array_decay_pointer_sub_deref_without_clang() {
     ))
     .expect("fixture JSON");
 
-    let error =
+    let lowered =
         lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table_sub")
-            .expect_err("array decay through pointer-sub deref must stay fail-closed");
+            .expect("array decay through pointer-sub deref should stay visible in typed IR");
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("array decay through pointer-sub deref must stay fail-closed at emission");
 
     assert!(
-        error.message.contains("ArrayToPointerDecay"),
-        "unexpected error: {error}"
+        error.reason.contains("array-to-pointer decay")
+            || error
+                .reason
+                .contains("deref expression requires readonly pointer evidence")
+            || error.reason.contains("deref pointer must be Var"),
+        "unexpected error: {error:?}"
     );
 }
 
@@ -2116,6 +3431,18 @@ fn ir_void() -> IrType {
         spelled: "void".to_string(),
         canonical: "void".to_string(),
         kind: IrTypeKind::Void,
+        is_const: false,
+        width_bits: None,
+        source_span: None,
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn ir_function_type(spelled: &str) -> IrType {
+    IrType {
+        spelled: spelled.to_string(),
+        canonical: spelled.to_string(),
+        kind: IrTypeKind::Function,
         is_const: false,
         width_bits: None,
         source_span: None,
@@ -2963,8 +4290,8 @@ fn typed_ir_emits_record_local_assignment_value_copy() {
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_uninitialized_record_local_decl() {
-    let point_ty = ir_record("point");
     let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
     let ir = IrFunction {
         name: "bad_record_local".to_string(),
         return_type: i32_ty.clone(),
@@ -2996,6 +4323,920 @@ fn typed_ir_rejects_uninitialized_record_local_decl() {
     assert!(error
         .reason
         .contains("decl q record initializer is required"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_uninitialized_record_local_address_when_field_is_read() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty.clone(), false);
+    let ir = IrFunction {
+        name: "bad_record_address_and_read".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "q".to_string(),
+                ty: point_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "touch_point".to_string(),
+                    args: vec![IrExpr::AddrOf {
+                        operand: Box::new(ir_var("q", point_ty.clone())),
+                        ty: point_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: ir_void(),
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Member {
+                    base: Box::new(ir_var("q", point_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty,
+                    is_arrow: false,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("address-taken record locals cannot also be read without an initializer");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error
+        .reason
+        .contains("decl q record initializer is required"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_record_address_passed_to_direct_call() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_with_local_blob".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "observe_blob".to_string(),
+                    args: vec![IrExpr::AddrOf {
+                        operand: Box::new(ir_var("blob", blob_ty)),
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit address-of local record call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("let mut blob: FdbBlob = FdbBlob {"), "{rust}");
+    assert!(rust.contains("buf: core::ptr::null_mut()"), "{rust}");
+    assert!(rust.contains("size: 0usize"), "{rust}");
+    assert!(rust.contains("return observe_blob(&mut blob);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-local-record-address-call-arg",
+        &format!(
+            "fn observe_blob(blob: &mut FdbBlob) -> i32 {{ blob.size = 7usize; 7i32 }}\n{rust}"
+        ),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_record_address_with_nested_record_zero_initializer() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let u32_ty = ir_u32();
+    let usize_ty = ir_usize();
+    let saved_ty = ir_record_with_fields(
+        "fdb_blob_saved",
+        vec![
+            ("meta_addr", u32_ty.clone()),
+            ("addr", u32_ty),
+            ("len", usize_ty.clone()),
+        ],
+    );
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![
+            ("buf", mut_void_ptr_ty.clone()),
+            ("size", usize_ty),
+            ("saved", saved_ty),
+        ],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_with_nested_local_blob".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "observe_blob".to_string(),
+                    args: vec![IrExpr::AddrOf {
+                        operand: Box::new(ir_var("blob", blob_ty)),
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit nested local record call arg");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub struct FdbBlobSaved"), "{rust}");
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("saved: FdbBlobSaved {"), "{rust}");
+    assert!(rust.contains("meta_addr: 0u32"), "{rust}");
+    assert!(rust.contains("addr: 0u32"), "{rust}");
+    assert!(rust.contains("len: 0usize"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-local-record-address-nested-record",
+        &format!(
+            "fn observe_blob(blob: &mut FdbBlob) -> i32 {{ blob.saved.len = 7usize; 7i32 }}\n{rust}"
+        ),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_discarded_pointer_return_call_with_opaque_void_arg() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_blob_make".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: const_void_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "len".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "fdb_blob_make".to_string(),
+                    args: vec![
+                        IrExpr::AddrOf {
+                            operand: Box::new(ir_var("blob", blob_ty)),
+                            ty: blob_ptr_ty.clone(),
+                            source_span: None,
+                        },
+                        ir_var("value", const_void_ptr_ty),
+                        ir_var("len", usize_ty),
+                    ],
+                    ty: blob_ptr_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit discarded pointer-return direct call statement");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn call_blob_make(value: *const core::ffi::c_void, len: usize) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let _ = fdb_blob_make(&mut blob, value, len);"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-discarded-pointer-return-call-opaque-arg",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\n{rust}"
+        ),
+        "assert_eq!(call_blob_make(core::ptr::null(), 3usize), 0i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_blob_make_pointer_return_as_direct_call_argument() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: const_void_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "len".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "fdb_blob_make".to_string(),
+                        args: vec![
+                            IrExpr::AddrOf {
+                                operand: Box::new(ir_var("blob", blob_ty)),
+                                ty: blob_ptr_ty.clone(),
+                                source_span: None,
+                            },
+                            ir_var("value", const_void_ptr_ty),
+                            ir_var("len", usize_ty),
+                        ],
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit fdb_blob_make pointer return as direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("return fdb_kv_set_blob(fdb_blob_make(&mut blob, value, len));"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-blob-make-pointer-return-direct-call-arg",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
+        ),
+        "assert_eq!(call_kv_set_blob(core::ptr::null(), 5usize), 5i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_blob_make_pointer_return_argument_with_strlen_leaf() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob_strlen".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: const_u8_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "fdb_blob_make".to_string(),
+                        args: vec![
+                            IrExpr::AddrOf {
+                                operand: Box::new(ir_var("blob", blob_ty)),
+                                ty: blob_ptr_ty.clone(),
+                                source_span: None,
+                            },
+                            ir_var("value", const_u8_ptr_ty.clone()),
+                            IrExpr::Call {
+                                callee: "strlen".to_string(),
+                                args: vec![ir_var("value", const_u8_ptr_ty)],
+                                ty: usize_ty,
+                                source_span: None,
+                            },
+                        ],
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit fdb_blob_make strlen leaf as direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("pub fn call_kv_set_blob_strlen(value: &[u8]) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return fdb_kv_set_blob(fdb_blob_make(&mut blob, value.as_ptr() as *const core::ffi::c_void, value.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")));"
+        ),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-blob-make-pointer-return-strlen-leaf",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
+        ),
+        "assert_eq!(call_kv_set_blob_strlen(b\"abc\\0\"), 3i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_external_direct_call_pointer_passthrough_with_blob_constructor_arg() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const char *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let usize_ty = ir_usize();
+    let kvdb_ty = ir_record("fdb_kvdb");
+    let kvdb_ptr_ty = ir_pointer("fdb_kvdb_t", "struct fdb_kvdb *", kvdb_ty, false);
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob_with_context".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "db".to_string(),
+                ty: kvdb_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "key".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![
+                        ir_var("db", kvdb_ptr_ty),
+                        ir_var("key", const_u8_ptr_ty.clone()),
+                        IrExpr::Call {
+                            callee: "fdb_blob_make".to_string(),
+                            args: vec![
+                                IrExpr::AddrOf {
+                                    operand: Box::new(ir_var("blob", blob_ty)),
+                                    ty: blob_ptr_ty.clone(),
+                                    source_span: None,
+                                },
+                                ir_var("value", const_u8_ptr_ty.clone()),
+                                IrExpr::Call {
+                                    callee: "strlen".to_string(),
+                                    args: vec![ir_var("value", const_u8_ptr_ty)],
+                                    ty: usize_ty,
+                                    source_span: None,
+                                },
+                            ],
+                            ty: blob_ptr_ty,
+                            source_span: None,
+                        },
+                    ],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit external direct call pointer passthrough compile-context candidate");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(
+        rust.contains(
+            "pub fn call_kv_set_blob_with_context(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, value: &[u8]) -> i32"
+        ),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(
+            "return fdb_kv_set_blob(db, key, fdb_blob_make(&mut blob, value.as_ptr() as *const core::ffi::c_void, value.iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")));"
+        ),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-external-direct-call-pointer-passthrough-blob-constructor",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(_: *mut core::ffi::c_void, _: *const core::ffi::c_void, blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\n{rust}"
+        ),
+        "let mut db = 0u8; assert_eq!(call_kv_set_blob_with_context((&mut db as *mut u8).cast::<core::ffi::c_void>(), b\"boot\\0\".as_ptr().cast::<core::ffi::c_void>(), b\"123\\0\"), 3i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let char_ty = ir_integer("const char", "char", true, 8);
+    let const_char_ptr_ty = ir_pointer("const char *", "char *", ir_const(char_ty), false);
+    let clang_size_t_ty = ir_integer("__size_t", "__size_t", false, 64);
+    let kvdb_ty = ir_record("fdb_kvdb");
+    let kvdb_ptr_ty = ir_pointer("fdb_kvdb_t", "struct fdb_kvdb *", kvdb_ty, false);
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![
+            ("buf", mut_void_ptr_ty.clone()),
+            ("size", clang_size_t_ty.clone()),
+        ],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "set_or_delete".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "db".to_string(),
+                ty: kvdb_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "key".to_string(),
+                ty: const_char_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: const_char_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::If {
+                condition: ir_var("value", const_char_ptr_ty.clone()),
+                then_body: vec![IrStmt::Return {
+                    value: Some(IrExpr::Call {
+                        callee: "fdb_kv_set_blob".to_string(),
+                        args: vec![
+                            ir_var("db", kvdb_ptr_ty.clone()),
+                            ir_var("key", const_char_ptr_ty.clone()),
+                            IrExpr::Call {
+                                callee: "fdb_blob_make".to_string(),
+                                args: vec![
+                                    IrExpr::AddrOf {
+                                        operand: Box::new(ir_var("blob", blob_ty)),
+                                        ty: blob_ptr_ty.clone(),
+                                        source_span: None,
+                                    },
+                                    ir_var("value", const_char_ptr_ty.clone()),
+                                    IrExpr::Call {
+                                        callee: "strlen".to_string(),
+                                        args: vec![ir_var("value", const_char_ptr_ty.clone())],
+                                        ty: clang_size_t_ty,
+                                        source_span: None,
+                                    },
+                                ],
+                                ty: blob_ptr_ty,
+                                source_span: None,
+                            },
+                        ],
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    }),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_del".to_string(),
+                    args: vec![ir_var("db", kvdb_ptr_ty), ir_var("key", const_char_ptr_ty)],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit pointer truthiness blob constructor with clang __size_t strlen leaf");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains(
+            "pub fn set_or_delete(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, value: Option<&[i8]>) -> i32"
+        ),
+        "{rust}"
+    );
+    assert!(rust.contains("if value.is_some() {"), "{rust}");
+    assert!(
+        rust.contains(
+            "return fdb_kv_set_blob(db, key, fdb_blob_make(&mut blob, value.unwrap().as_ptr() as *const core::ffi::c_void, value.unwrap().iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\")));"
+        ),
+        "{rust}"
+    );
+    assert!(rust.contains("return fdb_kv_del(db, key);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-pointer-truthiness-blob-constructor-clang-size-t",
+        &format!(
+            "fn fdb_blob_make(blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> *mut FdbBlob {{ blob.buf = value as *mut core::ffi::c_void; blob.size = len; blob as *mut FdbBlob }}\nfn fdb_kv_set_blob(_: *mut core::ffi::c_void, _: *const core::ffi::c_void, blob: *mut FdbBlob) -> i32 {{ unsafe {{ if blob.is_null() {{ -1i32 }} else {{ (*blob).size as i32 }} }} }}\nfn fdb_kv_del(_: *mut core::ffi::c_void, _: *const core::ffi::c_void) -> i32 {{ 7i32 }}\n{rust}"
+        ),
+        "let mut db = 0u8; assert_eq!(set_or_delete((&mut db as *mut u8).cast::<core::ffi::c_void>(), b\"boot\\0\".as_ptr().cast::<core::ffi::c_void>(), Some(&[49i8, 50i8, 51i8, 0i8])), 3i32); assert_eq!(set_or_delete((&mut db as *mut u8).cast::<core::ffi::c_void>(), b\"boot\\0\".as_ptr().cast::<core::ffi::c_void>(), None), 7i32);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_top_level_blob_make_pointer_return_expression() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "return_blob_make_as_i32".to_string(),
+        return_type: i32_ty,
+        params: vec![
+            IrParam {
+                name: "value".to_string(),
+                ty: const_void_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "len".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_blob_make".to_string(),
+                    args: vec![
+                        IrExpr::AddrOf {
+                            operand: Box::new(ir_var("blob", blob_ty)),
+                            ty: blob_ptr_ty.clone(),
+                            source_span: None,
+                        },
+                        ir_var("value", const_void_ptr_ty),
+                        ir_var("len", usize_ty),
+                    ],
+                    ty: blob_ptr_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("top-level pointer-return call must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("return expr has pointer type struct fdb_blob * is unsupported"),
+        "{:?}",
+        error.reason
+    );
+    assert!(
+        error.reason.contains("struct fdb_blob *"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_blob_make_pointer_return_argument_with_unmodeled_nested_arg() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let usize_ty = ir_usize();
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty.clone()), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "call_kv_set_blob_with_bad_nested_len".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: const_void_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(IrExpr::Call {
+                    callee: "fdb_kv_set_blob".to_string(),
+                    args: vec![IrExpr::Call {
+                        callee: "fdb_blob_make".to_string(),
+                        args: vec![
+                            IrExpr::AddrOf {
+                                operand: Box::new(ir_var("blob", blob_ty)),
+                                ty: blob_ptr_ty.clone(),
+                                source_span: None,
+                            },
+                            ir_var("value", const_void_ptr_ty.clone()),
+                            IrExpr::Call {
+                                callee: "helper_len".to_string(),
+                                args: vec![ir_var("value", const_void_ptr_ty)],
+                                ty: usize_ty,
+                                source_span: None,
+                            },
+                        ],
+                        ty: blob_ptr_ty,
+                        source_span: None,
+                    }],
+                    ty: i32_ty,
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("unmodeled nested constructor arg must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("nested call expressions are outside the bounded call subset"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_discarded_pointer_return_call_with_non_opaque_pointer_arg() {
+    let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);
+    let usize_ty = ir_usize();
+    let i32_ty = ir_i32();
+    let int_ptr_ty = ir_pointer("const int *", "const int *", ir_const(i32_ty.clone()), true);
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_void_ptr_ty), ("size", usize_ty.clone())],
+    );
+    let blob_ptr_ty = ir_pointer(
+        "struct fdb_blob *",
+        "struct fdb_blob *",
+        blob_ty.clone(),
+        false,
+    );
+    let ir = IrFunction {
+        name: "call_blob_make_bad_pointer_arg".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "blob".to_string(),
+                ty: blob_ty.clone(),
+                init: None,
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "fdb_blob_make".to_string(),
+                    args: vec![
+                        IrExpr::AddrOf {
+                            operand: Box::new(ir_var("blob", blob_ty)),
+                            ty: blob_ptr_ty.clone(),
+                            source_span: None,
+                        },
+                        ir_lit(0, "0", int_ptr_ty),
+                        ir_lit(3, "3", usize_ty),
+                    ],
+                    ty: blob_ptr_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("non-opaque pointer value args must fail closed in discarded pointer calls");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("call arg[1] pointer value argument"),
+        "{:?}",
+        error.reason
+    );
+    assert!(error.reason.contains("const int *"), "{:?}", error.reason);
+    assert!(
+        error
+            .reason
+            .contains("explicit ownership/lifetime/ABI lowering"),
+        "{:?}",
+        error.reason
+    );
 }
 
 #[cfg(feature = "typed-ir")]
@@ -8786,6 +11027,63 @@ fn typed_ir_emits_memset_zero_for_mutable_byte_slice_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_memset_zero_for_discarded_void_pointer_result_statement() {
+    let void_ty = ir_void();
+    let usize_ty = ir_usize();
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let void_ptr_ty = ir_pointer("void *", "void *", void_ty.clone(), false);
+    let ir = IrFunction {
+        name: "clear_prefix".to_string(),
+        return_type: void_ty,
+        params: vec![
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memset".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_lit(0, "0", ir_i32()),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_ptr_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit modeled C memset statement with discarded void *");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains(".get_mut(..(count as usize))"), "{rust}");
+    assert!(rust.contains(".fill(0u8);"), "{rust}");
+    assert!(!rust.contains("memset(out, 0, count)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memset-discarded-void-pointer-result-model",
+        rust,
+        r#"
+    let mut out = [1u8, 2, 3, 4];
+    clear_prefix(&mut out, 3);
+    assert_eq!(out, [0u8, 0, 0, 4]);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_memset_byte_literal_for_mutable_byte_slice_statement() {
     let usize_ty = ir_usize();
     let void_ty = ir_void();
@@ -8879,7 +11177,7 @@ fn typed_ir_rejects_memset_calls_outside_minimal_statement_model() {
                 ("out", mutable_u8_ptr_ty.clone()),
                 ("count", usize_ty.clone()),
             ],
-            "requires void result type",
+            "requires void or discarded void * result type",
         ),
         (
             "memset_truncating_value",
@@ -9089,6 +11387,138 @@ fn typed_ir_emits_memcpy_for_restrict_byte_slices_statement() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_memcpy_for_discarded_void_pointer_result_statement() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let void_pointer_ty = ir_pointer("void *", "void *", void_ty.clone(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *restrict",
+        "const unsigned char *restrict",
+        ir_const(ir_u8()),
+        true,
+    );
+    let mutable_u8_ptr_ty = ir_pointer(
+        "uint8_t *restrict",
+        "unsigned char *restrict",
+        ir_u8(),
+        false,
+    );
+    let ir = IrFunction {
+        name: "copy_bytes_discarding_result".to_string(),
+        return_type: void_ty,
+        params: vec![
+            IrParam {
+                name: "src".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_var("src", const_u8_ptr_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_pointer_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit modeled C memcpy statement with discarded void *");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("copy_from_slice"), "{rust}");
+    assert!(!rust.contains("memcpy(out, src, count)"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-memcpy-discarded-void-pointer-result-model",
+        rust,
+        r#"
+    let src = [1u8, 2, 3, 4];
+    let mut out = [0u8; 4];
+    copy_bytes_discarding_result(&src, &mut out, 3);
+    assert_eq!(out, [1, 2, 3, 0]);
+"#,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_memcpy_discarded_void_pointer_without_noalias_proof() {
+    let usize_ty = ir_usize();
+    let void_ty = ir_void();
+    let void_pointer_ty = ir_pointer("void *", "void *", void_ty.clone(), false);
+    let const_u8_ptr_ty = ir_pointer(
+        "const uint8_t *",
+        "const unsigned char *",
+        ir_const(ir_u8()),
+        true,
+    );
+    let mutable_u8_ptr_ty = ir_pointer("uint8_t *", "unsigned char *", ir_u8(), false);
+    let ir = IrFunction {
+        name: "copy_bytes_without_noalias_discarding_result".to_string(),
+        return_type: void_ty,
+        params: vec![
+            IrParam {
+                name: "src".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "out".to_string(),
+                ty: mutable_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "count".to_string(),
+                ty: usize_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_var("out", mutable_u8_ptr_ty),
+                    ir_var("src", const_u8_ptr_ty),
+                    ir_var("count", usize_ty),
+                ],
+                ty: void_pointer_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("memcpy void * requires noalias proof");
+    assert!(
+        error
+            .reason
+            .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_memcpy_without_noalias_proof() {
     let usize_ty = ir_usize();
     let void_ty = ir_void();
@@ -9140,6 +11570,43 @@ fn typed_ir_rejects_memcpy_without_noalias_proof() {
         error
             .reason
             .contains("mutable pointer write with readonly pointer read requires noalias proof"),
+        "{:?}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_memcpy_value_expression_outside_statement_model() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "observe_memcpy_result".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "memcpy".to_string(),
+                args: vec![
+                    ir_lit(0, "0", i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                    ir_lit(0, "0", i32_ty.clone()),
+                ],
+                ty: i32_ty,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("expression-position memcpy must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("reserved C macro/stdlib/extern surface")
+            && error
+                .reason
+                .contains("requires explicit lowering or extern binding"),
         "{:?}",
         error.reason
     );
@@ -13810,6 +16277,89 @@ fn typed_ir_emits_comparison_condition_with_null_pointer_operand() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch() {
+    let usize_ty = ir_usize();
+    let char_ty = ir_integer("const char", "char", true, 8);
+    let ptr_ty = ir_pointer("const char *", "char *", ir_const(char_ty), false);
+    let ir = IrFunction {
+        name: "strlen_if_present".to_string(),
+        return_type: usize_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::If {
+                condition: ir_var("value", ptr_ty.clone()),
+                then_body: vec![IrStmt::Return {
+                    value: Some(IrExpr::Call {
+                        callee: "strlen".to_string(),
+                        args: vec![ir_var("value", ptr_ty.clone())],
+                        ty: usize_ty.clone(),
+                        source_span: None,
+                    }),
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", usize_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit readonly pointer truthiness condition");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn strlen_if_present(value: Option<&[i8]>) -> usize"),
+        "{rust}"
+    );
+    assert!(rust.contains("if value.is_some() {"), "{rust}");
+    assert!(
+        rust.contains("return value.unwrap().iter().position(|&byte| byte == 0).expect(\"C strlen precondition violated\");"),
+        "{rust}"
+    );
+    assert!(rust.contains("return 0usize;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-pointer-truthiness-strlen", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_readonly_pointer_truthiness_value_position() {
+    let i32_ty = ir_i32();
+    let char_ty = ir_integer("const char", "char", true, 8);
+    let ptr_ty = ir_pointer("const char *", "char *", ir_const(char_ty), false);
+    let ir = IrFunction {
+        name: "bad_return_pointer_truthiness".to_string(),
+        return_type: i32_ty,
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("value", ptr_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("pointer truthiness is condition-only");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("return expr"));
+    assert!(error
+        .reason
+        .contains("pointer type const char * is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_comparison_condition_with_record_null_pointer_operand() {
     let i32_ty = ir_i32();
     let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
@@ -16640,7 +19190,7 @@ fn clang_parse_spec_dry_run_uses_real_tu_metadata_without_libclang() {
 
 #[cfg(feature = "clang-frontend")]
 #[test]
-fn clang_parse_spec_preserves_target_abi_width_profile() {
+fn clang_parse_spec_preserves_target_abi_profile() {
     let spec: SliceSpec = serde_json::from_value(serde_json::json!({
         "target_id": "demo",
         "slice_id": "target-abi-width",
@@ -16668,12 +19218,18 @@ fn clang_parse_spec_preserves_target_abi_width_profile() {
                 "triple_or_abi": "x86_64-unknown-linux-gnu",
                 "endianness": "little",
                 "int_width": 32,
+                "int_align": 32,
                 "char_width": 8,
+                "char_align": 8,
                 "plain_char_signed": true,
                 "short_width": 16,
+                "short_align": 16,
                 "long_width": 64,
+                "long_align": 64,
                 "long_long_width": 64,
-                "pointer_width": 64
+                "long_long_align": 64,
+                "pointer_width": 64,
+                "pointer_align": 64
             },
             "target_triple": "x86_64-unknown-linux-gnu",
             "abi": "x86_64-unknown-linux-gnu",
@@ -16688,12 +19244,18 @@ fn clang_parse_spec_preserves_target_abi_width_profile() {
 
     assert_eq!(target_abi.triple_or_abi, "x86_64-unknown-linux-gnu");
     assert_eq!(target_abi.int_width, 32);
+    assert_eq!(target_abi.int_align, 32);
     assert_eq!(target_abi.char_width, 8);
+    assert_eq!(target_abi.char_align, 8);
     assert_eq!(target_abi.plain_char_signed, Some(true));
     assert_eq!(target_abi.short_width, 16);
+    assert_eq!(target_abi.short_align, 16);
     assert_eq!(target_abi.long_width, 64);
+    assert_eq!(target_abi.long_align, 64);
     assert_eq!(target_abi.long_long_width, 64);
+    assert_eq!(target_abi.long_long_align, 64);
     assert_eq!(target_abi.pointer_width, 64);
+    assert_eq!(target_abi.pointer_align, 64);
 }
 
 #[cfg(feature = "clang-frontend")]
@@ -28711,7 +31273,12 @@ fn writes_translation_artifacts_for_l3_manifest_binding() {
         assert!(out_dir.join(path).exists(), "{path}");
     }
     let plan = fs::read_to_string(out_dir.join("l3-add-one-auto-translation-plan.json")).unwrap();
-    assert!(plan.contains("\"status\": \"generated\""));
+    assert!(plan.contains("\"status\": \"blocked\""));
+    assert!(plan.contains("\"kind\": \"legacy_"));
+    assert!(plan.contains("_retired\""));
+    let events =
+        fs::read_to_string(out_dir.join("l3-add-one-auto-translation-events.jsonl")).unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
 }
 
 #[cfg(not(feature = "clang-frontend"))]
@@ -28881,7 +31448,7 @@ fn clang_frontend_feature_does_not_emit_lowering_report_without_opt_in() {
 
 #[cfg(feature = "clang-lowering-report")]
 #[test]
-fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifest_status() {
+fn clang_lowering_report_feature_blocks_retired_legacy_fallback_when_unavailable() {
     let source_root = unique_out_dir("clang-lowering-source");
     fs::create_dir_all(&source_root).unwrap();
     fs::write(
@@ -28925,7 +31492,17 @@ fn clang_lowering_report_feature_writes_report_artifact_without_changing_manifes
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
     let report = json_file(out_dir.join("l3-add-one-clang-lowering-report.json"));
 
-    assert_eq!(manifest.status, "generated");
+    if report["typed_ir_candidate"]["status"] == "generated" {
+        assert_eq!(manifest.status, "generated");
+    } else {
+        assert_eq!(manifest.status, "blocked");
+        let plan = json_file(out_dir.join("l3-add-one-auto-translation-plan.json"));
+        assert_eq!(plan["errors"][0]["kind"], "legacy_fallback_retired");
+        let events =
+            fs::read_to_string(out_dir.join("l3-add-one-auto-translation-events.jsonl")).unwrap();
+        assert!(events.contains("\"event\":\"translation_fallback\""));
+        assert!(!events.contains("\"event\":\"translation_generated\""));
+    }
     assert!(manifest
         .artifact_paths
         .iter()
@@ -29121,7 +31698,7 @@ fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when
 
 #[cfg(feature = "clang-frontend")]
 #[test]
-fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_translation() {
+fn clang_frontend_dry_run_artifact_records_metadata_errors_and_legacy_retired_status() {
     let spec = SliceSpec {
         target_id: "demo".to_string(),
         slice_id: "add-one".to_string(),
@@ -29137,7 +31714,7 @@ fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_tran
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
     let dry_run = json_file(out_dir.join("l3-add-one-clang-dry-run.json"));
 
-    assert_eq!(manifest.status, "generated");
+    assert_eq!(manifest.status, "blocked");
     assert_eq!(dry_run["status"], "blocked");
     assert_eq!(dry_run["errors"][0]["kind"], "missing_source_root");
     assert_eq!(
@@ -29145,4 +31722,9 @@ fn clang_frontend_dry_run_artifact_records_metadata_errors_without_blocking_tran
         "clang frontend dry-run requires source_root"
     );
     assert!(out_dir.join("l3-add-one-rust-draft.rs").exists());
+    let plan = json_file(out_dir.join("l3-add-one-auto-translation-plan.json"));
+    assert!(plan["errors"][0]["kind"]
+        .as_str()
+        .unwrap()
+        .starts_with("legacy_"));
 }

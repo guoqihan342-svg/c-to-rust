@@ -19,7 +19,7 @@
 - [ ] AI candidate manifest records prompt scope, input hashes, output hash, applied status, and gate outcome when AI is used.
 - [ ] AI output is never cited as correctness evidence.
 - [ ] PatchPlan exists before applying any automatic patch.
-- [ ] Repair round is within the configured limit, default maximum three.
+- [ ] Repair round is within the configured limit, default maximum five.
 - [ ] Forbidden changes are blocked: C oracle contract, fixture expected behavior, accepted metadata differences, public API outside impact set, source slice boundary, and unsafe budget policy.
 - [ ] 中文检查：alias gate 只能说明候选路径的风险状态，不能替代 C oracle、Rust replay、schema-aware diff、negative diff、unsafe ledger 和 final verification。
 - [ ] 中文检查：v2 pointer graph 的 `effect_graph` 必须能追到 read/write effect、alias risk 边和 cache identity；缺失时不能声称新生成 evidence 可复用。

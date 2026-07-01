@@ -188,7 +188,13 @@
             "int_width": {
               "type": "integer"
             },
+            "int_align": {
+              "type": "integer"
+            },
             "char_width": {
+              "type": "integer"
+            },
+            "char_align": {
               "type": "integer"
             },
             "plain_char_signed": {
@@ -197,13 +203,25 @@
             "short_width": {
               "type": "integer"
             },
+            "short_align": {
+              "type": "integer"
+            },
             "long_width": {
+              "type": "integer"
+            },
+            "long_align": {
               "type": "integer"
             },
             "long_long_width": {
               "type": "integer"
             },
+            "long_long_align": {
+              "type": "integer"
+            },
             "pointer_width": {
+              "type": "integer"
+            },
+            "pointer_align": {
               "type": "integer"
             }
           }

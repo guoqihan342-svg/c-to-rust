@@ -2,6 +2,10 @@
 
 ﻿# 运行与验证
 
+- [quickstart.md](../quickstart.md)
+- [quickstart.en.md](../quickstart.en.md)
+- [opencode-agent-harness-design.md](../opencode-agent-harness-design.md)
+- [opencode-agent-harness-design.en.md](../opencode-agent-harness-design.en.md)
 - [build-and-c2rust-baseline.md](../build-and-c2rust-baseline.md)
 - [bounded-auto-translation-pipeline.md](../bounded-auto-translation-pipeline.md)
 - [bounded-auto-translation-pipeline.en.md](../bounded-auto-translation-pipeline.en.md)

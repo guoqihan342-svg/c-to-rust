@@ -24,8 +24,8 @@
       "uses_libclang": false
     },
     "arguments": [
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests"
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests"
     ],
     "claim_boundary": {
       "affects_manifest_status": false,
@@ -48,7 +48,7 @@
     },
     "function_name": "fdb_kv_set",
     "source_file": "src/fdb_kvdb.c",
-    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_root": "sources/FlashDB",
     "status": "diagnostic_only"
   },
   "errors": [],
@@ -68,7 +68,7 @@
   },
   "schema_version": 1,
   "slice_id": "real-fdb-kv-set",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "diagnostic_only",
   "target_id": "flashdb"
 }

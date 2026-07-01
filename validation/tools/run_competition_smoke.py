@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -28,10 +29,61 @@ TRANSLATOR_COVERAGE_MATRIX = REPO_ROOT / "validation" / "tools" / "translator_co
 MILESTONE_RELEASE_REPORT = REPO_ROOT / "validation" / "tools" / "milestone_release_report.py"
 VERIFY_VENDORED_CLANG = REPO_ROOT / "validation" / "tools" / "verify_vendored_clang.py"
 DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+LOCAL_HOST_PATH_UNQUOTED = (
+    r"(?:"
+    r"[A-Za-z]:[\\/][^\s;&|]+|"
+    r"/mnt/[A-Za-z]/[^\s;&|]+|"
+    r"/home/[^\s;&|]+|"
+    r"/Users/[^\s;&|]+|"
+    r"/tmp/[^\s;&|]+|"
+    r"/var/[^\s;&|]+|"
+    r"\\\\wsl\$\\[^\s;&|]+|"
+    r"//wsl\.localhost/[^\s;&|]+"
+    r")"
+)
+LOCAL_HOST_PATH_DOUBLE_QUOTED = (
+    r"(?:"
+    r'[A-Za-z]:[\\/][^"]+|'
+    r'/mnt/[A-Za-z]/[^"]+|'
+    r'/home/[^"]+|'
+    r'/Users/[^"]+|'
+    r'/tmp/[^"]+|'
+    r'/var/[^"]+|'
+    r'\\\\wsl\$\\[^"]+|'
+    r'//wsl\.localhost/[^"]+'
+    r")"
+)
+LOCAL_HOST_PATH_SINGLE_QUOTED = (
+    r"(?:"
+    r"[A-Za-z]:[\\/][^']+|"
+    r"/mnt/[A-Za-z]/[^']+|"
+    r"/home/[^']+|"
+    r"/Users/[^']+|"
+    r"/tmp/[^']+|"
+    r"/var/[^']+|"
+    r"\\\\wsl\$\\[^']+|"
+    r"//wsl\.localhost/[^']+"
+    r")"
+)
+LOCAL_HOST_PATH_IN_COMMAND = re.compile(
+    rf'"(?P<double_quoted_path>{LOCAL_HOST_PATH_DOUBLE_QUOTED})"|'
+    rf"'(?P<single_quoted_path>{LOCAL_HOST_PATH_SINGLE_QUOTED})'|"
+    rf"(?P<plain_path>{LOCAL_HOST_PATH_UNQUOTED})"
+)
 
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 PROOF_CLASSES = ["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"]
+DEFAULT_STEP_TIMEOUT_SECONDS = 600
+REQUIRED_TOOL_MISSING_PATTERNS = (
+    "gcc is not installed",
+    "g++ is not installed",
+    "cc is not installed",
+    "c compiler is not installed",
+    "c compiler missing",
+    "required c compiler",
+    "no acceptable c compiler",
+)
 
 
 class CompetitionSmokeResult:
@@ -50,6 +102,7 @@ def main() -> int:
     parser.add_argument("--target-id", default="flashdb")
     parser.add_argument("--slice-id", default="real-fdb-calc-crc32")
     parser.add_argument("--slice-spec", type=Path, default=DEFAULT_SLICE_SPEC)
+    parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_STEP_TIMEOUT_SECONDS)
     args = parser.parse_args()
 
     result = run_competition_smoke(
@@ -59,6 +112,7 @@ def main() -> int:
         target_id=args.target_id,
         slice_id=args.slice_id,
         slice_spec=args.slice_spec,
+        timeout_seconds=args.timeout_seconds,
         run_id=args.run_id,
         repo_root=REPO_ROOT,
     )
@@ -77,6 +131,7 @@ def run_competition_smoke(
     target_id: str = "flashdb",
     slice_id: str = "real-fdb-calc-crc32",
     slice_spec: Path = DEFAULT_SLICE_SPEC,
+    timeout_seconds: int = DEFAULT_STEP_TIMEOUT_SECONDS,
 ) -> CompetitionSmokeResult:
     if proof_class == "competition-exact" and not confirm_competition_exact:
         raise SystemExit("proof_class=competition-exact requires --confirm-competition-exact")
@@ -88,6 +143,9 @@ def run_competition_smoke(
     reports_dir = out_root / "reports"
     for directory in [logs_dir, summary_dir, reports_dir]:
         directory.mkdir(parents=True, exist_ok=True)
+    command_log_path = logs_dir / "commands.jsonl"
+    if command_log_path.exists():
+        command_log_path.unlink()
 
     started = time.monotonic()
     run_id = run_id or time.strftime("smoke-%Y%m%dT%H%M%SZ", time.gmtime())
@@ -112,10 +170,25 @@ def run_competition_smoke(
             repo_root=repo_root,
             logs_dir=logs_dir,
             out_root=out_root,
+            timeout_seconds=timeout_seconds,
         )
-        step_status_value = smoke_step_status(step, result.returncode, proof_class=proof_class)
+        timed_out = bool(getattr(result, "timed_out", False))
+        failure_class = getattr(result, "failure_class", None)
+        step_status_value = smoke_step_status(
+            step,
+            result.returncode,
+            proof_class=proof_class,
+            timed_out=timed_out,
+            failure_class=failure_class,
+        )
         proof_class_effect = None
-        if step == "environment-check" and result.returncode != 0 and proof_class != "competition-exact":
+        if (
+            step == "environment-check"
+            and result.returncode != 0
+            and proof_class != "competition-exact"
+            and not timed_out
+            and failure_class != "required_c_compiler_missing"
+        ):
             proof_class_effect = "exactness_blocker"
         steps.append(
             {
@@ -123,6 +196,15 @@ def run_competition_smoke(
                 "status": step_status_value,
                 "returncode": result.returncode,
                 "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+                **(
+                    {
+                        "timed_out": True,
+                        "timeout_seconds": timeout_seconds,
+                    }
+                    if timed_out
+                    else {}
+                ),
+                **({"failure_class": failure_class} if failure_class else {}),
                 **({"proof_class_effect": proof_class_effect} if proof_class_effect else {}),
             }
         )
@@ -133,10 +215,16 @@ def run_competition_smoke(
         and step_status(steps, "environment-check") == "passed"
         and step_status(steps, "vendored-clang-verification") == "passed"
     )
-    final_gate_reasons = final_gate_reasons_for(proof_class=proof_class, steps=steps, deviations=deviations)
+    final_gate_reasons = final_gate_reasons_for(
+        proof_class=proof_class,
+        steps=steps,
+        deviations=deviations,
+        environment=environment,
+    )
     status = "passed" if not final_gate_reasons else "failed"
     summary = {
         "schema_version": 1,
+        "report_kind": "competition-smoke-summary",
         "run_id": run_id,
         "proof_class": proof_class,
         "profile_id": str(profile.get("profile_id", "unknown")),
@@ -152,6 +240,11 @@ def run_competition_smoke(
             repo_root=repo_root,
         ),
         "environment_deviations": deviations,
+        "timeout_policy": {
+            "per_step_timeout_seconds": timeout_seconds,
+            "timeout_exit_code": 124,
+            "timeout_is_final_gate_failure": True,
+        },
         "smoke_entrypoint": {
             "name": "competition-linux-wsl-ci-smoke",
             "script": "validation/tools/run_competition_smoke.py",
@@ -166,12 +259,42 @@ def run_competition_smoke(
             ],
             "semantic_acceptance_boundary": "does_not_translate_new_slices",
         },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "semantic_claim_source": "competition_environment_smoke",
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "Competition smoke proves environment and lightweight evidence gates only. "
+                "It does not translate new slices and does not expand semantic acceptance."
+            ),
+        },
         "elapsed_seconds": int(time.monotonic() - started),
         "artifact_roots": [
             summary_path(out_root / "summary", repo_root=repo_root, out_root=out_root),
             summary_path(out_root / "logs", repo_root=repo_root, out_root=out_root),
             summary_path(out_root / "reports", repo_root=repo_root, out_root=out_root),
         ],
+        "command_log": {
+            "path": summary_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+            "sha256": sha256(command_log_path),
+        },
+        "reports": {
+            "evidence_governance": {
+                "path": summary_path(
+                    out_root / "reports" / "evidence-governance.json",
+                    repo_root=repo_root,
+                    out_root=out_root,
+                ),
+            },
+            "translator_coverage_matrix": {
+                "path": summary_path(
+                    out_root / "reports" / "translator-coverage-matrix.json",
+                    repo_root=repo_root,
+                    out_root=out_root,
+                ),
+            },
+        },
         "vendored_clang_verification": {
             "path": summary_path(
                 out_root / "summary" / "vendored-clang-verification.json",
@@ -214,6 +337,7 @@ def smoke_commands(
     slice_id: str,
     slice_spec: Path,
 ) -> list[tuple[str, list[str]]]:
+    slice_spec_arg = repo_relative_path(slice_spec, repo_root, "slice_spec")
     vendored_clang_command = [
         sys.executable,
         rel_path(VERIFY_VENDORED_CLANG, repo_root),
@@ -241,7 +365,7 @@ def smoke_commands(
                 "--slice-id",
                 slice_id,
                 "--slice-spec",
-                rel_path(slice_spec, repo_root),
+                slice_spec_arg,
                 "--require-semantic-pass",
             ],
         ),
@@ -287,9 +411,20 @@ def smoke_commands(
     ]
 
 
-def smoke_step_status(step: str, returncode: int, *, proof_class: str) -> str:
+def smoke_step_status(
+    step: str,
+    returncode: int,
+    *,
+    proof_class: str,
+    timed_out: bool = False,
+    failure_class: str | None = None,
+) -> str:
+    if timed_out:
+        return "failed"
     if returncode == 0:
         return "passed"
+    if failure_class == "required_c_compiler_missing":
+        return "failed"
     if step == "environment-check" and proof_class != "competition-exact":
         return "degraded"
     return "failed"
@@ -303,19 +438,61 @@ def run_logged_step(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    timeout_seconds: int,
 ) -> subprocess.CompletedProcess[str]:
-    result = command_runner(command, cwd=repo_root, text=True, capture_output=True)
+    timed_out = False
+    try:
+        result = command_runner(
+            command,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        timed_out = True
+        result = subprocess.CompletedProcess(
+            command,
+            124,
+            timeout_output_text(error.output),
+            timeout_output_text(error.stderr) or f"timed out after {timeout_seconds} seconds",
+        )
+        setattr(result, "timed_out", True)
+    failure_class = smoke_step_failure_class(step, result)
+    if failure_class:
+        setattr(result, "failure_class", failure_class)
     entry = {
         "step": step,
-        "command": command,
+        "command": command_for_log(command, repo_root=repo_root, out_root=out_root),
         "returncode": result.returncode,
         "stdout": result.stdout,
         "stderr": result.stderr,
         "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+        **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
+        **({"failure_class": failure_class} if failure_class else {}),
     }
     with (logs_dir / "commands.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
     return result
+
+
+def smoke_step_failure_class(step: str, result: subprocess.CompletedProcess[str]) -> str | None:
+    if step != "environment-check" or result.returncode == 0:
+        return None
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    if any(pattern in output for pattern in REQUIRED_TOOL_MISSING_PATTERNS):
+        return "required_c_compiler_missing"
+    return None
+
+
+def timeout_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def detect_execution_environment() -> dict[str, Any]:
@@ -337,6 +514,7 @@ def detect_execution_environment() -> dict[str, Any]:
         "kind": kind,
         "detected_ci": bool(detected_ci),
         "detected_wsl": detected_wsl,
+        "competition_exact_host_attested": bool(os.environ.get("COMPETITION_EXACT_HOST")),
         "system": platform.system(),
         "release": uname.release,
         "version": uname.version,
@@ -451,8 +629,20 @@ def final_gate_reasons_for(
     proof_class: str,
     steps: list[dict[str, Any]],
     deviations: list[dict[str, Any]],
+    environment: dict[str, Any],
 ) -> list[str]:
     reasons = [f"step_failed:{step['step']}" for step in steps if step["status"] == "failed"]
+    reasons.extend(
+        f"{step['failure_class']}:{step['step']}"
+        for step in steps
+        if step.get("status") == "failed" and step.get("failure_class")
+    )
+    if proof_class == "ci-approximation" and not environment.get("detected_ci"):
+        reasons.append("proof_class_incompatible_with_environment")
+    if proof_class == "wsl-local-simulation" and not environment.get("detected_wsl"):
+        reasons.append("proof_class_incompatible_with_environment")
+    if proof_class == "competition-exact" and not environment.get("competition_exact_host_attested"):
+        reasons.append("proof_class_requires_exact_host_evidence")
     if proof_class == "competition-exact" and any(
         item.get("severity") == "proof-class-limiting" for item in deviations
     ):
@@ -503,6 +693,53 @@ def rel_path(path: Path, repo_root: Path) -> str:
         return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
     except ValueError:
         return resolved.as_posix()
+
+
+def repo_relative_path(path: Path, repo_root: Path, field_name: str) -> str:
+    resolved = path if path.is_absolute() else repo_root / path
+    try:
+        return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError as error:
+        raise ValueError(f"{field_name} must be repo-relative") from error
+
+
+def command_for_log(command: list[str], *, repo_root: Path, out_root: Path) -> list[str]:
+    return [command_argument_for_log(argument, repo_root=repo_root, out_root=out_root) for argument in command]
+
+
+def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) -> str:
+    if not argument or not any(separator in argument for separator in ["/", "\\"]):
+        return argument
+    sanitized_argument = sanitize_host_paths_in_command_text(argument)
+    if any(token in argument for token in [";", "|", "&&"]):
+        return sanitized_argument
+    path = Path(argument)
+    resolved = path if path.is_absolute() else repo_root / path
+    for root in [repo_root.resolve(), out_root.resolve()]:
+        try:
+            return resolved.resolve().relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return path_basename(argument)
+
+
+def sanitize_host_paths_in_command_text(argument: str) -> str:
+    def replace_match(match: re.Match[str]) -> str:
+        if match.group("double_quoted_path") is not None:
+            return f'"{path_basename(match.group("double_quoted_path"))}"'
+        if match.group("single_quoted_path") is not None:
+            return f"'{path_basename(match.group('single_quoted_path'))}'"
+        return path_basename(match.group("plain_path"))
+
+    return LOCAL_HOST_PATH_IN_COMMAND.sub(replace_match, argument)
+
+
+def path_basename(path_text: str) -> str:
+    name = Path(path_text).name
+    if name:
+        return name
+    normalized = path_text.replace("\\", "/").rstrip("/")
+    return normalized.rsplit("/", 1)[-1] if normalized else path_text
 
 
 def sha256(path: Path) -> str:

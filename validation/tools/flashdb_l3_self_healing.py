@@ -39,6 +39,8 @@ PATCH_PLAN_REQUIRED_FIELDS = [
     "verification_commands",
 ]
 
+DEFAULT_RETRY_LIMIT = 5
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -232,7 +234,7 @@ def main() -> int:
     parser.add_argument("--command", default="cargo check --message-format=json")
     parser.add_argument("--cwd", required=True)
     parser.add_argument("--exit-code", required=True, type=int)
-    parser.add_argument("--retry-limit", default=2, type=int)
+    parser.add_argument("--retry-limit", default=DEFAULT_RETRY_LIMIT, type=int)
     args = parser.parse_args()
 
     created_at = utc_now()

@@ -49,7 +49,10 @@ def main() -> int:
     parser.add_argument("--function", required=True)
     parser.add_argument("--target-id", required=True)
     parser.add_argument("--slice-id", required=True)
+    parser.add_argument("--source-repository")
+    parser.add_argument("--source-branch")
     parser.add_argument("--source-commit")
+    parser.add_argument("--require-source-commit")
     parser.add_argument("--compiler-command-source", default="unknown")
     parser.add_argument("--include-path", dest="include_paths", action="append", default=[])
     parser.add_argument("--define", dest="defines", action="append", default=[])
@@ -62,7 +65,10 @@ def main() -> int:
         function_name=args.function,
         target_id=args.target_id,
         slice_id=args.slice_id,
+        source_repository=args.source_repository,
+        source_branch=args.source_branch,
         source_commit=args.source_commit,
+        require_source_commit=args.require_source_commit,
         compiler_command_source=args.compiler_command_source,
         include_paths=args.include_paths,
         defines=args.defines,
@@ -80,7 +86,10 @@ def generate_slice_spec(
     function_name: str,
     target_id: str,
     slice_id: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
     source_commit: str | None = None,
+    require_source_commit: str | None = None,
     compiler_command_source: str = "unknown",
     include_paths: list[str] | None = None,
     defines: list[str] | None = None,
@@ -91,7 +100,22 @@ def generate_slice_spec(
     ensure_inside_root(root, source_path)
     text = source_path.read_text(encoding="utf-8")
     extracted = extract_function(text, function_name)
-    commit = source_commit or git_commit(root)
+    actual_commit = git_commit(root)
+    commit = source_commit or actual_commit
+    actual_branch = git_branch(root)
+    branch = normalize_branch(source_branch) if source_branch else actual_branch
+    actual_repository = git_remote_url(root)
+    repository = source_repository or actual_repository
+    validate_source_identity(
+        actual_commit=actual_commit,
+        declared_commit=source_commit,
+        effective_commit=commit,
+        require_source_commit=require_source_commit,
+        actual_branch=actual_branch,
+        declared_branch=source_branch,
+        actual_repository=actual_repository,
+        declared_repository=source_repository,
+    )
     file_hash = sha256(source_path)
 
     signature = parse_signature(extracted.signature, function_name)
@@ -100,6 +124,29 @@ def generate_slice_spec(
 
     dependencies = direct_type_dependencies(return_type, parameters)
     dependencies.extend(same_file_global_dependencies(text, extracted, relative_source, parameters))
+
+    source_identity: dict[str, Any] = {
+        "source_root": source_root_for_spec(repo_root, root),
+        "source_commit": commit,
+        "repo_commit": commit,
+        "source_file_hashes": {relative_source: file_hash},
+    }
+    if repository:
+        source_identity["source_repository"] = repository
+    if branch:
+        source_identity["source_branch"] = branch
+
+    cache_invalidation_keys = [
+        "source.source_commit",
+        "source.source_file_hashes",
+        "c_boundary.signatures[0].source_span.sha256",
+        "build_profile.profile_id",
+        "translator_version",
+    ]
+    if repository:
+        cache_invalidation_keys.append("source.source_repository")
+    if branch:
+        cache_invalidation_keys.append("source.source_branch")
 
     return {
         "schema_version": 1,
@@ -116,12 +163,7 @@ def generate_slice_spec(
             "status": "required",
             "accepted": False,
         },
-        "source": {
-            "source_root": str(root),
-            "source_commit": commit,
-            "repo_commit": commit,
-            "source_file_hashes": {relative_source: file_hash},
-        },
+        "source": source_identity,
         "c_boundary": {
             "files": [
                 {
@@ -221,13 +263,7 @@ def generate_slice_spec(
             "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
             "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics.",
         ],
-        "cache_invalidation_keys": [
-            "source.source_commit",
-            "source.source_file_hashes",
-            "c_boundary.signatures[0].source_span.sha256",
-            "build_profile.profile_id",
-            "translator_version",
-        ],
+        "cache_invalidation_keys": cache_invalidation_keys,
     }
 
 
@@ -793,6 +829,12 @@ def normalize_relative_path(path: Path) -> str:
     return path.as_posix()
 
 
+def source_root_for_spec(repo_root: Path, resolved_root: Path) -> str:
+    if repo_root.is_absolute():
+        return str(resolved_root)
+    return repo_root.as_posix().rstrip("/") or "."
+
+
 def ensure_inside_root(root: Path, path: Path) -> None:
     try:
         path.relative_to(root)
@@ -800,18 +842,70 @@ def ensure_inside_root(root: Path, path: Path) -> None:
         raise SystemExit(f"source file escapes repo root: {path}") from exc
 
 
+def validate_source_identity(
+    *,
+    actual_commit: str,
+    declared_commit: str | None,
+    effective_commit: str,
+    require_source_commit: str | None,
+    actual_branch: str | None,
+    declared_branch: str | None,
+    actual_repository: str | None,
+    declared_repository: str | None,
+) -> None:
+    if declared_commit and actual_commit != "UNKNOWN_SOURCE_COMMIT" and declared_commit != actual_commit:
+        raise SystemExit(f"source commit mismatch: declared {declared_commit}, actual {actual_commit}")
+    if require_source_commit:
+        if effective_commit != require_source_commit:
+            raise SystemExit(f"source commit mismatch: required {require_source_commit}, effective {effective_commit}")
+        if actual_commit != "UNKNOWN_SOURCE_COMMIT" and actual_commit != require_source_commit:
+            raise SystemExit(f"source commit mismatch: required {require_source_commit}, actual {actual_commit}")
+    if declared_branch and actual_branch and normalize_branch(declared_branch) != actual_branch:
+        raise SystemExit(f"source branch mismatch: declared {declared_branch}, actual {actual_branch}")
+    if declared_repository and actual_repository and normalize_repository(declared_repository) != normalize_repository(actual_repository):
+        raise SystemExit(f"source repository mismatch: declared {declared_repository}, actual {actual_repository}")
+
+
 def git_commit(root: Path) -> str:
+    value = git_output(root, ["rev-parse", "HEAD"])
+    return value or "UNKNOWN_SOURCE_COMMIT"
+
+
+def git_branch(root: Path) -> str | None:
+    value = git_output(root, ["rev-parse", "--abbrev-ref", "HEAD"])
+    if not value or value == "HEAD":
+        return None
+    return normalize_branch(value)
+
+
+def git_remote_url(root: Path) -> str | None:
+    return git_output(root, ["config", "--get", "remote.origin.url"])
+
+
+def git_output(root: Path, args: list[str]) -> str | None:
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", *args],
             cwd=root,
             text=True,
             capture_output=True,
             check=True,
         )
-        return result.stdout.strip()
+        value = result.stdout.strip()
+        return value or None
     except (OSError, subprocess.CalledProcessError):
-        return "UNKNOWN_SOURCE_COMMIT"
+        return None
+
+
+def normalize_branch(value: str) -> str:
+    value = value.strip()
+    if value.startswith("refs/heads/"):
+        return value.removeprefix("refs/heads/")
+    return value
+
+
+def normalize_repository(value: str) -> str:
+    return value.strip().rstrip("/")
 
 
 def sha256(path: Path) -> str:

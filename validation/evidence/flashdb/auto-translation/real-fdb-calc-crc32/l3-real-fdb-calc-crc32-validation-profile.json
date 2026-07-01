@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+        "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -19,9 +19,11 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "primary:clang-lowered-typed-ir",
-        "kind": "clang-lowered-typed-ir",
-        "role": "primary_rust_draft",
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -36,7 +38,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "9d28860b3be7a67cda482684ad604dc4c54d6af35c7b27a7cb980b4e3a3ca05a",
+          "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -50,14 +52,24 @@
         "status": "skipped"
       }
     ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": false,
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
     "generated_draft_semantic_pass": false,
     "primary_candidate": {
-      "candidate_id": "primary:clang-lowered-typed-ir",
+      "candidate_id": "primary:unknown",
       "fallback": false,
-      "selected": "clang-lowered-typed-ir",
+      "selected": "unknown",
       "semantic_pass": false
     },
-    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selected_candidate_id": null,
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -143,7 +155,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "594b8d7e76d56ebbdc6b90ea1f97099d3d88327b3656e2407ce0bd31a3509517",
+        "sha256": "d0ff5b17ee944418ec9e117ba94409e2af24bda3fcab4a15f15e375aa744f95d",
         "status": "lowered"
       },
       "status": "generated",
@@ -153,7 +165,7 @@
   "competition_environment": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "30bb0da0906b6d574905471f8830e9ff01520f43c00f25102a07de9bdb206985"
+    "sha256": "062135195e3281dc520d42128af4c0500434961bf0d0f35fd32cebf640156755"
   },
   "generated_draft_semantic_pass": false,
   "goal": "dev",
@@ -169,7 +181,7 @@
   ],
   "oracle_boundary_contract": {
     "compiler": {
-      "command_source": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\CMakeLists.txt",
+      "command_source": "CMakeLists.txt",
       "compile_commands": null,
       "defines": [],
       "flags": [],
@@ -213,10 +225,14 @@
     "schema_version": 1,
     "status": "sufficient_for_semantic_pass",
     "target": {
+      "char_width": "unknown",
       "endianness": "little",
       "int_width": 32,
+      "long_long_width": "unknown",
       "long_width": 64,
+      "plain_char_signed": "unknown",
       "pointer_width": 64,
+      "short_width": "unknown",
       "triple_or_abi": "x86_64-unknown-linux-gnu",
       "word_size_bits": 64
     },

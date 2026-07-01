@@ -15,7 +15,10 @@ use crate::clang_frontend;
 use crate::typed_ir;
 #[cfg(feature = "clang-lowering-report")]
 use crate::TranslationSource;
-use crate::{legacy_translation::translate_slice, ArtifactManifest, SliceSpec, TranslationResult};
+use crate::{
+    legacy_translation::translate_slice, ArtifactManifest, SliceSpec, TranslationError,
+    TranslationResult,
+};
 
 pub(crate) fn write_core_translation_artifacts(
     spec: &SliceSpec,
@@ -128,7 +131,7 @@ pub fn write_translation_artifacts(
     #[cfg(feature = "clang-lowering-report")]
     let result = translate_slice_with_optional_clang_lowered_ir(spec);
     #[cfg(not(feature = "clang-lowering-report"))]
-    let result = translate_slice(spec);
+    let result = translate_slice_with_retired_legacy_direct_path(spec);
     let prefix = format!("l3-{}", spec.slice_id);
     let status = if result.errors.is_empty() {
         "generated"
@@ -186,6 +189,17 @@ fn path_to_manifest_string(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+#[cfg(not(feature = "clang-lowering-report"))]
+fn translate_slice_with_retired_legacy_direct_path(spec: &SliceSpec) -> TranslationResult {
+    let mut result = translate_slice(spec);
+    result.errors.push(TranslationError {
+        kind: "legacy_direct_retired".to_string(),
+        message: "legacy string translator direct artifact generation is retained only as diagnostic compatibility evidence; it no longer produces a generated candidate".to_string(),
+        source_span: None,
+    });
+    result
+}
+
 #[cfg(feature = "clang-lowering-report")]
 fn translate_slice_with_optional_clang_lowered_ir(spec: &SliceSpec) -> TranslationResult {
     if let Some(result) =
@@ -199,6 +213,11 @@ fn translate_slice_with_optional_clang_lowered_ir(spec: &SliceSpec) -> Translati
         "clang-lowered-typed-ir",
         "clang_lowered_typed_ir_unavailable",
     );
+    result.errors.push(TranslationError {
+        kind: "legacy_fallback_retired".to_string(),
+        message: "legacy string translator fallback is retained only as diagnostic compatibility evidence when clang-lowered typed IR is unavailable; it no longer produces a generated candidate".to_string(),
+        source_span: None,
+    });
     result
 }
 
@@ -531,6 +550,15 @@ fn collect_expr_runtime_preconditions(
         typed_ir::IrExpr::Cast { expr, .. } => {
             collect_expr_runtime_preconditions(expr, preconditions);
         }
+        typed_ir::IrExpr::LValueToRValue { expr, .. } => {
+            collect_expr_runtime_preconditions(expr, preconditions);
+        }
+        typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
+            collect_expr_runtime_preconditions(expr, preconditions);
+        }
+        typed_ir::IrExpr::FunctionToPointerDecay { expr, .. } => {
+            collect_expr_runtime_preconditions(expr, preconditions);
+        }
         typed_ir::IrExpr::Index { base, index, .. } => {
             collect_expr_runtime_preconditions(base, preconditions);
             collect_expr_runtime_preconditions(index, preconditions);
@@ -825,7 +853,7 @@ mod core_translation_artifact_tests {
             expected_artifact_count += 1;
         }
 
-        assert_eq!(manifest.status, "generated");
+        assert_eq!(manifest.status, "blocked");
         assert_eq!(manifest.artifact_paths.len(), expected_artifact_count);
         assert!(out_dir
             .join("l3-artifact-orchestration-rust-draft.rs")
@@ -1245,7 +1273,7 @@ mod clang_lowering_report_artifact_tests {
     }
 
     #[test]
-    fn clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events() {
+    fn clang_lowering_fallback_to_legacy_is_diagnostic_not_generated() {
         let spec = SliceSpec {
             target_id: "demo".to_string(),
             slice_id: "fallback-identity".to_string(),
@@ -1260,12 +1288,13 @@ mod clang_lowering_report_artifact_tests {
 
         let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 
-        assert_eq!(manifest.status, "generated");
+        assert_eq!(manifest.status, "blocked");
         let plan: Value = serde_json::from_str(
             &fs::read_to_string(out_dir.join("l3-fallback-identity-auto-translation-plan.json"))
                 .unwrap(),
         )
         .unwrap();
+        assert_eq!(plan["status"], "blocked");
         assert_eq!(
             plan["translation_source"]["selected"],
             "legacy-string-translator"
@@ -1278,6 +1307,7 @@ mod clang_lowering_report_artifact_tests {
             plan["translation_source"]["fallback_reason"],
             "clang_lowered_typed_ir_unavailable"
         );
+        assert_eq!(plan["errors"][0]["kind"], "legacy_fallback_retired");
 
         let events =
             fs::read_to_string(out_dir.join("l3-fallback-identity-auto-translation-events.jsonl"))
@@ -1285,5 +1315,6 @@ mod clang_lowering_report_artifact_tests {
         assert!(events.contains("\"event\":\"translation_fallback\""));
         assert!(events.contains("\"selected\":\"legacy-string-translator\""));
         assert!(events.contains("\"fallback_from\":\"clang-lowered-typed-ir\""));
+        assert!(!events.contains("\"event\":\"translation_generated\""));
     }
 }

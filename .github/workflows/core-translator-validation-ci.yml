@@ -7,6 +7,8 @@ on:
       - "crates/c2r-translator/**"
       - "validation/tools/**"
       - "validation/competition-run-summary.schema.json"
+      - "validation/public-release-packet.schema.json"
+      - "validation/route-governance-metrics.schema.json"
       - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
       - "validation/unsafe-budget-ledger.json"
@@ -16,14 +18,18 @@ on:
       - "validation/cfg-template/**"
       - "validation/pointer-graph-template/**"
       - "validation/slice-spec-template/**"
-      - "validation/environment-profiles/**"
       - "config/competition-env/**"
+      - "README.md"
+      - "README.en.md"
+      - "docs/c2rust-migration-agent/**"
   pull_request:
     paths:
       - ".github/workflows/core-translator-validation-ci.yml"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
       - "validation/competition-run-summary.schema.json"
+      - "validation/public-release-packet.schema.json"
+      - "validation/route-governance-metrics.schema.json"
       - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
       - "validation/unsafe-budget-ledger.json"
@@ -33,8 +39,10 @@ on:
       - "validation/cfg-template/**"
       - "validation/pointer-graph-template/**"
       - "validation/slice-spec-template/**"
-      - "validation/environment-profiles/**"
       - "config/competition-env/**"
+      - "README.md"
+      - "README.en.md"
+      - "docs/c2rust-migration-agent/**"
   workflow_dispatch:
 
 jobs:
@@ -80,6 +88,16 @@ jobs:
           python -m unittest validation.tools.test_evidence_governance
           python -m unittest validation.tools.test_translator_coverage_matrix
           python -m unittest validation.tools.test_milestone_release_report
+          python -m unittest validation.tools.test_milestone_release_notes
+          python -m unittest validation.tools.test_route_governance_metrics_report
+          python -m unittest validation.tools.test_judge_demo_entrypoint
+          python -m unittest validation.tools.test_validate_judge_entrypoints
+          python -m unittest validation.tools.test_run_judge_entrypoints
+          python -m unittest validation.tools.test_validate_public_release_packet
+          python -m unittest validation.tools.test_judge_milestone_bundle
+
+      - name: Check judge entrypoint runner plan
+        run: python -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 
       - name: Run competition CI smoke gate
         run: python validation/tools/run_competition_smoke.py --proof-class ci-approximation --run-id core-ci-smoke --out-root target/competition-smoke
@@ -91,7 +109,10 @@ jobs:
         run: python validation/tools/translator_coverage_matrix.py
 
       - name: Run milestone release report gate
-        run: python validation/tools/milestone_release_report.py
+        run: python validation/tools/milestone_release_report.py --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+
+      - name: Run route governance metrics report gate
+        run: python validation/tools/route_governance_metrics_report.py
 
       - name: Check diff whitespace
         run: git diff --check

@@ -162,7 +162,7 @@ The system SHALL drive compile self-healing from rustc JSON error stacks using b
 
 #### Scenario: Automatic repair is bounded
 - **WHEN** compile self-healing runs for a slice
-- **THEN** it performs no more than the configured retry limit, defaults to three repair rounds, and appends every attempt to `l3-<slice>-auto-translation-events.jsonl`
+- **THEN** it performs no more than the configured retry limit, defaults to five repair rounds, and appends every attempt to `l3-<slice>-auto-translation-events.jsonl`
 
 #### Scenario: Unsafe or semantic widening blocks repair
 - **WHEN** a candidate repair changes the C oracle contract, fixture expected behavior, accepted differences, public API outside the impact set, source slice boundary, or first-party non-test unsafe budget

@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-        "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+        "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -19,14 +19,9 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
-        "kind": "legacy-string-translator",
-        "role": "compatibility_rust_draft",
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -34,14 +29,14 @@
         "candidate_id": "typed-ir:clang-lowered",
         "kind": "typed-ir",
         "role": "typed_ir_candidate_signal",
-        "rust_draft_generated": false,
+        "rust_draft_generated": true,
         "semantic_pass": false,
-        "status": "not_available"
+        "status": "generated"
       },
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c2rust-baseline-manifest.json",
-          "sha256": "4679ac151ac066cf86d8e42a5ae2ac293a556af8ff95ca8f17366ca0a7c9cf46",
+          "sha256": "30e2c4d787041f6510e003a1e9d9eb1ddde998cc9d2ea227f43428650df4d3ef",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -55,43 +50,105 @@
         "status": "skipped"
       }
     ],
-    "compatibility_sources": [
-      {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": true,
-        "fallback_from": "clang-lowered-typed-ir",
-        "fallback_reason": "clang_lowered_typed_ir_unavailable",
-        "selected": "legacy-string-translator",
-        "semantic_pass": false
-      }
-    ],
+    "compatibility_sources": [],
     "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L1",
+        "status": "not_refused"
+      },
+      "route_level": "L1",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
     "primary_candidate": {
-      "candidate_id": "primary:unknown",
+      "candidate_id": "primary:clang-lowered-typed-ir",
       "fallback": false,
-      "selected": "unknown",
+      "selected": "clang-lowered-typed-ir",
       "semantic_pass": false
     },
-    "selected_candidate_id": null,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
       "semantic_acceptance": false,
-      "stage": "post_generation_provenance"
+      "stage": "p0_route_governance"
     },
     "typed_ir": {
-      "candidate_route": null,
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
       "readonly_globals": [],
       "readonly_globals_identity": {
         "count": 0,
         "names": [],
         "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
       },
-      "reason": "function_ir_missing",
       "runtime_preconditions": [],
-      "rust_draft_generated": false,
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "f61e90564dc4ae008b79c206d69aaf658d1baa95adc8247388aceb052b128ccd",
       "scalar_admission": {
         "contract_status": "recorded",
         "covered": [],
@@ -102,16 +159,17 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
-        "sha256": "d6369fd17316adcebe7cfc107145c00c3c0d3df427429b149e65ae65e141a9b2",
-        "status": "unavailable"
+        "sha256": "ecd8e8261e6aa43421631db95a3f50e5f45aa8578588c807fd0bee43c35290fc",
+        "status": "lowered"
       },
-      "status": "not_available"
+      "status": "generated",
+      "typed_ir_sha256": "97287a4bd2b4825337ec9ccd4a5762620bd8ceade3dee5e343616fed7c5c973f"
     }
   },
   "competition_environment": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "0ae48012f8715f7e12c71e52c144f6cec56a14ee69994410f3d7adcccdcfefd0"
+    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
   },
   "generated_draft_semantic_pass": false,
   "goal": "dev",
@@ -123,11 +181,13 @@
   "optional_gates": [
     "negative_diff",
     "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
     "kani"
   ],
   "oracle_boundary_contract": {
     "compiler": {
-      "command_source": "CMakeLists.txt",
+      "command_source": "tests/Makefile",
       "compile_commands": null,
       "defines": [],
       "flags": [],
@@ -141,14 +201,13 @@
     },
     "fixture_representativeness": {
       "case_source": "fixture_contract",
-      "declared_case_count": 0,
+      "declared_case_count": 2,
       "fixture_hash": "real-fdb-kv-set-fixture",
       "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
       "limitations": [],
       "representativeness": "bounded_fixture_contract"
     },
     "insufficient_reasons": [
-      "fixture_declared_case_count_missing",
       "fixture_accepted_oracle_case_count_missing"
     ],
     "observable_outputs": [
@@ -173,13 +232,19 @@
     "schema_version": 1,
     "status": "insufficient",
     "target": {
+      "char_align": "unknown",
       "char_width": 8,
       "endianness": "little",
+      "int_align": "unknown",
       "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
       "long_long_width": 64,
       "long_width": 64,
       "plain_char_signed": true,
+      "pointer_align": "unknown",
       "pointer_width": 64,
+      "short_align": "unknown",
       "short_width": 16,
       "triple_or_abi": "x86_64-unknown-linux-gnu",
       "word_size_bits": 64
@@ -190,16 +255,18 @@
       "scalar_arithmetic_contract": {}
     }
   },
-  "profile": "L4-dev",
+  "profile": "L1-dev",
   "required_gate_status": {
     "c_oracle_diff": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
     "compile": "skipped"
   },
   "required_gates": [
     "compile",
-    "c_oracle_diff"
+    "c_oracle_diff",
+    "unsafe_ledger",
+    "rust_tests"
   ],
-  "route_level": "L4",
+  "route_level": "L1",
   "scalar_ub_contract": {
     "c_boundary": {
       "division_by_zero": "not_declared",
@@ -227,10 +294,6 @@
   "schema_version": 1,
   "skipped_gates": [
     {
-      "gate": "candidate_generation",
-      "reason": "route_refused"
-    },
-    {
       "gate": "compile",
       "reason": "skipped"
     },
@@ -240,7 +303,23 @@
     }
   ],
   "slice_id": "real-fdb-kv-set",
-  "status": "blocked",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_identity": {
+    "repo_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_branch": "competition",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb.c": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e",
+      "src/fdb_file.c": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d",
+      "src/fdb_kvdb.c": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030",
+      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_root": "sources/FlashDB"
+  },
+  "status": "incomplete",
   "target_id": "flashdb",
   "tool_boundaries": {
     "c_ub": [

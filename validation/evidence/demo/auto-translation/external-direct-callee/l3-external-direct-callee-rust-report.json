@@ -11,7 +11,7 @@
   },
   "generated_draft": {
     "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs",
-    "sha256": "37eb1ea9fd1f34823cfef555a6a28330a7aa87fbb66e3ee21962edde60121ebf",
+    "sha256": "386205c2cd49ded5890e9701f10ae608c0adf03746934ba61149229563a8c08e",
     "status": "candidate"
   },
   "generated_draft_semantic_pass": false,
@@ -59,6 +59,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/demo/auto-translation/external-direct-callee/l3-external-direct-callee-rust-draft.rs",
+        "sha256": "386205c2cd49ded5890e9701f10ae608c0adf03746934ba61149229563a8c08e",
         "status": "candidate"
       },
       "rust_report": {
@@ -108,6 +109,7 @@
           "hash": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
           "operation_count": 3,
           "path": "validation/l2_slices/fixtures/external-direct-callee-c-oracle.json",
+          "sha256": "424e3e7a936e01361ad7fe7eecf72ead804f4a80449c373e1305ad02566185c6",
           "source_kind": "fixture"
         }
       ],

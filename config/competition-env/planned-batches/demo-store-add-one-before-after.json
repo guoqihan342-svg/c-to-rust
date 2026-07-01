@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "profile_id": "demo-store-add-one-before-after",
+  "proof_class": "local-simulation",
+  "target_id": "demo",
+  "source_repo_root": "validation/l2_slices/c_sources",
+  "source_repository": "repo-local-demo-slice",
+  "source_branch": "workspace",
+  "source_file": "store_add_one.c",
+  "source_commit": "demo-store-add-one-20260625",
+  "require_source_commit": "demo-store-add-one-20260625",
+  "functions": [
+    "store_add_one"
+  ],
+  "slice_specs": [
+    "validation/slice-specs/demo-store-add-one.json"
+  ],
+  "reuse_accepted_evidence": true,
+  "accepted_evidence_root": "validation/evidence",
+  "slice_id_prefix": "demo-store-add-one",
+  "worker_prefix": "demo-worker",
+  "mode": "deterministic",
+  "execute_merge": true,
+  "auto_retry": true,
+  "max_workers": 4,
+  "emit_route_governance_metrics_report": true,
+  "emit_before_after_exhibit_report": true,
+  "acceptance_boundary": {
+    "semantic_claim_source": "accepted_evidence_binding",
+    "translation_before_after": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translation-before-after.json",
+    "generated_draft_semantic_pass": false,
+    "claim": "bounded demo out-parameter slice only; unsafe baseline to safe final is hash-bound and oracle-verified"
+  }
+}

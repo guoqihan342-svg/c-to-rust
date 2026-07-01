@@ -89,11 +89,32 @@
 
 - **typed IR emitter**: `GenericTypedIr` 覆盖 scalar 算术（无符号 `+`/`-`/`*` 显式 wrapping）/控制流、bitwise、comparison、logical not、short-circuit、`?:`、scoped `for`/`do-while`、`break`/`continue`、readonly pointer slice、mutable pointer write、global/local fixed-length integer array read/write/init（global 仅 readonly `static const` index read，含受限 clang `array_filler` sparse initializer）、record field read、bounded direct call
 - **clang 前端**: 真实 `fdb_calc_crc32` 已能经 clang AST dump → skeleton → typed IR → global table → Rust draft 生成 `GenericTypedIr` candidate
-- **FlashDB crc32**: accepted evidence 已通过 semantic pass（L4 authoritative 路径），generated draft 仍是 candidate
+- **FlashDB accepted evidence**: `real-fdb-calc-crc32` 和 `real-fdb-blob-make` 已通过 semantic pass（L4 accepted-evidence authoritative 路径），generated draft 仍是 candidate，`generated_draft_semantic_pass=false`
+- **FlashDB `fdb_kv_set`**: 已有 source/signature provenance 和 L4 refused/blocked evidence；`strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` callee 语义仍未由 shim/model/oracle 关闭，不能声明 `fdb_kv_set` semantic pass
 - **旧 crc32 特例代码**: typed IR canned matcher 和旧 string recognizer crc32 模板已删除；正向路径只走 clang-lowered typed IR + globals
 - **候选清单 provenance**: 新 route/profile evidence 记录 `selection_policy.stage=post_generation_provenance`、`selected_candidate_id` 和 `candidate_set`（primary draft、typed-IR signal、C2Rust baseline context），并由 validator 拒绝任何 candidate 自称 `semantic_pass=true`；C2Rust baseline candidate 还会绑定 baseline manifest 与 generated output ref/hash，防止 route/profile 中的 baseline status、reason 或输出引用漂移。这还不是带 score/hard gate 的完整多候选 router。
 - **仓库级 unsafe budget**: `validation/tools/unsafe_budget.py` 现在默认扫描 `crates/c2r-translator/src`、`flashDB_rust/src`、`validation/l2_slices/src`，加载 `validation/unsafe-budget-ledger.json`，并作为 core translator validation CI gate 执行。
 - **入口 unsafe claim 边界（P0-162）**: unsafe < 10% 或 0 findings 只表示当前扫描/ledger 未超出预算或未发现已建模问题，不证明 C ABI、FFI、flash hardware、volatile register、RTOS、多线程或中断语义已经解决。任何这类能力进入实现前，必须先有 unsafe ledger span、safe/typed 替代方案、target/test evidence 和人工 review 状态。
+
+## 当前 Harness MVP 状态
+
+- 当前分支：`codex/agent-harness-flashdb-mvp`
+- OpenCode harness 已有最小执行器：`python -m validation.tools.opencode_agent_harness run-worker --mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 worker summary 存在时自动入 SQLite ledger。
+- OpenCode 包装入口已接好：`run-worker --mode opencode --opencode-variant max` 执行同一份 assignment request；preflight、run-plan、worker report 和 handoff contract 会绑定结构化 launch policy（command/model/agent/variant/skip-permissions），缺失或漂移会在启动 OpenCode 前 fail-closed；OpenCode/LLM 输出仍不是 evidence。
+- accepted evidence 复用链路已接好：`assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` 可在 worker 隔离目录下验证已提交 evidence。
+- 评委 before/after demo 入口：`docs/c2rust-migration-agent/judge-demo.md`。首选真实 FlashDB profile 生成 `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`，并绑定 competition summary、workflow metrics、before/after exhibit、milestone report 与复制后的 `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json` 的路径和 sha256；保底 demo profile 仍生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` 和 `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`。二者展示 baseline unsafe Rust → final safe Rust、accepted patch、oracle evidence、unsafe reduction，以及 planner/worker/verifier/repairer/reporter 五阶段 contract；review gate 只解除 release readiness 的 review blocker，不是 semantic acceptance gate；accepted-evidence before/after artifact 不增加 `translation_coverage_numerator`。
+- 评委一键 harness runner：`python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json` 会按配置执行 competition smoke、before/after、显式多 worker 和 OpenCode 入口，并生成 `summary/judge-milestone-bundle.json` 与 `summary/milestone-release-notes.md`。本地 artifact 深校验现在会把 `competition-smoke-summary.json` 绑定到 judge config 的 `environment_profile.profile_id/sha256` 与 entrypoint 的 `proof_class/run_id`，并拒绝 CI/WSL/Windows 本地证据或带 `proof-class-limiting` deviation 的 summary 冒充 `competition-exact`；两个 `evaluate --profile` 入口还会写出 `harness/resume-manifest.json`，把 SQLite ledger、context pack、agent index、worker summary 和续跑入口串成 current-state 索引。`config/competition-env/bundle-manifest.json` 还把比赛配置目录升级为 hash-bound 归档合同，runner 报告会内嵌 `competition_config_archive` 快照。bundle 聚合 `core_translation_quality`、`harness_architecture_summary`、`route_governance_metrics`、`evidence_cost_retention`、`claim_scope`、`proof_classes`、`publishability`、`known_gaps`、`must_not_claim` 和复现命令，作为评委外部审阅索引；Markdown release notes 只是该 bundle 的人类可读投影，便于评委快速看 commit、source pin、scorecard、baseline comparison、known gaps 和禁止声明项。`validation/judge-milestone-bundle.schema.json` 锁定公开 claim boundary，并要求 run report `schema_version=1` 与 validator-owned proof-class contract 防越权；bundle、release notes 和 resume manifest 都不是 semantic gate，也不增加 `translation_coverage_numerator`。
+- `judge-milestone-bundle.json` 的 `harness_architecture_summary` 现在包含 `contract_matrix`，按 `plan/translate/verify/repair/report` 展示 stage、role、artifact、validator 和边界；schema 要求每一行保持 `semantic_gate=false`、`chat_output_is_evidence=false`、`translation_coverage_numerator=0`。OpenCode `run-plan` graph 也会直接暴露 `opencode_worker.opencode_variant`，避免评委必须钻进 preflight artifact 才能看到运行变体。
+- 公开 release packet：全量 runner 成功后还会写出 `summary/public-release-packet.json`，hash 绑定 run report、readiness report、milestone bundle、Markdown release notes 和 competition config archive，并由 `validation.tools.validate_public_release_packet` 按 `validation/public-release-packet.schema.json` 校验 schema、hash、claim boundary、本机路径泄漏，检查 packet 中复制的 publication manifest、`quantitative_evaluation`、`progress_delta_ledger`、`summary.workflow_metrics`、known gaps、reproduction commands、must-not-claim 覆盖是否与被绑定的 bundle 一致，并要求 release notes 等于该 bundle 渲染出的 Markdown；它只是评委发布包索引，不是 semantic gate，也不增加 `translation_coverage_numerator`。
+- S4 进度增量账本：`judge-milestone-bundle.json` 现在公开 `progress_delta_ledger`，把 translator capability delta、governance/evidence delta 与 workflow repair delta 分开计数；当 `workflow_metrics.repair_activity` 稀疏或为 0 但 `before_after_repair_exhibit` 已验证 repair 时，`workflow_delta` 会按 entrypoint 补齐 observed repair、auto-recovered、rollback evidence 和 source 计数，避免评委低估自愈闭环。`public-release-packet.json` 会在顶层和 `summary` 中复制该账本，release notes 会渲染 `Progress Delta Ledger` 表；该账本固定 `semantic_gate=false`、`generated_draft_semantic_pass=false`、`translation_coverage_numerator=0`。
+- FlashDB 当前已通过语义证据绑定的切片：`real-fdb-calc-crc32`、`real-fdb-blob-make`。二者均是 L4 accepted-evidence authoritative，generated draft 仍不是 semantic pass。
+- FlashDB 当前阻塞切片：`real-fdb-kv-set`。其 direct callees 已有 signature/source provenance，但 `strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` 的 shim/model/oracle 语义尚未关闭。
+
+- **显式多 worker profile smoke**: `config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json` 会 fan-out 两个带 source pin 的 worker（`real-fdb-calc-crc32`、`real-fdb-blob-make`），并按 planner 顺序 merge。已验证 run `harness-flashdb-explicit-workers-20260701` 通过，accepted-evidence `semantic_pass=2`；同一 profile 的 `evaluate --profile` 入口也通过并生成 `harness/evaluate-report.json` 与 `harness/judge-evidence-index.json`，后者只索引已验证 batch artifacts 的路径与 sha256。语义结论仍来自 accepted-evidence binding、competition summary、workflow metrics 和 validators；它不是新的 semantic gate，也不增加 `translation_coverage_numerator`。tracked run manifest：`validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json`。
+- 启用 route-governance metrics 的 profiles 还会产出并绑定 `summary/route-governance-metrics-report.json`；`validation/route-governance-metrics.schema.json` 与 report 内 `retention_policy` 只锁定报告字段、artifact 保留策略和 public-claim boundary，不把 accepted-evidence、before/after 展品或 route-governance 指标升级为 translator-generated semantic pass，也不增加 `translation_coverage_numerator`。
+- C2Rust baseline manifest 状态现在会进入 route-governance metrics 和 milestone scorecard：报告会统计 manifest/generated-output/skipped/compile-only 状态，并在 release notes 的 baseline comparison 中展示；这些字段仍是 candidate context only，`semantic_gate=false` 且 `translation_coverage_numerator=0`。
+
+- 评委入口本地 artifact 校验现在也会对非 smoke `competition_summary` 调用 `validate_competition_run_summary.py`，因此 workflow metrics、before/after artifact ref、repair history、unsafe 账本、final-gate 规则和 slice counts 都会走已有 summary 合同深校验，不再只靠 path+sha256 通过。
 
 ## 核心目录
 
@@ -141,6 +162,27 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 
 # 语义通过验证
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
+
+# Harness worker accepted-evidence 复用 smoke
+python -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
+
+# 评委 before/after demo（首选真实 FlashDB 路径）
+python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+# 输出: target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json
+# 证据索引: target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json
+# 保底 demo 输出: target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json
+
+# 评委一键 harness runner（默认执行 competition smoke、before/after、多 worker、OpenCode 入口并深校验本地 artifacts）
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+# 公开审阅 Markdown: target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
+# 公开 release packet JSON: target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+python -B -m validation.tools.validate_public_release_packet --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+# evaluate 入口续跑索引: target/competition-out-flashdb-*-evaluate-profile-20260701/harness/resume-manifest.json
+# 聚焦 before/after 展品时可只跑单入口；competition smoke 只证明环境和轻量 evidence gate，semantic_gate=false
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+# 只检查将要执行的入口，不运行命令或要求本地 artifacts
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --dry-run
 
 # 全量回归
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
@@ -172,5 +214,6 @@ openspec validate --all --strict
 
 ## 代码分支
 
-- 主开发分支：`codex/flashdb-rust-skeleton`
+- 当前文档更新分支：`codex/agent-harness-flashdb-mvp`
+- 主开发基线分支：`codex/flashdb-rust-skeleton`
 - GitHub: `https://github.com/guoqihan342-svg/c-to-rust`

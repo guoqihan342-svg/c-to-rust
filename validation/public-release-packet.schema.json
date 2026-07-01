@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Public Release Packet",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "report_kind",
+    "status",
+    "summary",
+    "claim_boundary",
+    "judge_entrypoints_run_report",
+    "readiness_report",
+    "judge_milestone_bundle",
+    "milestone_release_notes",
+    "competition_config_archive",
+    "publication_manifest",
+    "quantitative_evaluation",
+    "progress_delta_ledger",
+    "known_gaps",
+    "must_not_claim",
+    "reproduction_commands"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "report_kind": {"const": "public-release-packet"},
+    "status": {"enum": ["passed", "blocked"]},
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "entrypoint_count",
+        "publication_scope",
+        "readiness",
+        "proof_class_rollup",
+        "workflow_metrics",
+        "progress_delta_ledger"
+      ],
+      "properties": {
+        "entrypoint_count": {"type": "integer", "minimum": 0},
+        "publication_scope": {"type": "string"},
+        "readiness": {"type": "object", "additionalProperties": true},
+        "proof_class_rollup": {"type": "object", "additionalProperties": true},
+        "workflow_metrics": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["repair_activity", "semantic_gate", "translation_coverage_numerator", "boundary"],
+          "properties": {
+            "repair_activity": {"type": "object", "additionalProperties": true},
+            "semantic_gate": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string"}
+          }
+        },
+        "progress_delta_ledger": {
+          "$ref": "#/$defs/progressDeltaLedger"
+        }
+      }
+    },
+    "claim_boundary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "semantic_gate",
+        "packet_is_semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "semantic_gate": {"const": false},
+        "packet_is_semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string"}
+      }
+    },
+    "judge_entrypoints_run_report": {"$ref": "#/$defs/artifactRef"},
+    "readiness_report": {"$ref": "#/$defs/artifactRef"},
+    "judge_milestone_bundle": {"$ref": "#/$defs/artifactRef"},
+    "milestone_release_notes": {"$ref": "#/$defs/artifactRef"},
+    "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
+    "publication_manifest": {"type": "object", "additionalProperties": true},
+    "quantitative_evaluation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["semantic_gate", "generated_draft_semantic_pass", "translation_coverage_numerator"],
+      "properties": {
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0}
+      }
+    },
+    "progress_delta_ledger": {
+      "$ref": "#/$defs/progressDeltaLedger"
+    },
+    "known_gaps": {"type": "array"},
+    "must_not_claim": {"type": "array", "items": {"type": "string"}},
+    "reproduction_commands": {"type": "object", "additionalProperties": true}
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "status", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "status": {"const": "present"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "progressDeltaLedger": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "capability_delta",
+        "governance_delta",
+        "workflow_delta",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "progress-delta-ledger"},
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "capability_delta": {"type": "object", "additionalProperties": true},
+        "governance_delta": {"type": "object", "additionalProperties": true},
+        "workflow_delta": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "workflow_source_count",
+            "workflow_units_total",
+            "workflow_units_converged",
+            "repair_history_unit_count",
+            "observed_repair_unit_count",
+            "auto_recovered_unit_count",
+            "rollback_evidence_count",
+            "before_after_repair_source_count",
+            "repair_delta_source_count",
+            "human_interventions"
+          ],
+          "properties": {
+            "workflow_source_count": {"type": "integer", "minimum": 0},
+            "workflow_units_total": {"type": "integer", "minimum": 0},
+            "workflow_units_converged": {"type": "integer", "minimum": 0},
+            "repair_history_unit_count": {"type": "integer", "minimum": 0},
+            "observed_repair_unit_count": {"type": "integer", "minimum": 0},
+            "auto_recovered_unit_count": {"type": "integer", "minimum": 0},
+            "rollback_evidence_count": {"type": "integer", "minimum": 0},
+            "before_after_repair_source_count": {"type": "integer", "minimum": 0},
+            "repair_delta_source_count": {"type": "integer", "minimum": 0},
+            "human_interventions": {"type": "integer", "minimum": 0},
+            "llm_calls": {"type": "integer", "minimum": 0}
+          }
+        },
+        "boundary": {"type": "string"}
+      }
+    }
+  }
+}

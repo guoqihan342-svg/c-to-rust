@@ -1,9 +1,9 @@
 {
   "cache_invalidation_keys": [
-    "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93",
+    "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "slice_spec_sha256=5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435",
     "fixture_hash=real-fdb-calc-crc32-fixture",
-    "build_profile_hash=08d130068ad3daf3be0e92badf5f57e1c99f5bbd8746ec18f118476519145d85",
+    "build_profile_hash=130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -49,6 +49,7 @@
     "validation/l2_slices/src/fdb_calc_crc32.rs"
   ],
   "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
   "external_direct_callees": [],
   "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
   "global_dependencies": [
@@ -71,13 +72,13 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "c559d6a61ee6596c55ca4622ad3389f45cbe4b10",
+  "repo_commit": "e719a132165a60c609928cce0e812cb485a2cd54",
   "schema_version": 1,
   "signature_bindings": [],
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "8b01ed8684db62bc3b1da80a53ed6683176cda37c5c291e36dd6c5d1f108ec93"
+    "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435"
   },
   "source_boundary": {
     "direct_call_edges": [],
@@ -96,7 +97,7 @@
       "size_t"
     ]
   },
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "recorded",
   "stub_boundaries": [],
   "target_id": "flashdb"

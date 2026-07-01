@@ -32,7 +32,7 @@
         "evidence_refs": [
           "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json"
         ],
-        "kind": "blocked_artifact",
+        "kind": "typed_ir_candidate_generated",
         "source": "route_decision.rationale"
       },
       "oracle_fixture_gap": {

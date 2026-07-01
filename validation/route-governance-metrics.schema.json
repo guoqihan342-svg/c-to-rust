@@ -1,0 +1,358 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Route governance metrics report",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "status",
+    "report_kind",
+    "inputs",
+    "metrics",
+    "denominators",
+    "claim_boundary",
+    "retention_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "status": {
+      "const": "passed"
+    },
+    "report_kind": {
+      "const": "route-governance-metrics"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["translator_coverage_matrix", "evidence_governance"],
+      "properties": {
+        "translator_coverage_matrix": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["path", "status", "capability_count"],
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "status": {"type": "string"},
+            "capability_count": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        "evidence_governance": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["evidence_root", "status", "file_count"],
+          "properties": {
+            "evidence_root": {"type": ["string", "null"]},
+            "status": {"type": "string"},
+            "file_count": {"type": ["integer", "null"], "minimum": 0}
+          }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "translation_coverage_numerator",
+        "accepted_evidence_semantic_pass_count",
+        "tracked_capability_delta_ledgers",
+        "tracked_capability_delta_count",
+        "tracked_route_decision_artifacts",
+        "s2_workflow_metrics",
+        "candidate_generation_inventory",
+        "tracked_slice_gate_contexts",
+        "slice_gate_contexts",
+        "c2rust_baseline",
+        "blocked_repairs"
+      ],
+      "properties": {
+        "translation_coverage_numerator": {"const": 0},
+        "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0},
+        "tracked_capability_delta_ledgers": {"type": "integer", "minimum": 0},
+        "tracked_capability_delta_count": {"type": "integer", "minimum": 0},
+        "tracked_route_decision_artifacts": {"type": "integer", "minimum": 0},
+        "candidate_classification": {"type": "object"},
+        "capability_delta_ledger": {"type": "object"},
+        "s2_workflow_metrics": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "run_count",
+            "input_summaries",
+            "units_total",
+            "units_converged",
+            "units_baseline_only",
+            "unsafe_reduction",
+            "translation_before_after",
+            "measured_unsafe_reduction_run_count",
+            "avg_repair_rounds",
+            "auto_recovery_rate",
+            "human_interventions",
+            "fail_closed_count",
+            "root_cause_counts",
+            "wall_clock_seconds",
+            "llm_calls",
+            "repair_history_unit_count",
+            "auto_recovered_units",
+            "claim_boundary"
+          ],
+          "properties": {
+            "run_count": {"type": "integer", "minimum": 0},
+            "input_summaries": {"type": "array", "items": {"type": "object"}},
+            "units_total": {"type": "integer", "minimum": 0},
+            "units_converged": {"type": "integer", "minimum": 0},
+            "units_baseline_only": {"type": "integer", "minimum": 0},
+            "unsafe_reduction": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": [
+                "status",
+                "baseline_total_unsafe",
+                "current_total_unsafe",
+                "reduced_by",
+                "ratio"
+              ],
+              "properties": {
+                "status": {"enum": ["measured", "not_measured"]},
+                "baseline_total_unsafe": {"type": ["integer", "null"], "minimum": 0},
+                "current_total_unsafe": {"type": ["integer", "null"], "minimum": 0},
+                "reduced_by": {"type": ["integer", "null"], "minimum": 0},
+                "ratio": {"type": ["number", "null"], "minimum": 0}
+              }
+            },
+            "translation_before_after": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": [
+                "status",
+                "input_run_count",
+                "unit_count",
+                "measured_unsafe_unit_count",
+                "accepted_patch_unit_count"
+              ],
+              "properties": {
+                "status": {"enum": ["bound", "not_provided"]},
+                "input_run_count": {"type": "integer", "minimum": 0},
+                "unit_count": {"type": "integer", "minimum": 0},
+                "measured_unsafe_unit_count": {"type": "integer", "minimum": 0},
+                "accepted_patch_unit_count": {"type": "integer", "minimum": 0}
+              }
+            },
+            "measured_unsafe_reduction_run_count": {"type": "integer", "minimum": 0},
+            "avg_repair_rounds": {"type": "number", "minimum": 0},
+            "auto_recovery_rate": {"type": "number", "minimum": 0},
+            "human_interventions": {"type": "integer", "minimum": 0},
+            "fail_closed_count": {"type": "integer", "minimum": 0},
+            "root_cause_counts": {"type": "object"},
+            "wall_clock_seconds": {"type": "integer", "minimum": 0},
+            "llm_calls": {"type": "integer", "minimum": 0},
+            "repair_history_unit_count": {"type": "integer", "minimum": 0},
+            "auto_recovered_units": {"type": "integer", "minimum": 0},
+            "claim_boundary": {"type": "string", "minLength": 1}
+          }
+        },
+        "candidate_generation_inventory": {"type": "object"},
+        "tracked_slice_gate_contexts": {"type": "integer", "minimum": 0},
+        "slice_gate_contexts": {
+          "type": "array",
+          "items": {"type": "object"}
+        },
+        "c2rust_baseline": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "report_kind",
+            "status",
+            "manifest_count",
+            "generated_output_count",
+            "skipped_without_output_count",
+            "compile_attempted_count",
+            "compile_passed_count",
+            "compile_semantic_pass_count",
+            "status_counts",
+            "output_status_counts",
+            "compile_status_counts",
+            "manifests",
+            "semantic_gate",
+            "generated_draft_semantic_pass",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "report_kind": {"const": "c2rust-baseline-rollup"},
+            "status": {"type": "string"},
+            "manifest_count": {"type": "integer", "minimum": 0},
+            "generated_output_count": {"type": "integer", "minimum": 0},
+            "skipped_without_output_count": {"type": "integer", "minimum": 0},
+            "compile_attempted_count": {"type": "integer", "minimum": 0},
+            "compile_passed_count": {"type": "integer", "minimum": 0},
+            "compile_semantic_pass_count": {"const": 0},
+            "status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "output_status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "compile_status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "manifests": {"type": "array", "items": {"type": "object"}},
+            "semantic_gate": {"const": false},
+            "generated_draft_semantic_pass": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
+          }
+        },
+        "blocked_repairs": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "status",
+            "blocked_repair_count",
+            "slice_count",
+            "human_action_required_count",
+            "status_counts",
+            "human_intervention_points",
+            "blocked_callees",
+            "ir_feature_gap_kinds",
+            "forbidden_change_counts",
+            "blocked_reason_counts",
+            "source_span_kind_counts",
+            "smallest_next_tests",
+            "next_actions",
+            "semantic_gate",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "status": {"type": "string"},
+            "blocked_repair_count": {"type": "integer", "minimum": 0},
+            "slice_count": {"type": "integer", "minimum": 0},
+            "human_action_required_count": {"type": "integer", "minimum": 0},
+            "status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "human_intervention_points": {"type": "array", "items": {"type": "string"}},
+            "blocked_callees": {"type": "array", "items": {"type": "string"}},
+            "ir_feature_gap_kinds": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "forbidden_change_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "blocked_reason_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "source_span_kind_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "smallest_next_tests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["kind"],
+                "properties": {
+                  "kind": {"type": "string", "minLength": 1},
+                  "command": {"type": "string", "minLength": 1},
+                  "expected_gate": {"type": "string", "minLength": 1}
+                }
+              }
+            },
+            "next_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["route", "status", "next_action"],
+                "properties": {
+                  "route": {"type": "string", "minLength": 1},
+                  "status": {"type": "string", "minLength": 1},
+                  "next_action": {"type": "string", "minLength": 1},
+                  "repair_id": {"type": "string", "minLength": 1},
+                  "target_id": {"type": "string", "minLength": 1},
+                  "slice_id": {"type": "string", "minLength": 1},
+                  "pipeline_id": {"type": "string", "minLength": 1},
+                  "smallest_next_test_kind": {"type": "string", "minLength": 1},
+                  "smallest_next_test_command": {"type": "string", "minLength": 1},
+                  "expected_gate": {"type": "string", "minLength": 1},
+                  "human_intervention_point": {"type": "string", "minLength": 1},
+                  "source_span_kind": {"type": "string", "minLength": 1},
+                  "source_span": {"type": "object"}
+                }
+              }
+            },
+            "semantic_gate": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "denominators": {
+      "type": "object",
+      "additionalProperties": {"type": "string"},
+      "required": [
+        "capability_delta_ledger",
+        "candidate_generation_inventory",
+        "slice_gate_contexts",
+        "c2rust_baseline",
+        "translation_coverage_numerator",
+        "accepted_evidence_semantic_pass_count",
+        "s2_workflow_metrics",
+        "blocked_repairs"
+      ]
+    },
+    "claim_boundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retention_policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "report_role",
+        "target_artifacts",
+        "committed_anchors",
+        "claim_boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "route-governance-metrics-retention-policy"},
+        "report_role": {"const": "p0-route-governance-and-capability-metrics"},
+        "target_artifacts": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["retention_class", "committed", "policy"],
+          "properties": {
+            "retention_class": {"const": "reproducible-local-output"},
+            "committed": {"const": false},
+            "policy": {"type": "string", "minLength": 1}
+          }
+        },
+        "committed_anchors": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["retention_class", "policy"],
+          "properties": {
+            "retention_class": {"const": "release-evidence"},
+            "policy": {"type": "string", "minLength": 1}
+          }
+        },
+        "claim_boundary": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

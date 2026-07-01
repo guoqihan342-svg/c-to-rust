@@ -14,6 +14,11 @@ The Chinese source currently contains these major headings:
 
 - No Markdown headings are present in the Chinese source yet.
 
+## Current FlashDB Evidence Summary
+
+- Accepted evidence: `real-fdb-calc-crc32` and `real-fdb-blob-make`. Both are L4 accepted-evidence-authoritative semantic bindings; generated drafts are still not semantic pass.
+- Blocked evidence: `real-fdb-kv-set`; external direct callee shim/model/oracle semantics are not closed.
+
 ## Maintenance Notes
 
 - Keep filenames paired as `flashdb.md` and `flashdb.en.md` in the same directory.

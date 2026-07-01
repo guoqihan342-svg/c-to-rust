@@ -405,6 +405,15 @@ fn record_ir_call_expression_evidence_for_expr(
         typed_ir::IrExpr::Cast { expr, .. } => {
             record_ir_call_expression_evidence_for_expr(expr, statement_context, result);
         }
+        typed_ir::IrExpr::LValueToRValue { expr, .. } => {
+            record_ir_call_expression_evidence_for_expr(expr, statement_context, result);
+        }
+        typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
+            record_ir_call_expression_evidence_for_expr(expr, statement_context, result);
+        }
+        typed_ir::IrExpr::FunctionToPointerDecay { expr, .. } => {
+            record_ir_call_expression_evidence_for_expr(expr, statement_context, result);
+        }
         typed_ir::IrExpr::Index { base, index, .. } => {
             record_ir_call_expression_evidence_for_expr(base, statement_context, result);
             record_ir_call_expression_evidence_for_expr(index, statement_context, result);
@@ -465,6 +474,13 @@ fn ir_expr_source_text(expr: &typed_ir::IrExpr) -> String {
         ),
         typed_ir::IrExpr::Cast { target, expr, .. } => {
             format!("({} as {})", ir_expr_source_text(expr), ir_c_type(target))
+        }
+        typed_ir::IrExpr::LValueToRValue { expr, .. } => ir_expr_source_text(expr),
+        typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
+            format!("array_to_pointer_decay({})", ir_expr_source_text(expr))
+        }
+        typed_ir::IrExpr::FunctionToPointerDecay { expr, .. } => {
+            format!("function_to_pointer_decay({})", ir_expr_source_text(expr))
         }
         typed_ir::IrExpr::Index { base, index, .. } => {
             format!(
@@ -750,6 +766,9 @@ fn ir_expr_label(expr: &typed_ir::IrExpr) -> String {
         typed_ir::IrExpr::Unary { op, .. } => format!("{op:?}"),
         typed_ir::IrExpr::Conditional { .. } => "conditional".to_string(),
         typed_ir::IrExpr::Cast { .. } => "cast".to_string(),
+        typed_ir::IrExpr::LValueToRValue { .. } => "lvalue_to_rvalue".to_string(),
+        typed_ir::IrExpr::ArrayToPointerDecay { .. } => "array_to_pointer_decay".to_string(),
+        typed_ir::IrExpr::FunctionToPointerDecay { .. } => "function_to_pointer_decay".to_string(),
         typed_ir::IrExpr::Index { .. } => "index".to_string(),
         typed_ir::IrExpr::Member { field, .. } => format!("member {field}"),
         typed_ir::IrExpr::ArrayLiteral { .. } => "array_literal".to_string(),
@@ -996,6 +1015,15 @@ fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars:
             collect_ir_post_increment_deref_vars_from_expr(else_expr, vars);
         }
         typed_ir::IrExpr::Cast { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
+        }
+        typed_ir::IrExpr::LValueToRValue { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
+        }
+        typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
+        }
+        typed_ir::IrExpr::FunctionToPointerDecay { expr, .. } => {
             collect_ir_post_increment_deref_vars_from_expr(expr, vars);
         }
         typed_ir::IrExpr::Index { base, index, .. } => {

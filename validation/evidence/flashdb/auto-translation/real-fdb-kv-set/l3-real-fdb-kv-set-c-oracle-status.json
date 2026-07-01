@@ -4,10 +4,13 @@
     "argv": [
       "cc",
       "-std=c99",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
       "l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+      "sources/FlashDB/src/fdb_kvdb.c",
+      "sources/FlashDB/src/fdb_utils.c",
+      "sources/FlashDB/src/fdb.c",
+      "sources/FlashDB/src/fdb_file.c",
       "-o",
       "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
     ],
@@ -16,17 +19,39 @@
       {
         "path": "src/fdb_kvdb.c",
         "resolution": "source_root_relative",
-        "resolved_path": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+        "resolved_path": "sources/FlashDB/src/fdb_kvdb.c",
         "role": "source",
         "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+      },
+      {
+        "path": "src/fdb_utils.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "sources/FlashDB/src/fdb_utils.c",
+        "role": "link_dependency",
+        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      },
+      {
+        "path": "src/fdb.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "sources/FlashDB/src/fdb.c",
+        "role": "link_dependency",
+        "sha256": "b328b568d5f11accf83609d14809b14ecde204496d661f6baff31a65675aac8e"
+      },
+      {
+        "path": "src/fdb_file.c",
+        "resolution": "source_root_relative",
+        "resolved_path": "sources/FlashDB/src/fdb_file.c",
+        "role": "link_dependency",
+        "sha256": "c27b7bc5e57253774a29f363305ba3ffdcf8c9afea3a8674ea03a33c83d2e02d"
       }
     ],
-    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "link_strategy": "compile_harness_with_declared_c_boundary_and_build_profile_sources",
+    "oracle_source_mode": "declared_c_boundary_sources",
     "resolved_include_paths": [
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests"
+      "sources/FlashDB/inc",
+      "sources/FlashDB/tests"
     ],
-    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_root": "sources/FlashDB",
     "status": "draft_not_executed",
     "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set"
   },
@@ -34,10 +59,13 @@
     "argv": [
       "cc",
       "-std=c99",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/inc",
-      "-Iexternal/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/tests",
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
       "l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-      "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829/src/fdb_kvdb.c",
+      "sources/FlashDB/src/fdb_kvdb.c",
+      "sources/FlashDB/src/fdb_utils.c",
+      "sources/FlashDB/src/fdb.c",
+      "sources/FlashDB/src/fdb_file.c",
       "-o",
       "l3-real-fdb-kv-set-c-oracle-harness-draft.exe"
     ],
@@ -56,10 +84,37 @@
     "behavior_fields": [
       "return_code"
     ],
-    "binding_status": "missing_or_empty",
-    "case_bindings": [],
-    "case_count": 0,
-    "expected_output_status": "missing_or_empty",
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+        "id": "uninit-set-value",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_code"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_code": 7
+        },
+        "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+        "id": "uninit-delete-null",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_code"
+        ]
+      }
+    ],
+    "case_count": 2,
+    "expected_output_status": "declared_not_executed",
     "observable_outputs": [
       "return_code"
     ],
@@ -71,10 +126,37 @@
       "behavior_fields": [
         "return_code"
       ],
-      "binding_status": "missing_or_empty",
-      "case_bindings": [],
-      "case_count": 0,
-      "expected_output_status": "missing_or_empty",
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 7
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+          "id": "uninit-set-value",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_code": 7
+          },
+          "expected_ref": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
+          "id": "uninit-delete-null",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_code"
+          ]
+        }
+      ],
+      "case_count": 2,
+      "expected_output_status": "declared_not_executed",
       "observable_outputs": [
         "return_code"
       ],
@@ -82,6 +164,10 @@
     },
     "function_prototype": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value);",
     "global_dependencies": [],
+    "oracle_harness_includes": [
+      "flashdb.h"
+    ],
+    "oracle_source_mode": "declared_c_boundary_sources",
     "source_files": [
       {
         "path": "src/fdb_kvdb.c",
@@ -94,7 +180,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-c-oracle-harness-draft.c",
-    "sha256": "5bb250ceebadd54c440d4e1ed67c32dce62c0de4eb790b8339fa227cfa86d24b",
+    "sha256": "3f14942b5d4564cea99aa489c51a5014995fa1afcd89241fc4be66fce0381617",
     "status": "draft"
   },
   "required_final_status": "C_ORACLE_GENERATED",

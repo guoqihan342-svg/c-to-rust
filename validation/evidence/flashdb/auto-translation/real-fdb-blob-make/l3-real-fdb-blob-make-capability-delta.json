@@ -3,8 +3,8 @@
   "capability_delta": [
     {
       "blocked_callees": [],
-      "construct_id": "blocked_artifact",
-      "delta_id": "cap-real-fdb-blob-make-blocked_artifact",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "cap-real-fdb-blob-make-typed_ir_candidate_generated",
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
@@ -24,8 +24,8 @@
   "governance_delta": [
     {
       "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-      "construct_id": "blocked_artifact",
-      "delta_id": "gov-real-fdb-blob-make-blocked_artifact-evidence",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "gov-real-fdb-blob-make-typed_ir_candidate_generated-evidence",
       "evidence_refs": [
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
