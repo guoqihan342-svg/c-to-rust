@@ -95,6 +95,15 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         )
         self.assertEqual(report["readiness_report"]["status"], "present")
         self.assertIn("sha256", report["readiness_report"])
+        self.assertEqual(
+            report["milestone_bundle"]["path"],
+            repo_relative(out_path.parent / "judge-milestone-bundle.json"),
+        )
+        self.assertEqual(report["milestone_bundle"]["status"], "present")
+        self.assertIn("sha256", report["milestone_bundle"])
+        milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
+        self.assertEqual(milestone_bundle["status"], "blocked")
+        self.assertIn("not_all_entrypoints_executed", milestone_bundle["blockers"])
         stdout_log = out_path.parent / "logs" / "before_after_judge_demo.stdout.log"
         stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
         self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["path"], repo_relative(stdout_log))
@@ -161,6 +170,15 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertIn("2/2", summary["headline"])
         self.assertFalse(summary["claim_boundary"]["semantic_gate"])
         self.assertTrue(summary["readiness"]["all_entrypoints_executed"])
+        self.assertEqual(
+            report["milestone_bundle"]["path"],
+            repo_relative(out_path.parent / "judge-milestone-bundle.json"),
+        )
+        self.assertEqual(report["milestone_bundle"]["status"], "present")
+        milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
+        self.assertEqual(milestone_bundle["status"], "passed")
+        self.assertTrue(milestone_bundle["summary"]["external_milestone_claim_ready"])
+        self.assertFalse(milestone_bundle["claim_boundary"]["semantic_gate"])
         self.assertEqual(summary["readiness"]["executed_count"], 2)
         self.assertEqual(summary["readiness"]["configured_count"], 2)
         self.assertEqual(summary["readiness"]["validation_status"], "passed")

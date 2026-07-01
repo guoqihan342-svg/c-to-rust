@@ -88,6 +88,7 @@ jobs:
           python -m unittest validation.tools.test_judge_demo_entrypoint
           python -m unittest validation.tools.test_validate_judge_entrypoints
           python -m unittest validation.tools.test_run_judge_entrypoints
+          python -m unittest validation.tools.test_judge_milestone_bundle
 
       - name: Check judge entrypoint runner plan
         run: python -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json

@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools import validate_judge_entrypoints as validator
+from validation.tools import judge_milestone_bundle
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -145,7 +146,7 @@ def run_judge_entrypoints(
     if dry_run:
         status = "planned"
 
-    return write_run_report(
+    report = write_run_report(
         out_path=out_path,
         status=status,
         dry_run=dry_run,
@@ -156,6 +157,9 @@ def run_judge_entrypoints(
         validation=validation,
         readiness_ref=readiness_ref,
     )
+    if not dry_run and status == "passed":
+        attach_milestone_bundle(report, out_path=out_path, repo_root=repo_root)
+    return report
 
 
 def write_run_report(
@@ -203,6 +207,16 @@ def write_run_report(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
+
+
+def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root: Path) -> None:
+    bundle_path = out_path.parent / "judge-milestone-bundle.json"
+    judge_milestone_bundle.build_judge_milestone_bundle(
+        run_report_path=out_path,
+        out_path=bundle_path,
+        repo_root=repo_root,
+    )
+    report["milestone_bundle"] = artifact_ref(bundle_path, repo_root=repo_root)
 
 
 def select_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> list[dict[str, Any]]:

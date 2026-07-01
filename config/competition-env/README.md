@@ -44,7 +44,7 @@
 - `toolchain-check.sh`：比赛机环境自检脚本。
 - `smoke.sh`：Linux/WSL/CI 轻量 smoke 入口，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要。
 - `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，在 `auto_retry=true` 时启用 `run-plan --auto-retry`，并用 `max_workers` fan-out 独立 worker。
-- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 competition environment smoke、FlashDB before/after demo、显式多 worker evaluate profile 和 OpenCode 多 worker evaluate profile。默认不传 `--entrypoint-id` 时会按配置顺序运行全部入口，并写出带 `summary` 的 `judge-entrypoints-run-report.json`；聚焦 before/after 时再加 `--entrypoint-id before_after_judge_demo`。只校验索引时可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 smoke summary、context-pack、agent-index、judge-evidence-index 与 worker 索引一致性。
+- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 competition environment smoke、FlashDB before/after demo、显式多 worker evaluate profile 和 OpenCode 多 worker evaluate profile。默认不传 `--entrypoint-id` 时会按配置顺序运行全部入口，并写出带 `summary` 的 `judge-entrypoints-run-report.json`；聚焦 before/after 时再加 `--entrypoint-id before_after_judge_demo`。只校验索引时可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 smoke summary、context-pack、agent-index、judge-evidence-index 与 worker 索引一致性。全量 runner 成功时还会写出 `target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json`，把 run report、readiness report、post-run expected artifacts、workflow metrics 和 OpenCode runtime 摘要绑定成外部评估索引；它不是 semantic gate，也不增加 translation coverage numerator。
 - `review-checklists/`：milestone/release review gate 输入目录；`flashdb-harness-internal-review.json` 记录 harness architecture、unsafe ledger、coverage matrix、真实切片证据、公开 claim boundary 和已知拒绝项的人工 review 覆盖。`milestone_release_report.py --review-checklist ...` 会把它作为 release readiness 输入；`judge_demo.py --review-checklist ...` 会在 out-root 下生成 `summary/milestone-review-checklist.json` 副本并由 `harness/judge-evidence-index.json` 绑定原始输入与副本；review checklist 不是 semantic gate。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计。
 
@@ -139,7 +139,7 @@ python -B -m validation.tools.run_judge_entrypoints \
   --dry-run
 ```
 
-runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后才执行入口命令；命令成功后再调用本地 artifact 深校验并写出 readiness report。它只是编排证据，语义接受仍只来自 competition summary、workflow metrics、oracle evidence 和 validators。
+runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后才执行入口命令；命令成功后再调用本地 artifact 深校验并写出 readiness report。非 dry-run 成功执行时，它还会在 run report 同目录写出 `judge-milestone-bundle.json`；bundle 会 hash 绑定 run report 和 validator-owned artifact refs，并把 focused run 标记为不可作为外部全量 milestone 发布。它只是编排证据，语义接受仍只来自 competition summary、workflow metrics、oracle evidence 和 validators。
 
 可复用 planned batch profile 入口：
 
