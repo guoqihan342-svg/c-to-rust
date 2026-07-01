@@ -568,6 +568,83 @@ def validate_competition_smoke_summary_contract(
     }
 
 
+def validate_vendored_clang_verification_contract(
+    payload: dict[str, Any],
+    *,
+    smoke_summary: dict[str, Any] | None = None,
+    environment_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if payload.get("schema_version") != 1:
+        raise ValueError("vendored_clang_verification schema_version must be 1")
+    if payload.get("artifact_kind") != "vendored-clang-verification":
+        raise ValueError("vendored_clang_verification artifact_kind must be vendored-clang-verification")
+    proof_class = require_string(payload.get("proof_class"), "vendored_clang_verification.proof_class")
+    status = require_string(payload.get("status"), "vendored_clang_verification.status")
+    final_gate = require_object(payload.get("final_gate"), "vendored_clang_verification.final_gate")
+    clang = require_object(payload.get("clang"), "vendored_clang_verification.clang")
+    clang_lane_verified = payload.get("clang_lane_verified")
+    if not isinstance(clang_lane_verified, bool):
+        raise ValueError("vendored_clang_verification.clang_lane_verified must be boolean")
+
+    if environment_profile is not None:
+        expected_profile_id = require_string(environment_profile.get("profile_id"), "environment_profile.profile_id")
+        expected_sha256 = require_string(environment_profile.get("sha256"), "environment_profile.sha256")
+        if payload.get("profile_id") != expected_profile_id:
+            raise ValueError("vendored_clang_verification profile_id must match environment_profile.profile_id")
+        if payload.get("profile_sha256") != expected_sha256:
+            raise ValueError("vendored_clang_verification profile_sha256 must match environment_profile.sha256")
+
+    if smoke_summary is not None:
+        smoke_proof_class = require_string(smoke_summary.get("proof_class"), "competition_smoke_summary.proof_class")
+        if proof_class != smoke_proof_class:
+            raise ValueError("vendored_clang_verification proof_class must match competition_smoke_summary.proof_class")
+        smoke_profile_match = require_object(
+            smoke_summary.get("competition_profile_match"),
+            "competition_smoke_summary.competition_profile_match",
+        )
+        smoke_clang_verified = smoke_profile_match.get("clang_lane_verified")
+        if not isinstance(smoke_clang_verified, bool):
+            raise ValueError("competition_smoke_summary.competition_profile_match.clang_lane_verified must be boolean")
+        if clang_lane_verified != smoke_clang_verified:
+            raise ValueError("vendored_clang_verification clang_lane_verified must match competition_smoke_summary")
+        top_level_clang_verified = smoke_summary.get("clang_lane_verified")
+        if top_level_clang_verified is not None and top_level_clang_verified != clang_lane_verified:
+            raise ValueError("vendored_clang_verification clang_lane_verified must match competition_smoke_summary")
+
+    if status == "missing":
+        if payload.get("reason") != "missing_clang_path":
+            raise ValueError("vendored_clang_verification missing status requires reason=missing_clang_path")
+        if clang.get("source") != "missing":
+            raise ValueError("vendored_clang_verification missing status requires clang.source=missing")
+        if clang_lane_verified is not False:
+            raise ValueError("vendored_clang_verification missing status requires clang_lane_verified=false")
+        if proof_class == "competition-exact":
+            if payload.get("clang_required") is not True:
+                raise ValueError("vendored_clang_verification competition-exact missing status requires clang_required=true")
+            if final_gate.get("status") != "failed":
+                raise ValueError("vendored_clang_verification competition-exact missing status must fail final_gate")
+        elif final_gate.get("status") != "passed":
+            raise ValueError("vendored_clang_verification non-exact missing status must keep final_gate passed")
+    elif status == "passed":
+        if clang_lane_verified is not True:
+            raise ValueError("vendored_clang_verification passed status requires clang_lane_verified=true")
+        if final_gate.get("status") != "passed":
+            raise ValueError("vendored_clang_verification passed status requires final_gate.status=passed")
+    elif status == "failed":
+        if final_gate.get("status") != "failed":
+            raise ValueError("vendored_clang_verification failed status requires final_gate.status=failed")
+    else:
+        raise ValueError("vendored_clang_verification.status must be passed, missing, or failed")
+
+    return {
+        "status": "passed",
+        "proof_class": proof_class,
+        "clang_lane_verified": clang_lane_verified,
+        "verification_status": status,
+        "final_gate": final_gate.get("status"),
+    }
+
+
 def validate_competition_smoke_timeout_policy(payload: dict[str, Any]) -> None:
     timeout_policy = payload.get("timeout_policy")
     if not isinstance(timeout_policy, dict):
@@ -2210,13 +2287,21 @@ def validate_harness_artifact_contracts(
         if smoke_contract is None:
             raise ValueError("competition_smoke_summary requires smoke_contract context")
         smoke_summary_path = repo_path(str(artifacts["competition_smoke_summary"]), repo_root=repo_root)
+        smoke_summary_payload = load_json(smoke_summary_path)
         result["competition_smoke_summary"] = validate_competition_smoke_summary_contract(
-            load_json(smoke_summary_path),
+            smoke_summary_payload,
             expected_artifacts=artifacts,
             environment_profile=environment_profile,
             entrypoint_proof_class=str(smoke_contract.get("proof_class")),
             entrypoint_run_id=str(smoke_contract.get("run_id")),
         )
+        if "vendored_clang_verification" in artifacts:
+            vendored_clang_path = repo_path(str(artifacts["vendored_clang_verification"]), repo_root=repo_root)
+            result["vendored_clang_verification"] = validate_vendored_clang_verification_contract(
+                load_json(vendored_clang_path),
+                smoke_summary=smoke_summary_payload,
+                environment_profile=environment_profile,
+            )
     return result
 
 
