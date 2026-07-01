@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "report_kind": "competition-env-bundle",
+  "bundle_root": "config/competition-env",
+  "canonical_environment_profile": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+  },
+  "files": [
+    {
+      "path": "config/competition-env/environment.json",
+      "role": "environment-profile",
+      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+    },
+    {
+      "path": "config/competition-env/env.sh",
+      "role": "environment-shell-entrypoint",
+      "sha256": "d7489d3cacada15b375d717879b0c289583184bec15d24f432f479ec3048c689"
+    },
+    {
+      "path": "config/competition-env/toolchain-check.sh",
+      "role": "toolchain-smoke",
+      "sha256": "8f109062ff6a256cd393b2ff4e0a320ed04ec8ec79bc9a9909ef088e7b83bda7"
+    },
+    {
+      "path": "config/competition-env/smoke.sh",
+      "role": "competition-smoke-entrypoint",
+      "sha256": "91758a7c6b59a3c0394ceb1053c1e397fa60c72ece2a760407e741d04e5550f0"
+    },
+    {
+      "path": "config/competition-env/apt/sources.list",
+      "role": "apt-mirror",
+      "sha256": "184f6117e0daa9c64a73ae62b4d710efd98b226a1a56e7793c0e6701b7ac8dea"
+    },
+    {
+      "path": "config/competition-env/pip/pip.conf",
+      "role": "pip-mirror",
+      "sha256": "4d0d31c429f38f98ae0327e4f3c29d8ac4874c3b0189bbb4bf8d8f0d65809d23"
+    },
+    {
+      "path": "config/competition-env/npm/.npmrc",
+      "role": "npm-mirror",
+      "sha256": "3fd7b976a150c3b3df616131a469dd52de907bf2235c2adc0cdae09d96ab05b1"
+    },
+    {
+      "path": "config/competition-env/cargo/config.toml",
+      "role": "cargo-mirror",
+      "sha256": "55cf7c550c31d14a5416e90a6766b4bb5db093176cb9159a3223e77855441d73"
+    },
+    {
+      "path": "config/competition-env/rust/rust-toolchain.toml",
+      "role": "rust-toolchain",
+      "sha256": "2c108b6a37757f2801a33342354d1d89eeff673fa878e1afafbe756afb03d5fa"
+    },
+    {
+      "path": "config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json",
+      "role": "planned-batch-profile",
+      "sha256": "367b32c2a84feb08d0f751cf935ce3756c2b5038154e08ecd5745b50e26d6a7e"
+    },
+    {
+      "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+      "role": "planned-batch-profile",
+      "sha256": "0f1bd2182edcfc8932ef84bec8dff8025c1e0e11d6955fb11d2c6da9aa710bfe"
+    },
+    {
+      "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
+      "role": "planned-batch-profile",
+      "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
+    },
+    {
+      "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+      "role": "planned-batch-profile",
+      "sha256": "b2ef01855dfa133fa5e314b854890b80647ea60662bb22d082d329aede4adf48"
+    },
+    {
+      "path": "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
+      "role": "planned-batch-profile",
+      "sha256": "6b919251805b513a2784d0035cdd83c849d18dc9f7bdb358d2b8276170837948"
+    },
+    {
+      "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
+      "role": "judge-entrypoint-index",
+      "sha256": "16302ce9f2ce81dce4ec0da44c54ac873ff22bf9e6199b022667b5798439ef68"
+    },
+    {
+      "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+      "role": "review-gate",
+      "sha256": "6d01d08d81c7edf333ee6a85cbc9d6d5c8b84ee4c59c52f726d8b11d5a585f7d"
+    },
+    {
+      "path": "config/competition-env/opencode-single-interaction.md",
+      "role": "opencode-runbook",
+      "sha256": "9fb4580eb0b9221b6d60ae6a1c9059f563ea28fa6372a1a69ef1e0cd022f537b"
+    },
+    {
+      "path": "config/competition-env/opencode-single-interaction.en.md",
+      "role": "opencode-runbook",
+      "sha256": "82d13a86a46b39da6b7cb9daee133e5cda9cf8c5281c1e152a9d277358baf660"
+    }
+  ],
+  "claim_boundary": {
+    "semantic_gate": false,
+    "archive_is_semantic_gate": false,
+    "boundary": "This manifest binds repo-local competition configuration files for reproduction and drift checks only. It does not claim semantic acceptance or translation coverage."
+  }
+}

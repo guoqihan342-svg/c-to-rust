@@ -24,6 +24,8 @@ if str(REPO_ROOT) not in sys.path:
 from validation.tools import milestone_release_report
 
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
+COMPETITION_ENV_ROOT = "config/competition-env"
+COMPETITION_ENV_BUNDLE_MANIFEST = Path("config") / "competition-env" / "bundle-manifest.json"
 ROUTE_GOVERNANCE_METRICS_SCHEMA = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
 LOCAL_ABSOLUTE_PATH = re.compile(r"(?:^|[^A-Za-z0-9_])(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/)")
 REQUIRED_HARNESS_FEATURES = (
@@ -92,6 +94,7 @@ def write_readiness_report(result: dict[str, Any], out_path: Path, *, repo_root:
         "entrypoint_count": result.get("entrypoint_count", 0),
         "proof_class_contract": result.get("proof_class_contract", {}),
         "source_pin_contract": result.get("source_pin_contract", {}),
+        "competition_env_bundle_contract": result.get("competition_env_bundle_contract", {}),
         "test_contract": result.get("test_contract", {}),
         "validation": result,
     }
@@ -235,6 +238,105 @@ def validate_ref(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     if expected_sha != actual_sha:
         raise ValueError(f"artifact ref sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}")
     return {"path": path_text, "sha256": actual_sha, "status": "present"}
+
+
+def validate_competition_env_bundle_contract(
+    config: dict[str, Any],
+    *,
+    repo_root: Path,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    manifest_path = manifest_path or COMPETITION_ENV_BUNDLE_MANIFEST
+    manifest_path = manifest_path if manifest_path.is_absolute() else repo_root / manifest_path
+    if not manifest_path.is_file():
+        raise ValueError("competition env bundle manifest is missing")
+    manifest = load_json(manifest_path)
+    if manifest.get("schema_version") != 1:
+        raise ValueError("competition env bundle schema_version must be 1")
+    if manifest.get("report_kind") != "competition-env-bundle":
+        raise ValueError("competition env bundle report_kind must be competition-env-bundle")
+    if manifest.get("bundle_root") != COMPETITION_ENV_ROOT:
+        raise ValueError(f"competition env bundle bundle_root must be {COMPETITION_ENV_ROOT}")
+    boundary = require_object(manifest.get("claim_boundary"), "competition env bundle claim_boundary")
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError("competition env bundle claim_boundary.semantic_gate must be false")
+    if boundary.get("archive_is_semantic_gate") is not False:
+        raise ValueError("competition env bundle claim_boundary.archive_is_semantic_gate must be false")
+
+    environment_profile = require_object(config.get("environment_profile"), "environment_profile")
+    canonical_profile = require_object(
+        manifest.get("canonical_environment_profile"),
+        "competition env bundle canonical_environment_profile",
+    )
+    for field in ("path", "profile_id", "sha256"):
+        if canonical_profile.get(field) != environment_profile.get(field):
+            raise ValueError(f"competition env bundle canonical_environment_profile.{field} must match environment_profile")
+
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files:
+        raise ValueError("competition env bundle files must be a non-empty list")
+    result_files: dict[str, dict[str, Any]] = {}
+    roles: dict[str, str] = {}
+    for file_entry in files:
+        entry = require_object(file_entry, "competition env bundle files[]")
+        path_text = require_string(entry.get("path"), "competition env bundle files[].path")
+        role = require_string(entry.get("role"), f"competition env bundle {path_text}.role")
+        expected_sha = require_string(entry.get("sha256"), f"competition env bundle {path_text}.sha256")
+        assert_repo_relative_posix(path_text)
+        if not path_text.startswith(f"{COMPETITION_ENV_ROOT}/"):
+            raise ValueError(f"competition env bundle file must stay under {COMPETITION_ENV_ROOT}: {path_text}")
+        if path_text in result_files:
+            raise ValueError(f"competition env bundle duplicate file: {path_text}")
+        path = repo_path(path_text, repo_root=repo_root)
+        if not path.is_file():
+            raise ValueError(f"competition env bundle file is missing: {path_text}")
+        actual_sha = sha256_file(path)
+        if expected_sha != actual_sha:
+            raise ValueError(f"competition env bundle file sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}")
+        result_files[path_text] = {
+            "path": path_text,
+            "role": role,
+            "sha256": actual_sha,
+            "status": "present",
+        }
+        roles[path_text] = role
+
+    required_paths = {
+        "config/competition-env/environment.json",
+        "config/competition-env/env.sh",
+        "config/competition-env/toolchain-check.sh",
+        "config/competition-env/smoke.sh",
+        "config/competition-env/apt/sources.list",
+        "config/competition-env/pip/pip.conf",
+        "config/competition-env/npm/.npmrc",
+        "config/competition-env/cargo/config.toml",
+        "config/competition-env/rust/rust-toolchain.toml",
+        "config/competition-env/judge-entrypoints/flashdb-harness.json",
+        "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+        "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+    }
+    missing_required = sorted(required_paths - set(result_files))
+    if missing_required:
+        raise ValueError(f"competition env bundle missing required files: {missing_required}")
+
+    return {
+        "status": "passed",
+        "report_kind": "competition-env-bundle",
+        "manifest": {
+            "path": repo_relative(manifest_path, repo_root),
+            "sha256": sha256_file(manifest_path),
+        },
+        "bundle_root": COMPETITION_ENV_ROOT,
+        "canonical_environment_profile": {
+            "path": str(canonical_profile.get("path")),
+            "profile_id": str(canonical_profile.get("profile_id")),
+            "sha256": str(canonical_profile.get("sha256")),
+        },
+        "semantic_gate": False,
+        "file_count": len(result_files),
+        "files": sorted(result_files),
+        "roles": roles,
+    }
 
 
 def validate_entrypoint_review_checklist_ref(entry: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
@@ -2061,10 +2163,12 @@ def validate_config(
             raise ValueError("status must be active")
         claim_boundary = validate_claim_boundary(config)
         validate_ref(config["environment_profile"], repo_root=repo_root)
+        competition_env_bundle_contract = validate_competition_env_bundle_contract(config, repo_root=repo_root)
         assert_no_local_absolute_path(str(config.get("source_pin", {}).get("checkout_command", "")))
     except (KeyError, ValueError) as error:
         errors.append(str(error))
         claim_boundary = {}
+        competition_env_bundle_contract = {}
 
     entrypoints = config.get("entrypoints")
     if not isinstance(entrypoints, list) or not entrypoints:
@@ -2184,6 +2288,7 @@ def validate_config(
         "entrypoint_count": len(entrypoint_results),
         "entrypoints": entrypoint_results,
         "claim_boundary": claim_boundary,
+        "competition_env_bundle_contract": competition_env_bundle_contract,
         "proof_class_contract": proof_class_contract,
         "source_pin_contract": source_pin_contract,
         "test_contract": test_contract,

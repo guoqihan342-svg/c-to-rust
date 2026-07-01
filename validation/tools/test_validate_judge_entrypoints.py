@@ -448,6 +448,60 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             },
         )
 
+    def test_default_flashdb_judge_entrypoints_validates_competition_env_bundle(self) -> None:
+        result = validator.validate_config(validator.DEFAULT_CONFIG, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+        bundle = result["competition_env_bundle_contract"]
+        self.assertEqual(bundle["status"], "passed")
+        self.assertEqual(bundle["report_kind"], "competition-env-bundle")
+        self.assertEqual(bundle["bundle_root"], "config/competition-env")
+        self.assertFalse(bundle["semantic_gate"])
+        self.assertGreater(bundle["file_count"], 10)
+        required_paths = {
+            "config/competition-env/environment.json",
+            "config/competition-env/env.sh",
+            "config/competition-env/toolchain-check.sh",
+            "config/competition-env/smoke.sh",
+            "config/competition-env/apt/sources.list",
+            "config/competition-env/pip/pip.conf",
+            "config/competition-env/npm/.npmrc",
+            "config/competition-env/cargo/config.toml",
+            "config/competition-env/rust/rust-toolchain.toml",
+            "config/competition-env/judge-entrypoints/flashdb-harness.json",
+            "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+        }
+        self.assertTrue(required_paths.issubset(set(bundle["files"])))
+        self.assertEqual(
+            bundle["canonical_environment_profile"],
+            {
+                "path": "config/competition-env/environment.json",
+                "profile_id": "huawei-competition-ubuntu-24.04",
+                "sha256": validator.sha256_file(REPO_ROOT / "config/competition-env/environment.json"),
+            },
+        )
+
+    def test_competition_env_bundle_rejects_hash_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        for entry in manifest["files"]:
+            if entry["path"] == "config/competition-env/pip/pip.conf":
+                entry["sha256"] = "0" * 64
+                break
+        else:
+            raise AssertionError("missing pip config in competition env bundle manifest")
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+
+        with self.assertRaisesRegex(ValueError, "competition env bundle file sha256 mismatch"):
+            validator.validate_competition_env_bundle_contract(
+                load_default_config(),
+                manifest_path=temp_manifest,
+                repo_root=REPO_ROOT,
+            )
+
     def test_opencode_profile_requires_explicit_launch_policy_fields(self) -> None:
         config = load_default_config()
         entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")

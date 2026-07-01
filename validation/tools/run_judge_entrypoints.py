@@ -21,6 +21,7 @@ from validation.tools import judge_milestone_bundle
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 DEFAULT_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
+COMPETITION_CONFIG_ROOT = Path("config/competition-env")
 
 
 def main() -> int:
@@ -64,6 +65,7 @@ def run_judge_entrypoints(
     out_path = resolve_output_path(out_path, repo_root=repo_root)
     log_dir = out_path.parent / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+    config_archive = build_competition_config_archive(repo_root=repo_root)
 
     try:
         config_path = resolve_input_path(config_path, repo_root=repo_root)
@@ -76,6 +78,7 @@ def run_judge_entrypoints(
             dry_run=dry_run,
             config_ref=invalid_config_ref(config_path, error),
             configured_entrypoint_count=0,
+            config_archive=config_archive,
             command_results=[],
             preflight_validation={"status": "failed", "errors": [str(error)]},
             validation={"status": "skipped", "reason": "preflight_failed"},
@@ -90,6 +93,7 @@ def run_judge_entrypoints(
             dry_run=dry_run,
             config_ref=config_ref,
             configured_entrypoint_count=configured_entrypoint_count(config),
+            config_archive=config_archive,
             command_results=[],
             preflight_validation=preflight_validation,
             validation={"status": "skipped", "reason": "preflight_failed"},
@@ -105,6 +109,7 @@ def run_judge_entrypoints(
             dry_run=dry_run,
             config_ref=config_ref,
             configured_entrypoint_count=configured_entrypoint_count(config),
+            config_archive=config_archive,
             command_results=[],
             preflight_validation=preflight_validation,
             validation={"status": "skipped", "reason": "entrypoint_selection_failed", "errors": [str(error)]},
@@ -152,6 +157,7 @@ def run_judge_entrypoints(
         dry_run=dry_run,
         config_ref=config_ref,
         configured_entrypoint_count=configured_entrypoint_count(config),
+        config_archive=config_archive,
         command_results=command_results,
         preflight_validation=preflight_validation,
         validation=validation,
@@ -169,6 +175,7 @@ def write_run_report(
     dry_run: bool,
     config_ref: dict[str, Any],
     configured_entrypoint_count: int,
+    config_archive: dict[str, Any],
     command_results: list[dict[str, Any]],
     preflight_validation: dict[str, Any],
     validation: dict[str, Any],
@@ -180,6 +187,7 @@ def write_run_report(
         "status": status,
         "dry_run": dry_run,
         "config": config_ref,
+        "competition_config_archive": config_archive,
         "entrypoint_count": len(command_results),
         "entrypoints": command_results,
         "preflight_validation": preflight_validation,
@@ -199,6 +207,7 @@ def write_run_report(
         status=status,
         dry_run=dry_run,
         configured_entrypoint_count=configured_entrypoint_count,
+        config_archive=config_archive,
         command_results=command_results,
         validation=validation,
         readiness_ref=readiness_ref,
@@ -248,6 +257,7 @@ def build_judge_run_summary(
     status: str,
     dry_run: bool,
     configured_entrypoint_count: int,
+    config_archive: dict[str, Any],
     command_results: list[dict[str, Any]],
     validation: dict[str, Any],
     readiness_ref: dict[str, Any] | None,
@@ -289,6 +299,11 @@ def build_judge_run_summary(
             "validation_status": validation_status,
             "readiness_report": readiness_ref,
         },
+        "competition_config_archive": {
+            "status": config_archive.get("status"),
+            "root": config_archive.get("root"),
+            "file_count": config_archive.get("file_count", 0),
+        },
         "claim_boundary": {
             "semantic_gate": False,
             "semantic_claim_source": claim_boundary.get("semantic_claim_source", "validator-owned-artifacts"),
@@ -297,6 +312,52 @@ def build_judge_run_summary(
         },
         "entrypoints": entrypoint_summaries,
     }
+
+
+def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
+    root = validator.repo_path(COMPETITION_CONFIG_ROOT.as_posix(), repo_root=repo_root)
+    files: dict[str, dict[str, Any]] = {}
+    if not root.is_dir():
+        return {
+            "report_kind": "competition-config-archive",
+            "status": "missing",
+            "root": COMPETITION_CONFIG_ROOT.as_posix(),
+            "file_count": 0,
+            "files": files,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "archive_is_semantic_gate": False,
+            },
+        }
+
+    for path in sorted(candidate_config_files(root)):
+        rel = validator.repo_relative(path, repo_root)
+        files[rel] = {
+            "path": rel,
+            "status": "present",
+            "sha256": validator.sha256_file(path),
+            "bytes": path.stat().st_size,
+        }
+    return {
+        "report_kind": "competition-config-archive",
+        "status": "present",
+        "root": COMPETITION_CONFIG_ROOT.as_posix(),
+        "file_count": len(files),
+        "files": files,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "archive_is_semantic_gate": False,
+            "boundary": "This archive binds repo-local competition configuration files for reproduction only.",
+        },
+    }
+
+
+def candidate_config_files(root: Path) -> list[Path]:
+    return [
+        path
+        for path in root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    ]
 
 
 def run_entrypoint_command(

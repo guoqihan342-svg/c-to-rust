@@ -235,6 +235,18 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["entrypoints"][0]["status"], "planned")
         self.assertIsNone(report["entrypoints"][0]["exit_code"])
         self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["status"], "missing")
+        archive = report["competition_config_archive"]
+        self.assertEqual(archive["report_kind"], "competition-config-archive")
+        self.assertEqual(archive["root"], "config/competition-env")
+        self.assertEqual(archive["status"], "present")
+        self.assertIn("config/competition-env/environment.json", archive["files"])
+        self.assertIn("config/competition-env/judge-entrypoints/flashdb-harness.json", archive["files"])
+        self.assertIn("config/competition-env/review-checklists/flashdb-harness-internal-review.json", archive["files"])
+        self.assertIn("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json", archive["files"])
+        for file_ref in archive["files"].values():
+            self.assertEqual(file_ref["status"], "present")
+            self.assertRegex(file_ref["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(report["summary"]["competition_config_archive"]["file_count"], archive["file_count"])
         self.assertTrue(out_path.is_file())
 
     def test_dry_run_preflight_failure_is_not_planned(self) -> None:
