@@ -932,6 +932,166 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn("core_quality_generated_draft_semantic_pass_must_be_false", report["blockers"])
         self.assertIn("core_quality_translation_coverage_numerator_must_be_zero", report["blockers"])
 
+    def test_bundle_blocks_inconsistent_repair_accounting_claims(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-repair-accounting-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "final_gate_status": "passed",
+                    "semantic_pass_count": 1,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 2,
+                        "rollback_evidence_count": 0,
+                    },
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 1,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        expected_blockers = {
+            "repair_accounting_auto_recovered_exceeds_observed",
+            "repair_accounting_unsafe_reduced_by_exceeds_measured_baseline",
+            "repair_accounting_rollback_evidence_missing_for_observed_repairs",
+        }
+        self.assertEqual(report["status"], "blocked")
+        self.assertTrue(expected_blockers.issubset(set(report["blockers"])))
+        self.assertTrue(expected_blockers.issubset(set(report["summary"]["blockers"])))
+
+    def test_bundle_repair_accounting_does_not_require_final_gate_passed(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(
+            tempfile.mkdtemp(
+                prefix="judge-milestone-repair-accounting-failed-gate-",
+                dir=REPO_ROOT / "target",
+            )
+        )
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "final_gate_status": "failed",
+                    "semantic_pass_count": 0,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 1,
+                    },
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 1,
+                        "reduced_by": 1,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        repair_blockers = [blocker for blocker in report["blockers"] if blocker.startswith("repair_accounting_")]
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(repair_blockers, [])
+
     def test_bundle_blocks_opencode_runtime_missing_explicit_evidence_boundary_fields(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

@@ -110,6 +110,7 @@ def build_judge_milestone_bundle(
         proof_class_contract_errors=proof_class_contract_errors,
         opencode_policy=opencode_policy,
         core_translation_quality=core_translation_quality,
+        before_after_repair_exhibit=before_after_repair_exhibit,
         route_governance_metrics=route_governance_metrics,
         evidence_cost_retention=evidence_cost_retention,
     )
@@ -274,6 +275,7 @@ def milestone_blockers(
     proof_class_contract_errors: list[str],
     opencode_policy: dict[str, Any],
     core_translation_quality: dict[str, Any],
+    before_after_repair_exhibit: dict[str, Any],
     route_governance_metrics: dict[str, Any],
     evidence_cost_retention: dict[str, Any],
 ) -> list[str]:
@@ -301,6 +303,7 @@ def milestone_blockers(
         blockers.append("core_quality_generated_draft_semantic_pass_must_be_false")
     if int_or_zero(core_translation_quality.get("translation_coverage_numerator")) != 0:
         blockers.append("core_quality_translation_coverage_numerator_must_be_zero")
+    blockers.extend(repair_accounting_consistency_blockers(before_after_repair_exhibit))
     route_rollup = (
         route_governance_metrics.get("rollup", {})
         if isinstance(route_governance_metrics.get("rollup"), dict)
@@ -319,6 +322,28 @@ def milestone_blockers(
     )
     if int_or_zero(evidence_rollup.get("source_count")) > 0 and not evidence_rollup.get("all_sources_passed"):
         blockers.append("evidence_cost_retention_sources_must_pass")
+    return blockers
+
+
+def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str, Any]) -> list[str]:
+    rollup = (
+        before_after_repair_exhibit.get("rollup", {})
+        if isinstance(before_after_repair_exhibit.get("rollup"), dict)
+        else {}
+    )
+    blockers: list[str] = []
+    observed = int_or_zero(rollup.get("observed_repair_unit_count"))
+    auto_recovered = int_or_zero(rollup.get("auto_recovered_unit_count"))
+    rollback_evidence_count = int_or_zero(rollup.get("rollback_evidence_count"))
+    unsafe_reduced_by = int_or_zero(rollup.get("unsafe_reduced_by"))
+    unsafe_reduction = rollup.get("unsafe_reduction", {}) if isinstance(rollup.get("unsafe_reduction"), dict) else {}
+    baseline_total_unsafe = int_or_none(unsafe_reduction.get("baseline_total_unsafe"))
+    if auto_recovered > observed:
+        blockers.append("repair_accounting_auto_recovered_exceeds_observed")
+    if baseline_total_unsafe is not None and unsafe_reduced_by > baseline_total_unsafe:
+        blockers.append("repair_accounting_unsafe_reduced_by_exceeds_measured_baseline")
+    if observed > 0 and rollback_evidence_count == 0:
+        blockers.append("repair_accounting_rollback_evidence_missing_for_observed_repairs")
     return blockers
 
 
