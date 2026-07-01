@@ -5568,6 +5568,335 @@ def c2rust_baseline_compile_artifact_ref(baseline: dict[str, Any]) -> dict[str, 
     }
 
 
+def c2rust_generated_crate_name(cargo_toml: Path) -> str | None:
+    if not cargo_toml.exists() or not cargo_toml.is_file():
+        return None
+    current_section = ""
+    package_name: str | None = None
+    lib_name: str | None = None
+    for raw_line in cargo_toml.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line.strip("[]").strip()
+            continue
+        match = re.fullmatch(r'name\s*=\s*"([^"]+)"', line)
+        if match is None:
+            continue
+        if current_section == "package" and package_name is None:
+            package_name = match.group(1)
+        elif current_section == "lib" and lib_name is None:
+            lib_name = match.group(1)
+    crate_name = lib_name or package_name
+    if crate_name is None:
+        return None
+    return safe_ident(crate_name)
+
+
+def path_from_evidence_text(path_text: Any) -> Path:
+    path = Path(str(path_text))
+    if path.is_absolute():
+        return path
+    return REPO_ROOT / path
+
+
+def relative_path_for_toml(path: Path, start: Path) -> str:
+    try:
+        return Path(os.path.relpath(path.resolve(), start=start.resolve())).as_posix()
+    except ValueError:
+        return path.resolve().as_posix()
+
+
+def direct_c2rust_replay_cases(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], Path | None, str]:
+    fixture_path_text = fixture_path(spec)
+    fixture_file = path_from_evidence_text(fixture_path_text)
+    if not fixture_file.exists() or not fixture_file.is_file():
+        return [], None, "fixture_missing"
+    payload = read_json(fixture_file)
+    cases = payload.get("cases") if isinstance(payload, dict) else None
+    if not isinstance(cases, list) or not cases:
+        return [], fixture_file, "fixture_cases_missing"
+    normalized: list[dict[str, Any]] = []
+    for index, raw_case in enumerate(cases):
+        if not isinstance(raw_case, dict):
+            return [], fixture_file, "fixture_case_not_object"
+        case_id = str(raw_case.get("id") or f"case-{index}")
+        crc = raw_case.get("crc")
+        buf = raw_case.get("buf")
+        size = raw_case.get("size")
+        expected = raw_case.get("return_code")
+        if not is_uint32_value(crc) or not is_uint32_value(expected):
+            return [], fixture_file, "fixture_case_uint32_unsupported"
+        if not is_size_value(size) or not is_byte_list(buf) or int(size) != len(buf):
+            return [], fixture_file, "fixture_case_buffer_unsupported"
+        normalized.append(
+            {
+                "id": case_id,
+                "crc": int(crc),
+                "buf": [int(item) for item in buf],
+                "size": int(size),
+                "return_code": int(expected),
+            }
+        )
+    return normalized, fixture_file, "ok"
+
+
+def rust_direct_replay_case_literal(case: dict[str, Any]) -> str:
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case['id'])}, "
+        f"crc: {int(case['crc'])}u32, "
+        f"buf: {rust_byte_slice_literal(case['buf'])}, "
+        f"size: {int(case['size'])}usize, "
+        f"return_code: {int(case['return_code'])}u32 "
+        "},\n"
+    )
+
+
+def direct_c2rust_replay_main_rs(crate_name: str, cases: list[dict[str, Any]]) -> str:
+    case_literals = "".join(rust_direct_replay_case_literal(case) for case in cases)
+    return (
+        "use std::fs;\n"
+        "\n"
+        "struct FixtureCase {\n"
+        "    id: &'static str,\n"
+        "    crc: u32,\n"
+        "    buf: &'static [u8],\n"
+        "    size: usize,\n"
+        "    return_code: u32,\n"
+        "}\n"
+        "\n"
+        "fn json_escape(value: &str) -> String {\n"
+        "    value.replace('\\\\', \"\\\\\\\\\").replace('\"', \"\\\\\\\"\")\n"
+        "}\n"
+        "\n"
+        "fn c2rust_fdb_calc_crc32(crc: u32, buf: &[u8]) -> u32 {\n"
+        "    unsafe {\n"
+        f"        {crate_name}::src::fdb_utils::fdb_calc_crc32(\n"
+        "            crc,\n"
+        "            buf.as_ptr().cast::<core::ffi::c_void>(),\n"
+        "            buf.len(),\n"
+        "        )\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "fn main() {\n"
+        "    let results_path = std::env::args().nth(1).expect(\"missing direct replay results path\");\n"
+        "    let fixture_cases: &[FixtureCase] = &[\n"
+        f"{case_literals}"
+        "    ];\n"
+        "    let mut all_matched = true;\n"
+        "    let mut rows = Vec::new();\n"
+        "    for case in fixture_cases {\n"
+        "        let actual = c2rust_fdb_calc_crc32(case.crc, case.buf);\n"
+        "        let matched = case.buf.len() == case.size && actual == case.return_code;\n"
+        "        if !matched { all_matched = false; }\n"
+        "        rows.push(format!(\n"
+        "            \"{{\\\"id\\\":\\\"{}\\\",\\\"expected_return_code\\\":{},\\\"actual_return_code\\\":{},\\\"matched\\\":{}}}\",\n"
+        "            json_escape(case.id),\n"
+        "            case.return_code,\n"
+        "            actual,\n"
+        "            if matched { \"true\" } else { \"false\" }\n"
+        "        ));\n"
+        "    }\n"
+        "    let payload = format!(\n"
+        "        \"{{\\\"schema_version\\\":1,\\\"case_count\\\":{},\\\"all_matched\\\":{},\\\"cases\\\":[{}]}}\",\n"
+        "        fixture_cases.len(),\n"
+        "        if all_matched { \"true\" } else { \"false\" },\n"
+        "        rows.join(\",\")\n"
+        "    );\n"
+        "    fs::write(&results_path, payload).expect(\"write direct replay results\");\n"
+        "    if !all_matched { std::process::exit(1); }\n"
+        "}\n"
+    )
+
+
+def emit_c2rust_direct_replay_artifact(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    c2rust_baseline: dict[str, Any],
+    output_ref: dict[str, Any],
+    compile_artifact_ref: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    function_name = required_str(spec, "function_name")
+    artifact_path = evidence_dir / f"{prefix}-c2rust-direct-replay.json"
+    if function_name != "fdb_calc_crc32":
+        return {
+            "status": "blocked",
+            "reason": "direct_c2rust_replay_unsupported_function",
+        }
+    output = c2rust_baseline.get("output")
+    if not isinstance(output, dict):
+        return {"status": "blocked", "reason": "c2rust_output_missing"}
+    crate_root_text = output.get("crate_root")
+    cargo_toml_text = output.get("cargo_toml")
+    if not crate_root_text or not cargo_toml_text:
+        return {"status": "blocked", "reason": "c2rust_generated_crate_missing"}
+    crate_root = path_from_evidence_text(crate_root_text)
+    cargo_toml = path_from_evidence_text(cargo_toml_text)
+    crate_name = c2rust_generated_crate_name(cargo_toml)
+    if crate_name is None:
+        return {"status": "blocked", "reason": "c2rust_generated_crate_name_missing"}
+    cases, fixture_file, case_status = direct_c2rust_replay_cases(spec)
+    if case_status != "ok" or fixture_file is None:
+        return {"status": "blocked", "reason": f"direct_c2rust_replay_{case_status}"}
+    cargo = shutil.which("cargo")
+    if cargo is None:
+        return {"status": "blocked", "reason": "cargo_not_found_for_direct_c2rust_replay"}
+
+    harness_dir = evidence_dir / f"{prefix}-c2rust-direct-replay-harness"
+    src_dir = harness_dir / "src"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    dependency_path = relative_path_for_toml(crate_root, harness_dir)
+    write_text(
+        harness_dir / "Cargo.toml",
+        "\n".join(
+            [
+                "[package]",
+                f"name = {json.dumps(safe_ident(prefix + '-c2rust-direct-replay'))}",
+                'version = "0.0.0"',
+                'edition = "2021"',
+                "publish = false",
+                "",
+                "[dependencies]",
+                f"{crate_name} = {{ path = {json.dumps(dependency_path)} }}",
+                "",
+            ]
+        ),
+    )
+    main_rs = src_dir / "main.rs"
+    write_text(main_rs, direct_c2rust_replay_main_rs(crate_name, cases))
+    results_path = evidence_dir / f"{prefix}-c2rust-direct-replay-results.json"
+    stdout_log = evidence_dir / f"{prefix}-c2rust-direct-replay.stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-direct-replay.stderr.log"
+    timeout_seconds = 120
+    argv = [
+        cargo,
+        "run",
+        "--quiet",
+        "--manifest-path",
+        str(harness_dir / "Cargo.toml"),
+        "--",
+        str(results_path),
+    ]
+    command: dict[str, Any] = {
+        "argv": argv,
+        "working_directory": rel(REPO_ROOT),
+        "stdout_log": rel(stdout_log),
+        "stderr_log": rel(stderr_log),
+        "timeout_seconds": timeout_seconds,
+        "exit_status": "not_executed",
+        "returncode": None,
+    }
+    env = dict(os.environ)
+    env.update({"RUSTUP_TOOLCHAIN": "stable", "RUSTC_BOOTSTRAP": "1"})
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        write_text(stdout_log, exc.stdout or "")
+        write_text(stderr_log, exc.stderr or f"direct C2Rust replay timed out after {timeout_seconds} seconds\n")
+        command["exit_status"] = "timeout"
+        command["returncode"] = -1
+        return {"status": "failed", "reason": "direct_c2rust_replay_timeout", "command": command}
+    except OSError as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        command["exit_status"] = "error"
+        command["returncode"] = -1
+        return {"status": "failed", "reason": "direct_c2rust_replay_error", "command": command}
+
+    write_text(stdout_log, completed.stdout or "")
+    write_text(stderr_log, completed.stderr or "")
+    command["exit_status"] = "passed" if completed.returncode == 0 else "failed"
+    command["returncode"] = completed.returncode
+    if not results_path.exists():
+        return {"status": "failed", "reason": "direct_c2rust_replay_results_missing", "command": command}
+    results = read_json(results_path)
+    cases_result = results.get("cases")
+    all_matched = completed.returncode == 0 and results.get("all_matched") is True and isinstance(cases_result, list)
+    status = "passed" if all_matched else "failed"
+    fixture_ref = {
+        "path": str(fixture_path(spec)),
+        "sha256": sha256(fixture_file),
+        "case_count": len(cases),
+    }
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": status,
+        "observable_replay_pass": all_matched,
+        "semantic_pass": False,
+        "semantic_claim_source": "direct_c2rust_output_replay_observable_only",
+        "generated_draft_semantic_pass": False,
+        "replay_kind": "direct_c2rust_output_replay",
+        "correctness_role": "direct_replay_evidence",
+        "source_commit": source_commit(spec),
+        "fixture": fixture_ref,
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_artifact_ref,
+        "call_binding": {
+            "crate_name": crate_name,
+            "crate_root_ref": evidence_ref(crate_root, "generated"),
+            "cargo_toml_ref": evidence_ref(cargo_toml, "generated"),
+            "module_path": "src::fdb_utils",
+            "symbol": "fdb_calc_crc32",
+            "abi": 'extern "C"',
+            "signature": "pub unsafe extern \"C\" fn fdb_calc_crc32(crc: u32, buf: *const core::ffi::c_void, size: usize) -> u32",
+            "wrapper_fn": "c2rust_fdb_calc_crc32(crc: u32, buf: &[u8]) -> u32",
+            "argument_mapping": {
+                "crc": "case.crc",
+                "buf": "case.buf.as_ptr().cast::<core::ffi::c_void>()",
+                "size": "case.buf.len()",
+            },
+        },
+        "execution": {
+            "harness_root": rel(harness_dir),
+            "harness_main": evidence_ref(main_rs, "generated"),
+            "command": command,
+            "exit_status": command["exit_status"],
+            "returncode": command["returncode"],
+            "case_count": len(cases),
+            "fixture_sha256": fixture_ref["sha256"],
+            "stdout_ref": evidence_ref(stdout_log, "recorded"),
+            "stderr_ref": evidence_ref(stderr_log, "recorded"),
+            "results_ref": evidence_ref(results_path, "recorded"),
+        },
+        "bound_inputs": {
+            "baseline_manifest": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+            "c2rust_output": output_ref,
+            "compile_artifact": compile_artifact_ref,
+            "source_files": output.get("source_files") if isinstance(output.get("source_files"), list) else [],
+            "fixture": fixture_ref,
+            "cargo_lock": evidence_ref(crate_root / "Cargo.lock", "present") if (crate_root / "Cargo.lock").exists() else None,
+            "rust_toolchain": evidence_ref(
+                REPO_ROOT / "config" / "competition-env" / "rust" / "rust-toolchain.toml",
+                "present",
+            ),
+        },
+        "results": results,
+        "claim_boundary": {
+            "accepted_evidence_reused": False,
+            "compile_only_is_semantic_pass": False,
+            "generated_draft_semantic_pass": False,
+            "semantic_pass": False,
+            "scope": "Direct replay of the generated C2Rust output against fixture observables; not a full semantic acceptance gate until diff, negative diff, unsafe ledger, and final verification are bound to the same output.",
+        },
+    }
+    write_json(artifact_path, payload)
+    return payload
+
+
 def translation_source_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
     source = plan.get("translation_source")
     if not isinstance(source, dict):
@@ -5983,17 +6312,43 @@ def emit_c2rust_verified_unsafe_baseline(
         blocked_reasons.append("c2rust_compile_not_passed")
     if compile_artifact_ref is None:
         blocked_reasons.append("c2rust_compile_artifact_missing")
-    blocked_reasons.append("direct_c2rust_replay_not_implemented")
+    direct_replay: dict[str, Any] = {
+        "status": "blocked",
+        "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    }
+    if (
+        baseline_status == "generated"
+        and output_ref is not None
+        and isinstance(compile_status, dict)
+        and compile_status.get("status") == "passed"
+        and compile_artifact_ref is not None
+    ):
+        direct_replay = emit_c2rust_direct_replay_artifact(
+            spec,
+            evidence_dir,
+            c2rust_baseline,
+            output_ref,
+            compile_artifact_ref,
+        )
+    if direct_replay.get("status") == "passed":
+        blocked_reasons.append("c2rust_bound_gate_refs_not_implemented")
+    else:
+        blocked_reasons.append(str(direct_replay.get("reason") or "direct_c2rust_replay_not_implemented"))
     status = "blocked" if blocked_reasons else "passed"
+    if status == "passed":
+        semantic_claim_source = "verified_unsafe_baseline_gates"
+    elif direct_replay.get("status") == "passed":
+        semantic_claim_source = "blocked_missing_c2rust_bound_gates"
+    else:
+        semantic_claim_source = "blocked_missing_direct_c2rust_replay"
+    direct_replay_ref = evidence_ref(evidence_dir / f"{prefix}-c2rust-direct-replay.json", str(direct_replay.get("status")))
     payload = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
         "slice_id": slice_id,
         "status": status,
         "semantic_pass": status == "passed",
-        "semantic_claim_source": "verified_unsafe_baseline_gates"
-        if status == "passed"
-        else "blocked_missing_direct_c2rust_replay",
+        "semantic_claim_source": semantic_claim_source,
         "generated_draft_semantic_pass": False,
         "source_commit": source_commit(spec),
         "entry_function": spec.get("function_name"),
@@ -6014,13 +6369,19 @@ def emit_c2rust_verified_unsafe_baseline(
         },
         "blocked_reasons": blocked_reasons,
         "direct_c2rust_replay": {
-            "status": "blocked" if "direct_c2rust_replay_not_implemented" in blocked_reasons else "passed",
-            "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+            "status": direct_replay.get("status"),
+            "semantic_pass": direct_replay.get("semantic_pass", False),
+            "observable_replay_pass": direct_replay.get("observable_replay_pass", False),
+            "artifact": direct_replay_ref if (evidence_dir / f"{prefix}-c2rust-direct-replay.json").exists() else None,
+            "reason": direct_replay.get("reason"),
+            "c2rust_output": direct_replay.get("c2rust_output", output_ref),
+            "compile_artifact": direct_replay.get("compile_artifact", compile_artifact_ref),
         },
         "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
         "claim_boundary": {
             "semantic_pass": status == "passed",
             "generated_draft_semantic_pass": False,
+            "accepted_evidence_reused": False,
             "compile_only_is_semantic_pass": False,
             "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
         },

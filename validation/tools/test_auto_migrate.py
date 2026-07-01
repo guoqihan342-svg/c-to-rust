@@ -7268,6 +7268,183 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertTrue(manifest["compile"]["attempted"])
         self.assertFalse(manifest["compile"]["semantic_pass"])
 
+    def test_c2rust_verified_baseline_writes_direct_replay_artifact_for_crc32_generated_crate(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            prefix = "l3-real-fdb-calc-crc32"
+            fixture_path = tmp_path / "real-fdb-calc-crc32.json"
+            fixture = {
+                "schema_version": 1,
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "case_count": 2,
+                "compared_fields": ["return_code"],
+                "cases": [
+                    {"id": "empty-crc-zero", "crc": 0, "buf": [], "size": 0, "return_code": 0},
+                    {
+                        "id": "ascii-123456789-crc-zero",
+                        "crc": 0,
+                        "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                        "size": 9,
+                        "return_code": 3421780262,
+                    },
+                ],
+            }
+            fixture_path.write_text(json.dumps(fixture), encoding="utf-8")
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "function_name": "fdb_calc_crc32",
+                "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                "fixture_contract": {
+                    "path": fixture_path.as_posix(),
+                    "hash": hashlib.sha256(fixture_path.read_bytes()).hexdigest(),
+                    "observable_outputs": ["return_code"],
+                },
+            }
+            crate_root = evidence_dir / f"{prefix}-c2rust-baseline-generated"
+            (crate_root / "src").mkdir(parents=True)
+            cargo_toml = crate_root / "Cargo.toml"
+            cargo_toml.write_text(
+                "\n".join(
+                    [
+                        "[package]",
+                        'name = "l3_real_fdb_calc_crc32_c2rust_baseline_generated"',
+                        'version = "0.0.0"',
+                        'edition = "2021"',
+                        "",
+                        "[lib]",
+                        'name = "l3_real_fdb_calc_crc32_c2rust_baseline_generated"',
+                        'path = "lib.rs"',
+                        'crate-type = ["rlib"]',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (crate_root / "lib.rs").write_text("pub mod src { pub mod fdb_utils; }\n", encoding="utf-8")
+            (crate_root / "src" / "fdb_utils.rs").write_text(
+                "pub unsafe extern \"C\" fn fdb_calc_crc32(_: u32, _: *const core::ffi::c_void, _: usize) -> u32 { 0 }\n",
+                encoding="utf-8",
+            )
+            output_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rs"
+            output_path.write_text("// combined c2rust output\n", encoding="utf-8")
+            compile_artifact = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+            compile_artifact.write_text("fake rlib\n", encoding="utf-8")
+            c2rust_baseline = {
+                "status": "generated",
+                "output": {
+                    "path": output_path.as_posix(),
+                    "status": "generated",
+                    "sha256": auto_migrate.sha256(output_path),
+                    "crate_root": crate_root.as_posix(),
+                    "cargo_toml": cargo_toml.as_posix(),
+                    "source_files": [
+                        {"path": (crate_root / "lib.rs").as_posix(), "sha256": auto_migrate.sha256(crate_root / "lib.rs")},
+                        {
+                            "path": (crate_root / "src" / "fdb_utils.rs").as_posix(),
+                            "sha256": auto_migrate.sha256(crate_root / "src" / "fdb_utils.rs"),
+                        },
+                    ],
+                },
+                "compile": {
+                    "status": "passed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                    "candidate_output": {
+                        "path": output_path.as_posix(),
+                        "status": "generated",
+                        "sha256": auto_migrate.sha256(output_path),
+                    },
+                    "artifact": {
+                        "path": compile_artifact.as_posix(),
+                        "status": "compiled",
+                        "sha256": auto_migrate.sha256(compile_artifact),
+                    },
+                },
+            }
+
+            def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                self.assertEqual(argv[0], "cargo")
+                self.assertIn("run", argv)
+                self.assertIn("--manifest-path", argv)
+                self.assertEqual(kwargs.get("timeout"), 120)
+                results_path = evidence_dir / f"{prefix}-c2rust-direct-replay-results.json"
+                results_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "case_count": 2,
+                            "all_matched": True,
+                            "cases": [
+                                {
+                                    "id": "empty-crc-zero",
+                                    "expected_return_code": 0,
+                                    "actual_return_code": 0,
+                                    "matched": True,
+                                },
+                                {
+                                    "id": "ascii-123456789-crc-zero",
+                                    "expected_return_code": 3421780262,
+                                    "actual_return_code": 3421780262,
+                                    "matched": True,
+                                },
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="direct replay ok\n", stderr="")
+
+            with (
+                mock.patch.object(auto_migrate.shutil, "which", return_value="cargo"),
+                mock.patch.object(auto_migrate.subprocess, "run", side_effect=fake_run),
+            ):
+                verified = auto_migrate.emit_c2rust_verified_unsafe_baseline(
+                    spec,
+                    evidence_dir,
+                    c2rust_baseline,
+                    {"status": "refused", "level": "L4"},
+                    {"status": "passed", "route_level": "L4"},
+                    accepted=None,
+                    semantic_pass=False,
+                )
+
+            direct_replay_path = evidence_dir / f"{prefix}-c2rust-direct-replay.json"
+            self.assertTrue(direct_replay_path.exists())
+            direct_replay = json.loads(direct_replay_path.read_text(encoding="utf-8"))
+            self.assertEqual(direct_replay["status"], "passed")
+            self.assertTrue(direct_replay["observable_replay_pass"])
+            self.assertFalse(direct_replay["semantic_pass"])
+            self.assertEqual(
+                direct_replay["call_binding"]["crate_name"],
+                "l3_real_fdb_calc_crc32_c2rust_baseline_generated",
+            )
+            self.assertEqual(direct_replay["call_binding"]["module_path"], "src::fdb_utils")
+            self.assertEqual(direct_replay["call_binding"]["symbol"], "fdb_calc_crc32")
+            self.assertEqual(
+                direct_replay["bound_inputs"]["c2rust_output"]["sha256"],
+                c2rust_baseline["output"]["sha256"],
+            )
+            self.assertEqual(
+                direct_replay["bound_inputs"]["compile_artifact"]["sha256"],
+                c2rust_baseline["compile"]["artifact"]["sha256"],
+            )
+            self.assertEqual(direct_replay["results"]["case_count"], 2)
+            self.assertTrue(all(case["matched"] for case in direct_replay["results"]["cases"]))
+            self.assertEqual(verified["direct_c2rust_replay"]["status"], "passed")
+            self.assertEqual(
+                verified["direct_c2rust_replay"]["artifact"]["sha256"],
+                hashlib.sha256(direct_replay_path.read_bytes()).hexdigest(),
+            )
+            self.assertNotIn("direct_c2rust_replay_not_implemented", verified["blocked_reasons"])
+            self.assertIn("c2rust_bound_gate_refs_not_implemented", verified["blocked_reasons"])
+            self.assertEqual(verified["status"], "blocked")
+            self.assertFalse(verified["semantic_pass"])
+
     def test_c2rust_baseline_schema_rejects_hollow_generated_manifest(self) -> None:
         schema = json.loads(
             (

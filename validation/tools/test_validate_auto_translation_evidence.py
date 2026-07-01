@@ -3365,6 +3365,101 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("final_verification.verified_unsafe_baseline sha256 mismatch", result.stderr + result.stdout)
 
+    def test_rejects_verified_unsafe_baseline_direct_replay_output_ref_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            prefix = "l3-call-expression"
+            output_ref, compile_ref, baseline_ref = self._install_generated_c2rust_baseline_for_verified_tests(
+                evidence_dir,
+                prefix,
+            )
+            drifted_output = dict(output_ref)
+            drifted_output["sha256"] = "stale-direct-replay-output-sha"
+            self._install_verified_baseline_direct_replay_for_tests(
+                evidence_dir,
+                prefix,
+                baseline_ref,
+                output_ref,
+                compile_ref,
+                direct_output_ref=drifted_output,
+            )
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("direct_c2rust_replay c2rust_output drift", result.stderr + result.stdout)
+
+    def test_rejects_verified_unsafe_baseline_compile_only_semantic_source_spoof(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            prefix = "l3-call-expression"
+            output_ref, compile_ref, baseline_ref = self._install_generated_c2rust_baseline_for_verified_tests(
+                evidence_dir,
+                prefix,
+            )
+            self._install_verified_baseline_direct_replay_for_tests(
+                evidence_dir,
+                prefix,
+                baseline_ref,
+                output_ref,
+                compile_ref,
+            )
+            verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+            verified = json.loads(verified_path.read_text(encoding="utf-8"))
+            verified["semantic_claim_source"] = "c2rust_compile_only"
+            self._write_json(verified_path, verified)
+            verified_ref = self._ref(verified_path, "blocked")
+            for ref_path, key_path in [
+                (evidence_dir / f"{prefix}-auto-translation-manifest.json", ("verified_unsafe_baseline",)),
+                (evidence_dir / f"{prefix}-evidence-manifest.json", ("evidence", "verified_unsafe_baseline")),
+                (evidence_dir / f"{prefix}-final-verification.json", ("verified_unsafe_baseline",)),
+            ]:
+                payload = json.loads(ref_path.read_text(encoding="utf-8"))
+                target = payload
+                for key in key_path[:-1]:
+                    target = target[key]
+                target[key_path[-1]] = verified_ref
+                self._write_json(ref_path, payload)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("semantic_claim_source cannot be compile-only", result.stderr + result.stdout)
+
     def test_semantic_pass_rejects_missing_oracle_boundary_contract(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             tmp_path = Path(tmp)
@@ -4542,6 +4637,202 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             if resolved.exists():
                 ref["sha256"] = self._sha256(resolved)
         self._write_json(manifest_path, manifest)
+
+    def _install_generated_c2rust_baseline_for_verified_tests(
+        self,
+        evidence_dir: Path,
+        prefix: str,
+    ) -> tuple[dict, dict, dict]:
+        baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+        output_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rs"
+        artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+        compile_commands_path = evidence_dir / f"{prefix}-c2rust-compile-commands" / "compile_commands.json"
+        stdout_path = evidence_dir / f"{prefix}-c2rust-baseline.stdout.log"
+        stderr_path = evidence_dir / f"{prefix}-c2rust-baseline.stderr.log"
+        compile_stdout_path = evidence_dir / f"{prefix}-c2rust-baseline-compile.stdout.log"
+        compile_stderr_path = evidence_dir / f"{prefix}-c2rust-baseline-compile.stderr.log"
+        generated_src_path = evidence_dir / f"{prefix}-c2rust-baseline-generated" / "src" / "lib.rs"
+        compile_commands_path.parent.mkdir(parents=True, exist_ok=True)
+        generated_src_path.parent.mkdir(parents=True, exist_ok=True)
+        compile_commands_path.write_text("[]\n", encoding="utf-8")
+        stdout_path.write_text("generated\n", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        compile_stdout_path.write_text("compiled\n", encoding="utf-8")
+        compile_stderr_path.write_text("", encoding="utf-8")
+        generated_src_path.write_text("pub fn generated_by_c2rust() {}\n", encoding="utf-8")
+        output_path.write_text("pub fn generated_by_c2rust() {}\n", encoding="utf-8")
+        artifact_path.write_text("fake rlib\n", encoding="utf-8")
+        output_ref = {
+            "path": output_path.as_posix(),
+            "status": "generated",
+            "sha256": self._sha256(output_path),
+        }
+        compile_ref = {
+            "path": artifact_path.as_posix(),
+            "status": "compiled",
+            "sha256": self._sha256(artifact_path),
+        }
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        baseline.update(
+            {
+                "status": "generated",
+                "reason": "generated_by_c2rust",
+                "selected_command": {
+                    "argv": ["c2rust-transpile", str(compile_commands_path)],
+                    "working_directory": ".",
+                },
+                "output": dict(output_ref),
+                "generation": {
+                    "compile_commands": {
+                        "path": compile_commands_path.as_posix(),
+                        "sha256": self._sha256(compile_commands_path),
+                    },
+                    "command": {
+                        "argv": ["c2rust-transpile", str(compile_commands_path)],
+                        "working_directory": ".",
+                        "stdout_log": stdout_path.as_posix(),
+                        "stderr_log": stderr_path.as_posix(),
+                        "timeout_seconds": 300,
+                        "exit_status": "passed",
+                        "returncode": 0,
+                    },
+                    "generated_files": [
+                        {
+                            "path": generated_src_path.as_posix(),
+                            "sha256": self._sha256(generated_src_path),
+                        }
+                    ],
+                },
+                "compile": {
+                    "status": "passed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                    "candidate_output": dict(output_ref),
+                    "command": {
+                        "argv": ["cargo", "check", "--manifest-path", "Cargo.toml"],
+                        "working_directory": ".",
+                        "stdout_log": compile_stdout_path.as_posix(),
+                        "stderr_log": compile_stderr_path.as_posix(),
+                        "timeout_seconds": 120,
+                        "exit_status": "passed",
+                        "returncode": 0,
+                    },
+                    "artifact": dict(compile_ref),
+                    "diagnostics": [],
+                },
+            }
+        )
+        self._write_json(baseline_path, baseline)
+        baseline_ref = self._ref(baseline_path, "generated")
+
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        route = json.loads(route_path.read_text(encoding="utf-8"))
+        route["source_artifacts"]["c2rust_baseline"] = baseline_ref
+        self._write_json(route_path, route)
+        route_ref = self._ref(route_path, "recorded")
+
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        auto_manifest["route_decision"] = route_ref
+        auto_manifest["c2rust_baseline"] = baseline_ref
+        self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evidence"]["route_decision"] = route_ref
+        manifest["evidence"]["c2rust_baseline"] = baseline_ref
+        self._write_json(manifest_path, manifest)
+
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["route_decision"] = route_ref
+        final["c2rust_baseline"] = baseline_ref
+        self._write_json(final_path, final)
+
+        cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache["route_decision_identity"] = {"status": "recorded", "sha256": self._sha256_json(route)}
+        cache["c2rust_baseline_identity"] = {"status": "generated", "sha256": self._sha256_json(baseline)}
+        cache.setdefault("cache_input_fields", [])
+        if "route_decision_identity" not in cache["cache_input_fields"]:
+            cache["cache_input_fields"].append("route_decision_identity")
+        if "c2rust_baseline_identity" not in cache["cache_input_fields"]:
+            cache["cache_input_fields"].append("c2rust_baseline_identity")
+        cache.setdefault("dependent_artifacts", {})["route_decision"] = route_ref
+        cache.setdefault("dependent_artifacts", {})["c2rust_baseline"] = baseline_ref
+        self._write_json(cache_path, cache)
+
+        return output_ref, compile_ref, baseline_ref
+
+    def _install_verified_baseline_direct_replay_for_tests(
+        self,
+        evidence_dir: Path,
+        prefix: str,
+        baseline_ref: dict,
+        output_ref: dict,
+        compile_ref: dict,
+        *,
+        direct_output_ref: dict | None = None,
+    ) -> None:
+        direct_path = evidence_dir / f"{prefix}-c2rust-direct-replay.json"
+        direct_payload = {
+            "schema_version": 1,
+            "status": "passed",
+            "observable_replay_pass": True,
+            "semantic_pass": False,
+            "generated_draft_semantic_pass": False,
+            "replay_kind": "direct_c2rust_output_replay",
+            "correctness_role": "direct_replay_evidence",
+            "c2rust_output": dict(direct_output_ref or output_ref),
+            "compile_artifact": dict(compile_ref),
+            "results": {"case_count": 1, "cases": [{"id": "case-one", "matched": True}]},
+        }
+        self._write_json(direct_path, direct_payload)
+
+        verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+        verified_payload = {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": prefix.removeprefix("l3-"),
+            "status": "blocked",
+            "semantic_pass": False,
+            "semantic_claim_source": "blocked_missing_c2rust_bound_gates",
+            "generated_draft_semantic_pass": False,
+            "c2rust_baseline": baseline_ref,
+            "c2rust_output": dict(output_ref),
+            "compile_artifact": dict(compile_ref),
+            "direct_c2rust_replay": {
+                "status": "passed",
+                "semantic_pass": False,
+                "observable_replay_pass": True,
+                "artifact": self._ref(direct_path, "passed"),
+                "c2rust_output": dict(direct_output_ref or output_ref),
+                "compile_artifact": dict(compile_ref),
+            },
+            "blocked_reasons": ["c2rust_bound_gate_refs_not_implemented"],
+            "claim_boundary": {
+                "semantic_pass": False,
+                "generated_draft_semantic_pass": False,
+                "compile_only_is_semantic_pass": False,
+            },
+        }
+        self._write_json(verified_path, verified_payload)
+        verified_ref = self._ref(verified_path, "blocked")
+
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        auto_manifest["verified_unsafe_baseline"] = verified_ref
+        self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evidence"]["verified_unsafe_baseline"] = verified_ref
+        self._write_json(manifest_path, manifest)
+
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["verified_unsafe_baseline"] = verified_ref
+        self._write_json(final_path, final)
 
     def _global_dependency_spec(self) -> dict:
         return {
