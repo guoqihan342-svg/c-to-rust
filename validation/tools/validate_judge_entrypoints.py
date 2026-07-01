@@ -409,6 +409,10 @@ def validate_expected_artifacts(
     for name, path_text in sorted(artifacts.items()):
         if not isinstance(path_text, str):
             raise ValueError(f"expected artifact path must be a string: {name}")
+        try:
+            assert_repo_relative_posix(path_text)
+        except ValueError as error:
+            raise ValueError(f"expected_artifacts.{name}: {error}") from error
         path = repo_path(path_text, repo_root=repo_root)
         artifact = {"path": path_text, "status": "present" if path.is_file() else "missing"}
         if path.is_file():
@@ -517,6 +521,7 @@ def validate_competition_smoke_summary_contract(
     validate_competition_smoke_proof_class_environment(payload)
     validate_competition_exact_smoke_summary(payload)
     validate_competition_smoke_step_contract(payload)
+    validate_competition_smoke_artifact_roots(payload)
 
     assert_expected_smoke_path(
         payload.get("vendored_clang_verification"),
@@ -566,6 +571,17 @@ def validate_competition_smoke_summary_contract(
         "generated_draft_semantic_pass": False,
         "translation_coverage_numerator": 0,
     }
+
+
+def validate_competition_smoke_artifact_roots(payload: dict[str, Any]) -> dict[str, Any]:
+    roots = payload.get("artifact_roots", [])
+    if roots is None:
+        roots = []
+    if not isinstance(roots, list):
+        raise ValueError("competition_smoke_summary artifact_roots must be a list")
+    for index, root in enumerate(roots):
+        assert_repo_relative_posix(require_string(root, f"competition_smoke_summary artifact_roots[{index}]"))
+    return {"status": "passed", "root_count": len(roots)}
 
 
 def validate_competition_smoke_command_log_contract(command_log_path: Path) -> dict[str, Any]:
@@ -845,6 +861,8 @@ def assert_expected_smoke_path(
     payload = require_object(container, label.rsplit(".", 1)[0])
     observed = require_string(payload.get(field), label)
     expected = require_string(expected_artifacts.get(expected_name), f"expected_artifacts.{expected_name}")
+    assert_repo_relative_posix(observed)
+    assert_repo_relative_posix(expected)
     if observed != expected:
         raise ValueError(f"{label} must match expected_artifacts.{expected_name}")
 
@@ -1771,6 +1789,10 @@ def validate_judge_evidence_artifact_refs(
                 missing.append(artifact_name)
                 continue
             expected_path = require_string(expected_artifacts[artifact_name], f"expected_artifacts.{artifact_name}")
+            try:
+                assert_repo_relative_posix(expected_path)
+            except ValueError as error:
+                raise ValueError(f"expected_artifacts.{artifact_name}: {error}") from error
             if validated_refs[ref_name]["path"] != expected_path:
                 raise ValueError(f"judge_evidence_index.evidence_artifact_refs.{ref_name}.path must match expected_artifacts.{artifact_name}")
         if missing:

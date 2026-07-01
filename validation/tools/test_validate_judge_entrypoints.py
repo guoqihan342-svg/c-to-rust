@@ -570,6 +570,39 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             },
         )
 
+    def test_expected_artifacts_rejects_drive_prefix_with_artifact_name(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_artifacts.command_log: path must not use a drive prefix",
+        ):
+            validator.validate_expected_artifacts(
+                {"command_log": "F:/agent/local/commands.jsonl"},
+                require_local_artifacts=False,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_expected_artifacts_rejects_parent_traversal_with_artifact_name(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_artifacts.competition_smoke_summary: path must not contain parent traversal",
+        ):
+            validator.validate_expected_artifacts(
+                {"competition_smoke_summary": "target/../summary/competition-smoke-summary.json"},
+                require_local_artifacts=False,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_expected_artifacts_rejects_empty_path_with_artifact_name(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_artifacts.command_log: path must be a non-empty string",
+        ):
+            validator.validate_expected_artifacts(
+                {"command_log": ""},
+                require_local_artifacts=False,
+                repo_root=REPO_ROOT,
+            )
+
     def test_competition_env_bundle_rejects_hash_drift(self) -> None:
         source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
@@ -818,6 +851,51 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 payload,
                 expected_artifacts=competition_smoke_expected_artifacts(),
                 entrypoint_run_id="competition-flashdb-environment-smoke-20260701",
+            )
+
+    def test_competition_smoke_summary_artifact_path_rejects_local_absolute_path(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        artifacts = competition_smoke_expected_artifacts()
+        local_absolute = "F:/agent/local/commands.jsonl"
+        payload["command_log"]["path"] = local_absolute
+        artifacts["command_log"] = local_absolute
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "path must not use a drive prefix",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=artifacts,
+            )
+
+    def test_competition_smoke_summary_artifact_path_rejects_parent_traversal(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        artifacts = competition_smoke_expected_artifacts()
+        traversal = "target/competition-smoke-flashdb-judge-entrypoint/reports/../summary/vendored.json"
+        payload["vendored_clang_verification"]["path"] = traversal
+        artifacts["vendored_clang_verification"] = traversal
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "path must not contain parent traversal",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=artifacts,
+            )
+
+    def test_competition_smoke_summary_artifact_roots_reject_local_absolute_path(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["artifact_roots"] = ["target/competition-smoke/summary", "F:/agent/local/reports"]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "path must not use a drive prefix",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
             )
 
     def test_competition_smoke_summary_requires_timeout_policy(self) -> None:
@@ -1228,6 +1306,19 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 payload,
                 path_text="target/out/harness/judge-evidence-index.json",
                 expected_artifacts=expected_artifacts,
+            )
+
+    def test_judge_evidence_index_expected_artifacts_reject_drive_prefix(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "expected_artifacts.competition_summary: path must not use a drive prefix",
+        ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+                expected_artifacts={"competition_summary": "F:/agent/local/competition-run-summary.json"},
             )
 
     def test_judge_evidence_index_requires_opencode_preflight_ref(self) -> None:

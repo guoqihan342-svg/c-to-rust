@@ -446,6 +446,39 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertTrue(any(argument == "summary/vendored-clang-verification.json" for argument in logged_arguments))
             self.assertTrue(any(argument == "reports/evidence-governance.json" for argument in logged_arguments))
 
+    def test_command_log_sanitizes_python_executable_with_spaces(self) -> None:
+        module = load_smoke_module()
+        original_executable = module.sys.executable
+        module.sys.executable = r"C:\Program Files\Python314\python.exe"
+        try:
+            with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                out_root = Path(tmp) / "competition-smoke"
+
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-command-log-python-spaces-test",
+                )
+
+                self.assertEqual(result.exit_code, 0)
+                command_entries = [
+                    json.loads(line)
+                    for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+                ]
+                assert_no_local_absolute_command_arguments(self, command_entries)
+                logged_arguments = [
+                    argument
+                    for entry in command_entries
+                    for argument in entry["command"]
+                    if isinstance(argument, str)
+                ]
+                self.assertNotIn(module.sys.executable, logged_arguments)
+                self.assertIn("python.exe", logged_arguments)
+        finally:
+            module.sys.executable = original_executable
+
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
         module = load_smoke_module()
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:

@@ -654,7 +654,7 @@ def command_for_log(command: list[str], *, repo_root: Path, out_root: Path) -> l
 def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) -> str:
     if not argument or not any(separator in argument for separator in ["/", "\\"]):
         return argument
-    if any(char.isspace() for char in argument) or any(token in argument for token in [";", "|", "&&"]):
+    if any(token in argument for token in [";", "|", "&&"]):
         return argument
     path = Path(argument)
     resolved = path if path.is_absolute() else repo_root / path
