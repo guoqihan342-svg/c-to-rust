@@ -582,6 +582,12 @@ def validate_vendored_clang_verification_contract(
     status = require_string(payload.get("status"), "vendored_clang_verification.status")
     final_gate = require_object(payload.get("final_gate"), "vendored_clang_verification.final_gate")
     clang = require_object(payload.get("clang"), "vendored_clang_verification.clang")
+    clang_path = clang.get("path")
+    if clang_path is not None:
+        try:
+            assert_repo_relative_posix(require_string(clang_path, "vendored_clang_verification.clang.path"))
+        except ValueError as error:
+            raise ValueError("vendored_clang_verification clang.path must be repo-relative POSIX") from error
     clang_lane_verified = payload.get("clang_lane_verified")
     if not isinstance(clang_lane_verified, bool):
         raise ValueError("vendored_clang_verification.clang_lane_verified must be boolean")
@@ -628,6 +634,8 @@ def validate_vendored_clang_verification_contract(
     elif status == "passed":
         if clang_lane_verified is not True:
             raise ValueError("vendored_clang_verification passed status requires clang_lane_verified=true")
+        if clang_path is None:
+            raise ValueError("vendored_clang_verification passed status requires clang.path")
         if final_gate.get("status") != "passed":
             raise ValueError("vendored_clang_verification passed status requires final_gate.status=passed")
     elif status == "failed":

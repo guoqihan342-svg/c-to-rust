@@ -172,6 +172,27 @@ def valid_competition_smoke_summary_payload() -> dict:
     }
 
 
+def valid_vendored_clang_verification_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "artifact_kind": "vendored-clang-verification",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "status": "passed",
+        "clang": {
+            "source": "CLANG_PATH",
+            "path": "tools/llvm/bin/clang-18",
+            "version": "clang version 18.1.8",
+        },
+        "clang_required": False,
+        "clang_lane_verified": True,
+        "checks": {},
+        "command_logs": [],
+        "final_gate": {"status": "passed"},
+    }
+
+
 def opencode_launch_policy() -> dict:
     return {
         "opencode_command": "opencode",
@@ -713,6 +734,23 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             validator.validate_competition_smoke_summary_contract(
                 payload,
                 expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
+                },
+            )
+
+    def test_vendored_clang_verification_rejects_local_absolute_clang_path(self) -> None:
+        payload = valid_vendored_clang_verification_payload()
+        payload["clang"]["path"] = "F:/agent/local/clang.exe"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "vendored_clang_verification clang.path must be repo-relative POSIX",
+        ):
+            validator.validate_vendored_clang_verification_contract(
+                payload,
+                smoke_summary=valid_competition_smoke_summary_payload(),
                 environment_profile={
                     "profile_id": "huawei-competition-ubuntu-24.04",
                     "sha256": "a" * 64,

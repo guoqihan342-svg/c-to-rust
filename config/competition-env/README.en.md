@@ -85,7 +85,7 @@ Rationale: clang is used only for `-ast-dump=json`; the lane does not require li
 
 - Default build, test, and validation paths must not require Go.
 - Default build, test, and validation paths must not require CMake; C/C++ oracle paths should prefer `gcc`, `g++`, and GNU Make.
-- Default build, test, and validation paths must not require a system clang install. When the real clang AST dump typed-IR lane is needed, use `CLANG_PATH` or a project-local vendored clang binary under the repo root (`tools/llvm/bin/clang-18`, `tools/llvm/bin/clang`, or `tools/clang/bin/clang`), then run `auto_migrate.py --competition-clang-lane`; that lane must fail clearly if neither source is available. When clang is present, `toolchain-check.sh` runs the minimum TU smoke.
+- Default build, test, and validation paths must not require a system clang install. When the real clang AST dump typed-IR lane is needed, use `CLANG_PATH` as a command name on `PATH` or as a repo-local path, or use a project-local vendored clang binary under the repo root (`tools/llvm/bin/clang-18`, `tools/llvm/bin/clang`, or `tools/clang/bin/clang`), then run `auto_migrate.py --competition-clang-lane`; path-like `CLANG_PATH` values that resolve outside the repo fail closed as `invalid_clang_path_outside_repo`. That lane must fail clearly if neither source is available. When clang is present, `toolchain-check.sh` runs the minimum TU smoke.
 - The Huawei Cargo mirror is activated by `env.sh` through `CARGO_HOME=config/competition-env/cargo`; do not rely only on the existence of `cargo/config.toml`, and do not mutate the user's global Cargo configuration by default.
 - Rust code must remain compatible with stable Rust `1.96.0` and must not use nightly-only features.
 - Python scripts should target Python `3.12.3` / pip `24.0`.
@@ -118,9 +118,9 @@ python validation/tools/run_competition_smoke.py \
   --out-root target/competition-smoke
 ```
 
-The smoke runs the environment check, the structured vendored clang verifier, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, `vendored_clang_verification.path`, gate status, and log paths. The Python entrypoint defaults to a 600-second per-step timeout; timeouts are written to `timeout_policy` and the affected step, use exit code 124, and must trigger a final-gate failure. `validate_judge_entrypoints --require-local-artifacts` rejects missing or drifted timeout policies. In non-`competition-exact` proof classes, missing clang is recorded as `missing_clang_path` in `vendored-clang-verification.json`; `competition-exact` treats the vendored clang verifier as a required gate. Missing required C compilers such as `gcc`/`g++` are not ordinary proof-class drift: the summary step records `failure_class=required_c_compiler_missing` and fails closed. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
+The smoke runs the environment check, the structured vendored clang verifier, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, `vendored_clang_verification.path`, gate status, and log paths. The Python entrypoint defaults to a 600-second per-step timeout; timeouts are written to `timeout_policy` and the affected step, use exit code 124, and must trigger a final-gate failure. `validate_judge_entrypoints --require-local-artifacts` rejects missing or drifted timeout policies. In non-`competition-exact` proof classes, missing clang is recorded as `missing_clang_path` in `vendored-clang-verification.json`; path-like `CLANG_PATH` values outside the repo are recorded as `invalid_clang_path_outside_repo` and fail closed; `competition-exact` treats the vendored clang verifier as a required gate. Missing required C compilers such as `gcc`/`g++` are not ordinary proof-class drift: the summary step records `failure_class=required_c_compiler_missing` and fails closed. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
 
-The judge-facing smoke entrypoint uses the same runner with `--out-root target/competition-smoke-flashdb-judge-entrypoint`; its summary has `report_kind=competition-smoke-summary` and `claim_boundary.semantic_gate=false`, and `validate_judge_entrypoints --require-local-artifacts` checks the summary, vendored-clang verification, evidence governance report, coverage matrix, milestone report, and command log paths. The same local-artifact gate also verifies that the summary `profile_id/profile_sha256/proof_class/run_id` match `flashdb-harness.json`, and binds `vendored-clang-verification.json` `status/reason/final_gate/clang_lane_verified` to the summary; local/WSL/CI runs mislabeled as `competition-exact`, or missing clang mislabeled as a verified clang lane, fail closed.
+The judge-facing smoke entrypoint uses the same runner with `--out-root target/competition-smoke-flashdb-judge-entrypoint`; its summary has `report_kind=competition-smoke-summary` and `claim_boundary.semantic_gate=false`, and `validate_judge_entrypoints --require-local-artifacts` checks the summary, vendored-clang verification, evidence governance report, coverage matrix, milestone report, and command log paths. The same local-artifact gate also verifies that the summary `profile_id/profile_sha256/proof_class/run_id` match `flashdb-harness.json`, binds `vendored-clang-verification.json` `status/reason/final_gate/clang_lane_verified` to the summary, and rejects non repo-relative `clang.path`; local/WSL/CI runs mislabeled as `competition-exact`, missing clang mislabeled as a verified clang lane, or local absolute clang paths fail closed.
 
 Judge-facing one-click harness runner:
 
@@ -171,14 +171,16 @@ This profile generates `target/competition-out-demo-before-after-exhibit/summary
 The clang typed-IR competition lane is explicit opt-in:
 
 ```bash
-# Option 1: explicit CLANG_PATH
-export CLANG_PATH="$(command -v clang)"
+# Option 1: explicit CLANG_PATH through PATH, without storing a host absolute path
+export CLANG_PATH="clang"
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 
 # Option 2: project-local clang detected by env.sh
 source config/competition-env/env.sh
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 ```
+
+For committed or judge-facing evidence, do not set `CLANG_PATH="$(command -v clang)"`: the structured verifier rejects path-like `CLANG_PATH` values that resolve outside the repository and normalizes repo-local clang paths in command logs.
 
 Passing only `--emit-clang-lowering-report` remains diagnostic mode; when clang is missing it writes an unavailable report and does not turn the default non-clang lane into a failure.
 

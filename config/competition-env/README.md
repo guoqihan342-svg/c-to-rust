@@ -87,7 +87,7 @@ python validation/tools/verify_vendored_clang.py \
 
 - 默认构建、测试和验证路径不能依赖 Go。
 - 默认构建、测试和验证路径不能依赖 CMake；C/C++ oracle 路径优先使用 `gcc`、`g++` 和 GNU Make。
-- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，优先用 `CLANG_PATH` 环境变量；未设置时自动搜索 repo root 下的 `tools/llvm/bin/clang-18`、`tools/llvm/bin/clang` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。`env.sh` 已包含自动探测逻辑，`toolchain-check.sh` 会在找到 clang 时执行最小 TU smoke。
+- 默认构建、测试和验证路径不能依赖系统级 clang 安装。typed-IR 路线实际需要 clang 时，`CLANG_PATH` 可以是 `PATH` 上的命令名，也可以是 repo 内路径；未设置时自动搜索 repo root 下的 `tools/llvm/bin/clang-18`、`tools/llvm/bin/clang` 或 `tools/clang/bin/clang` 这类 vendored 本地二进制。带路径分隔符的 `CLANG_PATH` 如果解析到 repo 外，会以 `invalid_clang_path_outside_repo` fail-closed。`env.sh` 已包含自动探测逻辑，`toolchain-check.sh` 会在找到 clang 时执行最小 TU smoke。
 - Cargo 华为镜像通过 `env.sh` 设置 `CARGO_HOME=config/competition-env/cargo` 激活；不要只检查 `cargo/config.toml` 存在，也不要默认修改用户全局 Cargo 配置。
 - Rust 代码必须兼容 stable Rust `1.96.0`，不得引入 nightly-only 功能。
 - Python 脚本按 Python `3.12.3` / pip `24.0` 适配。
@@ -120,9 +120,9 @@ python validation/tools/run_competition_smoke.py \
   --out-root target/competition-smoke
 ```
 
-评委入口中的 `competition_environment_smoke` 使用同一 runner，但输出到 `target/competition-smoke-flashdb-judge-entrypoint`；`competition-smoke-summary.json` 会声明 `claim_boundary.semantic_gate=false`，只证明环境和轻量 evidence gate，不声明新的 semantic pass。`validate_judge_entrypoints --require-local-artifacts` 会校验该 summary 的 `profile_id/profile_sha256/proof_class/run_id` 与 `flashdb-harness.json` 一致，并把 `vendored-clang-verification.json` 的 `status/reason/final_gate/clang_lane_verified` 与 summary 绑定；CI/WSL/Windows 本地运行结果冒充 `competition-exact`，或缺 clang 却把 clang lane 标成 verified，都会 fail-closed。
+评委入口中的 `competition_environment_smoke` 使用同一 runner，但输出到 `target/competition-smoke-flashdb-judge-entrypoint`；`competition-smoke-summary.json` 会声明 `claim_boundary.semantic_gate=false`，只证明环境和轻量 evidence gate，不声明新的 semantic pass。`validate_judge_entrypoints --require-local-artifacts` 会校验该 summary 的 `profile_id/profile_sha256/proof_class/run_id` 与 `flashdb-harness.json` 一致，并把 `vendored-clang-verification.json` 的 `status/reason/final_gate/clang_lane_verified` 与 summary 绑定，同时拒绝非 repo-relative 的 `clang.path`；CI/WSL/Windows 本地运行结果冒充 `competition-exact`，缺 clang 却把 clang lane 标成 verified，或把本机绝对 clang 路径写进评委 artifact，都会 fail-closed。
 
-smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。Python 入口默认 per-step timeout 为 600 秒；超时会写入 `timeout_policy` 和对应 step，exit code 固定为 124，且必须触发 final gate failure，`validate_judge_entrypoints --require-local-artifacts` 会拒绝缺失或漂移的 timeout policy。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；`competition-exact` 会把 vendored clang verifier 作为 required gate。缺失 required C compiler（如 `gcc`/`g++`）不是普通 proof-class 漂移，summary step 会记录 `failure_class=required_c_compiler_missing` 并 fail-closed。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
+smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。Python 入口默认 per-step timeout 为 600 秒；超时会写入 `timeout_policy` 和对应 step，exit code 固定为 124，且必须触发 final gate failure，`validate_judge_entrypoints --require-local-artifacts` 会拒绝缺失或漂移的 timeout policy。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；带路径分隔符的 `CLANG_PATH` 若解析到 repo 外，会标为 `invalid_clang_path_outside_repo` 并 fail-closed；`competition-exact` 会把 vendored clang verifier 作为 required gate。缺失 required C compiler（如 `gcc`/`g++`）不是普通 proof-class 漂移，summary step 会记录 `failure_class=required_c_compiler_missing` 并 fail-closed。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
 
 评委一键 harness runner：
 
@@ -173,14 +173,16 @@ python -B validation/tools/validate_competition_run_summary.py \
 clang typed-IR 比赛路线是显式 opt-in：
 
 ```bash
-# 方式一：显式设置 CLANG_PATH
-export CLANG_PATH="$(command -v clang)"
+# 方式一：通过 PATH 显式设置 CLANG_PATH，不把本机绝对路径写进证据
+export CLANG_PATH="clang"
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 
 # 方式二：使用项目内置 clang（env.sh 已自动探测 tools/llvm/bin/clang）
 source config/competition-env/env.sh
 python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 ```
+
+评委证据或已提交 evidence 不应使用 `CLANG_PATH="$(command -v clang)"`：结构化 verifier 会拒绝解析到 repo 外的 path-like `CLANG_PATH`，并把 repo-local clang 路径在命令日志中归一为相对路径。
 
 只传 `--emit-clang-lowering-report` 仍是诊断模式；缺 clang 时会产出 unavailable 报告，不会把默认非 clang lane 改成失败。
 
