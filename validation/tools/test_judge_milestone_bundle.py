@@ -770,6 +770,123 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
 
+    def test_progress_delta_ledger_uses_before_after_repair_when_workflow_metrics_are_sparse(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-progress-repair-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 1,
+                "units_converged": 0,
+                "avg_repair_rounds": 0.0,
+                "auto_recovery_rate": 0.0,
+                "human_interventions": 0,
+                "llm_calls": 0,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+                "per_unit_statuses": [{"unit_id": "flashdb/real-fdb-calc-crc32"}],
+            },
+        )
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "final_gate_status": "failed",
+                    "semantic_pass_count": 0,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "status": "converged",
+                            "accepted_patch": {"path": "validation/evidence/accepted.patch", "sha256": "c" * 64},
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                        }
+                    ],
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 5,
+                    },
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(metrics_path),
+                            "judge_evidence_index": repo_relative(index_path),
+                        },
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        workflow_delta = report["progress_delta_ledger"]["workflow_delta"]
+        self.assertEqual(workflow_delta["repair_history_unit_count"], 1)
+        self.assertEqual(workflow_delta["observed_repair_unit_count"], 1)
+        self.assertEqual(workflow_delta["auto_recovered_unit_count"], 1)
+        self.assertEqual(workflow_delta["rollback_evidence_count"], 5)
+        self.assertEqual(workflow_delta["before_after_repair_source_count"], 1)
+        self.assertEqual(workflow_delta["repair_delta_source_count"], 1)
+        self.assertFalse(report["progress_delta_ledger"]["semantic_gate"])
+        self.assertEqual(report["progress_delta_ledger"]["translation_coverage_numerator"], 0)
+
     def test_bundle_matches_schema_and_rejects_expanded_claims(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
@@ -940,6 +1057,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         expanded["progress_delta_ledger"]["translation_coverage_numerator"] = 1
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(expanded, schema)
+
+        missing_repair_delta = json.loads(json.dumps(report))
+        missing_repair_delta["progress_delta_ledger"]["workflow_delta"].pop("observed_repair_unit_count")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_repair_delta, schema)
+
+        missing_repair_delta = json.loads(json.dumps(report))
+        missing_repair_delta["progress_delta_ledger"]["workflow_delta"].pop("repair_delta_source_count")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_repair_delta, schema)
 
         expanded = json.loads(json.dumps(report))
         expanded["quantitative_evaluation"]["claim_boundary"]["scorecard_is_semantic_gate"] = True

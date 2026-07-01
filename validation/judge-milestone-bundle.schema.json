@@ -601,7 +601,11 @@
             "workflow_units_total",
             "workflow_units_converged",
             "repair_history_unit_count",
+            "observed_repair_unit_count",
             "auto_recovered_unit_count",
+            "rollback_evidence_count",
+            "before_after_repair_source_count",
+            "repair_delta_source_count",
             "human_interventions"
           ],
           "properties": {
@@ -609,7 +613,11 @@
             "workflow_units_total": {"type": "integer", "minimum": 0},
             "workflow_units_converged": {"type": "integer", "minimum": 0},
             "repair_history_unit_count": {"type": "integer", "minimum": 0},
+            "observed_repair_unit_count": {"type": "integer", "minimum": 0},
             "auto_recovered_unit_count": {"type": "integer", "minimum": 0},
+            "rollback_evidence_count": {"type": "integer", "minimum": 0},
+            "before_after_repair_source_count": {"type": "integer", "minimum": 0},
+            "repair_delta_source_count": {"type": "integer", "minimum": 0},
             "human_interventions": {"type": "integer", "minimum": 0},
             "llm_calls": {"type": "integer", "minimum": 0}
           }

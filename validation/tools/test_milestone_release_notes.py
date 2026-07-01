@@ -43,7 +43,11 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("| Capability delta count | 2 |", notes)
         self.assertIn("| Governance delta count | 3 |", notes)
         self.assertIn("| Workflow units converged | 4 / 5 |", notes)
+        self.assertIn("| Observed repair units | 1 |", notes)
         self.assertIn("| Auto-recovered units | 1 |", notes)
+        self.assertIn("| Rollback evidence count | 2 |", notes)
+        self.assertIn("| Before/after repair sources | 1 |", notes)
+        self.assertIn("| Repair delta sources | 1 |", notes)
         self.assertIn("| raw C2Rust | not_verified_here | no | 0 |", notes)
         self.assertIn("python -B -m validation.tools.run_judge_entrypoints", notes)
         self.assertIn("accepted_evidence_is_not_translator_generated_coverage", notes)
@@ -311,10 +315,15 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "slice_gate_contexts": 2,
                 },
                 "workflow_delta": {
+                    "workflow_source_count": 2,
                     "workflow_units_total": 5,
                     "workflow_units_converged": 4,
                     "repair_history_unit_count": 1,
+                    "observed_repair_unit_count": 1,
                     "auto_recovered_unit_count": 1,
+                    "rollback_evidence_count": 2,
+                    "before_after_repair_source_count": 1,
+                    "repair_delta_source_count": 1,
                     "human_interventions": 0,
                 },
                 "boundary": "Progress deltas are review metrics only.",

@@ -283,6 +283,11 @@ def progress_delta_lines(progress_delta: dict[str, Any]) -> list[str]:
         f"| Route decision artifacts | {int_text(governance.get('route_decision_artifacts'))} |",
         f"| Workflow units converged | {int_text(workflow.get('workflow_units_converged'))} / {int_text(workflow.get('workflow_units_total'))} |",
         f"| Repair-history units | {int_text(workflow.get('repair_history_unit_count'))} |",
+        f"| Observed repair units | {int_text(workflow.get('observed_repair_unit_count'))} |",
+        f"| Auto-recovered units | {int_text(workflow.get('auto_recovered_unit_count'))} |",
+        f"| Rollback evidence count | {int_text(workflow.get('rollback_evidence_count'))} |",
+        f"| Before/after repair sources | {int_text(workflow.get('before_after_repair_source_count'))} |",
+        f"| Repair delta sources | {int_text(workflow.get('repair_delta_source_count'))} |",
     ]
 
 

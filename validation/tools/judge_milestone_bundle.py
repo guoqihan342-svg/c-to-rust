@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-from typing import Any
+from typing import Any, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -107,6 +107,7 @@ def build_judge_milestone_bundle(
     progress_delta_ledger = build_progress_delta_ledger(
         route_governance_metrics=route_governance_metrics,
         workflow_metrics=workflow_metrics,
+        before_after_repair_exhibit=before_after_repair_exhibit,
     )
     semantic_evidence = build_semantic_evidence_rollup(run_report)
     blockers = milestone_blockers(
@@ -2026,6 +2027,7 @@ def build_progress_delta_ledger(
     *,
     route_governance_metrics: dict[str, Any],
     workflow_metrics: dict[str, Any],
+    before_after_repair_exhibit: dict[str, Any],
 ) -> dict[str, Any]:
     route_rollup = (
         route_governance_metrics.get("rollup", {})
@@ -2040,8 +2042,9 @@ def build_progress_delta_ledger(
     workflow_rollup = (
         workflow_metrics.get("rollup", {}) if isinstance(workflow_metrics.get("rollup"), dict) else {}
     )
-    repair_activity = (
-        workflow_rollup.get("repair_activity", {}) if isinstance(workflow_rollup.get("repair_activity"), dict) else {}
+    repair_progress = build_workflow_repair_progress_delta(
+        workflow_metrics=workflow_metrics,
+        before_after_repair_exhibit=before_after_repair_exhibit,
     )
     return {
         "report_kind": "progress-delta-ledger",
@@ -2069,8 +2072,12 @@ def build_progress_delta_ledger(
             "workflow_source_count": int_or_zero(workflow_rollup.get("source_count")),
             "workflow_units_total": int_or_zero(workflow_rollup.get("units_total")),
             "workflow_units_converged": int_or_zero(workflow_rollup.get("units_converged")),
-            "repair_history_unit_count": int_or_zero(repair_activity.get("repair_history_unit_count")),
-            "auto_recovered_unit_count": int_or_zero(repair_activity.get("auto_recovered_unit_count")),
+            "repair_history_unit_count": repair_progress["repair_history_unit_count"],
+            "observed_repair_unit_count": repair_progress["observed_repair_unit_count"],
+            "auto_recovered_unit_count": repair_progress["auto_recovered_unit_count"],
+            "rollback_evidence_count": repair_progress["rollback_evidence_count"],
+            "before_after_repair_source_count": repair_progress["before_after_repair_source_count"],
+            "repair_delta_source_count": repair_progress["repair_delta_source_count"],
             "human_interventions": int_or_zero(workflow_rollup.get("human_interventions")),
             "llm_calls": int_or_zero(workflow_rollup.get("llm_calls")),
         },
@@ -2079,6 +2086,110 @@ def build_progress_delta_ledger(
             "They are reviewer navigation metrics only, not semantic gates or translation coverage numerator."
         ),
     }
+
+
+def build_workflow_repair_progress_delta(
+    *,
+    workflow_metrics: dict[str, Any],
+    before_after_repair_exhibit: dict[str, Any],
+) -> dict[str, int]:
+    by_source: dict[str, dict[str, int]] = {}
+    workflow_sources = object_list(workflow_metrics.get("sources"))
+    before_after_sources = object_list(before_after_repair_exhibit.get("sources"))
+
+    for index, source in enumerate(workflow_sources):
+        key = repair_progress_source_key(source, prefix="workflow", index=index)
+        entry = by_source.setdefault(key, empty_repair_progress_source())
+        repair_history_units = int_or_zero(source.get("repair_history_unit_count"))
+        entry["repair_history_unit_count"] = max(entry["repair_history_unit_count"], repair_history_units)
+        entry["observed_repair_unit_count"] = max(entry["observed_repair_unit_count"], repair_history_units)
+        entry["auto_recovered_unit_count"] = max(
+            entry["auto_recovered_unit_count"],
+            int_or_zero(source.get("auto_recovered_unit_count")),
+        )
+
+    for index, source in enumerate(before_after_sources):
+        key = repair_progress_source_key(source, prefix="before_after", index=index)
+        entry = by_source.setdefault(key, empty_repair_progress_source())
+        repair_summary = source.get("repair_summary") if isinstance(source.get("repair_summary"), dict) else {}
+        observed = int_or_zero(repair_summary.get("observed_repair_unit_count"))
+        auto_recovered = int_or_zero(repair_summary.get("auto_recovered_unit_count"))
+        rollback = int_or_zero(repair_summary.get("rollback_evidence_count"))
+        verified_source = 1 if repair_summary.get("status") == "verified" or observed > 0 or rollback > 0 else 0
+        entry["repair_history_unit_count"] = max(entry["repair_history_unit_count"], observed)
+        entry["observed_repair_unit_count"] = max(entry["observed_repair_unit_count"], observed)
+        entry["auto_recovered_unit_count"] = max(entry["auto_recovered_unit_count"], auto_recovered)
+        entry["rollback_evidence_count"] = max(entry["rollback_evidence_count"], rollback)
+        entry["before_after_repair_source_count"] = max(entry["before_after_repair_source_count"], verified_source)
+
+    if by_source:
+        return sum_repair_progress_sources(by_source.values())
+
+    workflow_rollup = (
+        workflow_metrics.get("rollup", {}) if isinstance(workflow_metrics.get("rollup"), dict) else {}
+    )
+    repair_activity = (
+        workflow_rollup.get("repair_activity", {}) if isinstance(workflow_rollup.get("repair_activity"), dict) else {}
+    )
+    before_after_rollup = (
+        before_after_repair_exhibit.get("rollup", {})
+        if isinstance(before_after_repair_exhibit.get("rollup"), dict)
+        else {}
+    )
+    return {
+        "repair_history_unit_count": max(
+            int_or_zero(repair_activity.get("repair_history_unit_count")),
+            int_or_zero(before_after_rollup.get("observed_repair_unit_count")),
+        ),
+        "observed_repair_unit_count": max(
+            int_or_zero(repair_activity.get("repair_history_unit_count")),
+            int_or_zero(before_after_rollup.get("observed_repair_unit_count")),
+        ),
+        "auto_recovered_unit_count": max(
+            int_or_zero(repair_activity.get("auto_recovered_unit_count")),
+            int_or_zero(before_after_rollup.get("auto_recovered_unit_count")),
+        ),
+        "rollback_evidence_count": int_or_zero(before_after_rollup.get("rollback_evidence_count")),
+        "before_after_repair_source_count": int_or_zero(before_after_rollup.get("verified_repair_source_count")),
+        "repair_delta_source_count": int_or_zero(repair_activity.get("observed_source_count"))
+        + int_or_zero(before_after_rollup.get("verified_repair_source_count")),
+    }
+
+
+def empty_repair_progress_source() -> dict[str, int]:
+    return {
+        "repair_history_unit_count": 0,
+        "observed_repair_unit_count": 0,
+        "auto_recovered_unit_count": 0,
+        "rollback_evidence_count": 0,
+        "before_after_repair_source_count": 0,
+    }
+
+
+def repair_progress_source_key(source: dict[str, Any], *, prefix: str, index: int) -> str:
+    entrypoint_id = source.get("entrypoint_id")
+    if isinstance(entrypoint_id, str) and entrypoint_id:
+        return f"entrypoint:{entrypoint_id}"
+    artifact = source.get("artifact")
+    if isinstance(artifact, dict) and isinstance(artifact.get("path"), str) and artifact["path"]:
+        return f"artifact:{artifact['path']}"
+    return f"{prefix}:{index}"
+
+
+def sum_repair_progress_sources(sources: Iterable[dict[str, int]]) -> dict[str, int]:
+    result = empty_repair_progress_source()
+    repair_delta_source_count = 0
+    for source in sources:
+        has_repair_delta = False
+        for field in result:
+            value = int_or_zero(source.get(field))
+            result[field] += value
+            if value > 0:
+                has_repair_delta = True
+        if has_repair_delta:
+            repair_delta_source_count += 1
+    result["repair_delta_source_count"] = repair_delta_source_count
+    return result
 
 
 def c2rust_baseline_source(value: object) -> dict[str, Any]:
