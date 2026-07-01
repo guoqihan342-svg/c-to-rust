@@ -1481,9 +1481,15 @@ def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: s
     return normalized
 
 
-def compare_opencode_launch_policy(actual: dict[str, Any], expected: dict[str, Any], label: str) -> None:
+def compare_opencode_launch_policy(
+    actual: dict[str, Any],
+    expected: dict[str, Any],
+    label: str,
+    *,
+    expected_label: str = "opencode_agent_runtime.opencode_preflight_report",
+) -> None:
     if actual != expected:
-        raise ValueError(f"{label}.launch_policy must match opencode_agent_runtime.opencode_preflight_report")
+        raise ValueError(f"{label}.launch_policy must match {expected_label}")
 
 
 def validate_opencode_preflight_binding(
@@ -1511,12 +1517,19 @@ def validate_opencode_preflight_binding(
             "launch_policy_sha256": sha256_text(json.dumps(launch_policy, sort_keys=True)),
         }
     )
+    if "run_id" in binding:
+        result["run_id"] = require_string(binding.get("run_id"), f"{label}.run_id")
     if repo_root is not None:
         preflight_payload = load_json(repo_path(result["path"], repo_root=repo_root))
         if preflight_payload.get("status") != "passed":
             raise ValueError(f"{label} file status must be passed")
         if preflight_payload.get("marker_exists") is not True:
             raise ValueError(f"{label} file marker_exists must be true")
+        if "run_id" in preflight_payload:
+            file_run_id = require_string(preflight_payload.get("run_id"), f"{label} file.run_id")
+            if "run_id" in result and file_run_id != result["run_id"]:
+                raise ValueError(f"{label} file.run_id must match binding run_id")
+            result["run_id"] = file_run_id
         payload_policy = validate_opencode_launch_policy_binding(
             preflight_payload.get("launch_policy"),
             preflight_payload.get("launch_policy_sha256"),
@@ -1581,6 +1594,8 @@ def validate_opencode_worker_runtime(
     if worker_preflight["path"] != expected_preflight["path"] or worker_preflight["sha256"] != expected_preflight["sha256"]:
         raise ValueError(f"{label}.opencode_preflight_report must match opencode_agent_runtime.opencode_preflight_report")
     compare_opencode_launch_policy(worker_preflight["launch_policy"], expected_preflight["launch_policy"], f"{label}.opencode_preflight_report")
+    if worker_preflight.get("run_id") != expected_preflight.get("run_id"):
+        raise ValueError(f"{label}.opencode_preflight_report.run_id must match opencode_agent_runtime.opencode_preflight_report")
 
     verification = require_object(worker.get("opencode_contract_verification"), f"{label}.opencode_contract_verification")
     if verification.get("status") != "executed":
@@ -1823,10 +1838,30 @@ def validate_judge_evidence_artifact_refs(
             repo_root=repo_root,
         )
 
+    profile_launch_policy = None
     profile_ref = payload.get("profile")
-    if isinstance(profile_ref, dict) and "profile" in validated_refs:
-        profile_binding = validate_artifact_binding_shape(profile_ref, "judge_evidence_index.profile", repo_root=repo_root)
-        compare_artifact_binding(validated_refs["profile"], profile_binding, "judge_evidence_index.evidence_artifact_refs.profile")
+    if "profile" in validated_refs:
+        profile_binding = validated_refs["profile"]
+        if isinstance(profile_ref, dict):
+            profile_payload_binding = validate_artifact_binding_shape(profile_ref, "judge_evidence_index.profile", repo_root=repo_root)
+            compare_artifact_binding(
+                profile_binding,
+                profile_payload_binding,
+                "judge_evidence_index.evidence_artifact_refs.profile",
+            )
+        if repo_root is not None and opencode_runtime_result is not None:
+            profile_payload = load_json(repo_path(profile_binding["path"], repo_root=repo_root))
+            if profile_payload.get("mode") == "opencode":
+                profile_launch_policy = validate_opencode_profile_launch_policy(
+                    profile_payload,
+                    entry_id="judge_evidence_index.profile",
+                )
+                compare_opencode_launch_policy(
+                    opencode_runtime_result["opencode_preflight_report"]["launch_policy"],
+                    profile_launch_policy,
+                    "opencode_agent_runtime.opencode_preflight_report",
+                    expected_label="profile launch policy",
+                )
     architecture = require_object(payload.get("harness_architecture"), "judge_evidence_index.harness_architecture")
     for name in ("context_pack", "agent_index"):
         ref = architecture.get(name)
@@ -1850,6 +1885,8 @@ def validate_judge_evidence_artifact_refs(
     }
     if route_metrics_contract is not None:
         result["route_governance_metrics_report"] = route_metrics_contract
+    if profile_launch_policy is not None:
+        result["profile_launch_policy"] = profile_launch_policy
     return result
 
 
@@ -1896,6 +1933,8 @@ def validate_judge_evidence_index_contract(
             payload.get("opencode_agent_runtime"),
             repo_root=repo_root,
         )
+        if "run_id" in payload and opencode_runtime_result["opencode_preflight_report"].get("run_id") != payload.get("run_id"):
+            raise ValueError("opencode_agent_runtime.opencode_preflight_report.run_id must match judge_evidence_index.run_id")
     graph_contract = validate_judge_graph_contract(
         architecture,
         opencode_runtime_result=opencode_runtime_result,

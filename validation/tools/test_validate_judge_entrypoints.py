@@ -225,6 +225,73 @@ def opencode_launch_policy_sha256(policy: dict) -> str:
     return hashlib.sha256(json.dumps(policy, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def set_artifact_ref(ref: dict, path: Path, payload: dict | None = None) -> None:
+    if payload is None:
+        payload = {"report_kind": "test-artifact"}
+    write_json(path, payload)
+    ref["path"] = repo_relative(path)
+    ref["sha256"] = validator.sha256_file(path)
+
+
+def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, launch_policy: dict) -> None:
+    preflight_payload = {
+        "report_kind": "opencode-preflight-report",
+        "status": "passed",
+        "marker_exists": True,
+        "run_id": run_id,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "contract_verification": {
+            "status": "executed",
+            "first_shell_command_matches_worker_command": True,
+            "worker_command_seen": True,
+            "summary_exists": True,
+            "tools_before_first_shell": [],
+        },
+    }
+    write_json(path, preflight_payload)
+    binding = {
+        "path": repo_relative(path),
+        "sha256": validator.sha256_file(path),
+        "status": "passed",
+        "contract_status": "executed",
+        "run_id": run_id,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+    }
+    payload["evidence_artifact_refs"]["opencode_preflight_report"] = json.loads(json.dumps(binding))
+    payload["opencode_agent_runtime"]["opencode_preflight_report"] = json.loads(json.dumps(binding))
+    for worker in payload["opencode_agent_runtime"]["workers"]:
+        worker["opencode_preflight_report"] = json.loads(json.dumps(binding))
+
+
+def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, profile_payload: dict) -> None:
+    profile_path = root / "profile.json"
+    set_artifact_ref(payload["evidence_artifact_refs"]["profile"], profile_path, profile_payload)
+    set_artifact_ref(
+        payload["evidence_artifact_refs"]["competition_run_summary"],
+        root / "summary" / "competition-run-summary.json",
+    )
+    set_artifact_ref(payload["evidence_artifact_refs"]["workflow_metrics"], root / "summary" / "workflow-metrics.json")
+    set_artifact_ref(payload["evidence_artifact_refs"]["worker_plan"], root / "harness" / "plans" / "workers.json")
+    launch_policy = payload["opencode_agent_runtime"]["opencode_preflight_report"]["launch_policy"]
+    set_all_opencode_preflight_refs(
+        payload,
+        root / "harness" / "opencode-preflight-report.json",
+        run_id=payload["run_id"],
+        launch_policy=launch_policy,
+    )
+    for worker in payload["opencode_agent_runtime"]["workers"]:
+        worker_id = worker["worker_id"]
+        worker_root = root / "workers" / worker_id
+        set_artifact_ref(worker["summary"], worker_root / "summary" / "competition-run-summary.json")
+        set_artifact_ref(worker["worker_report"], worker_root / "harness" / "run-worker-report.json")
+        set_artifact_ref(worker["handoff_contract"], worker_root / "harness" / "opencode-handoff-contract.json")
+        set_artifact_ref(worker["opencode_session_evidence"], worker_root / "logs" / "opencode-session-evidence.json")
+        set_artifact_ref(worker["logs"]["stdout"], worker_root / "logs" / "stdout.log")
+        set_artifact_ref(worker["logs"]["stderr"], worker_root / "logs" / "stderr.log")
+
+
 def valid_opencode_judge_index_payload() -> dict:
     launch_policy = opencode_launch_policy()
     preflight = {
@@ -232,6 +299,7 @@ def valid_opencode_judge_index_payload() -> dict:
         "sha256": "a" * 64,
         "status": "passed",
         "contract_status": "executed",
+        "run_id": "run-test",
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
     }
@@ -268,6 +336,7 @@ def valid_opencode_judge_index_payload() -> dict:
         "schema_version": 1,
         "report_kind": "judge-evidence-index",
         "status": "completed",
+        "run_id": "run-test",
         "mode": "opencode",
         "claim_boundary": {
             "semantic_claim_source": "accepted_evidence_binding",
@@ -1406,6 +1475,19 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 path_text="target/out/harness/judge-evidence-index.json",
             )
 
+    def test_judge_evidence_index_preflight_run_id_must_match_runtime(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]["run_id"] = "stale-run"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "opencode_agent_runtime.workers\\[0\\].opencode_preflight_report.run_id must match opencode_agent_runtime.opencode_preflight_report",
+        ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
     def test_judge_evidence_index_requires_opencode_launch_policy_binding(self) -> None:
         payload = valid_opencode_judge_index_payload()
         del payload["opencode_agent_runtime"]["opencode_preflight_report"]["launch_policy"]
@@ -1414,6 +1496,32 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text="target/out/harness/judge-evidence-index.json",
+            )
+
+    def test_judge_evidence_index_rejects_opencode_launch_policy_drift_from_profile_ref(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-profile-drift-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        profile_policy = opencode_launch_policy()
+        profile_policy["opencode_skip_permissions"] = True
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile-drift",
+                "mode": "opencode",
+                **profile_policy,
+            },
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "opencode_agent_runtime.opencode_preflight_report.launch_policy must match profile launch policy",
+        ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
             )
 
     def test_judge_evidence_index_requires_matching_worker_opencode_launch_policy(self) -> None:
