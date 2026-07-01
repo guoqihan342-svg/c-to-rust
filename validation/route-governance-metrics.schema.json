@@ -62,7 +62,8 @@
         "s2_workflow_metrics",
         "candidate_generation_inventory",
         "tracked_slice_gate_contexts",
-        "slice_gate_contexts"
+        "slice_gate_contexts",
+        "blocked_repairs"
       ],
       "properties": {
         "translation_coverage_numerator": {"const": 0},
@@ -155,6 +156,47 @@
         "slice_gate_contexts": {
           "type": "array",
           "items": {"type": "object"}
+        },
+        "blocked_repairs": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "status",
+            "blocked_repair_count",
+            "slice_count",
+            "human_action_required_count",
+            "status_counts",
+            "human_intervention_points",
+            "blocked_callees",
+            "ir_feature_gap_kinds",
+            "forbidden_change_counts",
+            "semantic_gate",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "status": {"type": "string"},
+            "blocked_repair_count": {"type": "integer", "minimum": 0},
+            "slice_count": {"type": "integer", "minimum": 0},
+            "human_action_required_count": {"type": "integer", "minimum": 0},
+            "status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "human_intervention_points": {"type": "array", "items": {"type": "string"}},
+            "blocked_callees": {"type": "array", "items": {"type": "string"}},
+            "ir_feature_gap_kinds": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "forbidden_change_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "semantic_gate": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
+          }
         }
       }
     },
@@ -167,7 +209,8 @@
         "slice_gate_contexts",
         "translation_coverage_numerator",
         "accepted_evidence_semantic_pass_count",
-        "s2_workflow_metrics"
+        "s2_workflow_metrics",
+        "blocked_repairs"
       ]
     },
     "claim_boundary": {

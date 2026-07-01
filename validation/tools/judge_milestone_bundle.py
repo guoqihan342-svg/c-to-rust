@@ -97,6 +97,7 @@ def build_judge_milestone_bundle(
     before_after_repair_exhibit = build_before_after_repair_exhibit_rollup(core_quality_sources)
     harness_architecture_summary = build_harness_architecture_summary(architecture_sources)
     route_governance_metrics = build_route_governance_metrics_rollup(route_governance_sources)
+    blocked_repairs_rollup = build_blocked_repairs_rollup(route_governance_sources)
     evidence_cost_retention = build_evidence_cost_retention_rollup(evidence_cost_sources)
     opencode_runtime = build_opencode_runtime_rollup(opencode_sources)
     opencode_policy = build_opencode_evidence_policy(opencode_sources)
@@ -111,6 +112,7 @@ def build_judge_milestone_bundle(
         opencode_policy=opencode_policy,
         core_translation_quality=core_translation_quality,
         before_after_repair_exhibit=before_after_repair_exhibit,
+        blocked_repairs_rollup=blocked_repairs_rollup,
         route_governance_metrics=route_governance_metrics,
         evidence_cost_retention=evidence_cost_retention,
     )
@@ -139,6 +141,7 @@ def build_judge_milestone_bundle(
         "semantic_evidence_rollup": semantic_evidence,
         "core_translation_quality": core_translation_quality,
         "before_after_repair_exhibit": before_after_repair_exhibit,
+        "blocked_repairs_rollup": blocked_repairs_rollup,
         "harness_architecture_summary": harness_architecture_summary,
         "route_governance_metrics": route_governance_metrics,
         "evidence_cost_retention": evidence_cost_retention,
@@ -276,6 +279,7 @@ def milestone_blockers(
     opencode_policy: dict[str, Any],
     core_translation_quality: dict[str, Any],
     before_after_repair_exhibit: dict[str, Any],
+    blocked_repairs_rollup: dict[str, Any],
     route_governance_metrics: dict[str, Any],
     evidence_cost_retention: dict[str, Any],
 ) -> list[str]:
@@ -304,6 +308,7 @@ def milestone_blockers(
     if int_or_zero(core_translation_quality.get("translation_coverage_numerator")) != 0:
         blockers.append("core_quality_translation_coverage_numerator_must_be_zero")
     blockers.extend(repair_accounting_consistency_blockers(before_after_repair_exhibit))
+    blockers.extend(blocked_repairs_rollup_blockers(blocked_repairs_rollup))
     route_rollup = (
         route_governance_metrics.get("rollup", {})
         if isinstance(route_governance_metrics.get("rollup"), dict)
@@ -345,6 +350,18 @@ def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str
     if observed > 0 and rollback_evidence_count == 0:
         blockers.append("repair_accounting_rollback_evidence_missing_for_observed_repairs")
     return blockers
+
+
+def blocked_repairs_rollup_blockers(blocked_repairs_rollup: dict[str, Any]) -> list[str]:
+    rollup = (
+        blocked_repairs_rollup.get("rollup", {})
+        if isinstance(blocked_repairs_rollup.get("rollup"), dict)
+        else {}
+    )
+    status_counts = rollup.get("status_counts", {}) if isinstance(rollup.get("status_counts"), dict) else {}
+    if int_or_zero(status_counts.get("stale")) > 0 or int_or_zero(status_counts.get("incomplete")) > 0:
+        return ["blocked_repairs_rollup_stale_or_incomplete"]
+    return []
 
 
 def run_report_contract_blockers(run_report: dict[str, Any], *, entrypoints: list[dict[str, Any]]) -> list[str]:
@@ -790,6 +807,7 @@ def build_opencode_evidence_policy(sources: list[dict[str, Any]]) -> dict[str, A
 def build_must_not_claim(opencode_runtime: dict[str, Any]) -> list[str]:
     claims = [
         "accepted_evidence_is_not_translator_generated_coverage",
+        "blocked_repairs_are_not_translation_success",
         "before_after_exhibit_is_not_new_semantic_gate",
         "bundle_status_passed_is_not_project_level_translation_success",
         "local_simulation_is_not_competition_exact",
@@ -798,6 +816,45 @@ def build_must_not_claim(opencode_runtime: dict[str, Any]) -> list[str]:
     if opencode_runtime.get("enabled_entrypoint_count", 0):
         claims.append("opencode_chat_output_is_semantic_evidence")
     return claims
+
+
+def build_blocked_repairs_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    rollup = build_blocked_repairs_route_rollup(sources)
+    rollup["source_count"] = len(sources)
+    rollup["recorded_source_count"] = sum(
+        1
+        for source in sources
+        if blocked_repairs_source_has_entries(source)
+    )
+    return {
+        "report_kind": "blocked-repairs-rollup",
+        "sources": [
+            {
+                "entrypoint_id": source.get("entrypoint_id"),
+                "artifact": source.get("artifact"),
+                "blocked_repairs": source.get("blocked_repairs", empty_blocked_repairs_rollup()),
+            }
+            for source in sources
+        ],
+        "rollup": rollup,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": (
+            "This rollup indexes validator-bound blocked-repair playbooks for judge review. It records "
+            "fail-closed next steps for refused or blocked repair attempts. It is not a semantic acceptance "
+            "gate, does not convert blocked or refused work into translation success, does not increase "
+            "translator-generated coverage, and does not prove unsafe reduction."
+        ),
+    }
+
+
+def blocked_repairs_source_has_entries(source: dict[str, Any]) -> bool:
+    blocked = source.get("blocked_repairs", {})
+    if not isinstance(blocked, dict):
+        return False
+    return int_or_zero(blocked.get("blocked_repair_count")) > 0
 
 
 def build_known_gaps(*, proof_classes: dict[str, Any], opencode_runtime: dict[str, Any]) -> list[dict[str, Any]]:
@@ -951,6 +1008,7 @@ def route_governance_metrics_source_from_artifact(
         ),
         "tracked_route_decision_artifacts": int_or_zero(metrics.get("tracked_route_decision_artifacts")),
         "tracked_slice_gate_contexts": int_or_zero(metrics.get("tracked_slice_gate_contexts")),
+        "blocked_repairs": blocked_repairs_source(metrics.get("blocked_repairs")),
         "s2_workflow_run_count": int_or_zero(s2.get("run_count")),
         "s2_unsafe_reduction_status": unsafe_reduction.get("status", "unknown"),
         "s2_reduced_by": int_or_zero(unsafe_reduction.get("reduced_by")),
@@ -1309,6 +1367,7 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
                 else "not_measured",
                 "reduced_by": sum(int_or_zero(source.get("s2_reduced_by")) for source in sources),
             },
+            "blocked_repairs": build_blocked_repairs_route_rollup(sources),
             "all_retention_policies_present": all_retention_present,
             "all_target_artifacts_reproducible": all_reproducible,
         },
@@ -1316,6 +1375,79 @@ def build_route_governance_metrics_rollup(sources: list[dict[str, Any]]) -> dict
             "Route governance metrics constrain public claims and artifact retention. They are not a semantic gate "
             "and do not increase translator-generated translation coverage."
         ),
+    }
+
+
+def blocked_repairs_source(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return empty_blocked_repairs_rollup()
+    return {
+        "status": value.get("status") if isinstance(value.get("status"), str) else "unknown",
+        "blocked_repair_count": int_or_zero(value.get("blocked_repair_count")),
+        "slice_count": int_or_zero(value.get("slice_count")),
+        "human_action_required_count": int_or_zero(value.get("human_action_required_count")),
+        "human_intervention_points": string_list(value.get("human_intervention_points")),
+        "blocked_callees": string_list(value.get("blocked_callees")),
+        "ir_feature_gap_kinds": int_count_map(value.get("ir_feature_gap_kinds")),
+        "forbidden_change_counts": int_count_map(value.get("forbidden_change_counts")),
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+    }
+
+
+def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    human_points: list[str] = []
+    callees: list[str] = []
+    status_counts: dict[str, int] = {}
+    gap_kinds: dict[str, int] = {}
+    forbidden_changes: dict[str, int] = {}
+    blocked_repair_count = 0
+    slice_count = 0
+    human_action_required_count = 0
+    for source in sources:
+        blocked = source.get("blocked_repairs", {}) if isinstance(source.get("blocked_repairs"), dict) else {}
+        blocked_repair_count += int_or_zero(blocked.get("blocked_repair_count"))
+        slice_count += int_or_zero(blocked.get("slice_count"))
+        human_action_required_count += int_or_zero(blocked.get("human_action_required_count"))
+        increment_count(status_counts, blocked.get("status"))
+        for point in string_list(blocked.get("human_intervention_points")):
+            append_unique(human_points, point)
+        for callee in string_list(blocked.get("blocked_callees")):
+            append_unique(callees, callee)
+        merge_int_counts(gap_kinds, blocked.get("ir_feature_gap_kinds"))
+        merge_int_counts(forbidden_changes, blocked.get("forbidden_change_counts"))
+    return {
+        "status": "observed" if blocked_repair_count else "none",
+        "blocked_repair_count": blocked_repair_count,
+        "slice_count": slice_count,
+        "human_action_required_count": human_action_required_count,
+        "status_counts": status_counts,
+        "human_intervention_points": human_points,
+        "blocked_callees": callees,
+        "ir_feature_gap_kinds": gap_kinds,
+        "forbidden_change_counts": forbidden_changes,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Blocked repairs summarize route-governance self-healing refusals only. They are not semantic "
+            "acceptance and do not increase translator-generated coverage."
+        ),
+    }
+
+
+def empty_blocked_repairs_rollup() -> dict[str, Any]:
+    return {
+        "status": "none",
+        "blocked_repair_count": 0,
+        "slice_count": 0,
+        "human_action_required_count": 0,
+        "status_counts": {},
+        "human_intervention_points": [],
+        "blocked_callees": [],
+        "ir_feature_gap_kinds": {},
+        "forbidden_change_counts": {},
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
     }
 
 
@@ -1448,6 +1580,33 @@ def normalize_retention_classes(value: dict[str, Any]) -> dict[str, dict[str, in
             "total_bytes": int_or_zero(counts.get("total_bytes")),
         }
     return result
+
+
+def string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def int_count_map(value: object) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): int_or_zero(count) for key, count in value.items()}
+
+
+def merge_int_counts(target: dict[str, int], value: object) -> None:
+    for key, count in int_count_map(value).items():
+        target[key] = target.get(key, 0) + count
+
+
+def increment_count(target: dict[str, int], value: object) -> None:
+    if isinstance(value, str) and value:
+        target[value] = target.get(value, 0) + 1
+
+
+def append_unique(items: list[str], value: object) -> None:
+    if isinstance(value, str) and value and value not in items:
+        items.append(value)
 
 
 def int_or_zero(value: object) -> int:

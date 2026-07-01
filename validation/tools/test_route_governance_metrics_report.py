@@ -156,6 +156,17 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             self.assertEqual(inventory["by_kind"]["legacy-string-translator"]["compatibility_only_count"], 1)
             self.assertEqual(metrics["capability_delta_ledger"]["route_statuses"]["refused"], 1)
             self.assertEqual(metrics["tracked_slice_gate_contexts"], 1)
+            self.assertEqual(metrics["blocked_repairs"]["blocked_repair_count"], 1)
+            self.assertEqual(metrics["blocked_repairs"]["slice_count"], 1)
+            self.assertEqual(
+                metrics["blocked_repairs"]["human_intervention_points"],
+                ["Bind external callee semantics before promotion."],
+            )
+            self.assertEqual(metrics["blocked_repairs"]["blocked_callees"], ["helper_blocked"])
+            self.assertEqual(
+                metrics["blocked_repairs"]["ir_feature_gap_kinds"],
+                {"external_direct_callee_context": 1},
+            )
             context = metrics["slice_gate_contexts"][0]
             self.assertEqual(context["target_id"], "demo")
             self.assertEqual(context["slice_id"], "refused")
@@ -166,6 +177,11 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             self.assertIn("SKIPPED_LOCAL_NO_C_TOOLCHAIN", context["failure_reasons"])
             self.assertEqual(context["human_intervention_points"], ["Bind external callee semantics before promotion."])
             self.assertEqual(context["blocked_callees"], ["helper_blocked"])
+            self.assertEqual(context["blocked_repairs"]["blocked_repair_count"], 1)
+            self.assertEqual(
+                context["blocked_repairs"]["entries"][0]["human_intervention_point"],
+                "Bind external callee semantics before promotion.",
+            )
             self.assertEqual(context["fixture"]["case_count"], 2)
             self.assertEqual(context["unsafe"]["first_party_non_test_unsafe_count"], 0)
             self.assertEqual(context["unsafe"]["first_party_non_test_unsafe_ratio"], 0.0)
@@ -189,6 +205,16 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             committed_target["retention_policy"]["target_artifacts"]["committed"] = True
             with self.assertRaises(jsonschema.exceptions.ValidationError):
                 jsonschema.validate(committed_target, schema)
+
+            missing_blocked_repairs = json.loads(json.dumps(report))
+            missing_blocked_repairs["metrics"].pop("blocked_repairs")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_blocked_repairs, schema)
+
+            expanded = json.loads(json.dumps(report))
+            expanded["metrics"]["blocked_repairs"]["semantic_gate"] = True
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(expanded, schema)
 
     def test_rejects_failed_coverage_report(self) -> None:
         with tempfile.TemporaryDirectory(prefix="route-governance-metrics-") as tmp:

@@ -1344,6 +1344,20 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "candidate_generation_inventory": {},
                     "tracked_slice_gate_contexts": 1,
                     "slice_gate_contexts": [],
+                    "blocked_repairs": {
+                        "status": "none",
+                        "blocked_repair_count": 0,
+                        "slice_count": 0,
+                        "human_action_required_count": 0,
+                        "status_counts": {"none": 1},
+                        "human_intervention_points": [],
+                        "blocked_callees": [],
+                        "ir_feature_gap_kinds": {},
+                        "forbidden_change_counts": {},
+                        "semantic_gate": False,
+                        "translation_coverage_numerator": 0,
+                        "boundary": "Blocked repairs are not semantic acceptance evidence.",
+                    },
                 },
                 "denominators": {
                     "capability_delta_ledger": "capability delta ledger artifacts",
@@ -1352,6 +1366,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "translation_coverage_numerator": "translator-generated only",
                     "accepted_evidence_semantic_pass_count": "separate accepted evidence count",
                     "s2_workflow_metrics": "competition summaries",
+                    "blocked_repairs": "self-healing blocked repairs artifacts",
                 },
                 "claim_boundary": "Route governance metrics are not semantic acceptance evidence.",
                 "retention_policy": {

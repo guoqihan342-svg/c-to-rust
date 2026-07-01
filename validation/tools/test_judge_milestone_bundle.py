@@ -26,7 +26,10 @@ def route_metrics_payload(
     tracked_slice_gate_contexts: int,
     s2_workflow_run_count: int,
     s2_reduced_by: int,
+    blocked_repair_count: int = 0,
+    blocked_repairs_status: str | None = None,
 ) -> dict:
+    resolved_blocked_repairs_status = blocked_repairs_status or ("observed" if blocked_repair_count else "none")
     return {
         "schema_version": 1,
         "status": "passed",
@@ -61,6 +64,26 @@ def route_metrics_payload(
             "candidate_generation_inventory": {},
             "tracked_slice_gate_contexts": tracked_slice_gate_contexts,
             "slice_gate_contexts": [],
+            "blocked_repairs": {
+                "status": resolved_blocked_repairs_status,
+                "blocked_repair_count": blocked_repair_count,
+                "slice_count": 1 if blocked_repair_count else 0,
+                "human_action_required_count": blocked_repair_count,
+                "status_counts": {resolved_blocked_repairs_status: 1},
+                "human_intervention_points": ["Bind external callee semantics before promotion."]
+                if blocked_repair_count
+                else [],
+                "blocked_callees": ["helper_blocked"] if blocked_repair_count else [],
+                "ir_feature_gap_kinds": {"external_direct_callee_context": blocked_repair_count}
+                if blocked_repair_count
+                else {},
+                "forbidden_change_counts": {"missing_l1_evidence": blocked_repair_count}
+                if blocked_repair_count
+                else {},
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+                "boundary": "Blocked repair rollup is route-governance context only.",
+            },
         },
         "denominators": {
             "capability_delta_ledger": "capability delta ledger artifacts",
@@ -69,6 +92,7 @@ def route_metrics_payload(
             "translation_coverage_numerator": "translator-generated semantic-pass named slices only",
             "accepted_evidence_semantic_pass_count": "accepted evidence semantic pass count is separate",
             "s2_workflow_metrics": "hash-bound competition run summaries",
+            "blocked_repairs": "self-healing blocked repairs artifacts under validation/evidence",
         },
         "claim_boundary": "Route governance metrics are not semantic acceptance evidence.",
         "retention_policy": {
@@ -407,6 +431,9 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["route_governance_metrics"]["rollup"]["accepted_evidence_semantic_pass_count"], 3)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_route_decision_artifacts"], 4)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_slice_gate_contexts"], 3)
+        self.assertEqual(report["blocked_repairs_rollup"]["rollup"]["blocked_repair_count"], 0)
+        self.assertFalse(report["blocked_repairs_rollup"]["semantic_gate"])
+        self.assertEqual(report["blocked_repairs_rollup"]["translation_coverage_numerator"], 0)
         self.assertTrue(report["route_governance_metrics"]["rollup"]["all_target_artifacts_reproducible"])
         self.assertTrue(report["route_governance_metrics"]["rollup"]["all_retention_policies_present"])
         self.assertEqual(report["evidence_cost_retention"]["report_kind"], "evidence-cost-retention-rollup")
@@ -586,6 +613,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         missing_evidence_cost.pop("evidence_cost_retention")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_evidence_cost, schema)
+
+        missing_blocked_repairs = json.loads(json.dumps(report))
+        missing_blocked_repairs.pop("blocked_repairs_rollup")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_repairs, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["blocked_repairs_rollup"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
 
     def test_bundle_blocks_malformed_run_report_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
@@ -931,6 +968,141 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["status"], "blocked")
         self.assertIn("core_quality_generated_draft_semantic_pass_must_be_false", report["blockers"])
         self.assertIn("core_quality_translation_coverage_numerator_must_be_zero", report["blockers"])
+
+    def test_bundle_rolls_up_blocked_repairs_from_bound_route_metrics(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-blocked-repairs-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        route_metrics_path = temp_dir / "summary" / "route-governance-metrics-report.json"
+        write_json(
+            route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=0,
+                tracked_route_decision_artifacts=1,
+                tracked_slice_gate_contexts=1,
+                s2_workflow_run_count=0,
+                s2_reduced_by=0,
+                blocked_repair_count=2,
+            ),
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"route_governance_metrics_report": repo_relative(route_metrics_path)},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        blocked = report["blocked_repairs_rollup"]["rollup"]
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["blocked_repairs_rollup"]["report_kind"], "blocked-repairs-rollup")
+        self.assertEqual(blocked["source_count"], 1)
+        self.assertEqual(blocked["blocked_repair_count"], 2)
+        self.assertEqual(blocked["slice_count"], 1)
+        self.assertEqual(blocked["human_action_required_count"], 2)
+        self.assertEqual(blocked["human_intervention_points"], ["Bind external callee semantics before promotion."])
+        self.assertEqual(blocked["blocked_callees"], ["helper_blocked"])
+        self.assertEqual(blocked["ir_feature_gap_kinds"], {"external_direct_callee_context": 2})
+        self.assertFalse(report["blocked_repairs_rollup"]["semantic_gate"])
+        self.assertFalse(report["blocked_repairs_rollup"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["blocked_repairs_rollup"]["translation_coverage_numerator"], 0)
+        self.assertFalse(blocked["semantic_gate"])
+        self.assertEqual(blocked["translation_coverage_numerator"], 0)
+        self.assertIn("blocked_repairs_are_not_translation_success", report["must_not_claim"])
+
+    def test_bundle_blocks_stale_or_incomplete_blocked_repairs_rollup(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-stale-blocked-repairs-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        route_metrics_path = temp_dir / "summary" / "route-governance-metrics-report.json"
+        write_json(
+            route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=0,
+                tracked_route_decision_artifacts=1,
+                tracked_slice_gate_contexts=1,
+                s2_workflow_run_count=0,
+                s2_reduced_by=0,
+                blocked_repair_count=1,
+                blocked_repairs_status="stale",
+            ),
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"route_governance_metrics_report": repo_relative(route_metrics_path)},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("blocked_repairs_rollup_stale_or_incomplete", report["blockers"])
 
     def test_bundle_blocks_inconsistent_repair_accounting_claims(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

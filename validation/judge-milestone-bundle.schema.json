@@ -18,6 +18,7 @@
     "semantic_evidence_rollup",
     "core_translation_quality",
     "before_after_repair_exhibit",
+    "blocked_repairs_rollup",
     "harness_architecture_summary",
     "route_governance_metrics",
     "evidence_cost_retention",
@@ -210,6 +211,72 @@
             "semantic_gate": {"const": false},
             "generated_draft_semantic_pass": {"const": false},
             "translation_coverage_numerator": {"const": 0}
+          }
+        },
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "accepted_evidence_counts_as_translator_coverage": {"const": false},
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "blocked_repairs_rollup": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "sources",
+        "rollup",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "accepted_evidence_counts_as_translator_coverage",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "blocked-repairs-rollup"},
+        "sources": {"type": "array", "items": {"type": "object"}},
+        "rollup": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "source_count",
+            "slice_count",
+            "recorded_source_count",
+            "blocked_repair_count",
+            "human_action_required_count",
+            "status_counts",
+            "human_intervention_points",
+            "blocked_callees",
+            "ir_feature_gap_kinds",
+            "forbidden_change_counts",
+            "semantic_gate",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "source_count": {"type": "integer", "minimum": 0},
+            "slice_count": {"type": "integer", "minimum": 0},
+            "recorded_source_count": {"type": "integer", "minimum": 0},
+            "blocked_repair_count": {"type": "integer", "minimum": 0},
+            "human_action_required_count": {"type": "integer", "minimum": 0},
+            "status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "human_intervention_points": {"type": "array", "items": {"type": "string"}},
+            "blocked_callees": {"type": "array", "items": {"type": "string"}},
+            "ir_feature_gap_kinds": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "forbidden_change_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "semantic_gate": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
           }
         },
         "semantic_gate": {"const": false},

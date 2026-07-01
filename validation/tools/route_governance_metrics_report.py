@@ -102,6 +102,7 @@ def build_report(
             "candidate_generation_inventory": candidate_inventory,
             "tracked_slice_gate_contexts": len(slice_gate_contexts),
             "slice_gate_contexts": slice_gate_contexts,
+            "blocked_repairs": build_blocked_repairs_rollup(slice_gate_contexts),
         },
         "denominators": {
             "capability_delta_ledger": "capability delta ledger artifacts under validation/evidence/**/l3-*-capability-delta.json",
@@ -110,6 +111,7 @@ def build_report(
             "translation_coverage_numerator": "translator-generated Rust drafts with semantic-pass status backed by L3 accepted/passed route evidence",
             "accepted_evidence_semantic_pass_count": "accepted external evidence contexts reported separately and excluded from translation_coverage_numerator",
             "s2_workflow_metrics": "S2 repair, retry, unsafe-reduction, and before/after artifact-binding workflow metrics loaded from hash-bound competition-run summaries when provided",
+            "blocked_repairs": "self-healing blocked repairs artifacts under validation/evidence/**/l3-*-self-healing-blocked-repairs.json",
         },
         "claim_boundary": (
             "Route governance metrics are not semantic acceptance evidence; capability_delta_ledger entries "
@@ -174,6 +176,7 @@ def build_slice_gate_context(repo_root: Path, fallback_target_id: str, slice_dir
         "failure_reasons": failure_reasons(final, negative_diff),
         "human_intervention_points": human_intervention_points(repairs),
         "blocked_callees": blocked_callees(repairs),
+        "blocked_repairs": blocked_repairs_context(repairs),
         "fixture": {
             "case_count": fixture_case_count(manifest),
         },
@@ -261,6 +264,130 @@ def blocked_callees(repairs: dict[str, Any]) -> list[str]:
         for callee in list_or_empty(gap.get("blocked_callees")):
             append_unique(callees, callee)
     return callees
+
+
+def blocked_repairs_context(repairs: dict[str, Any]) -> dict[str, Any]:
+    entries = [
+        entry
+        for entry in (
+            blocked_repair_entry(repair) for repair in list_or_empty(repairs.get("blocked_repairs"))
+        )
+        if entry
+    ]
+    status = repairs.get("status") if isinstance(repairs.get("status"), str) else None
+    return blocked_repairs_summary(entries, status=status)
+
+
+def blocked_repair_entry(repair: Any) -> dict[str, Any] | None:
+    if not isinstance(repair, dict):
+        return None
+    gap = repair.get("ir_feature_gap", {}) if isinstance(repair.get("ir_feature_gap"), dict) else {}
+    oracle_gap = repair.get("oracle_fixture_gap", {}) if isinstance(repair.get("oracle_fixture_gap"), dict) else {}
+    smallest_next_test = (
+        repair.get("smallest_next_test", {}) if isinstance(repair.get("smallest_next_test"), dict) else {}
+    )
+    candidate_routes = []
+    for route in list_or_empty(repair.get("candidate_routes")):
+        if isinstance(route, dict):
+            candidate_routes.append(
+                {
+                    "route": route.get("route"),
+                    "status": route.get("status"),
+                    "next_action": route.get("next_action"),
+                }
+            )
+    return {
+        "repair_id": repair.get("repair_id"),
+        "blocked_reason": repair.get("blocked_reason"),
+        "forbidden_change": repair.get("forbidden_change"),
+        "candidate_patch_id": repair.get("candidate_patch_id"),
+        "human_action_required": repair.get("human_action_required") is True,
+        "human_intervention_point": repair.get("human_intervention_point"),
+        "ir_feature_gap_kind": gap.get("kind"),
+        "blocked_callees": [callee for callee in list_or_empty(gap.get("blocked_callees")) if isinstance(callee, str)],
+        "oracle_fixture_gap_status": oracle_gap.get("status"),
+        "candidate_routes": candidate_routes,
+        "smallest_next_test": {
+            "kind": smallest_next_test.get("kind"),
+            "command": smallest_next_test.get("command"),
+            "expected_gate": smallest_next_test.get("expected_gate"),
+        },
+    }
+
+
+def build_blocked_repairs_rollup(contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    entries: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = {}
+    for context in contexts:
+        blocked = context.get("blocked_repairs", {}) if isinstance(context.get("blocked_repairs"), dict) else {}
+        increment_count(status_counts, blocked.get("status"))
+        for entry in list_or_empty(blocked.get("entries")):
+            if not isinstance(entry, dict):
+                continue
+            enriched = dict(entry)
+            enriched["target_id"] = context.get("target_id")
+            enriched["slice_id"] = context.get("slice_id")
+            enriched["pipeline_id"] = context.get("pipeline_id")
+            entries.append(enriched)
+    summary = blocked_repairs_summary(
+        entries,
+        slice_count=sum(1 for context in contexts if int_or_zero_from_context(context) > 0),
+    )
+    summary["status_counts"] = status_counts
+    return summary
+
+
+def int_or_zero_from_context(context: dict[str, Any]) -> int:
+    blocked = context.get("blocked_repairs", {}) if isinstance(context.get("blocked_repairs"), dict) else {}
+    value = blocked.get("blocked_repair_count")
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def blocked_repairs_summary(
+    entries: list[dict[str, Any]],
+    *,
+    status: str | None = None,
+    slice_count: int | None = None,
+) -> dict[str, Any]:
+    human_points: list[str] = []
+    callees: list[str] = []
+    gap_kinds: dict[str, int] = {}
+    forbidden_changes: dict[str, int] = {}
+    smallest_tests: list[dict[str, Any]] = []
+    for entry in entries:
+        append_unique(human_points, entry.get("human_intervention_point"))
+        for callee in list_or_empty(entry.get("blocked_callees")):
+            append_unique(callees, callee)
+        increment_count(gap_kinds, entry.get("ir_feature_gap_kind"))
+        increment_count(forbidden_changes, entry.get("forbidden_change"))
+        test = entry.get("smallest_next_test")
+        if isinstance(test, dict) and any(test.get(key) is not None for key in ["kind", "command", "expected_gate"]):
+            smallest_tests.append(test)
+    count = len(entries)
+    return {
+        "status": status if status is not None else ("observed" if count else "none"),
+        "blocked_repair_count": count,
+        "slice_count": slice_count if slice_count is not None else (1 if count else 0),
+        "human_action_required_count": sum(1 for entry in entries if entry.get("human_action_required") is True),
+        "status_counts": {status: 1} if status else ({"observed": 1} if count else {"none": 1}),
+        "human_intervention_points": human_points,
+        "blocked_callees": callees,
+        "ir_feature_gap_kinds": gap_kinds,
+        "forbidden_change_counts": forbidden_changes,
+        "smallest_next_tests": smallest_tests,
+        "entries": entries,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Blocked repairs summarize fail-closed self-healing evidence only. They are not semantic "
+            "acceptance and do not increase translator-generated coverage."
+        ),
+    }
+
+
+def increment_count(counts: dict[str, int], value: Any) -> None:
+    if isinstance(value, str) and value:
+        counts[value] = counts.get(value, 0) + 1
 
 
 def fixture_case_count(manifest: dict[str, Any]) -> int | None:
