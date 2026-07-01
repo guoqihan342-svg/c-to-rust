@@ -3793,6 +3793,65 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertIn("RuntimeError: rustc failed", diagnostics["python_traceback"])
             self.assertEqual(payload["attempts"][0]["diagnostics"]["primary_error"]["code"], "E0133")
 
+    def test_run_worker_stale_summary_cleanup_failure_fails_closed_without_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            worker_out_root = out_root / "workers" / "worker-a"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=worker_out_root,
+                repo_root=REPO_ROOT,
+            )
+            summary_path = worker_out_root / "summary" / "competition-run-summary.json"
+            write_worker_summary(summary_path, "run-test-worker-a", status="passed", failed=0, semantic_pass=1)
+            launched = False
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                nonlocal launched
+                launched = True
+                return subprocess.CompletedProcess(argv, 0, stdout="unexpected launch\n", stderr="")
+
+            original_unlink = Path.unlink
+
+            def fail_for_stale_summary(path: Path, *args: object, **kwargs: object) -> None:
+                if path.resolve() == summary_path.resolve():
+                    raise PermissionError("locked stale summary")
+                original_unlink(path, *args, **kwargs)
+
+            with patch.object(Path, "unlink", fail_for_stale_summary):
+                result = harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertFalse(launched)
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["runner_kind"], "stale-summary-cleanup")
+            self.assertEqual(result["summary_status"], "stale-summary-cleanup-failed")
+            self.assertFalse(result["recorded"])
+            self.assertEqual(result["repair_hint"]["root_cause_key"], "stale_summary_cleanup_failed")
+            stderr = (worker_out_root / "logs" / "harness-worker-executor.stderr.log").read_text(encoding="utf-8")
+            self.assertIn("locked stale summary", stderr)
+            hint_rows = fetch_rows(db_path, "select root_cause_key, status from repair_hints")
+            self.assertEqual(hint_rows, [("stale_summary_cleanup_failed", "open")])
+
     def test_worker_repair_diagnostics_redacts_local_absolute_paths(self) -> None:
         with temp_repo_dir() as tmp:
             stdout_path = Path(tmp) / "stdout.log"

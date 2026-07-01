@@ -16,8 +16,25 @@
 
 - `opencode-agent-harness-逐行稳定性审查.md` 大体有道理，尤其无 timeout、非原子写、命令环境不一致、retry 外层无防御 cap 这四项是 P0。
 - `fencing_token` 和 `assign_slice` 事务属于“未来并行 planner 风险”，可以先二选一：要么明确 audit-only 并写入 contract，要么补消费侧校验和事务。
-- 顶层 JSON error envelope、`summary_path.unlink()` 防护属于 P1 小硬化，可以跟随 H7 做，但不能挤掉前四项。
+- stale summary cleanup 属于 H7/P0：旧 summary 删除失败时必须 fail-closed，不能启动 worker 或接受旧 evidence。顶层 JSON error envelope 属于 P1 小硬化，可以跟随 H7 后续做，但不能挤掉前四项。
 - `c-to-rust-flashdb-rust-skeleton-评估报告.md` 对 showcase 边界的提醒成立：手写 `flashDB_rust` 不能当自动翻译产物；before/after 必须绑定真实 source pin、baseline/final/oracle 来源和 proof class。
+
+## 审查条目到 H7 待办映射
+
+| 外部审查条目 | 判断 | 当前处理 | 优先级 |
+|---|---|---|---|
+| 子进程无 timeout | 成立；评委现场 hang 是最高风险 | 已进入 Task 1，timeout 规范化为 `124` / `timed_out=true` | H7/P0 |
+| 裸 `"python"` 与比赛 profile 的 `python3` 不一致 | 成立；必须避免解释器漂移和本机绝对路径泄漏 | 已进入 Task 2，公开命令和 worker argv 统一 `python3 -B` portable contract | H7/P0 |
+| 关键 evidence 非原子写 | 成立；半截 JSON 会破坏 resume/validator | 已进入 Task 3，关键 artifact 使用同目录临时文件 + `os.replace` | H7/P0 |
+| `auto_retry` 外层无独立 cap | 成立；虽有内层 5 轮 cap，但缺第二道保险 | 已进入 Task 4，外层上限为 `REPAIR_ROUND_CAP + 2` 并进 graph/report | H7/P0 |
+| OpenCode SQLite lock 匹配过窄 | 成立；第三方 CLI stderr 不稳定 | 已进入 Task 4，扩展等价 lock 信号分类 | H7/P0 |
+| `fencing_token` 语义不清 | 成立；字段存在但不应被误读成强并发防护 | 已进入 Task 4，当前定义为 audit-only monotonic counter 并写入 contract | H7/P0 |
+| `assign_slice` check-then-write 窗口 | 成立但偏未来风险 | 已进入 Task 4，用 `BEGIN IMMEDIATE` 明确分配事务 | H7/P0 |
+| `subprocess.list2cmdline` 与 POSIX shell contract 混用 | 成立；Linux/OpenCode prompt 应按 POSIX | 已进入 Task 5，使用 `shlex.join` 与 POSIX parser 对齐 | H7/P0 |
+| stale summary 删除失败未处理 | 成立；Windows/杀毒/并发句柄会触发 | 已进入 Task 5.3a，删除失败 fail-closed，不启动 worker，不接受旧 summary | H7/P0 |
+| deterministic worker 零瞬时重试 | 有道理但不应抢 H7 主线；deterministic worker 当前按 fail-fast 处理，避免在缺少幂等/副作用合同前重复执行 | 后置；未来若要加短重试窗口，必须先定义幂等输入、输出目录清理和 summary 覆盖合同 | P1/Deferred |
+| 顶层 JSON error envelope | 有价值，但不应阻塞已完成稳定性合同 | 后置为 Task 5.3b；需要独立设计，避免吞 traceback 或改坏 exit code | P1 |
+| 真实子进程集成 timeout 测试 | 有价值，能覆盖 mock 不到的 OS 行为 | 放入 H7 后续验证池；当前单元测试已覆盖 `TimeoutExpired` 合同 | P1/验证增强 |
 
 ## 并行分工
 
@@ -33,7 +50,15 @@
 
 - 已完成：Task 1 timeout envelope；Task 2 Python command portability split（统一 `python3 -B` portable strategy）；Task 3 atomic critical evidence writes；Task 4 retry/lock/lease/fencing guardrails；Task 5 Step 1-2 POSIX shell contract；Task 6 translator smoke 修复。
 - 已验证：`python -B -m unittest validation.tools.test_opencode_agent_harness -q`、`python -B -m unittest validation.tools.test_doc_mirror_contract -q`、`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`。
-- 剩余：Task 5 Step 3 cleanup/error-envelope 小硬化；Task 7 judge smoke 和最终 roadmap 勾选。若时间紧，Step 5.3 可作为 P1 留待 H7 后续补丁，不阻塞已完成的 P0 稳定性合同。
+- 当前补丁：Task 5 Step 3a stale summary cleanup fail-closed 已有单测覆盖；顶层 JSON error envelope 拆为 Step 3b/P1，不阻塞 H7。
+- 剩余：Task 7 judge smoke 和最终 roadmap 勾选；若 judge smoke 被环境或 config hash 漂移阻塞，必须把具体 blocker 写进路线图，而不是口头跳过。
+
+## 当前核对表
+
+- H7/P0 implemented：timeout、portable command、atomic write、retry cap、OpenCode lock、fencing audit contract、assignment transaction、POSIX shell contract、translator smoke fix 均已落到代码和测试。
+- stale summary cleanup included in H7/P0：旧 summary 删除失败现在 fail-closed，不启动 worker，不记录旧 summary，并打开 `stale_summary_cleanup_failed` repair hint。
+- judge smoke/blocker still pending：H7 仍保持未勾选，直到刷新 judge entrypoint smoke，或把环境/config hash 漂移等具体 blocker 写进路线图。
+- P1 deferred：top-level JSON error envelope、real subprocess sleep/timeout integration tests、deterministic worker short retry policy。
 
 ---
 
@@ -156,9 +181,13 @@ Add paths with spaces and quoted arguments. Assert the command line placed in Op
 
 For Linux/competition OpenCode prompts, prefer POSIX shell semantics through `shlex.join`. Keep Windows-only convenience paths out of judge-facing prompt/evidence. Update `command_matches_for_contract` so generated command strings and observed shell commands are normalized under the same convention.
 
-- [ ] **Step 3: Harden cleanup and top-level failures**
+- [x] **Step 3a: Harden stale summary cleanup**
 
-Wrap stale summary cleanup in best-effort error handling. If adding a top-level JSON error envelope, make it deterministic and avoid masking the original nonzero exit code.
+If `summary/competition-run-summary.json` already exists and cannot be removed before a retry/new attempt, fail closed with `runner_kind=stale-summary-cleanup`, `summary_status=stale-summary-cleanup-failed`, `root_cause_key=stale_summary_cleanup_failed`, and do not launch the worker or record the stale summary.
+
+- [ ] **Step 3b: Decide top-level JSON error envelope**
+
+If adding a top-level JSON error envelope, make it deterministic and avoid masking the original nonzero exit code. This is P1 unless a judge entrypoint currently assumes every harness CLI failure writes parseable JSON to stdout.
 
 - [ ] **Step 4: Verify**
 

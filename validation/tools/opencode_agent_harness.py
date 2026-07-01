@@ -4285,6 +4285,7 @@ def run_worker(
     attempt_request_path = report_dir / f"{worker_id}-request-attempt-{attempt_number}.json"
     atomic_write_json(attempt_request_path, attempt_request)
     rollback_evidence = None
+    stale_summary_cleanup_error: OSError | None = None
     if summary_path.exists():
         if retry_of:
             rollback_evidence = write_worker_rollback_evidence(
@@ -4295,7 +4296,10 @@ def run_worker(
                 report_dir=report_dir,
                 repo_root=repo_root,
             )
-        summary_path.unlink()
+        try:
+            summary_path.unlink()
+        except OSError as exc:
+            stale_summary_cleanup_error = exc
 
     worker_command = portable_python_script_argv(
         "scripts/c2rust-migrator.py",
@@ -4305,7 +4309,7 @@ def run_worker(
         repo_relative(attempt_request_path, repo_root=repo_root),
     )
     preflight_binding = None
-    if mode == "opencode":
+    if mode == "opencode" and stale_summary_cleanup_error is None:
         preflight_binding = validate_opencode_preflight_report(
             opencode_preflight_report,
             expected_run_id=run_id,
@@ -4316,7 +4320,21 @@ def run_worker(
             opencode_skip_permissions=opencode_skip_permissions,
             repo_root=repo_root,
         )
-    if mode == "deterministic":
+    if stale_summary_cleanup_error is not None:
+        argv = worker_command
+        runner_kind = "stale-summary-cleanup"
+        handoff_contract = None
+        opencode_process_retries = None
+        completed = subprocess.CompletedProcess(
+            argv,
+            1,
+            stdout="",
+            stderr=(
+                f"{type(stale_summary_cleanup_error).__name__}: failed to remove stale summary "
+                f"{repo_relative(summary_path, repo_root=repo_root)}: {stale_summary_cleanup_error}\n"
+            ),
+        )
+    elif mode == "deterministic":
         argv = worker_command
         runner_kind = "repo-local-c2rust-migrator"
         handoff_contract = None
@@ -4359,20 +4377,21 @@ def run_worker(
     else:
         raise SystemExit(f"unsupported worker mode: {mode}")
 
-    completed, opencode_process_retries = run_worker_process(
-        argv=argv,
-        mode=mode,
-        command_runner=command_runner,
-        repo_root=repo_root,
-        timeout_seconds=timeout_seconds,
-    )
+    if stale_summary_cleanup_error is None:
+        completed, opencode_process_retries = run_worker_process(
+            argv=argv,
+            mode=mode,
+            command_runner=command_runner,
+            repo_root=repo_root,
+            timeout_seconds=timeout_seconds,
+        )
     timed_out = completed_process_timed_out(completed)
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
     stderr_path = logs_dir / "harness-worker-executor.stderr.log"
     atomic_write_text(stdout_path, completed.stdout or "")
     atomic_write_text(stderr_path, completed.stderr or "")
     opencode_session_evidence = None
-    if mode == "opencode":
+    if mode == "opencode" and stale_summary_cleanup_error is None:
         opencode_session_evidence = write_opencode_session_evidence(
             completed=completed,
             evidence_path=logs_dir / "opencode-session-evidence.json",
@@ -4391,12 +4410,14 @@ def run_worker(
 
     synthetic_failure_root_cause = None
     rejected_summary_evidence = None
+    if stale_summary_cleanup_error is not None:
+        synthetic_failure_root_cause = "stale_summary_cleanup_failed"
     opencode_contract_failed = (
         opencode_contract_verification is not None
         and opencode_contract_verification.get("status") != "executed"
         and int(completed.returncode) == 0
     )
-    if opencode_contract_failed:
+    if stale_summary_cleanup_error is None and opencode_contract_failed:
         synthetic_failure_root_cause = "opencode_contract_not_executed"
         if summary_path.exists():
             rejected_summary_evidence = write_rejected_worker_summary_evidence(
@@ -4423,7 +4444,7 @@ def run_worker(
             opencode_session_evidence=opencode_session_evidence,
             repo_root=repo_root,
         )
-    elif not summary_path.exists():
+    elif stale_summary_cleanup_error is None and not summary_path.exists():
         provisional_root_cause = worker_failure_root_cause(
             process_returncode=int(completed.returncode),
             recorded=False,
@@ -4450,9 +4471,9 @@ def run_worker(
             )
 
     recorded: dict[str, Any] | None = None
-    summary_status = "missing-summary"
+    summary_status = "stale-summary-cleanup-failed" if stale_summary_cleanup_error is not None else "missing-summary"
     summary_payload: dict[str, Any] | None = None
-    if summary_path.exists():
+    if summary_path.exists() and stale_summary_cleanup_error is None:
         recorded = record_worker_summary(
             db_path=db_path,
             run_id=run_id,

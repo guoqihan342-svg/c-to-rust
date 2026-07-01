@@ -16,8 +16,25 @@ Chinese original: `2026-07-02-harness-stability-hardening.md`.
 
 - `opencode-agent-harness-逐行稳定性审查.md` is directionally correct. Missing timeouts, non-atomic writes, inconsistent command environments, and the missing defensive outer retry cap are P0.
 - `fencing_token` and `assign_slice` transactions are future parallel-planner risks. Pick one path now: document the token as audit-only, or enforce it in assignment/worker consumers.
-- A top-level JSON error envelope and protected `summary_path.unlink()` are useful P1 hardening items, but they must not displace the first four P0 items.
+- Stale summary cleanup is H7/P0: if an old summary cannot be removed, the harness must fail closed instead of launching a worker or accepting old evidence. A top-level JSON error envelope is P1 hardening and must not displace the first four P0 items.
 - The showcase-boundary warnings in `c-to-rust-flashdb-rust-skeleton-评估报告.md` are valid: handwritten `flashDB_rust` is not automatic translation output, and every before/after exhibit must bind the real source pin, baseline/final/oracle source, and proof class.
+
+## Review Finding to H7 Backlog Mapping
+
+| External review item | Assessment | Current treatment | Priority |
+|---|---|---|---|
+| Subprocesses have no timeout | Valid; a judge-visible hang is the highest-risk failure mode | Covered by Task 1, normalizing timeouts to `124` / `timed_out=true` | H7/P0 |
+| Bare `"python"` conflicts with the competition profile's `python3` | Valid; avoid interpreter drift and local absolute interpreter leakage | Covered by Task 2, using the `python3 -B` portable contract for public commands and worker argv | H7/P0 |
+| Critical evidence writes are non-atomic | Valid; partial JSON can break resume and validator flows | Covered by Task 3, using same-directory temp files plus `os.replace` for critical artifacts | H7/P0 |
+| `auto_retry` lacks an independent outer cap | Valid; the inner five-round cap needs a second guardrail | Covered by Task 4, using `REPAIR_ROUND_CAP + 2` and recording the decision in graph/report artifacts | H7/P0 |
+| OpenCode SQLite lock detection is too narrow | Valid; third-party CLI stderr is unstable | Covered by Task 4 with broader equivalent lock-signal classification | H7/P0 |
+| `fencing_token` semantics are unclear | Valid; the field must not be mistaken for enforced concurrency fencing | Covered by Task 4; current contract defines it as an audit-only monotonic counter | H7/P0 |
+| `assign_slice` check-then-write window | Valid but mostly a future parallel-planner risk | Covered by Task 4 with `BEGIN IMMEDIATE` assignment transactions | H7/P0 |
+| `subprocess.list2cmdline` mixed with a POSIX shell contract | Valid; Linux/OpenCode prompts should use POSIX semantics | Covered by Task 5 through `shlex.join` plus POSIX parser alignment | H7/P0 |
+| Stale summary deletion failure is unhandled | Valid; Windows, antivirus, or concurrent handles can trigger it | Covered by Task 5.3a: fail closed, do not launch the worker, and do not accept the stale summary | H7/P0 |
+| Deterministic worker has no transient retry | Reasonable finding, but it should not displace the H7 mainline; deterministic workers remain fail-fast until idempotency and side-effect contracts are explicit | Deferred; a future short retry window must first define idempotent input, out-root cleanup, and summary overwrite contracts | P1/Deferred |
+| Top-level JSON error envelope | Valuable, but not a blocker for the completed stability contract | Deferred to Task 5.3b; needs a separate design to avoid swallowing traceback or breaking exit codes | P1 |
+| Real subprocess timeout integration tests | Valuable because they cover OS behavior that mocks miss | Add to the post-H7 verification pool; current unit tests cover the `TimeoutExpired` contract | P1/verification |
 
 ## Parallel Work Split
 
@@ -33,7 +50,15 @@ All agents should hand back small patches or worktree diffs. One main integrator
 
 - Done: Task 1 timeout envelope; Task 2 Python command portability split with the shared `python3 -B` portable strategy; Task 3 atomic critical evidence writes; Task 4 retry/lock/lease/fencing guardrails; Task 5 Steps 1-2 POSIX shell contract; Task 6 translator smoke fixes.
 - Verified: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`, `python -B -m unittest validation.tools.test_doc_mirror_contract -q`, and `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`.
-- Remaining: Task 5 Step 3 cleanup/error-envelope hardening; Task 7 judge smoke and final roadmap checkbox. If time is tight, Step 5.3 can remain P1 after H7 because it does not block the completed P0 stability contracts.
+- Current patch: Task 5 Step 3a stale summary cleanup fail-closed has focused test coverage; the top-level JSON error envelope is split into Step 3b/P1 and does not block H7.
+- Remaining: Task 7 judge smoke and the final roadmap checkbox. If judge smoke is blocked by environment or config-hash drift, record the exact blocker in the roadmap instead of skipping it verbally.
+
+## Current Checklist
+
+- H7/P0 implemented: timeout, portable command, atomic write, retry cap, OpenCode lock classification, fencing audit contract, assignment transaction, POSIX shell contract, and translator smoke fix are implemented in code and tests.
+- Stale summary cleanup included in H7/P0: old-summary removal failures now fail closed, do not launch the worker, do not record the old summary, and open a `stale_summary_cleanup_failed` repair hint.
+- Judge smoke/blocker still pending: H7 remains unchecked until a judge entrypoint smoke is refreshed, or an exact environment/config-hash blocker is recorded in the roadmap.
+- P1 deferred: top-level JSON error envelope, real subprocess sleep/timeout integration tests, and deterministic-worker short retry policy.
 
 ---
 
@@ -156,9 +181,13 @@ Add paths with spaces and quoted arguments. Assert the command line placed in Op
 
 For Linux/competition OpenCode prompts, prefer POSIX shell semantics through `shlex.join`. Keep Windows-only convenience paths out of judge-facing prompt/evidence. Update `command_matches_for_contract` so generated command strings and observed shell commands are normalized under the same convention.
 
-- [ ] **Step 3: Harden cleanup and top-level failures**
+- [x] **Step 3a: Harden stale summary cleanup**
 
-Wrap stale summary cleanup in best-effort error handling. If adding a top-level JSON error envelope, make it deterministic and avoid masking the original nonzero exit code.
+If `summary/competition-run-summary.json` already exists and cannot be removed before a retry or new attempt, fail closed with `runner_kind=stale-summary-cleanup`, `summary_status=stale-summary-cleanup-failed`, `root_cause_key=stale_summary_cleanup_failed`, and do not launch the worker or record the stale summary.
+
+- [ ] **Step 3b: Decide top-level JSON error envelope**
+
+If adding a top-level JSON error envelope, make it deterministic and avoid masking the original nonzero exit code. This is P1 unless a judge entrypoint currently assumes every harness CLI failure writes parseable JSON to stdout.
 
 - [ ] **Step 4: Verify**
 
