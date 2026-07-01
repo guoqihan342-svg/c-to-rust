@@ -26,7 +26,7 @@ Full judge public packet entrypoint:
 python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 ```
 
-After success, the command writes `judge-milestone-bundle.json`, `milestone-release-notes.md`, and `public-release-packet.json` in the same summary directory. The bundle is the machine-readable external review index, the Markdown notes render the judge packet index for humans, and the JSON public release packet hash-binds the run report, readiness report, bundle, release notes, and config archive; none of these artifacts is a semantic gate or increases `translation_coverage_numerator`.
+After success, the command writes `judge-milestone-bundle.json`, `milestone-release-notes.md`, and `public-release-packet.json` in the same summary directory. The bundle is the machine-readable external review index, the Markdown notes render the judge packet index for humans, and the JSON public release packet hash-binds the run report, readiness report, bundle, release notes, and config archive before `validate_public_release_packet` checks schema, hashes, claim boundary, and local-path hygiene; none of these artifacts is a semantic gate or increases `translation_coverage_numerator`.
 
 Primary real FlashDB run:
 

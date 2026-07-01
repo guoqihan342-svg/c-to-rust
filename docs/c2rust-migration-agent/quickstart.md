@@ -514,6 +514,8 @@ python -B -m validation.tools.milestone_release_notes \
 
 # run_judge_entrypoints 在 bundle 和 release notes 后自动生成
 # target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+python -B -m validation.tools.validate_public_release_packet \
+  --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 
 # evaluate profile 续跑索引由入口自动生成并由 validator 深校验
 # target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json

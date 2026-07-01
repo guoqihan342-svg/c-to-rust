@@ -314,6 +314,59 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertTrue((out_path.parent / "judge-milestone-bundle.json").is_file())
         self.assertFalse((out_path.parent / "milestone-release-notes.md").exists())
 
+    def test_public_release_packet_validation_failure_fails_closed(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-packet-fail-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "competition_environment_smoke",
+                            "command": "python -B validation/tools/run_competition_smoke.py",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        def fake_write_readiness(result: dict, path: Path, *, repo_root: Path) -> dict:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-readiness",
+                "status": result["status"],
+            }
+            path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            return payload
+
+        with patch.object(runner.validator, "validate_config", side_effect=[{"status": "passed"}, {"status": "passed"}]):
+            with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
+                with patch.object(
+                    runner.validate_public_release_packet,
+                    "validate_packet",
+                    return_value={"status": "failed", "errors": ["packet overclaim"]},
+                ):
+                    with self.assertRaisesRegex(SystemExit, "public release packet validation failed"):
+                        runner.run_judge_entrypoints(
+                            config_path=config_path,
+                            entrypoint_ids=[],
+                            out_path=out_path,
+                            command_runner=fake_runner,
+                            repo_root=REPO_ROOT,
+                        )
+
+        self.assertTrue((out_path.parent / "public-release-packet.json").is_file())
+
     def test_dry_run_plans_without_executing_or_validating(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 

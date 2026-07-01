@@ -3682,6 +3682,35 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertIn("RuntimeError: rustc failed", diagnostics["python_traceback"])
             self.assertEqual(payload["attempts"][0]["diagnostics"]["primary_error"]["code"], "E0133")
 
+    def test_worker_repair_diagnostics_redacts_local_absolute_paths(self) -> None:
+        with temp_repo_dir() as tmp:
+            stdout_path = Path(tmp) / "stdout.log"
+            stderr_path = Path(tmp) / "stderr.log"
+            stdout_path.write_text(
+                'tool output workdir="F:\\agent\\crustpaper\\0625ctr" failed\n',
+                encoding="utf-8",
+            )
+            stderr_path.write_text(
+                "Traceback (most recent call last):\n"
+                '  File "F:\\agent\\crustpaper\\0630\\scripts\\c2rust-migrator.py", line 42, in <module>\n'
+                "FileNotFoundError: missing request under /mnt/c/Users/Administrator/Desktop\n",
+                encoding="utf-8",
+            )
+
+            diagnostics = harness.worker_repair_diagnostics(
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                process_returncode=0,
+                root_cause_key="missing_summary",
+            )
+            serialized = json.dumps(diagnostics, sort_keys=True)
+
+            self.assertNotIn("F:\\agent", serialized)
+            self.assertNotIn("/mnt/c/Users", serialized)
+            self.assertIn("<local-absolute-path>", serialized)
+            self.assertEqual(diagnostics["primary_error"]["kind"], "python")
+            self.assertEqual(diagnostics["root_cause_key"], "missing_summary")
+
     def test_run_worker_records_report_when_worker_command_cannot_launch(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -4229,6 +4258,47 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(verification["first_shell_command"], quoted_command)
         self.assertTrue(verification["first_shell_command_matches_worker_command"])
         self.assertEqual(verification["contract_failure_reason"], "")
+
+    def test_opencode_contract_rejects_shell_command_from_wrong_workdir(self) -> None:
+        worker_command = [
+            "python",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker-a/harness/worker-a-request-attempt-1.json",
+        ]
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": subprocess.list2cmdline(worker_command),
+                                "workdir": str(REPO_ROOT.parent / "0625ctr"),
+                            }
+                        },
+                    },
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "opencode_workdir_mismatch")
+        self.assertEqual(verification["first_shell_workdir_status"], "non_repo_root")
+        self.assertEqual(verification["expected_workdir_status"], "repo_root")
 
     def test_opencode_contract_rejects_any_tool_before_first_shell_command(self) -> None:
         worker_command = [

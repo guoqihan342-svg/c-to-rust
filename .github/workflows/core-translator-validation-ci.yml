@@ -7,6 +7,7 @@ on:
       - "crates/c2r-translator/**"
       - "validation/tools/**"
       - "validation/competition-run-summary.schema.json"
+      - "validation/public-release-packet.schema.json"
       - "validation/route-governance-metrics.schema.json"
       - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
@@ -27,6 +28,7 @@ on:
       - "crates/c2r-translator/**"
       - "validation/tools/**"
       - "validation/competition-run-summary.schema.json"
+      - "validation/public-release-packet.schema.json"
       - "validation/route-governance-metrics.schema.json"
       - "validation/translator-coverage-matrix.json"
       - "validation/l2_slices/**"
@@ -91,6 +93,7 @@ jobs:
           python -m unittest validation.tools.test_judge_demo_entrypoint
           python -m unittest validation.tools.test_validate_judge_entrypoints
           python -m unittest validation.tools.test_run_judge_entrypoints
+          python -m unittest validation.tools.test_validate_public_release_packet
           python -m unittest validation.tools.test_judge_milestone_bundle
 
       - name: Check judge entrypoint runner plan

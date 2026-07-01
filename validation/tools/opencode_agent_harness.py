@@ -37,6 +37,17 @@ SCHEMA_VERSION = 1
 PROFILE_ID = "huawei-competition-ubuntu-24.04"
 REPAIR_ROUND_CAP = 5
 REPAIR_LOG_TAIL_CHARS = 4096
+LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
+    r"(?<![A-Za-z0-9_])(?:"
+    r"[A-Za-z]:[\\/][^\s\"'`,;)]*|"
+    r"/mnt/[A-Za-z]/[^\s\"'`,;)]*|"
+    r"/home/[^\s\"'`,;)]*|/Users/[^\s\"'`,;)]*|/tmp/[^\s\"'`,;)]*|/var/[^\s\"'`,;)]*|"
+    r"\\\\wsl\$\\[^\s\"'`,;)]*|"
+    r"//wsl\$/[^\s\"'`,;)]*|"
+    r"\\\\wsl\.localhost\\[^\s\"'`,;)]*|"
+    r"//wsl\.localhost/[^\s\"'`,;)]*"
+    r")"
+)
 OPENCODE_WORKER_EVIDENCE_FIELDS = (
     "handoff_contract",
     "opencode_session_evidence",
@@ -4946,8 +4957,8 @@ def worker_repair_diagnostics(
     process_returncode: int,
     root_cause_key: str,
 ) -> dict[str, Any]:
-    stdout_tail = file_tail(stdout_path, REPAIR_LOG_TAIL_CHARS)
-    stderr_tail = file_tail(stderr_path, REPAIR_LOG_TAIL_CHARS)
+    stdout_tail = redact_local_absolute_paths(file_tail(stdout_path, REPAIR_LOG_TAIL_CHARS))
+    stderr_tail = redact_local_absolute_paths(file_tail(stderr_path, REPAIR_LOG_TAIL_CHARS))
     combined = "\n".join(part for part in [stderr_tail, stdout_tail] if part)
     diagnostics: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -4977,6 +4988,10 @@ def worker_repair_diagnostics(
                 "message": last_line or "python traceback",
             }
     return diagnostics
+
+
+def redact_local_absolute_paths(text: str) -> str:
+    return LOCAL_ABSOLUTE_PATH_TEXT.sub("<local-absolute-path>", text)
 
 
 def file_tail(path: Path, max_chars: int) -> str:
@@ -5676,17 +5691,21 @@ def verify_opencode_contract_execution(
         None,
     )
     first_shell_tool_name = str(tool_trace[first_shell_index]["tool"]) if first_shell_index is not None else ""
+    first_shell_workdir = (
+        str(tool_trace[first_shell_index].get("workdir", "")) if first_shell_index is not None else ""
+    )
     tools_before_first_shell = [
         str(item["tool"]) for item in tool_trace[:first_shell_index]
     ] if first_shell_index is not None else [str(item["tool"]) for item in tool_trace[:20]]
     first_shell_command_matches_worker_command = (
         bool(first_shell_command) and command_matches_for_contract(first_shell_command, expected_worker_command_line)
     )
+    workdir_matches_repo_root = opencode_workdir_matches_repo_root(first_shell_workdir, repo_root=repo_root)
     status = "not-observed"
     if executed_shell_commands:
         status = (
             "executed"
-            if first_shell_command_matches_worker_command and not tools_before_first_shell
+            if first_shell_command_matches_worker_command and workdir_matches_repo_root and not tools_before_first_shell
             else "not-executed"
         )
     contract_failure_reason = ""
@@ -5695,6 +5714,8 @@ def verify_opencode_contract_execution(
     elif status == "not-executed":
         if tools_before_first_shell:
             contract_failure_reason = "tool_before_first_shell_command"
+        elif not workdir_matches_repo_root:
+            contract_failure_reason = "opencode_workdir_mismatch"
         else:
             contract_failure_reason = (
                 "first_shell_command_mismatch_worker_command_seen_later"
@@ -5710,7 +5731,10 @@ def verify_opencode_contract_execution(
         "first_tool_name": first_tool_name,
         "first_shell_command": first_shell_command,
         "first_shell_tool_name": first_shell_tool_name,
+        "first_shell_workdir_status": "repo_root" if workdir_matches_repo_root else "non_repo_root",
+        "expected_workdir_status": "repo_root",
         "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
+        "first_shell_workdir_matches_repo_root": workdir_matches_repo_root,
         "tools_before_first_shell": tools_before_first_shell[:20],
         "contract_failure_reason": contract_failure_reason,
         "worker_command_seen": exact_worker_command_seen,
@@ -5739,14 +5763,32 @@ def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[s
                 raw_command = tool_input.get("command") or tool_input.get("cmd")
                 if isinstance(raw_command, str):
                     command = raw_command.strip()
+                raw_workdir = tool_input.get("workdir") or tool_input.get("cwd")
+                workdir = raw_workdir.strip() if isinstance(raw_workdir, str) else ""
+            else:
+                workdir = ""
+        else:
+            workdir = ""
         tools.append(
             {
                 "tool": tool,
                 "command": command,
+                "workdir": workdir,
                 "is_shell_command": tool in {"bash", "shell", "cmd", "powershell"} and bool(command),
             }
         )
     return tools
+
+
+def opencode_workdir_matches_repo_root(workdir: str, *, repo_root: Path) -> bool:
+    if not workdir:
+        return True
+    try:
+        observed = normalize_windows_extended_path(Path(workdir).resolve())
+        expected = normalize_windows_extended_path(repo_root.resolve())
+    except OSError:
+        return False
+    return observed == expected
 
 
 def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[str]:

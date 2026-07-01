@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
 from validation.tools import validate_judge_entrypoints as validator
 from validation.tools import judge_milestone_bundle
 from validation.tools import milestone_release_notes
+from validation.tools import validate_public_release_packet
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -254,6 +255,10 @@ def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root
         public_packet_path=public_packet_path,
         repo_root=repo_root,
     )
+    packet_validation = validate_public_release_packet.validate_packet(public_packet_path, repo_root=repo_root)
+    if packet_validation.get("status") != "passed":
+        errors = packet_validation.get("errors", [])
+        raise SystemExit(f"public release packet validation failed: {errors}")
 
 
 def write_public_release_packet(
@@ -295,11 +300,18 @@ def write_public_release_packet(
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
         "known_gaps": bundle.get("known_gaps", []),
-        "must_not_claim": bundle.get("must_not_claim", []),
+        "must_not_claim": public_packet_must_not_claim(bundle.get("must_not_claim", [])),
         "reproduction_commands": bundle.get("reproduction_commands", {}),
     }
     public_packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return packet
+
+
+def public_packet_must_not_claim(value: object) -> list[str]:
+    claims = [str(item) for item in value] if isinstance(value, list) else []
+    if "public_release_packet_is_not_semantic_gate" not in claims:
+        claims.append("public_release_packet_is_not_semantic_gate")
+    return claims
 
 
 def artifact_ref_from_report_ref(value: object, *, repo_root: Path) -> dict[str, Any]:
