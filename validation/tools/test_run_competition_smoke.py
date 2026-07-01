@@ -76,7 +76,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
 
             result = module.run_competition_smoke(
                 out_root=out_root,
-                proof_class="ci-approximation",
+                proof_class="local-simulation",
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
                 run_id="smoke-test",
@@ -94,7 +94,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertTrue(any("-m unittest" in text for text in command_texts))
 
             summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(summary["proof_class"], "ci-approximation")
+            self.assertEqual(summary["proof_class"], "local-simulation")
             self.assertEqual(summary["profile_id"], "huawei-competition-ubuntu-24.04")
             self.assertEqual(summary["final_gate"]["status"], "passed")
             self.assertGreaterEqual(len(summary["environment_deviations"]), 3)
@@ -151,7 +151,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             out_root = Path(tmp) / "competition-smoke"
             result = module.run_competition_smoke(
                 out_root=out_root,
-                proof_class="ci-approximation",
+                proof_class="local-simulation",
                 command_runner=FakeCommandRunner(fail_commands_containing={"toolchain-check.sh"}),
                 repo_root=REPO_ROOT,
                 run_id="smoke-test",
@@ -163,6 +163,65 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             environment_step = next(step for step in summary["steps"] if step["step"] == "environment-check")
             self.assertEqual(environment_step["status"], "degraded")
             self.assertEqual(environment_step["proof_class_effect"], "exactness_blocker")
+
+    def test_non_exact_proof_class_overclaim_fails_on_incompatible_environment(self) -> None:
+        module = load_smoke_module()
+        cases = [
+            (
+                "ci-approximation",
+                {
+                    "kind": "local-linux",
+                    "detected_ci": False,
+                    "detected_wsl": False,
+                    "system": "Ubuntu",
+                    "release": "5.10.0-182.0.0.95.r194_123.hce2.x86_64",
+                    "version": "competition-host",
+                    "machine": "x86_64",
+                    "kernel": "5.10.0-182.0.0.95.r194_123.hce2.x86_64",
+                    "python_version": "3.12.3",
+                    "runner_name": "local",
+                },
+            ),
+            (
+                "wsl-local-simulation",
+                {
+                    "kind": "windows-local",
+                    "detected_ci": False,
+                    "detected_wsl": False,
+                    "system": "Windows",
+                    "release": "11",
+                    "version": "10.0.26220",
+                    "machine": "AMD64",
+                    "kernel": "11",
+                    "python_version": "3.14.2",
+                    "runner_name": "local",
+                },
+            ),
+        ]
+
+        original_detect = module.detect_execution_environment
+        try:
+            for proof_class, environment in cases:
+                with self.subTest(proof_class=proof_class):
+                    module.detect_execution_environment = lambda environment=environment: dict(environment)
+                    with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                        out_root = Path(tmp) / "competition-smoke"
+                        result = module.run_competition_smoke(
+                            out_root=out_root,
+                            proof_class=proof_class,
+                            command_runner=FakeCommandRunner(),
+                            repo_root=REPO_ROOT,
+                            run_id=f"smoke-{proof_class}-overclaim-test",
+                        )
+
+                        self.assertEqual(result.exit_code, 1)
+                        summary = json.loads(
+                            (out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8")
+                        )
+                        self.assertEqual(summary["final_gate"]["status"], "failed")
+                        self.assertIn("proof_class_incompatible_with_environment", summary["final_gate"]["reasons"])
+        finally:
+            module.detect_execution_environment = original_detect
 
     def test_required_c_compiler_missing_fails_all_proof_classes(self) -> None:
         module = load_smoke_module()
@@ -345,6 +404,49 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 1)
             self.assertEqual(summary["final_gate"]["status"], "failed")
             self.assertIn("proof_class_limited_by_environment", summary["final_gate"]["reasons"])
+
+    def test_competition_exact_requires_host_attestation_even_when_profile_matches(self) -> None:
+        module = load_smoke_module()
+        profile = module.load_profile(REPO_ROOT)
+        expected_os = profile["os"]
+        expected_toolchain = profile["toolchain"]
+        matching_environment = {
+            "kind": "local-linux",
+            "detected_ci": False,
+            "detected_wsl": False,
+            "system": expected_os["name"],
+            "release": expected_os["kernel"],
+            "version": "competition-host",
+            "machine": "x86_64",
+            "kernel": expected_os["kernel"],
+            "python_version": expected_toolchain["python"],
+            "runner_name": "local",
+            "competition_exact_host_attested": False,
+        }
+
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            original_detect = module.detect_execution_environment
+            original_clang_source = module.clang_source
+            try:
+                module.detect_execution_environment = lambda: dict(matching_environment)
+                module.clang_source = lambda _: "vendored"
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    confirm_competition_exact=True,
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-exact-attestation-test",
+                )
+            finally:
+                module.detect_execution_environment = original_detect
+                module.clang_source = original_clang_source
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertIn("proof_class_requires_exact_host_evidence", summary["final_gate"]["reasons"])
 
     def test_main_accepts_smoke_cli_args(self) -> None:
         module = load_smoke_module()

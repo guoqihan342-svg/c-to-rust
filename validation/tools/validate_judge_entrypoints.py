@@ -828,6 +828,8 @@ def validate_competition_exact_smoke_summary(payload: dict[str, Any]) -> None:
     environment_kind = str(environment.get("kind", ""))
     if str(environment.get("system", "")).lower() == "windows" or environment_kind in {"windows-local", "local"}:
         fail("execution_environment must not be local Windows")
+    if environment.get("competition_exact_host_attested") is not True:
+        fail("execution_environment.competition_exact_host_attested must be true")
 
     profile_match = require_object(
         payload.get("competition_profile_match"),

@@ -977,6 +977,25 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 entrypoint_proof_class="competition-exact",
             )
 
+    def test_competition_exact_smoke_summary_requires_host_attestation(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "competition-exact"
+        payload["execution_environment"]["competition_exact_host_attested"] = False
+        for step in payload["steps"]:
+            step["status"] = "passed"
+            step["returncode"] = 0
+            step.pop("proof_class_effect", None)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class=competition-exact requires exact host evidence",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="competition-exact",
+            )
+
     def test_ci_approximation_smoke_summary_rejects_non_ci_environment(self) -> None:
         payload = valid_competition_smoke_summary_payload()
         payload["proof_class"] = "ci-approximation"

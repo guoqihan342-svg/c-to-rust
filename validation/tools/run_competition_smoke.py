@@ -173,7 +173,12 @@ def run_competition_smoke(
         and step_status(steps, "environment-check") == "passed"
         and step_status(steps, "vendored-clang-verification") == "passed"
     )
-    final_gate_reasons = final_gate_reasons_for(proof_class=proof_class, steps=steps, deviations=deviations)
+    final_gate_reasons = final_gate_reasons_for(
+        proof_class=proof_class,
+        steps=steps,
+        deviations=deviations,
+        environment=environment,
+    )
     status = "passed" if not final_gate_reasons else "failed"
     summary = {
         "schema_version": 1,
@@ -466,6 +471,7 @@ def detect_execution_environment() -> dict[str, Any]:
         "kind": kind,
         "detected_ci": bool(detected_ci),
         "detected_wsl": detected_wsl,
+        "competition_exact_host_attested": bool(os.environ.get("COMPETITION_EXACT_HOST")),
         "system": platform.system(),
         "release": uname.release,
         "version": uname.version,
@@ -580,6 +586,7 @@ def final_gate_reasons_for(
     proof_class: str,
     steps: list[dict[str, Any]],
     deviations: list[dict[str, Any]],
+    environment: dict[str, Any],
 ) -> list[str]:
     reasons = [f"step_failed:{step['step']}" for step in steps if step["status"] == "failed"]
     reasons.extend(
@@ -587,6 +594,12 @@ def final_gate_reasons_for(
         for step in steps
         if step.get("status") == "failed" and step.get("failure_class")
     )
+    if proof_class == "ci-approximation" and not environment.get("detected_ci"):
+        reasons.append("proof_class_incompatible_with_environment")
+    if proof_class == "wsl-local-simulation" and not environment.get("detected_wsl"):
+        reasons.append("proof_class_incompatible_with_environment")
+    if proof_class == "competition-exact" and not environment.get("competition_exact_host_attested"):
+        reasons.append("proof_class_requires_exact_host_evidence")
     if proof_class == "competition-exact" and any(
         item.get("severity") == "proof-class-limiting" for item in deviations
     ):
