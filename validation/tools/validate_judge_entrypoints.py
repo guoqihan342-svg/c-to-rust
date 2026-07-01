@@ -375,9 +375,18 @@ def validate_competition_smoke_summary_contract(
     payload: dict[str, Any],
     *,
     expected_artifacts: dict[str, Any],
+    environment_profile: dict[str, Any] | None = None,
+    entrypoint_proof_class: str | None = None,
+    entrypoint_run_id: str | None = None,
 ) -> dict[str, Any]:
     if payload.get("report_kind") != "competition-smoke-summary":
         raise ValueError("competition_smoke_summary report_kind must be competition-smoke-summary")
+    proof_class = require_string(payload.get("proof_class"), "competition_smoke_summary.proof_class")
+    if entrypoint_proof_class is not None and proof_class != entrypoint_proof_class:
+        raise ValueError("competition_smoke_summary proof_class must match entrypoint proof_class")
+    if entrypoint_run_id is not None and payload.get("run_id") != entrypoint_run_id:
+        raise ValueError("competition_smoke_summary run_id must match entrypoint run_id")
+    validate_competition_smoke_profile_binding(payload, environment_profile=environment_profile)
     boundary = require_object(payload.get("claim_boundary"), "competition_smoke_summary claim_boundary")
     if boundary.get("semantic_gate") is not False:
         raise ValueError("competition_smoke_summary claim_boundary.semantic_gate must be false")
@@ -393,6 +402,7 @@ def validate_competition_smoke_summary_contract(
     final_gate = require_object(payload.get("final_gate"), "competition_smoke_summary final_gate")
     if final_gate.get("status") != "passed":
         raise ValueError("competition_smoke_summary final_gate.status must be passed")
+    validate_competition_exact_smoke_summary(payload)
 
     assert_expected_smoke_path(
         payload.get("vendored_clang_verification"),
@@ -435,12 +445,97 @@ def validate_competition_smoke_summary_contract(
     )
     return {
         "status": "passed",
-        "proof_class": payload.get("proof_class"),
+        "proof_class": proof_class,
+        "profile_sha256": payload.get("profile_sha256"),
         "final_gate": final_gate.get("status"),
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
         "translation_coverage_numerator": 0,
     }
+
+
+def validate_competition_smoke_profile_binding(
+    payload: dict[str, Any],
+    *,
+    environment_profile: dict[str, Any] | None,
+) -> None:
+    if environment_profile is None:
+        return
+    expected_sha256 = require_string(environment_profile.get("sha256"), "environment_profile.sha256")
+    expected_profile_id = require_string(environment_profile.get("profile_id"), "environment_profile.profile_id")
+    observed_profile_id = require_string(payload.get("profile_id"), "competition_smoke_summary.profile_id")
+    if observed_profile_id != expected_profile_id:
+        raise ValueError("competition_smoke_summary profile_id must match environment_profile.profile_id")
+    observed_sha256 = require_string(payload.get("profile_sha256"), "competition_smoke_summary.profile_sha256")
+    if observed_sha256 != expected_sha256:
+        raise ValueError("competition_smoke_summary profile_sha256 must match environment_profile.sha256")
+
+    match = require_object(
+        payload.get("competition_profile_match"),
+        "competition_smoke_summary.competition_profile_match",
+    )
+    match_profile_id = require_string(
+        match.get("profile_id"),
+        "competition_smoke_summary.competition_profile_match.profile_id",
+    )
+    if match_profile_id != expected_profile_id:
+        raise ValueError(
+            "competition_smoke_summary competition_profile_match.profile_id "
+            "must match environment_profile.profile_id"
+        )
+    match_sha256 = require_string(
+        match.get("profile_sha256_actual"),
+        "competition_smoke_summary.competition_profile_match.profile_sha256_actual",
+    )
+    if match_sha256 != expected_sha256:
+        raise ValueError(
+            "competition_smoke_summary competition_profile_match.profile_sha256_actual "
+            "must match environment_profile.sha256"
+        )
+
+
+def validate_competition_exact_smoke_summary(payload: dict[str, Any]) -> None:
+    if payload.get("proof_class") != "competition-exact":
+        return
+
+    def fail(detail: str) -> None:
+        raise ValueError(
+            "competition_smoke_summary proof_class=competition-exact requires exact host evidence: "
+            f"{detail}"
+        )
+
+    environment = require_object(
+        payload.get("execution_environment"),
+        "competition_smoke_summary.execution_environment",
+    )
+    if environment.get("detected_ci") is True:
+        fail("execution_environment.detected_ci must be false")
+    if environment.get("detected_wsl") is True:
+        fail("execution_environment.detected_wsl must be false")
+    environment_kind = str(environment.get("kind", ""))
+    if str(environment.get("system", "")).lower() == "windows" or environment_kind in {"windows-local", "local"}:
+        fail("execution_environment must not be local Windows")
+
+    profile_match = require_object(
+        payload.get("competition_profile_match"),
+        "competition_smoke_summary.competition_profile_match",
+    )
+    for field in (
+        "os_name_match",
+        "kernel_match",
+        "python_version_match",
+        "clang_lane_verified",
+        "cargo_mirror_config_present",
+    ):
+        if profile_match.get(field) is not True:
+            fail(f"competition_profile_match.{field} must be true")
+
+    deviations = payload.get("environment_deviations", [])
+    if not isinstance(deviations, list):
+        raise ValueError("competition_smoke_summary.environment_deviations must be a list")
+    for deviation in deviations:
+        if isinstance(deviation, dict) and deviation.get("severity") == "proof-class-limiting":
+            fail("environment_deviations must not include proof-class-limiting entries")
 
 
 def assert_expected_smoke_path(
@@ -1875,6 +1970,8 @@ def validate_harness_artifact_contracts(
     *,
     require_local_artifacts: bool,
     repo_root: Path,
+    environment_profile: dict[str, Any] | None = None,
+    smoke_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not require_local_artifacts:
         return {"status": "skipped", "reason": "require_local_artifacts=false"}
@@ -1931,10 +2028,15 @@ def validate_harness_artifact_contracts(
             expected_artifacts=artifacts,
         )
     if "competition_smoke_summary" in artifacts:
+        if smoke_contract is None:
+            raise ValueError("competition_smoke_summary requires smoke_contract context")
         smoke_summary_path = repo_path(str(artifacts["competition_smoke_summary"]), repo_root=repo_root)
         result["competition_smoke_summary"] = validate_competition_smoke_summary_contract(
             load_json(smoke_summary_path),
             expected_artifacts=artifacts,
+            environment_profile=environment_profile,
+            entrypoint_proof_class=str(smoke_contract.get("proof_class")),
+            entrypoint_run_id=str(smoke_contract.get("run_id")),
         )
     return result
 
@@ -1999,11 +2101,12 @@ def validate_config(
             expected_artifacts = entry.get("expected_artifacts", {})
             review_checklist_result = validate_entrypoint_review_checklist_ref(entry, repo_root=repo_root)
             if is_competition_smoke_entrypoint(entry):
+                smoke_contract = validate_competition_smoke_entrypoint_contract(entry)
                 entry_result = entrypoint_metadata(entry)
                 entry_result.update(
                     {
                         "status": "passed",
-                        "smoke_contract": validate_competition_smoke_entrypoint_contract(entry),
+                        "smoke_contract": smoke_contract,
                         "review_checklist": review_checklist_result["ref"],
                         "review_checklist_contract": review_checklist_result["contract"],
                         "expected_artifacts": validate_expected_artifacts(
@@ -2015,6 +2118,8 @@ def validate_config(
                             expected_artifacts,
                             require_local_artifacts=require_local_artifacts,
                             repo_root=repo_root,
+                            environment_profile=config.get("environment_profile"),
+                            smoke_contract=smoke_contract,
                         ),
                     }
                 )
@@ -2056,6 +2161,7 @@ def validate_config(
                         expected_artifacts,
                         require_local_artifacts=require_local_artifacts,
                         repo_root=repo_root,
+                        environment_profile=config.get("environment_profile"),
                     ),
                 }
             )

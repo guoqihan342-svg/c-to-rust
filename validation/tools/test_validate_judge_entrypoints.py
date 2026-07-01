@@ -52,6 +52,77 @@ def artifact_ref(path: str, sha_char: str) -> dict:
     return {"path": path, "sha256": sha_char * 64}
 
 
+def competition_smoke_expected_artifacts() -> dict:
+    return {
+        "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
+        "vendored_clang_verification": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+        "evidence_governance_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+        "translator_coverage_matrix": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+        "milestone_release_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+        "command_log": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+    }
+
+
+def valid_competition_smoke_summary_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "report_kind": "competition-smoke-summary",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "competition_profile_match": {
+            "cargo_mirror_config_present": True,
+            "clang_lane_verified": True,
+            "kernel_match": True,
+            "os_name_match": True,
+            "profile_id": "huawei-competition-ubuntu-24.04",
+            "profile_sha256_actual": "a" * 64,
+            "python_version_match": True,
+        },
+        "execution_environment": {
+            "detected_ci": False,
+            "detected_wsl": False,
+            "kernel": "5.10.0-182.0.0.95.r194_123.hce2.x86_64",
+            "kind": "local-linux",
+            "machine": "x86_64",
+            "python_version": "3.12.3",
+            "release": "5.10.0-182.0.0.95.r194_123.hce2.x86_64",
+            "runner_name": "local",
+            "system": "Ubuntu",
+            "version": "competition-host",
+        },
+        "environment_deviations": [],
+        "smoke_entrypoint": {
+            "semantic_acceptance_boundary": "does_not_translate_new_slices",
+        },
+        "vendored_clang_verification": {
+            "path": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+        },
+        "reports": {
+            "evidence_governance": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+            },
+            "translator_coverage_matrix": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+            },
+        },
+        "milestone_release_report": {
+            "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+            "semantic_acceptance_claim": False,
+        },
+        "command_log": {
+            "path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+        },
+        "final_gate": {"status": "passed"},
+        "steps": [],
+    }
+
+
 def opencode_launch_policy() -> dict:
     return {
         "opencode_command": "opencode",
@@ -491,14 +562,107 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "competition_smoke_summary claim_boundary.semantic_gate must be false"):
             validator.validate_competition_smoke_summary_contract(
                 payload,
-                expected_artifacts={
-                    "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
-                    "vendored_clang_verification": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
-                    "evidence_governance_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
-                    "translator_coverage_matrix": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
-                    "milestone_release_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
-                    "command_log": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+                expected_artifacts=competition_smoke_expected_artifacts(),
+            )
+
+    def test_competition_smoke_summary_profile_sha256_must_match_environment_profile(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["profile_sha256"] = "b" * 64
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary profile_sha256 must match environment_profile.sha256",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
                 },
+            )
+
+    def test_competition_smoke_summary_profile_match_sha256_must_match_environment_profile(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["competition_profile_match"]["profile_sha256_actual"] = "b" * 64
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary competition_profile_match.profile_sha256_actual must match environment_profile.sha256",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
+                },
+            )
+
+    def test_competition_smoke_summary_proof_class_must_match_entrypoint(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "competition-exact"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class must match entrypoint proof_class",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="local-simulation",
+            )
+
+    def test_competition_smoke_summary_run_id_must_match_entrypoint(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["run_id"] = "unexpected-run"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary run_id must match entrypoint run_id",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_run_id="competition-flashdb-environment-smoke-20260701",
+            )
+
+    def test_competition_exact_smoke_summary_rejects_local_wsl_or_ci_mislabel(self) -> None:
+        cases = [
+            ("windows-local", {"kind": "windows-local", "system": "Windows"}),
+            ("wsl", {"kind": "wsl", "detected_wsl": True}),
+            ("ci", {"kind": "linux-ci", "detected_ci": True}),
+        ]
+
+        for name, env_patch in cases:
+            with self.subTest(name=name):
+                payload = valid_competition_smoke_summary_payload()
+                payload["proof_class"] = "competition-exact"
+                payload["execution_environment"].update(env_patch)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "competition_smoke_summary proof_class=competition-exact requires exact host evidence",
+                ):
+                    validator.validate_competition_smoke_summary_contract(
+                        payload,
+                        expected_artifacts=competition_smoke_expected_artifacts(),
+                        entrypoint_proof_class="competition-exact",
+                    )
+
+    def test_competition_exact_smoke_summary_requires_full_profile_match(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "competition-exact"
+        payload["competition_profile_match"]["kernel_match"] = False
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class=competition-exact requires exact host evidence",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="competition-exact",
             )
 
     def test_judge_evidence_index_requires_valid_opencode_runtime_when_present(self) -> None:

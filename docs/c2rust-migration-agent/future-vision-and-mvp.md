@@ -54,6 +54,8 @@
 
 本轮补充：OpenCode 显式 worker profile `flashdb-fdb-utils-opencode-explicit-workers.json` 已作为 `opencode_multi_worker_evaluate_profile` 正式进入 judge entrypoints，绑定 preflight、`opencode_agent_runtime`、`worker_plan`、context-pack、agent-index 和 judge-evidence-index。preflight report、run-plan graph、worker report 和 handoff contract 现在都会记录结构化 launch policy（command/model/agent/variant/skip-permissions）及 hash；`run-worker --mode opencode` / `run-plan --mode opencode` 会在启动 OpenCode 前校验当前 launch policy 与 preflight 完全一致，缺失或漂移即 fail-closed。`validate_judge_entrypoints --require-local-artifacts` 现在会深校验 preflight passed/executed、OpenCode launch policy、2 个 worker contract executed、`chat_output_is_evidence=false`、`semantic_gate=false`，以及 summary/report/log/session/handoff 证据 path+sha256。边界：OpenCode chat/session 只是命令契约审计证据，不是 semantic gate，也不增加 `translation_coverage_numerator`。
 
+本轮补充：`validate_judge_entrypoints --require-local-artifacts` 现在会把 judge smoke summary 绑定到 `flashdb-harness.json` 中的 `environment_profile.profile_id/sha256` 和 entrypoint `proof_class/run_id`，并拒绝 CI/WSL/Windows 本地证据或包含 `proof-class-limiting` deviation 的 summary 被标成 `competition-exact`。边界：这是评委入口 evidence 漂移防护，不把 smoke 升级成 semantic gate，也不证明真实比赛机 `competition-exact` 已经取得。
+
 冻结/后置项：
 
 - 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H6 的真实样例。
