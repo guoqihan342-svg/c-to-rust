@@ -12,6 +12,7 @@ from validation.tools import validate_judge_entrypoints as validator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_ENVIRONMENT_SHA256 = validator.sha256_file(REPO_ROOT / "config/competition-env/environment.json")
 
 
 def load_default_config() -> dict:
@@ -218,7 +219,7 @@ def valid_competition_run_summary_payload(
     run_id: str,
     proof_class: str = "local-simulation",
     profile_id: str = "huawei-competition-ubuntu-24.04",
-    profile_sha256: str = "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb",
+    profile_sha256: str = DEFAULT_ENVIRONMENT_SHA256,
 ) -> dict:
     return {
         "schema_version": 1,
@@ -853,6 +854,18 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 manifest_path=temp_manifest,
                 repo_root=REPO_ROOT,
             )
+
+    def test_environment_profile_hash_mismatch_preserves_claim_boundary_for_test_contract(self) -> None:
+        config = load_default_config()
+        config["environment_profile"]["sha256"] = "0" * 64
+        temp_config = write_temp_config(config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        joined_errors = "\n".join(result["errors"])
+        self.assertIn("artifact ref sha256 mismatch for config/competition-env/environment.json", joined_errors)
+        self.assertNotIn("test_contract.semantic_claim_source must match claim_boundary", joined_errors)
 
     def test_opencode_profile_requires_explicit_launch_policy_fields(self) -> None:
         config = load_default_config()

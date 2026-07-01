@@ -268,7 +268,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-    "sha256": "d2794cdec34bb058825b73054dc510a81bc262b86f5f0fadc1324be7705666b5",
+    "sha256": "82b8b989c6cd6bf733720fb74be9046b54e24516e21258aa9f0b2c83a90c7426",
     "status": "draft"
   },
   "schema_version": 1,

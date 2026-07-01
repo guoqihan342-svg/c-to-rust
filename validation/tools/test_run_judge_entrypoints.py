@@ -82,11 +82,15 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["summary"]["entrypoints"][0]["proof_class"], "unknown")
         self.assertEqual(report["entrypoints"][0]["id"], "before_after_judge_demo")
         self.assertEqual(calls, [["python", "-B", "-m", "validation.tools.judge_demo", "--run-id", "selected"]])
-        validate_config.assert_has_calls(
-            [
-                call(config_path, require_local_artifacts=False, repo_root=REPO_ROOT),
-                call(config_path, require_local_artifacts=True, repo_root=REPO_ROOT),
-            ]
+        validate_calls = validate_config.call_args_list
+        self.assertEqual(validate_calls[0], call(config_path, require_local_artifacts=False, repo_root=REPO_ROOT))
+        validation_config_path = validate_calls[1].args[0]
+        self.assertNotEqual(validation_config_path, config_path)
+        self.assertEqual(validate_calls[1].kwargs, {"require_local_artifacts": True, "repo_root": REPO_ROOT})
+        validation_config = json.loads(Path(validation_config_path).read_text(encoding="utf-8"))
+        self.assertEqual(
+            [entry["id"] for entry in validation_config["entrypoints"]],
+            ["before_after_judge_demo"],
         )
         self.assertEqual(report["validation"]["status"], "passed")
         self.assertEqual(

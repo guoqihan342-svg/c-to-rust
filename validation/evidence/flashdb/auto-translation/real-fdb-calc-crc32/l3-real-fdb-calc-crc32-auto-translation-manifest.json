@@ -28,7 +28,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
+    "sha256": "ccf633f933be49214cc90e7bbe8e437273af4015e53c32428498a685cd69e440",
     "status": "skipped"
   },
   "cache": {
@@ -43,12 +43,12 @@
     },
     "build_profile_hash": "130471ddacb11bad5713c8d91747b523db3910e4b89af5c767def16d996ca6da",
     "c2rust_baseline_identity": {
-      "sha256": "0470a7a9f893b827d9ef95edf64681dd389612dccd4455fc3e38dae202c9d2c6",
-      "status": "skipped"
+      "status": "skipped",
+      "sha256": "40585cb3bdcb384413b1c5bdef5cdc9af949262334f1d10b3fddc942bf690631"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "d2794cdec34bb058825b73054dc510a81bc262b86f5f0fadc1324be7705666b5",
+      "sha256": "82b8b989c6cd6bf733720fb74be9046b54e24516e21258aa9f0b2c83a90c7426",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -84,24 +84,24 @@
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "062135195e3281dc520d42128af4c0500434961bf0d0f35fd32cebf640156755"
+      "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
     },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "db433f0c0ae368a2d77cf1f8707e9f066fc847dae277600232d076e194b08d50",
+        "sha256": "ccf633f933be49214cc90e7bbe8e437273af4015e53c32428498a685cd69e440",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "186d26373be9bb59a6317a9da8e92921b4f24b88a7a7b189ac4d6f9d1aa041cb",
+        "sha256": "b4fd917fb1fd122e850c46582a41694d58f24a8e6e124e3744d9af8367792d67",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
         "profile": "L4-accepted-evidence",
-        "sha256": "1567d952bb1e23190ebcb8eb2047d3a1365319e507bbb92778079413f13d63b6",
+        "sha256": "5e0a556f3539d126914c2bdf4523019b01eafc2e114a76fae3e1f463f93d13c8",
         "status": "passed"
       }
     },
@@ -148,8 +148,8 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "e57d7ab4f89f9e78b563b020056964927273a843d7a550a9fdd1a5185b96cfd6",
-      "status": "refused"
+      "status": "refused",
+      "sha256": "4f6c5e6eb9c70100c0a71ba312b5951b0cf9215337afffe30fdfbbd97d05d053"
     },
     "scalar_ub_contract_identity": {
       "sha256": "8786dcdd4c6bca0c61668a2bd9d3d9fcd9cf00a3869e4e9584d5f282b9b49d91",
@@ -180,8 +180,8 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "be226211fcb37dacde94bceffe0b52bbfc35c955124c03282b5c34eeede029e3",
-      "status": "passed"
+      "status": "passed",
+      "sha256": "3b145fc4ce54847316e06e42c8c073deeaaa3806cf56ba6dc9fe6a45108ce361"
     }
   },
   "claim_boundary": {
@@ -493,7 +493,7 @@
     "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "d2794cdec34bb058825b73054dc510a81bc262b86f5f0fadc1324be7705666b5",
+      "sha256": "82b8b989c6cd6bf733720fb74be9046b54e24516e21258aa9f0b2c83a90c7426",
       "status": "draft"
     },
     "schema_version": 1,
@@ -719,7 +719,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "186d26373be9bb59a6317a9da8e92921b4f24b88a7a7b189ac4d6f9d1aa041cb",
+    "sha256": "b4fd917fb1fd122e850c46582a41694d58f24a8e6e124e3744d9af8367792d67",
     "status": "refused"
   },
   "rust_check": {
@@ -767,7 +767,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "1567d952bb1e23190ebcb8eb2047d3a1365319e507bbb92778079413f13d63b6",
+    "sha256": "5e0a556f3539d126914c2bdf4523019b01eafc2e114a76fae3e1f463f93d13c8",
     "status": "passed"
   }
 }

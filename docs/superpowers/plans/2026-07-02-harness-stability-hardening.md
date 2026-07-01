@@ -49,15 +49,16 @@
 ## 2026-07-02 实施进度
 
 - 已完成：Task 1 timeout envelope；Task 2 Python command portability split（统一 `python3 -B` portable strategy）；Task 3 atomic critical evidence writes；Task 4 retry/lock/lease/fencing guardrails；Task 5 Step 1-2 POSIX shell contract；Task 6 translator smoke 修复。
-- 已验证：`python -B -m unittest validation.tools.test_opencode_agent_harness -q`、`python -B -m unittest validation.tools.test_doc_mirror_contract -q`、`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`。
-- 当前补丁：Task 5 Step 3a stale summary cleanup fail-closed 已有单测覆盖；顶层 JSON error envelope 拆为 Step 3b/P1，不阻塞 H7。
-- 剩余：Task 7 judge smoke 和最终 roadmap 勾选；若 judge smoke 被环境或 config hash 漂移阻塞，必须把具体 blocker 写进路线图，而不是口头跳过。
+- 已验证：`python -B -m unittest validation.tools.test_opencode_agent_harness -q`、`python -B -m unittest validation.tools.test_doc_mirror_contract -q`、`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`、`python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass`、`python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json`、`python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json`。
+- 当前补丁：Task 5 Step 3a stale summary cleanup fail-closed 已有单测覆盖；focused `--entrypoint-id` runner 的 post-run local-artifact validation 现在会生成 `selected-entrypoints-validation-config.json`，只深校验本次执行的入口，避免未执行入口的旧 `target/` artifact 让 smoke/triage 误失败。
+- H7/P0 状态：已封顶。`competition_environment_smoke` 在本机 `local-simulation` proof class 下可跑通 runner 和 post-run 深校验；环境检查仍按 proof class 记录本机降级，不冒充 `competition-exact`。
+- 后置：顶层 JSON error envelope、真实子进程 sleep/timeout 集成测试、deterministic worker 短重试策略，均为 P1，不阻塞 H7。
 
 ## 当前核对表
 
 - H7/P0 implemented：timeout、portable command、atomic write、retry cap、OpenCode lock、fencing audit contract、assignment transaction、POSIX shell contract、translator smoke fix 均已落到代码和测试。
 - stale summary cleanup included in H7/P0：旧 summary 删除失败现在 fail-closed，不启动 worker，不记录旧 summary，并打开 `stale_summary_cleanup_failed` repair hint。
-- judge smoke/blocker still pending：H7 仍保持未勾选，直到刷新 judge entrypoint smoke，或把环境/config hash 漂移等具体 blocker 写进路线图。
+- judge smoke refreshed：focused `competition_environment_smoke` runner 已通过，post-run 深校验使用选中入口过滤配置；本地 proof class 明确保持 `local-simulation`。
 - P1 deferred：top-level JSON error envelope、real subprocess sleep/timeout integration tests、deterministic worker short retry policy。
 
 ---
@@ -189,11 +190,11 @@ If `summary/competition-run-summary.json` already exists and cannot be removed b
 
 If adding a top-level JSON error envelope, make it deterministic and avoid masking the original nonzero exit code. This is P1 unless a judge entrypoint currently assumes every harness CLI failure writes parseable JSON to stdout.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify H7/P0 path**
 
 Run: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`
 
-Expected: OK.
+Expected: OK. Top-level JSON error envelope remains Task 5.3b/P1 and is intentionally not required for this verification step.
 
 ### Task 6: Translator Smoke and Showcase Boundary Fixes
 
@@ -233,7 +234,7 @@ Expected: OK.
 - Modify: `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
 - Modify as needed: judge entrypoint artifacts/configs
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 Run:
 
@@ -243,10 +244,16 @@ python -B -m unittest validation.tools.test_doc_mirror_contract -q
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
 ```
 
-- [ ] **Step 2: Run or record judge smoke**
+- [x] **Step 2: Run or record judge smoke**
 
-Refresh one judge entrypoint smoke if local prerequisites are available. If not available, record the exact blocker and keep proof class honest as local-only or not-run.
+Refreshed focused judge smoke:
 
-- [ ] **Step 3: Update roadmap status**
+```powershell
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json
+```
 
-When H7 is complete, mark H7 checked in the canonical roadmap and English mirror, listing the verification commands and any remaining non-goals.
+Expected/observed: runner exits 0; report status is passed; proof class remains `local-simulation`; selected-entrypoint post-run validation uses `target/h7-judge-smoke/summary/selected-entrypoints-validation-config.json`.
+
+- [x] **Step 3: Update roadmap status**
+
+Mark H7 checked in the canonical roadmap and English mirror, listing the verification commands and remaining non-goals.

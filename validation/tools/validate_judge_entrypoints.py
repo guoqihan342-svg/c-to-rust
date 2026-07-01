@@ -2750,6 +2750,8 @@ def validate_config(
     config = load_json(config_path)
     errors: list[str] = []
     entrypoint_results: list[dict[str, Any]] = []
+    claim_boundary: dict[str, Any] = {}
+    competition_env_bundle_contract: dict[str, Any] = {}
 
     try:
         if config.get("schema_version") != 1:
@@ -2758,14 +2760,20 @@ def validate_config(
             raise ValueError("manifest_kind must be judge-entrypoints")
         if config.get("status") != "active":
             raise ValueError("status must be active")
+    except ValueError as error:
+        errors.append(str(error))
+
+    try:
         claim_boundary = validate_claim_boundary(config)
+    except (KeyError, ValueError) as error:
+        errors.append(str(error))
+
+    try:
         validate_ref(config["environment_profile"], repo_root=repo_root)
         competition_env_bundle_contract = validate_competition_env_bundle_contract(config, repo_root=repo_root)
         assert_no_local_absolute_path(str(config.get("source_pin", {}).get("checkout_command", "")))
     except (KeyError, ValueError) as error:
         errors.append(str(error))
-        claim_boundary = {}
-        competition_env_bundle_contract = {}
 
     entrypoints = config.get("entrypoints")
     if not isinstance(entrypoints, list) or not entrypoints:

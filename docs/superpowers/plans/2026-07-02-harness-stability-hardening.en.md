@@ -49,15 +49,16 @@ All agents should hand back small patches or worktree diffs. One main integrator
 ## 2026-07-02 Implementation Progress
 
 - Done: Task 1 timeout envelope; Task 2 Python command portability split with the shared `python3 -B` portable strategy; Task 3 atomic critical evidence writes; Task 4 retry/lock/lease/fencing guardrails; Task 5 Steps 1-2 POSIX shell contract; Task 6 translator smoke fixes.
-- Verified: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`, `python -B -m unittest validation.tools.test_doc_mirror_contract -q`, and `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`.
-- Current patch: Task 5 Step 3a stale summary cleanup fail-closed has focused test coverage; the top-level JSON error envelope is split into Step 3b/P1 and does not block H7.
-- Remaining: Task 7 judge smoke and the final roadmap checkbox. If judge smoke is blocked by environment or config-hash drift, record the exact blocker in the roadmap instead of skipping it verbally.
+- Verified: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`, `python -B -m unittest validation.tools.test_doc_mirror_contract -q`, `cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`, `python -B -m validation.tools.validate_auto_translation_evidence --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --evidence-root validation/evidence --require-semantic-pass`, `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json`, and `python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json`.
+- Current patch: Task 5 Step 3a stale summary cleanup fail-closed has focused test coverage; focused `--entrypoint-id` runner post-run local-artifact validation now writes `selected-entrypoints-validation-config.json` and deep-validates only the entrypoints executed in that run, so smoke/triage runs are not failed by stale artifacts from unexecuted `target/` outputs.
+- H7/P0 status: closed. The `competition_environment_smoke` entrypoint runs through the runner and post-run deep validation under local `local-simulation`; environment checks still record local proof-class degradation and do not claim `competition-exact`.
+- Deferred: the top-level JSON error envelope, real subprocess sleep/timeout integration tests, and deterministic-worker short retry policy remain P1 and do not block H7.
 
 ## Current Checklist
 
 - H7/P0 implemented: timeout, portable command, atomic write, retry cap, OpenCode lock classification, fencing audit contract, assignment transaction, POSIX shell contract, and translator smoke fix are implemented in code and tests.
 - Stale summary cleanup included in H7/P0: old-summary removal failures now fail closed, do not launch the worker, do not record the old summary, and open a `stale_summary_cleanup_failed` repair hint.
-- Judge smoke/blocker still pending: H7 remains unchecked until a judge entrypoint smoke is refreshed, or an exact environment/config-hash blocker is recorded in the roadmap.
+- Judge smoke refreshed: the focused `competition_environment_smoke` runner passed, and post-run validation uses the generated selected-entrypoint config; local proof class remains `local-simulation`.
 - P1 deferred: top-level JSON error envelope, real subprocess sleep/timeout integration tests, and deterministic-worker short retry policy.
 
 ---
@@ -189,11 +190,11 @@ If `summary/competition-run-summary.json` already exists and cannot be removed b
 
 If adding a top-level JSON error envelope, make it deterministic and avoid masking the original nonzero exit code. This is P1 unless a judge entrypoint currently assumes every harness CLI failure writes parseable JSON to stdout.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify H7/P0 path**
 
 Run: `python -B -m unittest validation.tools.test_opencode_agent_harness -q`
 
-Expected: OK.
+Expected: OK. The top-level JSON error envelope remains Task 5.3b/P1 and is intentionally not required for this verification step.
 
 ### Task 6: Translator Smoke and Showcase Boundary Fixes
 
@@ -233,7 +234,7 @@ Expected: OK.
 - Modify: `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
 - Modify as needed: judge entrypoint artifacts/configs
 
-- [ ] **Step 1: Run focused tests**
+- [x] **Step 1: Run focused tests**
 
 Run:
 
@@ -243,10 +244,16 @@ python -B -m unittest validation.tools.test_doc_mirror_contract -q
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
 ```
 
-- [ ] **Step 2: Run or record judge smoke**
+- [x] **Step 2: Run or record judge smoke**
 
-Refresh one judge entrypoint smoke if local prerequisites are available. If not available, record the exact blocker and keep proof class honest as local-only or not-run.
+Refreshed focused judge smoke:
 
-- [ ] **Step 3: Update roadmap status**
+```powershell
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json
+```
 
-When H7 is complete, mark H7 checked in the canonical roadmap and English mirror, listing the verification commands and remaining non-goals.
+Expected/observed: runner exits 0; report status is passed; proof class remains `local-simulation`; selected-entrypoint post-run validation uses `target/h7-judge-smoke/summary/selected-entrypoints-validation-config.json`.
+
+- [x] **Step 3: Update roadmap status**
+
+Mark H7 checked in the canonical roadmap and English mirror, listing the verification commands and remaining non-goals.

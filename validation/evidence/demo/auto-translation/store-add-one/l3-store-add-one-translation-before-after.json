@@ -13,7 +13,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-    "sha256": "1b0bce64a04c302caaccd4df7cd190d537721fd91fb7e8377f9eae4771d19f21"
+    "sha256": "39aba0abfcd860acdbd33c66a185a00f3b6c3cdf56bfca7984fbfe3daa406f48"
   },
   "accepted_patch": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
@@ -21,7 +21,7 @@
   },
   "patch_log": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-safety-step-log.jsonl",
-    "sha256": "92f1d32baaeb47b869569b3c483199894756212788fa6867e82469796ed0992f"
+    "sha256": "acc4dd5feac45fdb7572e56ab0521d26a5a024e924f006a65f1ab61ce6b293a6"
   },
   "unsafe_reduction": {
     "status": "measured",

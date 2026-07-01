@@ -133,7 +133,14 @@ def run_judge_entrypoints(
     if dry_run:
         validation = {"status": "skipped", "reason": "dry_run", "preflight_status": preflight_validation.get("status")}
     elif all(result["exit_code"] == 0 for result in command_results):
-        validation = validator.validate_config(config_path, require_local_artifacts=True, repo_root=repo_root)
+        validation_config_path = post_run_validation_config_path(
+            config_path,
+            config,
+            selected,
+            entrypoint_ids=entrypoint_ids,
+            out_path=out_path,
+        )
+        validation = validator.validate_config(validation_config_path, require_local_artifacts=True, repo_root=repo_root)
     else:
         validation = {"status": "skipped", "reason": "failed_command"}
 
@@ -168,6 +175,30 @@ def run_judge_entrypoints(
     if not dry_run and status == "passed":
         attach_milestone_bundle(report, out_path=out_path, repo_root=repo_root)
     return report
+
+
+def post_run_validation_config_path(
+    config_path: Path,
+    config: dict[str, Any],
+    selected: list[dict[str, Any]],
+    *,
+    entrypoint_ids: list[str],
+    out_path: Path,
+) -> Path:
+    if not entrypoint_ids:
+        return config_path
+    payload = json.loads(json.dumps(config))
+    selected_ids = [str(entry.get("id")) for entry in selected]
+    selected_id_set = set(selected_ids)
+    payload["entrypoints"] = [
+        entry for entry in payload.get("entrypoints", []) if isinstance(entry, dict) and entry.get("id") in selected_id_set
+    ]
+    contract = payload.get("test_contract")
+    if isinstance(contract, dict) and isinstance(contract.get("required_entrypoint_ids"), list):
+        contract["required_entrypoint_ids"] = selected_ids
+    path = out_path.parent / "selected-entrypoints-validation-config.json"
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
 
 
 def write_run_report(

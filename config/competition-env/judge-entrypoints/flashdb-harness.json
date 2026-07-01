@@ -17,7 +17,7 @@
   "environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+    "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
   },
   "source_pin": {
     "target_id": "flashdb",
@@ -113,15 +113,15 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "0f1bd2182edcfc8932ef84bec8dff8025c1e0e11d6955fb11d2c6da9aa710bfe"
+        "sha256": "1d40599f0717f8f2cf08e1612f462113983b32a9986d498f9f305a9cded26e0d"
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "590c9f40e76ddaf772f5e62caca5f5e7bcac8e22c050aac0ec8cb19f98f4c748"
+        "sha256": "3586e8a51e31d91030be11ab914412a9c3ec3a244bc0d68a06049f7252046325"
       },
       "review_checklist": {
         "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
-        "sha256": "6d01d08d81c7edf333ee6a85cbc9d6d5c8b84ee4c59c52f726d8b11d5a585f7d",
+        "sha256": "08f578b417053433d1942cf07d6464ac54053413d42f24ea14b11e63373e968a",
         "report_kind": "milestone-review-checklist"
       },
       "command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
@@ -160,11 +160,11 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
         "profile_id": "flashdb-fdb-utils-explicit-workers",
-        "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
+        "sha256": "639e805ebdaf046a1fe0ca8f2bc3cc980363fb5d2bed8381887d4ed5aacec0e1"
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
-        "sha256": "5249e1eb4aa8b3cc67a62fa72e2582fc263d495fed1c4abf579af9be4a1c5d26"
+        "sha256": "bcc132ad4d929b479c565ba81b9876a62a02ca11ee2f16fafa87775041b3693b"
       },
       "command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
       "verification_commands": [
@@ -200,11 +200,11 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
         "profile_id": "flashdb-fdb-utils-opencode-explicit-workers",
-        "sha256": "b2ef01855dfa133fa5e314b854890b80647ea60662bb22d082d329aede4adf48"
+        "sha256": "913efff95564209a858ba7bea555ec7bbdf74235fce26436a87e2848d09cdd1e"
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json",
-        "sha256": "01a562ae62517afda3ba7148bcb7b1dc41c0bbf5188430d7b63bae0c58684bc8"
+        "sha256": "4dcb34aa1218e37b1a160e99138bd2cf3069e9b089c4c88d757c852d8115b91b"
       },
       "command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
       "verification_commands": [

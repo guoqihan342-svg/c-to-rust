@@ -20,6 +20,14 @@ python -B -m validation.tools.run_judge_entrypoints --config config/competition-
 
 该命令成功后会在同目录生成 `judge-milestone-bundle.json`、`milestone-release-notes.md` 和 `public-release-packet.json`。bundle 是机器可读外部评估索引，Markdown notes 是从 bundle 渲染的人类可读 release notes，JSON public release packet hash 绑定 run report、readiness report、bundle、notes 和 competition config archive，并由 `validate_public_release_packet` 校验 schema、hash、claim boundary、本机路径泄漏、packet-to-bundle 内容一致性，以及 notes 是否等于 bundle 渲染结果；这些产物都不是 semantic gate，也不增加 `translation_coverage_numerator`。
 
+focused smoke/triage 入口示例：
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json
+```
+
+聚焦运行成功后，runner 会在 report 同目录写出 `selected-entrypoints-validation-config.json`，post-run local-artifact 深校验只检查本次选中的 entrypoint，并同步收窄 `test_contract.required_entrypoint_ids`。这用于 smoke/triage，不是全量 public packet；外部发布仍应使用不带 `--entrypoint-id` 的全量入口。
+
 启用 `--require-local-artifacts` 时，`validate_judge_entrypoints` 还会通过 `validate_competition_run_summary.py` 深校验非 smoke `competition_summary`，覆盖 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则和 slice counts。
 
 同一 public packet 现在还会把 C2Rust baseline manifest 状态纳入 route-governance 与 milestone scorecard：`raw_c2rust.c2rust_baseline_rollup` 按 evidence root 去重，展示 manifest/source/compile-pass 数，但保持 `semantic_gate=false` 和 `translation_coverage_numerator=0`。

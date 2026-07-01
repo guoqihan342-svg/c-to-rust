@@ -5,13 +5,13 @@
   "canonical_environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+    "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
   },
   "files": [
     {
       "path": "config/competition-env/environment.json",
       "role": "environment-profile",
-      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+      "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
     },
     {
       "path": "config/competition-env/env.sh",
@@ -56,47 +56,47 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json",
       "role": "planned-batch-profile",
-      "sha256": "367b32c2a84feb08d0f751cf935ce3756c2b5038154e08ecd5745b50e26d6a7e"
+      "sha256": "8e941781f089976de75445dd755f4ff3c374bb15c42fccab0c6f37a6c8c1e0aa"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "0f1bd2182edcfc8932ef84bec8dff8025c1e0e11d6955fb11d2c6da9aa710bfe"
+      "sha256": "1d40599f0717f8f2cf08e1612f462113983b32a9986d498f9f305a9cded26e0d"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
       "role": "planned-batch-profile",
-      "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
+      "sha256": "639e805ebdaf046a1fe0ca8f2bc3cc980363fb5d2bed8381887d4ed5aacec0e1"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
       "role": "planned-batch-profile",
-      "sha256": "b2ef01855dfa133fa5e314b854890b80647ea60662bb22d082d329aede4adf48"
+      "sha256": "913efff95564209a858ba7bea555ec7bbdf74235fce26436a87e2848d09cdd1e"
     },
     {
       "path": "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "6b919251805b513a2784d0035cdd83c849d18dc9f7bdb358d2b8276170837948"
+      "sha256": "eca91c90292e2bf4efd1c565e8433b10cdc64cf1c328ea3a668144e84593108c"
     },
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "39f7611a0cdecf6f8bce780cfc737ab56977d78dc5afdfba79325070a9d0ee75"
+      "sha256": "134a57b54d3ad9e0799b009f799bc21cd26675deb5fb29ee23b0055cda023bb1"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
       "role": "review-gate",
-      "sha256": "6d01d08d81c7edf333ee6a85cbc9d6d5c8b84ee4c59c52f726d8b11d5a585f7d"
+      "sha256": "08f578b417053433d1942cf07d6464ac54053413d42f24ea14b11e63373e968a"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.md",
       "role": "opencode-runbook",
-      "sha256": "7370127d9462871a595b74dd593a045f670842b96755603d63c38b335638686d"
+      "sha256": "23f720b6402cd4ca362f124f854712d346d7aa4d0a4512c097dd5a8043cec3fe"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.en.md",
       "role": "opencode-runbook",
-      "sha256": "35743066255133533cc9ad384748836ce943581047216dc4a460186a13f249ce"
+      "sha256": "7d4dca78d8f8a31e926c8bd87af526f82557d263e0cc887d143e9c2d41e7846c"
     }
   ],
   "claim_boundary": {

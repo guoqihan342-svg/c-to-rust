@@ -14,17 +14,17 @@
   "environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+    "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
   },
   "evaluate_profile_artifacts": {
     "artifacts": {
       "agent_index": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
-        "sha256": "47d605b241ffdb87ba58ffa746d9780c48c6f5682c421f7f4d109710b9124566"
+        "sha256": "1de903c2b6295711ad67f9155a95189eef2c43292060caf5411432b374643fe4"
       },
       "batch_profile_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
-        "sha256": "e2dc14681df9e0095ed45ce6eff22dea86cf6d4e33c5e7058c25124656a46044"
+        "sha256": "fd29b28869a10cff5b7301c8dd1cca020e0a0e120cb784ac49280a2a516dff69"
       },
       "competition_summary": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
@@ -32,15 +32,15 @@
       },
       "context_pack": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
-        "sha256": "9e7935b90c653479e2f5a3b0ae1cc17e6c293f542c2fdc9675bdc8e2db0e0d17"
+        "sha256": "3180e2db2cf662746b587c48aa88ef5c04be961a50b8a7e54ac923a2130b7284"
       },
       "evaluate_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
-        "sha256": "a8de06977eac3c70b3e598365f48d36f0d9cbce4eb68dc027c5b49a651c92290"
+        "sha256": "d9686cebf8334275316381e7c68c367118dce03ad227973f881b1bd658668759"
       },
       "judge_evidence_index": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
-        "sha256": "0fe3f5bd7787f47d771b5cbfa9d6ce73d61c02b9188305c5d354b8373ff9e9c1"
+        "sha256": "8c2720c826c56fe7241140725290bae5f5dae7d2f0fef2585fef2da12e1f986b"
       },
       "merge_plan": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
@@ -48,11 +48,11 @@
       },
       "route_governance_metrics_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
-        "sha256": "d469b3fdf84761995a610b3b4762294eb7d655a73bedc964b53053d7d245a6f4"
+        "sha256": "947fe04b5ce59bab71c5e748845d6adc35db3a0afcbb54f253fdbe59620544c1"
       },
       "run_plan_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
-        "sha256": "53018cdde373434cfd0b5ddf292d0b281f4db032f4b78751ee31a175d02a8b03"
+        "sha256": "8f9ae7fa4e1b71465da318813002c470c947e31bfd78137ee63eb02d38182c25"
       },
       "worker_plan": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/plans/flashdb-flashdb-fdb-utils-opencode-explicit-workers-workers.json",
@@ -66,11 +66,11 @@
     "opencode_runtime_artifacts": {
       "opencode_preflight_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/opencode-preflight-report.json",
-        "sha256": "f13668ae8ac4447d42a3c83f703bd9df811a0b1b7cf74fb4b73e2f045bb684a2"
+        "sha256": "8beb55b4b48a5871a02bed1d5f81d1b76e04f20fa145485b02462232e8d8516d"
       },
       "opencode_preflight_session_evidence": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/logs/opencode-preflight-session-evidence.json",
-        "sha256": "8d94ad9df9188800c33a5a6f50c2112005735f2985f55500cd7d2d4542f4773d"
+        "sha256": "7973d9a293d3be340097703bc17414e2c7a8d2cba02870e8bb6d0f4753ef2024"
       }
     },
     "status": "recorded_not_tracked"
@@ -106,7 +106,7 @@
   "profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
     "profile_id": "flashdb-fdb-utils-opencode-explicit-workers",
-    "sha256": "b2ef01855dfa133fa5e314b854890b80647ea60662bb22d082d329aede4adf48"
+    "sha256": "913efff95564209a858ba7bea555ec7bbdf74235fce26436a87e2848d09cdd1e"
   },
   "proof_class": "local-simulation",
   "reproduction": {
@@ -160,7 +160,7 @@
       "worker_id": "flashdb-opencode-worker-001-fdb-calc-crc32",
       "worker_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/run-worker-report.json",
-        "sha256": "5cb04ca640142b5f97980d780dba1dea7ac6c1ee7266b48cfefde0fba1ab89fb"
+        "sha256": "3948e3a73e2749dfbc248e426f86741888119278dbcdd9a08a0441c45610e113"
       }
     },
     {
@@ -181,7 +181,7 @@
       "worker_id": "flashdb-opencode-worker-002-fdb-blob-make",
       "worker_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-002-fdb-blob-make/harness/run-worker-report.json",
-        "sha256": "2d40ac6e9565cf8b5e6e72bb622b94fc90ee06748f3f8567c0867a3e15bc9c9e"
+        "sha256": "e8e452e82b0556d96957dbeff6ad79e99d2f3d3424ca3f6c59d2b4e36f7ae668"
       }
     }
   ]

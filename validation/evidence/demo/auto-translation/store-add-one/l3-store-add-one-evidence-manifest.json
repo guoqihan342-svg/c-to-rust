@@ -44,7 +44,7 @@
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-cache-metadata.json",
-      "sha256": "d58f1a20523b2f7a28566ebfee8f446a8018cdd1a449ed78f801fd75729d1f7d",
+      "sha256": "dc4afb31e56f86b7a09685af223c25a2ad070cba5e97ad89be0e674b48cdd599",
       "status": "recorded"
     },
     "config_profile": {
@@ -60,7 +60,7 @@
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-      "sha256": "1b0bce64a04c302caaccd4df7cd190d537721fd91fb7e8377f9eae4771d19f21",
+      "sha256": "39aba0abfcd860acdbd33c66a185a00f3b6c3cdf56bfca7984fbfe3daa406f48",
       "status": "passed"
     },
     "negative_diff": {
@@ -83,7 +83,7 @@
     },
     "route_decision": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-      "sha256": "42cada3abe262b69dbae634fd7cf82eb3a010d0700345f998d118d6ca425c28e",
+      "sha256": "7ac6f083bcbb04b9e5326b7e3f1add0c69960a0019e78b0a2fada7637f9b7d6e",
       "status": "recorded",
       "level": "L1"
     },
@@ -129,7 +129,7 @@
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
-      "sha256": "0960a93f0037a677cb8f05d8db0aa627f66eae8178c092542fa693bd117ae11b",
+      "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
       "status": "passed",
       "profile": "L1-dev"
     },

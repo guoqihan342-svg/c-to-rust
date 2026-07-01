@@ -28,6 +28,14 @@ python -B -m validation.tools.run_judge_entrypoints --config config/competition-
 
 After success, the command writes `judge-milestone-bundle.json`, `milestone-release-notes.md`, and `public-release-packet.json` in the same summary directory. The bundle is the machine-readable external review index, the Markdown notes render the judge packet index for humans, and the JSON public release packet hash-binds the run report, readiness report, bundle, release notes, and config archive before `validate_public_release_packet` checks schema, hashes, claim boundary, local-path hygiene, packet-to-bundle consistency, and release-notes consistency against the bundle rendering; none of these artifacts is a semantic gate or increases `translation_coverage_numerator`.
 
+Focused smoke/triage entrypoint example:
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json
+```
+
+After a successful focused run, the runner writes `selected-entrypoints-validation-config.json` next to the report, and post-run local-artifact deep validation checks only the selected entrypoints while narrowing `test_contract.required_entrypoint_ids`. This is for smoke/triage, not a full public packet; external publication should use the full entrypoint without `--entrypoint-id`.
+
 With `--require-local-artifacts`, `validate_judge_entrypoints` also deep-validates non-smoke `competition_summary` artifacts through `validate_competition_run_summary.py`, including workflow metrics, before/after refs, repair history, unsafe accounting, final-gate rules, and slice counts.
 
 The same public packet now folds C2Rust baseline manifest status into route-governance and the milestone scorecard: `raw_c2rust.c2rust_baseline_rollup` deduplicates by evidence root, shows manifest/source/compile-pass counts, and still keeps `semantic_gate=false` plus `translation_coverage_numerator=0`.
