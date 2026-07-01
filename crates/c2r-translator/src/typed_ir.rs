@@ -947,6 +947,13 @@ fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
     emit_scalar_type(ty)
 }
 
+fn emit_mutable_record_pointer_field_type(ty: &IrType) -> Result<String, String> {
+    if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
+        return Ok(pointer_ty);
+    }
+    emit_scalar_type(ty)
+}
+
 fn emit_record_zero_initializer(ty: &IrType) -> Result<String, String> {
     let IrTypeKind::Record {
         name,
@@ -2102,7 +2109,7 @@ fn emit_mutable_record_pointer_member_assignment_target(
             type_label(base_ty)
         )
     })?;
-    emit_record_field_type(ty)
+    emit_mutable_record_pointer_field_type(ty)
         .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
     let base_name = emit_identifier(base_name, "arrow member assignment base")?;
     let field = emit_identifier(field, "arrow member assignment field")?;
@@ -5873,7 +5880,7 @@ fn mutable_record_pointer_field_key_for_definite_assignment(
             type_label(base_ty)
         )
     })?;
-    emit_record_field_type(ty)
+    emit_mutable_record_pointer_field_type(ty)
         .map_err(|detail| format!("mutable record pointer field {name}.{field} has {detail}"))?;
     Ok(Some(MutableRecordPointerFieldKey {
         base: name.clone(),
@@ -8289,7 +8296,7 @@ fn collect_mutable_record_pointer_write_param_from_target(
     {
         return Ok(());
     }
-    emit_record_field_type(ty)
+    emit_mutable_record_pointer_field_type(ty)
         .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
     write_params.insert(name.clone());
     Ok(())
@@ -8311,10 +8318,10 @@ fn validate_nullable_pointer_param_uses_in_body(
 
 /// Enforces the semantic boundary for nullable pointer parameters in one stmt.
 ///
-/// Nullable pointers may only be dereferenced, indexed, or member-accessed after
-/// a local guard has proven the parameter non-null on that path. The checker
-/// carries simple branch and early-return facts but does not infer loop
-/// invariants or global alias guarantees.
+/// Nullable pointers may only be used in null comparisons, except for guarded
+/// readonly record arrow field reads. The checker carries simple branch and
+/// early-return facts but does not infer loop invariants or global alias
+/// guarantees.
 fn validate_nullable_pointer_param_uses_in_stmt(
     stmt: &IrStmt,
     nullable_params: &HashSet<String>,
@@ -8502,11 +8509,7 @@ fn validate_nullable_pointer_param_uses_in_expr(
     }
     match expr {
         IrExpr::Var { name, ty, .. } if nullable_params.contains(name) => {
-            if proven_nonnull_params.contains(name)
-                && readonly_pointer_slice_element_type(ty).is_some()
-            {
-                return Ok(());
-            }
+            validate_nullable_pointer_type(name, ty)?;
             Err(format!(
                 "nullable pointer param {name} is only supported in null comparisons"
             ))
@@ -8582,7 +8585,39 @@ fn validate_nullable_pointer_param_uses_in_expr(
             }
             Ok(())
         }
-        IrExpr::Call { args, .. } => {
+        IrExpr::Call {
+            callee, args, ty, ..
+        } => {
+            if nullable_strlen_call_is_proven_nonnull(
+                callee,
+                args,
+                ty,
+                nullable_params,
+                proven_nonnull_params,
+            ) {
+                return Ok(());
+            }
+            if mutable_record_pointer_pointee_type(ty).is_some()
+                && validate_record_pointer_return_nested_call_arg(callee, args, ty, None).is_ok()
+            {
+                for (index, arg) in args.iter().enumerate() {
+                    if index > 0
+                        && nullable_record_pointer_return_call_inner_arg_is_proven_nonnull(
+                            arg,
+                            nullable_params,
+                            proven_nonnull_params,
+                        )
+                    {
+                        continue;
+                    }
+                    validate_nullable_pointer_param_uses_in_expr(
+                        arg,
+                        nullable_params,
+                        proven_nonnull_params,
+                    )?;
+                }
+                return Ok(());
+            }
             for arg in args {
                 validate_nullable_pointer_param_uses_in_expr(
                     arg,
@@ -8638,6 +8673,48 @@ fn null_return_guard_proves_nonnull<'a>(
         return None;
     };
     nullable_params.contains(name).then_some(name)
+}
+
+fn nullable_strlen_call_is_proven_nonnull(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
+) -> bool {
+    if callee != "strlen" || validate_c_strlen_call_shape(args, ty).is_err() {
+        return false;
+    }
+    let [IrExpr::Var { name, ty, .. }] = args else {
+        return false;
+    };
+    nullable_params.contains(name)
+        && proven_nonnull_params.contains(name)
+        && is_readonly_8_bit_pointer_type(ty)
+}
+
+fn nullable_record_pointer_return_call_inner_arg_is_proven_nonnull(
+    arg: &IrExpr,
+    nullable_params: &HashSet<String>,
+    proven_nonnull_params: &HashSet<String>,
+) -> bool {
+    match arg {
+        IrExpr::Var { name, ty, .. } => {
+            nullable_params.contains(name)
+                && proven_nonnull_params.contains(name)
+                && is_readonly_8_bit_pointer_type(ty)
+        }
+        IrExpr::Call {
+            callee, args, ty, ..
+        } => nullable_strlen_call_is_proven_nonnull(
+            callee,
+            args,
+            ty,
+            nullable_params,
+            proven_nonnull_params,
+        ),
+        _ => false,
+    }
 }
 
 enum NullComparisonNonnullBranch<'a> {

@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import closing
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import shlex
@@ -21,6 +22,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -37,6 +39,9 @@ SCHEMA_VERSION = 1
 PROFILE_ID = "huawei-competition-ubuntu-24.04"
 REPAIR_ROUND_CAP = 5
 REPAIR_LOG_TAIL_CHARS = 4096
+PROCESS_TIMEOUT_EXIT_CODE = 124
+DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 600
+PORTABLE_PYTHON_COMMAND = "python3"
 LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
     r"(?<![A-Za-z0-9_])(?:"
     r"[A-Za-z]:[\\/][^\s\"'`,;)]*|"
@@ -134,11 +139,13 @@ def main() -> int:
     run_plan_parser.add_argument("--execute-merge", action="store_true")
     run_plan_parser.add_argument("--auto-retry", action="store_true")
     run_plan_parser.add_argument("--max-workers", type=int, default=1)
+    run_plan_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     batch_profile_parser = subcommands.add_parser("run-batch-profile")
     batch_profile_parser.add_argument("--profile", type=Path, required=True)
     batch_profile_parser.add_argument("--run-id", required=True)
     batch_profile_parser.add_argument("--out-root", type=Path, required=True)
+    batch_profile_parser.add_argument("--timeout-seconds", type=int)
 
     evaluate_parser = subcommands.add_parser("evaluate")
     evaluate_parser.add_argument("--profile", type=Path)
@@ -175,6 +182,7 @@ def main() -> int:
     evaluate_parser.add_argument("--no-execute-merge", action="store_true")
     evaluate_parser.add_argument("--no-auto-retry", action="store_true")
     evaluate_parser.add_argument("--max-workers", type=int, default=1)
+    evaluate_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     preflight_parser = subcommands.add_parser("opencode-preflight")
     preflight_parser.add_argument("--run-id", required=True)
@@ -184,6 +192,7 @@ def main() -> int:
     preflight_parser.add_argument("--opencode-agent")
     preflight_parser.add_argument("--opencode-variant", default="max")
     preflight_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    preflight_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     preflight_marker_parser = subcommands.add_parser("write-preflight-marker")
     preflight_marker_parser.add_argument("--marker", type=Path, required=True)
@@ -200,6 +209,7 @@ def main() -> int:
     run_parser.add_argument("--opencode-variant", default="max")
     run_parser.add_argument("--opencode-skip-permissions", action="store_true")
     run_parser.add_argument("--opencode-preflight-report", type=Path)
+    run_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     retry_parser = subcommands.add_parser("retry-worker")
     retry_parser.add_argument("--db", type=Path, required=True)
@@ -213,6 +223,7 @@ def main() -> int:
     retry_parser.add_argument("--opencode-variant", default="max")
     retry_parser.add_argument("--opencode-skip-permissions", action="store_true")
     retry_parser.add_argument("--opencode-preflight-report", type=Path)
+    retry_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     record_parser = subcommands.add_parser("record-worker-summary")
     record_parser.add_argument("--db", type=Path, required=True)
@@ -304,12 +315,14 @@ def main() -> int:
             execute_merge=args.execute_merge,
             auto_retry=args.auto_retry,
             max_workers=args.max_workers,
+            timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "run-batch-profile":
         result = run_batch_profile(
             profile_path=args.profile,
             run_id=args.run_id,
             out_root=args.out_root,
+            timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "evaluate":
         if args.profile:
@@ -317,6 +330,7 @@ def main() -> int:
                 profile_path=args.profile,
                 run_id=args.run_id,
                 out_root=args.out_root,
+                timeout_seconds=args.timeout_seconds,
             )
             result = write_evaluate_profile_report(
                 batch_result=batch_result,
@@ -369,6 +383,7 @@ def main() -> int:
                 execute_merge=not args.no_execute_merge,
                 auto_retry=not args.no_auto_retry,
                 max_workers=args.max_workers,
+                timeout_seconds=args.timeout_seconds,
             )
     elif args.command == "opencode-preflight":
         result = run_opencode_preflight(
@@ -379,6 +394,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "write-preflight-marker":
         result = write_opencode_preflight_marker(
@@ -397,6 +413,7 @@ def main() -> int:
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
             opencode_preflight_report=args.opencode_preflight_report,
+            timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "retry-worker":
         result = retry_worker(
@@ -411,6 +428,7 @@ def main() -> int:
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
             opencode_preflight_report=args.opencode_preflight_report,
+            timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "record-worker-summary":
         result = record_worker_summary(
@@ -562,7 +580,7 @@ def assign_slice(
             "source_commit": source_commit,
         },
         "runner": {
-            "command": "python validation/tools/run_competition.py",
+            "command": "python3 -B validation/tools/run_competition.py",
             "out_root": out_root_rel,
             "reuse_accepted_evidence": reuse_accepted_evidence,
         },
@@ -620,6 +638,7 @@ def assign_slice(
 
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
+        connection.execute("BEGIN IMMEDIATE")
         active_owner = connection.execute(
             "select lease_owner from leases where resource_key=? and status='active'",
             (resource_key,),
@@ -723,9 +742,9 @@ def assign_slice(
         )
         assignment_path = assignment_file_path(db_path, worker_id)
         assignment_path.parent.mkdir(parents=True, exist_ok=True)
-        assignment_path.write_text(json.dumps(assignment, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        atomic_write_json(assignment_path, assignment)
         request_path = assignment_path.with_name(f"{worker_id}-request.json")
-        request_path.write_text(json.dumps(request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        atomic_write_json(request_path, request)
         record_event(connection, run_id=run_id, event_type="assignment_created", payload=assignment)
         connection.commit()
     return assignment
@@ -866,7 +885,7 @@ def plan_source_file(
     if source_branch:
         plan["source_branch"] = source_branch
     plan_path.parent.mkdir(parents=True, exist_ok=True)
-    plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(plan_path, plan)
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         record_artifact(
@@ -1018,7 +1037,7 @@ def plan_explicit_workers(
     if profile.get("source_branch"):
         plan["source_branch"] = profile_string(profile, "source_branch")
     plan_path.parent.mkdir(parents=True, exist_ok=True)
-    plan_path.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(plan_path, plan)
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         record_artifact(
@@ -1136,6 +1155,7 @@ def run_batch_profile(
     profile_path: Path,
     run_id: str,
     out_root: Path,
+    timeout_seconds: int | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -1162,6 +1182,11 @@ def run_batch_profile(
         Path(opencode_preflight_report_text) if opencode_preflight_report_text is not None else None
     )
     if mode == "opencode" and opencode_preflight_report is None:
+        effective_timeout_seconds = profile_int(
+            profile,
+            "timeout_seconds",
+            default=timeout_seconds or DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        )
         preflight_result = run_opencode_preflight(
             out_root=out_root,
             run_id=run_id,
@@ -1170,6 +1195,7 @@ def run_batch_profile(
             opencode_agent=profile_string(profile, "opencode_agent"),
             opencode_variant=profile_string(profile, "opencode_variant", default="max") or "max",
             opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+            timeout_seconds=effective_timeout_seconds,
             command_runner=command_runner,
             repo_root=repo_root,
         )
@@ -1237,6 +1263,11 @@ def run_batch_profile(
         execute_merge=profile_bool(profile, "execute_merge", default=False),
         auto_retry=profile_bool(profile, "auto_retry", default=False),
         max_workers=profile_int(profile, "max_workers", default=1),
+        timeout_seconds=profile_int(
+            profile,
+            "timeout_seconds",
+            default=timeout_seconds or DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        ),
         repair_trace=attempt_evidence_policy,
         command_runner=command_runner,
         repo_root=repo_root,
@@ -1324,7 +1355,7 @@ def run_batch_profile(
         repo_root=repo_root,
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, result)
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         record_artifact(
@@ -1460,7 +1491,7 @@ def write_evaluate_profile_report(
 
     payload["report_path"] = repo_relative(report_path, repo_root=repo_root)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, payload)
 
     db_path: Path | None = None
     db_path_text = batch_result.get("db_path")
@@ -1498,7 +1529,7 @@ def write_evaluate_profile_report(
             route_metrics=payload.get("route_governance_metrics_report"),
             opencode_runtime=opencode_agent_runtime_evidence(run_plan, repo_root=repo_root),
         )
-        report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        atomic_write_json(report_path, payload)
         with closing(connect(db_path)) as connection:
             ensure_schema(connection)
             record_artifact(
@@ -1671,17 +1702,17 @@ def write_judge_evidence_index(
     if reproduction_commands is None:
         reproduction_commands = {
             "evaluate_profile": (
-                "python -B -m validation.tools.opencode_agent_harness evaluate "
+                "python3 -B -m validation.tools.opencode_agent_harness evaluate "
                 f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
             ),
             "run_batch_profile": (
-                "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
                 f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
             ),
         }
         if isinstance(summary_path_text, str) and summary_path_text:
             reproduction_commands["summary_validation"] = (
-                "python -B validation/tools/validate_competition_run_summary.py "
+                "python3 -B validation/tools/validate_competition_run_summary.py "
                 f"--summary {summary_path_text}"
             )
     else:
@@ -1756,7 +1787,7 @@ def write_judge_evidence_index(
         opencode_runtime=opencode_runtime,
     )
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(index_path, payload)
     binding = artifact_ref(index_path, repo_root=repo_root)
     binding.update(
         {
@@ -1887,7 +1918,7 @@ def update_evaluate_profile_context_refs(
             report_entrypoint="evaluate_report",
             repo_root=repo_root,
         )
-        context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        atomic_write_json(context_pack_path, context_pack)
 
     if agent_index_path.exists():
         agent_index = load_json(agent_index_path)
@@ -1922,7 +1953,7 @@ def update_evaluate_profile_context_refs(
             mode=str(agent_index.get("mode")) if isinstance(agent_index.get("mode"), str) else None,
             repo_root=repo_root,
         )
-        agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        atomic_write_json(agent_index_path, agent_index)
 
     context_pack_ref = artifact_ref(context_pack_path, repo_root=repo_root)
     agent_index_ref = artifact_ref(agent_index_path, repo_root=repo_root)
@@ -1947,10 +1978,7 @@ def update_evaluate_profile_context_refs(
             repair_hints=repair_hint_resume_summary(connection, run_id=run_id),
             repo_root=repo_root,
         )
-        resume_manifest_path.write_text(
-            json.dumps(resume_manifest_payload, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+        atomic_write_json(resume_manifest_path, resume_manifest_payload)
         resume_manifest_ref = artifact_ref(resume_manifest_path, repo_root=repo_root)
         resume_manifest_ref.update({"status": status, "report_kind": "resume-manifest"})
         connection.execute(
@@ -2182,7 +2210,7 @@ def update_batch_profile_report_context_refs(
     if isinstance(architecture, dict):
         architecture["context_pack"] = context_refs["context_pack"]
         architecture["agent_index"] = context_refs["agent_index"]
-    batch_report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(batch_report_path, report)
     return artifact_ref(batch_report_path, repo_root=repo_root)
 
 
@@ -2218,6 +2246,7 @@ def evaluate(
     execute_merge: bool = True,
     auto_retry: bool = True,
     max_workers: int = 1,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -2273,6 +2302,7 @@ def evaluate(
         execute_merge=execute_merge,
         auto_retry=auto_retry,
         max_workers=max_workers,
+        timeout_seconds=timeout_seconds,
         command_runner=command_runner,
         repo_root=repo_root,
     )
@@ -2334,7 +2364,7 @@ def evaluate(
         judge_summary=result["judge_summary"],
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, result)
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         record_artifact(
@@ -2461,6 +2491,16 @@ def build_agent_coordination_contract(
         "runtime": graph.get("runtime"),
         "mode": mode,
         "worker_count": int(worker_count),
+        "planner_ownership": {
+            "mode": "single-planner-per-run",
+            "assignment_transaction": "BEGIN IMMEDIATE before lease/out_root checks and writes",
+            "worker_fanout_starts_after": "worker plan and assignment artifacts are written",
+        },
+        "lease_policy": {
+            "fencing_token": "audit-only-monotonic-counter",
+            "enforced_guards": ["resource_key active lease owner", "per-run isolated_out_root uniqueness"],
+            "not_acceptance_gate": True,
+        },
         "roles": {
             "planner": {
                 "stage": "plan",
@@ -2532,6 +2572,8 @@ def build_architecture_contracts(graph: dict[str, Any]) -> dict[str, Any]:
             "chat_output_is_evidence": False,
             "coordination_state": agent_contract["coordination_state"],
             "checkpoint_backend": agent_contract["checkpoint_backend"],
+            "planner_ownership": agent_contract["planner_ownership"],
+            "lease_policy": agent_contract["lease_policy"],
             "roles": list(agent_contract["roles"]),
             "resume_protocol": agent_contract["resume_protocol"],
         },
@@ -3037,8 +3079,8 @@ def write_context_pack_and_agent_index(
         agent_index["reports"] = report_artifacts
     if attempt_evidence_policy is not None:
         agent_index["attempt_evidence_policy"] = attempt_evidence_policy
-    context_pack_path.write_text(json.dumps(context_pack, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    agent_index_path.write_text(json.dumps(agent_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(context_pack_path, context_pack)
+    atomic_write_json(agent_index_path, agent_index)
     context_pack_ref = {"path": repo_relative(context_pack_path, repo_root=repo_root), "sha256": sha256_file(context_pack_path)}
     agent_index_ref = {"path": repo_relative(agent_index_path, repo_root=repo_root), "sha256": sha256_file(agent_index_path)}
     with closing(connect(db_path)) as connection:
@@ -3121,7 +3163,7 @@ def write_route_governance_metrics_profile_report(
     )
     report_path = out_root / "summary" / "route-governance-metrics-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, payload)
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
     s2_workflow_metrics = metrics.get("s2_workflow_metrics") if isinstance(metrics.get("s2_workflow_metrics"), dict) else {}
     unsafe_reduction = (
@@ -3245,17 +3287,17 @@ def write_before_after_exhibit_profile_report(
         "stage_contracts": stage_contracts,
         "reproduction": {
             "run_command": (
-                "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
                 f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
                 f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
             ),
             "verify_command": (
-                "python -B validation/tools/validate_competition_run_summary.py "
+                "python3 -B validation/tools/validate_competition_run_summary.py "
                 f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
             ),
         },
     }
-    report_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, payload)
     binding = {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
@@ -3549,6 +3591,7 @@ def run_plan(
     execute_merge: bool = False,
     auto_retry: bool = False,
     max_workers: int = 1,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     repair_trace: dict[str, Any] | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
@@ -3599,6 +3642,7 @@ def run_plan(
             opencode_skip_permissions=opencode_skip_permissions,
             opencode_preflight_report=opencode_preflight_report,
             repair_trace=repair_trace,
+            timeout_seconds=timeout_seconds,
             command_runner=command_runner,
             repo_root=repo_root,
         )
@@ -3622,7 +3666,8 @@ def run_plan(
             repair_hint = result.get("repair_hint")
             if isinstance(repair_hint, dict) and isinstance(repair_hint.get("hint_id"), str):
                 hint_id = repair_hint["hint_id"]
-            while True:
+            outer_round_cap = REPAIR_ROUND_CAP + 2
+            for _outer_round in range(outer_round_cap):
                 retry_result = retry_worker(
                     db_path=db_path,
                     run_id=run_id,
@@ -3636,6 +3681,7 @@ def run_plan(
                     opencode_skip_permissions=opencode_skip_permissions,
                     opencode_preflight_report=opencode_preflight_report,
                     repair_trace=repair_trace,
+                    timeout_seconds=timeout_seconds,
                     command_runner=command_runner,
                     repo_root=repo_root,
                     keep_open_on_failure=True,
@@ -3673,12 +3719,23 @@ def run_plan(
                     break
                 if retry_result.get("status") == "retry_limit_exceeded":
                     break
+            else:
+                if retry_results:
+                    retry_results[-1]["status"] = "outer_retry_limit_exceeded"
+                    retry_results[-1]["hint_status"] = "outer_retry_limit_exceeded"
+                    retry_results[-1]["outer_retry_limit"] = {
+                        "max_outer_rounds": outer_round_cap,
+                        "reason": "retry_worker did not return success or retry_limit_exceeded",
+                    }
         if retry_results:
             worker_result["auto_retry"] = {
                 "attempt_count": len(retry_results),
                 "attempts": retry_results,
                 "final_hint_status": retry_results[-1].get("hint_status"),
+                "outer_round_cap": REPAIR_ROUND_CAP + 2,
             }
+            if retry_results[-1].get("status") == "outer_retry_limit_exceeded":
+                worker_result["auto_retry"]["outer_retry_limit_exceeded"] = True
         worker_result["attempts"] = attempt_timeline
         worker_result["final_decision"] = run_plan_worker_final_decision(worker_result)
         return worker_result
@@ -3728,6 +3785,7 @@ def run_plan(
                 run_id=run_id,
                 out_root=out_root,
                 merge_plan=merge_plan,
+                timeout_seconds=timeout_seconds,
                 command_runner=command_runner,
                 repo_root=repo_root,
             )
@@ -3767,7 +3825,7 @@ def run_plan(
         report["merge_execution"] = merge_execution
     report_path = out_root / "harness" / "run-plan-report.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, report)
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
         record_artifact(
@@ -3854,6 +3912,7 @@ def execute_merge_plan(
     run_id: str,
     out_root: Path,
     merge_plan: dict[str, Any],
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -3872,7 +3931,10 @@ def execute_merge_plan(
             encoding="utf-8",
             errors="replace",
             capture_output=True,
+            timeout=timeout_seconds,
         )
+    except subprocess.TimeoutExpired as exc:
+        completed = completed_process_from_timeout(argv, exc, timeout_seconds)
     except OSError as exc:
         completed = subprocess.CompletedProcess(
             argv,
@@ -3880,8 +3942,9 @@ def execute_merge_plan(
             stdout="",
             stderr=f"{type(exc).__name__}: {exc}\n",
         )
-    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
-    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
+    timed_out = completed_process_timed_out(completed)
 
     summary_path = out_root / "summary" / "competition-run-summary.json"
     summary_exists = summary_path.exists()
@@ -3904,7 +3967,7 @@ def execute_merge_plan(
     elif effective_exit_code == 0:
         effective_exit_code = 1
 
-    return {
+    result = {
         "exit_code": effective_exit_code,
         "process_returncode": int(completed.returncode),
         "argv": argv,
@@ -3917,6 +3980,11 @@ def execute_merge_plan(
         "final_gate_status": final_gate_status,
         "finalized": finalized,
     }
+    if timed_out:
+        result["timed_out"] = True
+        result["timeout_seconds"] = timeout_seconds
+        result["root_cause_key"] = "process_timeout"
+    return result
 
 
 def record_worker_summary(
@@ -4053,11 +4121,17 @@ def run_worker_process(
     mode: str,
     command_runner: Any,
     repo_root: Path,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
     retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
     attempts: list[dict[str, Any]] = []
     for index in range(len(retry_delays) + 1):
-        completed = run_worker_process_once(argv=argv, command_runner=command_runner, repo_root=repo_root)
+        completed = run_worker_process_once(
+            argv=argv,
+            command_runner=command_runner,
+            repo_root=repo_root,
+            timeout_seconds=timeout_seconds,
+        )
         transient_lock = mode == "opencode" and opencode_database_locked(completed)
         attempts.append(
             {
@@ -4088,11 +4162,36 @@ def run_worker_process(
     }
 
 
+def timeout_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def completed_process_from_timeout(
+    argv: list[str],
+    exc: subprocess.TimeoutExpired,
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    stdout = timeout_output_text(exc.output)
+    stderr = timeout_output_text(exc.stderr).rstrip("\n")
+    message = f"timed out after {timeout_seconds} seconds"
+    stderr = f"{stderr}\n{message}\n" if stderr else f"{message}\n"
+    return subprocess.CompletedProcess(argv, PROCESS_TIMEOUT_EXIT_CODE, stdout=stdout, stderr=stderr)
+
+
+def completed_process_timed_out(completed: subprocess.CompletedProcess[str]) -> bool:
+    return int(completed.returncode) == PROCESS_TIMEOUT_EXIT_CODE
+
+
 def run_worker_process_once(
     *,
     argv: list[str],
     command_runner: Any,
     repo_root: Path,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return command_runner(
@@ -4102,7 +4201,10 @@ def run_worker_process_once(
             encoding="utf-8",
             errors="replace",
             capture_output=True,
+            timeout=timeout_seconds,
         )
+    except subprocess.TimeoutExpired as exc:
+        return completed_process_from_timeout(argv, exc, timeout_seconds)
     except OSError as exc:
         return subprocess.CompletedProcess(
             argv,
@@ -4116,7 +4218,15 @@ def opencode_database_locked(completed: subprocess.CompletedProcess[str]) -> boo
     if int(completed.returncode) == 0:
         return False
     stderr = (completed.stderr or "").lower()
-    return "database is locked" in stderr
+    return any(
+        marker in stderr
+        for marker in (
+            "database is locked",
+            "database table is locked",
+            "sqlite_busy",
+            "sqlite busy",
+        )
+    )
 
 
 def tail_text(value: str, max_chars: int) -> str:
@@ -4135,6 +4245,7 @@ def run_worker(
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
     opencode_preflight_report: Path | None = None,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
     attempt_number: int = 1,
@@ -4172,7 +4283,7 @@ def run_worker(
         repair_trace=repair_trace,
     )
     attempt_request_path = report_dir / f"{worker_id}-request-attempt-{attempt_number}.json"
-    attempt_request_path.write_text(json.dumps(attempt_request, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(attempt_request_path, attempt_request)
     rollback_evidence = None
     if summary_path.exists():
         if retry_of:
@@ -4186,15 +4297,13 @@ def run_worker(
             )
         summary_path.unlink()
 
-    worker_command = [
-        "python",
-        "-B",
+    worker_command = portable_python_script_argv(
         "scripts/c2rust-migrator.py",
         "--phase",
         "migrate",
         "--input",
         repo_relative(attempt_request_path, repo_root=repo_root),
-    ]
+    )
     preflight_binding = None
     if mode == "opencode":
         preflight_binding = validate_opencode_preflight_report(
@@ -4255,11 +4364,13 @@ def run_worker(
         mode=mode,
         command_runner=command_runner,
         repo_root=repo_root,
+        timeout_seconds=timeout_seconds,
     )
+    timed_out = completed_process_timed_out(completed)
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
     stderr_path = logs_dir / "harness-worker-executor.stderr.log"
-    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
-    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
     opencode_session_evidence = None
     if mode == "opencode":
         opencode_session_evidence = write_opencode_session_evidence(
@@ -4319,7 +4430,7 @@ def run_worker(
             summary_status="missing-summary",
             opencode_contract_verification=opencode_contract_verification,
         )
-        if provisional_root_cause == "opencode_contract_not_executed":
+        if provisional_root_cause in {"opencode_contract_not_executed", "process_timeout"}:
             synthetic_failure_root_cause = provisional_root_cause
             write_blocked_worker_summary(
                 run_id=run_id,
@@ -4418,6 +4529,9 @@ def run_worker(
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
         },
     }
+    if timed_out:
+        report["timed_out"] = True
+        report["timeout_seconds"] = timeout_seconds
     if handoff_contract is not None:
         report["handoff_contract"] = handoff_contract
     if opencode_process_retries is not None:
@@ -4441,7 +4555,7 @@ def run_worker(
             "status": "open",
             "diagnostics": repair_hint["diagnostics"],
         }
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, report)
 
     with closing(connect(db_path)) as connection:
         ensure_schema(connection)
@@ -4536,6 +4650,7 @@ def retry_worker(
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
     opencode_preflight_report: Path | None = None,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
     keep_open_on_failure: bool = False,
@@ -4568,6 +4683,7 @@ def retry_worker(
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
         opencode_preflight_report=opencode_preflight_report,
+        timeout_seconds=timeout_seconds,
         command_runner=command_runner,
         repo_root=repo_root,
         attempt_number=attempt_number,
@@ -4676,6 +4792,7 @@ def run_opencode_preflight(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -4689,16 +4806,14 @@ def run_opencode_preflight(
     if marker_path.exists():
         marker_path.unlink()
 
-    marker_command = [
-        "python",
-        "-B",
+    marker_command = portable_python_script_argv(
         "validation/tools/opencode_agent_harness.py",
         "write-preflight-marker",
         "--marker",
         repo_relative(marker_path, repo_root=repo_root),
         "--run-id",
         run_id,
-    ]
+    )
     launch_policy = opencode_launch_policy(
         opencode_command=opencode_command,
         opencode_model=opencode_model,
@@ -4735,7 +4850,10 @@ def run_opencode_preflight(
             encoding="utf-8",
             errors="replace",
             capture_output=True,
+            timeout=timeout_seconds,
         )
+    except subprocess.TimeoutExpired as exc:
+        completed = completed_process_from_timeout(argv, exc, timeout_seconds)
     except OSError as exc:
         completed = subprocess.CompletedProcess(
             argv,
@@ -4745,8 +4863,9 @@ def run_opencode_preflight(
         )
     stdout_path = logs_dir / "opencode-preflight.stdout.log"
     stderr_path = logs_dir / "opencode-preflight.stderr.log"
-    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
-    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
+    timed_out = completed_process_timed_out(completed)
     session_binding = write_opencode_session_evidence(
         completed=completed,
         evidence_path=logs_dir / "opencode-preflight-session-evidence.json",
@@ -4769,7 +4888,9 @@ def run_opencode_preflight(
     )
     root_cause_key = None
     if not preflight_passed:
-        if int(completed.returncode) != 0:
+        if timed_out:
+            root_cause_key = "process_timeout"
+        elif int(completed.returncode) != 0:
             root_cause_key = "opencode_process_failed"
         elif contract_verification.get("status") != "executed":
             root_cause_key = "opencode_contract_not_executed"
@@ -4799,9 +4920,12 @@ def run_opencode_preflight(
         "report_path": repo_relative(report_path, repo_root=repo_root),
         "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
     }
+    if timed_out:
+        report["timed_out"] = True
+        report["timeout_seconds"] = timeout_seconds
     if root_cause_key is not None:
         report["root_cause_key"] = root_cause_key
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(report_path, report)
     return report
 
 
@@ -4893,7 +5017,7 @@ def write_opencode_preflight_marker(
         "created_at": now_text(),
     }
     marker_path.parent.mkdir(parents=True, exist_ok=True)
-    marker_path.write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(marker_path, marker)
     return {
         "status": "written",
         "marker_path": repo_relative(marker_path, repo_root=repo_root),
@@ -4908,6 +5032,8 @@ def worker_failure_root_cause(
     summary_status: str,
     opencode_contract_verification: dict[str, Any] | None = None,
 ) -> str:
+    if process_returncode == PROCESS_TIMEOUT_EXIT_CODE:
+        return "process_timeout"
     if process_returncode != 0:
         return "worker_process_failed"
     if (
@@ -5040,9 +5166,7 @@ def worker_repair_hint_payload(
     target_id = str(request.get("target_id", "unknown"))
     slice_id = str(request.get("slice_id", "unknown"))
     hint_id = f"repair:{run_id}:{worker_id}:{root_cause_key}"
-    retry_command = [
-        "python",
-        "-B",
+    retry_command = portable_python_script_argv(
         "validation/tools/opencode_agent_harness.py",
         "retry-worker",
         "--db",
@@ -5053,7 +5177,7 @@ def worker_repair_hint_payload(
         worker_id,
         "--hint-id",
         hint_id,
-    ]
+    )
     hint = {
         "schema_version": SCHEMA_VERSION,
         "hint_id": hint_id,
@@ -5197,7 +5321,7 @@ def write_worker_rollback_evidence(
             "reason": "opencode harness has no accepted last-good worker summary for this failed retry",
         },
     }
-    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(evidence_path, evidence)
     return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
 
 
@@ -5226,7 +5350,7 @@ def write_rejected_worker_summary_evidence(
             "reason": "OpenCode did not execute the assigned worker command as the first shell command",
         },
     }
-    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(evidence_path, evidence)
     return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
 
 
@@ -5384,10 +5508,7 @@ def annotate_retry_worker_metrics(
     safe_hint_id = safe_file_component(hint_id)
     history_path = summary_path.parent / f"retry-repair-history-{safe_hint_id}.jsonl"
     history_events = retry_repair_history_events(hint_payload, result)
-    history_path.write_text(
-        "".join(json.dumps(event, sort_keys=True) + "\n" for event in history_events),
-        encoding="utf-8",
-    )
+    atomic_write_text(history_path, "".join(json.dumps(event, sort_keys=True) + "\n" for event in history_events))
     statuses = [str(event.get("status")) for event in history_events if isinstance(event.get("status"), str)]
     rollback_ids = retry_rollback_ids(attempts)
     repair_history = {
@@ -5409,10 +5530,10 @@ def annotate_retry_worker_metrics(
     units_total = int(metrics.get("units_total", 1)) if isinstance(metrics.get("units_total"), int) else 1
     metrics["avg_repair_rounds"] = repair_rounds / max(1, units_total)
     metrics["auto_recovery_rate"] = (1.0 if unit["auto_recovered"] else 0.0) / max(1, units_total)
-    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(metrics_path, metrics)
 
     summary["workflow_metrics"]["sha256"] = sha256_file(metrics_path)
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(summary_path, summary)
 
     annotation = {
         "history_path": repo_relative(history_path, repo_root=repo_root),
@@ -5549,6 +5670,14 @@ def opencode_launch_policy_sha256(policy: dict[str, Any]) -> str:
     return sha256_text(json.dumps(policy, sort_keys=True))
 
 
+def portable_python_script_argv(script: str, *args: str) -> list[str]:
+    return [PORTABLE_PYTHON_COMMAND, "-B", script, *args]
+
+
+def shell_command_line(argv: list[str]) -> str:
+    return shlex.join([str(item) for item in argv])
+
+
 def build_opencode_run_argv(
     *,
     opencode_command: str,
@@ -5564,7 +5693,7 @@ def build_opencode_run_argv(
 ) -> list[str]:
     if not opencode_command:
         raise SystemExit("opencode command must not be empty")
-    command_line = subprocess.list2cmdline(worker_command)
+    command_line = shell_command_line(worker_command)
     prompt_lines = [
         "Execute this assigned C-to-Rust worker exactly once.",
         "Use the shell/bash tool to run exactly the Command line string below.",
@@ -5625,7 +5754,7 @@ def build_opencode_preflight_argv(
 ) -> list[str]:
     if not opencode_command:
         raise SystemExit("opencode command must not be empty")
-    command_line = subprocess.list2cmdline(marker_command)
+    command_line = shell_command_line(marker_command)
     prompt = build_opencode_prompt(
         [
             "Execute this OpenCode preflight command exactly once.",
@@ -5682,7 +5811,7 @@ def verify_opencode_contract_execution(
     summary_path: Path,
     repo_root: Path,
 ) -> dict[str, Any]:
-    expected_worker_command_line = subprocess.list2cmdline(worker_command)
+    expected_worker_command_line = shell_command_line(worker_command)
     tool_trace = extract_opencode_tool_trace(session_evidence)
     executed_shell_commands = extract_opencode_shell_commands(session_evidence)
     exact_worker_command_seen = any(
@@ -5924,7 +6053,7 @@ def write_blocked_worker_summary(
         "per_unit_statuses": [unit_status],
     }
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(metrics_path, metrics)
 
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary = {
@@ -5969,7 +6098,7 @@ def write_blocked_worker_summary(
             "validator": "opencode_agent_harness.py run-worker --mode opencode",
         },
     }
-    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(summary_path, summary)
 
 
 def write_opencode_handoff_contract(
@@ -5997,10 +6126,10 @@ def write_opencode_handoff_contract(
         "request_path": repo_relative(request_path, repo_root=repo_root),
         "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
         "worker_command": worker_command,
-        "worker_command_line": subprocess.list2cmdline(worker_command),
-        "worker_command_sha256": sha256_text(subprocess.list2cmdline(worker_command)),
+        "worker_command_line": shell_command_line(worker_command),
+        "worker_command_sha256": sha256_text(shell_command_line(worker_command)),
         "opencode_argv": opencode_argv,
-        "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "opencode_command_line": shell_command_line(opencode_argv),
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
         "prompt": str(opencode_argv[-1]),
@@ -6009,7 +6138,7 @@ def write_opencode_handoff_contract(
     if assignment_request_path is not None:
         contract["assignment_request_path"] = repo_relative(assignment_request_path, repo_root=repo_root)
     contract_path.parent.mkdir(parents=True, exist_ok=True)
-    contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(contract_path, contract)
     return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
 
 
@@ -6031,17 +6160,17 @@ def write_opencode_preflight_contract(
         "runner_kind": "opencode-preflight",
         "expected_marker_path": repo_relative(marker_path, repo_root=repo_root),
         "worker_command": marker_command,
-        "worker_command_line": subprocess.list2cmdline(marker_command),
-        "worker_command_sha256": sha256_text(subprocess.list2cmdline(marker_command)),
+        "worker_command_line": shell_command_line(marker_command),
+        "worker_command_sha256": sha256_text(shell_command_line(marker_command)),
         "opencode_argv": opencode_argv,
-        "opencode_command_line": subprocess.list2cmdline(opencode_argv),
+        "opencode_command_line": shell_command_line(opencode_argv),
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "preflight proves exact-command compliance only; semantic acceptance requires worker summary and validators",
     }
     contract_path.parent.mkdir(parents=True, exist_ok=True)
-    contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(contract_path, contract)
     return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
 
 
@@ -6098,7 +6227,7 @@ def write_opencode_session_evidence(
             }
         )
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(evidence_path, evidence)
     return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
 
 
@@ -6130,7 +6259,7 @@ def write_merge_plan(
             repo_relative(repo_path(Path(summary), repo_root=repo_root), repo_root=repo_root)
             for summary in worker_summary_paths
         ]
-    argv = ["python", "-B", "validation/tools/run_competition.py"]
+    argv = portable_python_script_argv("validation/tools/run_competition.py")
     for summary in summaries:
         argv.extend(["--worker-summary", summary])
     argv.extend(["--out-root", repo_relative(out_root, repo_root=repo_root), "--proof-class", proof_class, "--run-id", run_id])
@@ -6144,7 +6273,7 @@ def write_merge_plan(
     }
     merge_path = out_root / "harness" / "merge-plan.json"
     merge_path.parent.mkdir(parents=True, exist_ok=True)
-    merge_path.write_text(json.dumps(merge_plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(merge_path, merge_plan)
     return merge_plan
 
 
@@ -6518,6 +6647,30 @@ def repo_relative(path: Path, *, repo_root: Path = REPO_ROOT) -> str:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as handle:
+            fd = None
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
 def load_json(path: Path) -> dict[str, Any]:

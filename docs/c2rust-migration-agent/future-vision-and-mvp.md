@@ -45,6 +45,8 @@
 
 活跃项：
 
+外部审查合并结论（2026-07-02）：两份外部报告的大方向成立，但必须按评分主线重排。`opencode-agent-harness-逐行稳定性审查.md` 指出的无外部进程 timeout、`python`/`python3` 命令不一致、关键证据非原子写、OpenCode lock 匹配过窄、retry 外层缺防御 cap、fencing token 语义不清、并行 lease 竞争窗口、Windows 命令串与 POSIX shell 合同混用，都是评委现场会直接放大的 harness 稳定性风险，应进入当前 P0。`c-to-rust-flashdb-rust-skeleton-评估报告.md` 指出的 showcase 边界也要保留：`flashDB_rust` 手写安全实现不能被写成自动翻译产物；before/after 展示必须说明 baseline/final/oracle 的来源、source pin、proof class 和 semantic gate 边界。详细执行方案见 `../superpowers/plans/2026-07-02-harness-stability-hardening.md`。
+
 - [x] H1 一键 `evaluate` 入口：一次命令完成 `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`，并产出 `context-pack.json`、`agent-index.json` 和 SQLite `context_packs` 索引。验收：`harness-h1-evaluate-verify` FlashDB smoke 已通过，`context_packs.payload_json` 与落盘 context-pack 一致；`evaluate --profile` 现在也会落 `harness/evaluate-report.json` wrapper 和 `harness/judge-evidence-index.json`，把完整 batch-profile run 作为评委可发现的一键入口索引。
 - [x] H2 多 worker fan-out/fan-in：`run-plan --max-workers` 固定按 planner 顺序汇总，所有 worker 隔离输出，SQLite 开启 busy timeout，OpenCode wrapper 可以并行跑互不依赖的 slice。验收：`run-plan` 已使用 `ThreadPoolExecutor` 并在 graph 中记录 `parallel_map.result_order=planner_order`，worker out-root 由 SQLite agent ledger 约束，`connect()` 设置 `busy_timeout=30000`；关键测试覆盖并行执行、重复 out-root 拒绝和 busy timeout；`workers[]` 显式 profile 已在真实 FlashDB 双 worker smoke 中跑通，`harness-flashdb-explicit-workers-20260701` 聚合 `real-fdb-calc-crc32` 与 `real-fdb-blob-make`，final gate passed，accepted-evidence `semantic_pass=2`，并由 `l3-flashdb-explicit-workers-harness-run.json` 记录复现命令与 hash。
 - [x] H3 精准 repair 自愈：失败 worker 必须落 `repair_hints`，同一 assignment 最多自动重试 5 轮；每次失败、回滚和最终接受/拒绝都要进入报告。验收：`run-plan --auto-retry`、`retry-worker`、5 轮 cap、rollback evidence、attempt timeline、final decision、context-pack/agent-index retry 状态和 before/after verified repair trace 均有测试覆盖。
@@ -74,9 +76,11 @@
 
 本轮补充：blocked repair 索引现在进一步公开 `blocked_reason_counts`、`source_span_kind_counts` 和每个 `next_actions[].source_span_kind`，把“为什么阻塞”和“定位指向 C 源、生成 Rust、证据产物还是未知来源”提升为 schema 约束。这个增量服务于 harness 自愈闭环的精确诊断：评委可以看到失败原因分布、下一步最小测试和源码/产物定位，而不是只看到失败数量。边界：这些分类仍然只是 fail-closed repair playbook，不代表自动接受、不证明语义通过、不增加翻译覆盖分子。
 
+- [ ] H7 harness 稳定性硬化封顶：在继续扩展 OpenCode 多 agent 或 before/after 展示前，先把一键 harness 的“不会无限挂起、不会半写证据、不会因命令环境漂移失效、失败可复跑”变成可测试合同。验收分层：第一，`run-worker` / `retry-worker` / `run-plan` / `evaluate --profile` 对 deterministic worker、OpenCode wrapper、preflight marker、merge/evaluate 子进程都传入有限 timeout，并把 `subprocess.TimeoutExpired` 规范化为 exit code `124`、`timed_out=true`、可索引 repair/block summary；第二，harness 子进程 argv、证据和 prompt 中的可复现命令统一使用 competition profile 约束下的 `python3 -B` portable command，并防止本机绝对解释器路径进入公开 artifact；第三，`context-pack.json`、`agent-index.json`、`resume-manifest.json`、`competition-run-summary.json`、repair hint、stdout/stderr/log 和 merge/evaluate 报告等关键证据改为同目录临时文件加 `os.replace` 的原子写，测试覆盖写入中断不会留下可被 validator 接收的半文件；第四，`auto_retry` 在内层 5 轮 cap 之外增加外层防御上限，OpenCode SQLite lock 分类扩展到 `database table is locked`、`sqlite_busy`、`SQLITE_BUSY` 等等价信号，且 retry/blocked 决策进入 graph/report；第五，明确 `leases.fencing_token` 是 audit-only 还是 enforceable，若保留 audit-only 必须写进 contract，若作为并发防护则 assignment/worker 消费侧必须校验 token；第六，`assign_slice` 的读写分配窗口改为显式事务或记录单 planner 约束，防止未来并行 planner 引入同 slice 竞争；第七，OpenCode prompt 的命令串生成和 contract 解析统一到 POSIX shell 语义，避免 `subprocess.list2cmdline` 与 `shlex.split(posix=True)` 在 Linux 评测场景下不一致；第八，补一个 translator/harness smoke 修复：`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report` 当前暴露的 nullable pointer fail-closed 漏洞和两个断言漂移必须进入修复队列，但不得扩成新的 C 语法覆盖战线。完成后至少运行 `python -B -m unittest validation.tools.test_opencode_agent_harness -q`、`python -B -m unittest validation.tools.test_doc_mirror_contract -q`、`cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report`，并刷新一次 judge entrypoint smoke 或记录无法运行原因。
+
 冻结/后置项：
 
-- 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H6 的真实样例。
+- 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H7 的真实样例。
 - 不做 `typed_ir.rs` / `clang_frontend.rs` 等大文件拆分，除非是 harness 必需的小修。
 - 不在 D7 后新增功能；D7 后只修复、验证、写文档和打磨演示。
 - Phase 2/3/4 的 CFG/relooper、union、一般指针图、多 TU、完整 function pointer 和工业级 coverage 继续保留为长期路线，但不再抢占当前 10 天主线。
