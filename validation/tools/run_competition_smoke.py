@@ -32,6 +32,7 @@ DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fd
 
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 PROOF_CLASSES = ["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"]
+DEFAULT_STEP_TIMEOUT_SECONDS = 600
 
 
 class CompetitionSmokeResult:
@@ -50,6 +51,7 @@ def main() -> int:
     parser.add_argument("--target-id", default="flashdb")
     parser.add_argument("--slice-id", default="real-fdb-calc-crc32")
     parser.add_argument("--slice-spec", type=Path, default=DEFAULT_SLICE_SPEC)
+    parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_STEP_TIMEOUT_SECONDS)
     args = parser.parse_args()
 
     result = run_competition_smoke(
@@ -59,6 +61,7 @@ def main() -> int:
         target_id=args.target_id,
         slice_id=args.slice_id,
         slice_spec=args.slice_spec,
+        timeout_seconds=args.timeout_seconds,
         run_id=args.run_id,
         repo_root=REPO_ROOT,
     )
@@ -77,6 +80,7 @@ def run_competition_smoke(
     target_id: str = "flashdb",
     slice_id: str = "real-fdb-calc-crc32",
     slice_spec: Path = DEFAULT_SLICE_SPEC,
+    timeout_seconds: int = DEFAULT_STEP_TIMEOUT_SECONDS,
 ) -> CompetitionSmokeResult:
     if proof_class == "competition-exact" and not confirm_competition_exact:
         raise SystemExit("proof_class=competition-exact requires --confirm-competition-exact")
@@ -112,10 +116,12 @@ def run_competition_smoke(
             repo_root=repo_root,
             logs_dir=logs_dir,
             out_root=out_root,
+            timeout_seconds=timeout_seconds,
         )
-        step_status_value = smoke_step_status(step, result.returncode, proof_class=proof_class)
+        timed_out = bool(getattr(result, "timed_out", False))
+        step_status_value = smoke_step_status(step, result.returncode, proof_class=proof_class, timed_out=timed_out)
         proof_class_effect = None
-        if step == "environment-check" and result.returncode != 0 and proof_class != "competition-exact":
+        if step == "environment-check" and result.returncode != 0 and proof_class != "competition-exact" and not timed_out:
             proof_class_effect = "exactness_blocker"
         steps.append(
             {
@@ -123,6 +129,14 @@ def run_competition_smoke(
                 "status": step_status_value,
                 "returncode": result.returncode,
                 "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+                **(
+                    {
+                        "timed_out": True,
+                        "timeout_seconds": timeout_seconds,
+                    }
+                    if timed_out
+                    else {}
+                ),
                 **({"proof_class_effect": proof_class_effect} if proof_class_effect else {}),
             }
         )
@@ -153,6 +167,11 @@ def run_competition_smoke(
             repo_root=repo_root,
         ),
         "environment_deviations": deviations,
+        "timeout_policy": {
+            "per_step_timeout_seconds": timeout_seconds,
+            "timeout_exit_code": 124,
+            "timeout_is_final_gate_failure": True,
+        },
         "smoke_entrypoint": {
             "name": "competition-linux-wsl-ci-smoke",
             "script": "validation/tools/run_competition_smoke.py",
@@ -317,7 +336,9 @@ def smoke_commands(
     ]
 
 
-def smoke_step_status(step: str, returncode: int, *, proof_class: str) -> str:
+def smoke_step_status(step: str, returncode: int, *, proof_class: str, timed_out: bool = False) -> str:
+    if timed_out:
+        return "failed"
     if returncode == 0:
         return "passed"
     if step == "environment-check" and proof_class != "competition-exact":
@@ -333,15 +354,28 @@ def run_logged_step(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    timeout_seconds: int,
 ) -> subprocess.CompletedProcess[str]:
-    result = command_runner(
-        command,
-        cwd=repo_root,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-    )
+    timed_out = False
+    try:
+        result = command_runner(
+            command,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        timed_out = True
+        result = subprocess.CompletedProcess(
+            command,
+            124,
+            timeout_output_text(error.output),
+            timeout_output_text(error.stderr) or f"timed out after {timeout_seconds} seconds",
+        )
+        setattr(result, "timed_out", True)
     entry = {
         "step": step,
         "command": command,
@@ -349,10 +383,19 @@ def run_logged_step(
         "stdout": result.stdout,
         "stderr": result.stderr,
         "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+        **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
     }
     with (logs_dir / "commands.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
     return result
+
+
+def timeout_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def detect_execution_environment() -> dict[str, Any]:

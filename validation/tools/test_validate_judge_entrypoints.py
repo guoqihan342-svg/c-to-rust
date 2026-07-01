@@ -97,6 +97,11 @@ def valid_competition_smoke_summary_payload() -> dict:
             "version": "competition-host",
         },
         "environment_deviations": [],
+        "timeout_policy": {
+            "per_step_timeout_seconds": 600,
+            "timeout_exit_code": 124,
+            "timeout_is_final_gate_failure": True,
+        },
         "smoke_entrypoint": {
             "semantic_acceptance_boundary": "does_not_translate_new_slices",
         },
@@ -119,7 +124,51 @@ def valid_competition_smoke_summary_payload() -> dict:
             "path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
         },
         "final_gate": {"status": "passed"},
-        "steps": [],
+        "steps": [
+            {
+                "step": "environment-check",
+                "status": "degraded",
+                "returncode": 1,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+                "proof_class_effect": "exactness_blocker",
+            },
+            {
+                "step": "vendored-clang-verification",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "core-auto-evidence-validator",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "evidence-governance",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "translator-coverage-matrix",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "milestone-release-report",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "lightweight-unittest",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+        ],
     }
 
 
@@ -681,6 +730,47 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 entrypoint_run_id="competition-flashdb-environment-smoke-20260701",
             )
 
+    def test_competition_smoke_summary_requires_timeout_policy(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload.pop("timeout_policy")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary timeout_policy must be an object",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+            )
+
+    def test_competition_smoke_summary_timeout_must_fail_closed(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["timeout_policy"]["timeout_is_final_gate_failure"] = False
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary timeout_policy.timeout_is_final_gate_failure must be true",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+            )
+
+    def test_competition_smoke_summary_requires_required_gate_steps(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["steps"] = [
+            step for step in payload["steps"] if step["step"] != "translator-coverage-matrix"
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary steps missing required gates",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+            )
+
     def test_competition_exact_smoke_summary_rejects_local_wsl_or_ci_mislabel(self) -> None:
         cases = [
             ("windows-local", {"kind": "windows-local", "system": "Windows"}),
@@ -717,6 +807,48 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 payload,
                 expected_artifacts=competition_smoke_expected_artifacts(),
                 entrypoint_proof_class="competition-exact",
+            )
+
+    def test_ci_approximation_smoke_summary_rejects_non_ci_environment(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "ci-approximation"
+        payload["execution_environment"].update(
+            {
+                "detected_ci": False,
+                "detected_wsl": True,
+                "kind": "wsl",
+            }
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class=ci-approximation requires execution_environment.detected_ci=true",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="ci-approximation",
+            )
+
+    def test_wsl_local_simulation_smoke_summary_rejects_non_wsl_environment(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "wsl-local-simulation"
+        payload["execution_environment"].update(
+            {
+                "detected_ci": True,
+                "detected_wsl": False,
+                "kind": "linux-ci",
+            }
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class=wsl-local-simulation requires execution_environment.detected_wsl=true",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="wsl-local-simulation",
             )
 
     def test_judge_evidence_index_requires_valid_opencode_runtime_when_present(self) -> None:

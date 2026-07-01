@@ -39,6 +39,15 @@ REQUIRED_HARNESS_FEATURES = (
 REQUIRED_AGENT_ROLES = ("planner", "worker", "repairer", "verifier", "reporter")
 REQUIRED_CONTEXT_STAGES = ("plan", "translate", "verify", "repair")
 REQUIRED_JUDGE_GRAPH_NODES = ("load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report")
+REQUIRED_COMPETITION_SMOKE_STEPS = (
+    "environment-check",
+    "vendored-clang-verification",
+    "core-auto-evidence-validator",
+    "evidence-governance",
+    "translator-coverage-matrix",
+    "milestone-release-report",
+    "lightweight-unittest",
+)
 EXPECTED_ARTIFACT_REF_ALIASES = {
     "competition_summary": "competition_run_summary",
 }
@@ -501,10 +510,13 @@ def validate_competition_smoke_summary_contract(
     smoke_entrypoint = require_object(payload.get("smoke_entrypoint"), "competition_smoke_summary smoke_entrypoint")
     if smoke_entrypoint.get("semantic_acceptance_boundary") != "does_not_translate_new_slices":
         raise ValueError("competition_smoke_summary smoke_entrypoint.semantic_acceptance_boundary must be does_not_translate_new_slices")
+    validate_competition_smoke_timeout_policy(payload)
     final_gate = require_object(payload.get("final_gate"), "competition_smoke_summary final_gate")
     if final_gate.get("status") != "passed":
         raise ValueError("competition_smoke_summary final_gate.status must be passed")
+    validate_competition_smoke_proof_class_environment(payload)
     validate_competition_exact_smoke_summary(payload)
+    validate_competition_smoke_step_contract(payload)
 
     assert_expected_smoke_path(
         payload.get("vendored_clang_verification"),
@@ -553,6 +565,71 @@ def validate_competition_smoke_summary_contract(
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
         "translation_coverage_numerator": 0,
+    }
+
+
+def validate_competition_smoke_timeout_policy(payload: dict[str, Any]) -> None:
+    timeout_policy = payload.get("timeout_policy")
+    if not isinstance(timeout_policy, dict):
+        raise ValueError("competition_smoke_summary timeout_policy must be an object")
+    timeout_seconds = timeout_policy.get("per_step_timeout_seconds")
+    if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
+        raise ValueError("competition_smoke_summary timeout_policy.per_step_timeout_seconds must be a positive integer")
+    if timeout_policy.get("timeout_exit_code") != 124:
+        raise ValueError("competition_smoke_summary timeout_policy.timeout_exit_code must be 124")
+    if timeout_policy.get("timeout_is_final_gate_failure") is not True:
+        raise ValueError("competition_smoke_summary timeout_policy.timeout_is_final_gate_failure must be true")
+
+
+def validate_competition_smoke_proof_class_environment(payload: dict[str, Any]) -> None:
+    proof_class = require_string(payload.get("proof_class"), "competition_smoke_summary.proof_class")
+    environment = require_object(
+        payload.get("execution_environment"),
+        "competition_smoke_summary.execution_environment",
+    )
+    if proof_class == "ci-approximation" and environment.get("detected_ci") is not True:
+        raise ValueError(
+            "competition_smoke_summary proof_class=ci-approximation requires "
+            "execution_environment.detected_ci=true"
+        )
+    if proof_class == "wsl-local-simulation" and environment.get("detected_wsl") is not True:
+        raise ValueError(
+            "competition_smoke_summary proof_class=wsl-local-simulation requires "
+            "execution_environment.detected_wsl=true"
+        )
+
+
+def validate_competition_smoke_step_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    proof_class = require_string(payload.get("proof_class"), "competition_smoke_summary.proof_class")
+    steps = payload.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("competition_smoke_summary steps must be a non-empty list")
+    observed_steps: dict[str, dict[str, Any]] = {}
+    for step_value in steps:
+        step = require_object(step_value, "competition_smoke_summary.steps[]")
+        name = require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+        if name in observed_steps:
+            raise ValueError(f"competition_smoke_summary steps duplicate gate: {name}")
+        status = require_string(step.get("status"), f"competition_smoke_summary step {name}.status")
+        if step.get("timed_out") is True:
+            raise ValueError(f"competition_smoke_summary step {name} timed_out cannot be in a passed summary")
+        if not isinstance(step.get("returncode"), int):
+            raise ValueError(f"competition_smoke_summary step {name}.returncode must be an integer")
+        assert_repo_relative_posix(require_string(step.get("log_path"), f"competition_smoke_summary step {name}.log_path"))
+        if status == "degraded":
+            if name != "environment-check" or proof_class == "competition-exact":
+                raise ValueError(f"competition_smoke_summary step {name} cannot be degraded for proof_class={proof_class}")
+            if step.get("proof_class_effect") != "exactness_blocker":
+                raise ValueError("competition_smoke_summary environment-check degradation must record exactness_blocker")
+        elif status != "passed":
+            raise ValueError(f"competition_smoke_summary step {name}.status must be passed")
+        observed_steps[name] = step
+    missing = [step for step in REQUIRED_COMPETITION_SMOKE_STEPS if step not in observed_steps]
+    if missing:
+        raise ValueError(f"competition_smoke_summary steps missing required gates: {missing}")
+    return {
+        "status": "passed",
+        "required_steps": list(REQUIRED_COMPETITION_SMOKE_STEPS),
     }
 
 

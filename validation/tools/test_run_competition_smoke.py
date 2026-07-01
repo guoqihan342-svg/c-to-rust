@@ -23,13 +23,24 @@ def load_smoke_module():
 
 
 class FakeCommandRunner:
-    def __init__(self, *, fail_commands_containing: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        fail_commands_containing: set[str] | None = None,
+        timeout_commands_containing: set[str] | None = None,
+    ) -> None:
         self.commands: list[list[str]] = []
+        self.kwargs: list[dict[str, object]] = []
         self.fail_commands_containing = fail_commands_containing or set()
+        self.timeout_commands_containing = timeout_commands_containing or set()
 
-    def __call__(self, command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+    def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.commands.append(command)
+        self.kwargs.append(kwargs)
         command_text = " ".join(command)
+        for marker in self.timeout_commands_containing:
+            if marker in command_text:
+                raise subprocess.TimeoutExpired(command, kwargs.get("timeout"), output="partial", stderr="timed out")
         for marker in self.fail_commands_containing:
             if marker in command_text:
                 return subprocess.CompletedProcess(command, 1, "", f"failed {marker}")
@@ -155,6 +166,65 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertEqual(summary["clang_source"], "vendored")
             self.assertFalse(summary["clang_lane_verified"])
             self.assertFalse(summary["competition_profile_match"]["clang_lane_verified"])
+
+    def test_step_timeout_is_recorded_and_fails_closed(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            fake_runner = FakeCommandRunner(timeout_commands_containing={"evidence_governance.py"})
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="smoke-timeout-test",
+                timeout_seconds=3,
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            self.assertTrue(all(kwargs.get("timeout") == 3 for kwargs in fake_runner.kwargs))
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                summary["timeout_policy"],
+                {
+                    "per_step_timeout_seconds": 3,
+                    "timeout_exit_code": 124,
+                    "timeout_is_final_gate_failure": True,
+                },
+            )
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertIn("step_failed:evidence-governance", summary["final_gate"]["reasons"])
+            timed_out_step = next(step for step in summary["steps"] if step["step"] == "evidence-governance")
+            self.assertEqual(timed_out_step["status"], "failed")
+            self.assertTrue(timed_out_step["timed_out"])
+            self.assertEqual(timed_out_step["timeout_seconds"], 3)
+            command_log = out_root / "logs" / "commands.jsonl"
+            log_entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            timed_out_log = next(entry for entry in log_entries if entry["step"] == "evidence-governance")
+            self.assertTrue(timed_out_log["timed_out"])
+            self.assertEqual(timed_out_log["timeout_seconds"], 3)
+
+    def test_environment_check_timeout_fails_closed_for_non_exact_proof_class(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(timeout_commands_containing={"toolchain-check.sh"}),
+                repo_root=REPO_ROOT,
+                run_id="smoke-environment-timeout-test",
+                timeout_seconds=3,
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            environment_step = next(step for step in summary["steps"] if step["step"] == "environment-check")
+            self.assertEqual(environment_step["status"], "failed")
+            self.assertTrue(environment_step["timed_out"])
+            self.assertNotIn("proof_class_effect", environment_step)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertIn("step_failed:environment-check", summary["final_gate"]["reasons"])
 
     def test_competition_exact_fails_on_environment_drift_even_when_confirmed(self) -> None:
         module = load_smoke_module()
