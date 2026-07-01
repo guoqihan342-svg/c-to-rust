@@ -13,7 +13,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-    "sha256": "6fbf71f789baa2c5fbfd49f6638d93c58e21d571d9192d87af4a4b8e0e2c7ccb"
+    "sha256": "ddf5bddec4537c806ffa26fa73ac7b8edd3c655a5c24a8ac5a4ef8b6efacd435"
   },
   "accepted_patch": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
@@ -21,7 +21,7 @@
   },
   "patch_log": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",
-    "sha256": "874c14cb74260024182a29a10977b317ef72af37d1d034f5b569a22725cde7ef"
+    "sha256": "6fb0e22bf93b32b045be8464b19f50cfb33e8dfd32e5571a4692c69cee35a664"
   },
   "unsafe_reduction": {
     "status": "measured",
@@ -37,7 +37,7 @@
   "semantic_evidence": {
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "afee98f42017335e698ce6c7126b6baad65fa6ae02b4f7c5ffb13fd420b57692"
+      "sha256": "8b4054add3949312e313983a5c8e6bb7b9968b2465416236dbf3a9a82046641e"
     },
     "final_source_snapshot": {
       "path": "validation/l2_slices/src/fdb_calc_crc32.rs",

@@ -113,11 +113,11 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "1d40599f0717f8f2cf08e1612f462113983b32a9986d498f9f305a9cded26e0d"
+        "sha256": "c320621e19c889ff55e434b166259dcb78611f132715439ca9ed11fbb672dc7f"
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "3586e8a51e31d91030be11ab914412a9c3ec3a244bc0d68a06049f7252046325"
+        "sha256": "494c23548a63cf8ff0924f61183f3135a7bd091442fc4777e687319228ce24a4"
       },
       "review_checklist": {
         "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
@@ -164,7 +164,7 @@
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
-        "sha256": "bcc132ad4d929b479c565ba81b9876a62a02ca11ee2f16fafa87775041b3693b"
+        "sha256": "0c63037577024781e597b0fe4264965f3df943875e83f6b67e7f25ea700b0e9a"
       },
       "command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
       "verification_commands": [
@@ -204,7 +204,7 @@
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json",
-        "sha256": "4dcb34aa1218e37b1a160e99138bd2cf3069e9b089c4c88d757c852d8115b91b"
+        "sha256": "2374f7bd921af56c35a86c014f3ed96767f142361a8cc3769b80d9080214c226"
       },
       "command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
       "verification_commands": [

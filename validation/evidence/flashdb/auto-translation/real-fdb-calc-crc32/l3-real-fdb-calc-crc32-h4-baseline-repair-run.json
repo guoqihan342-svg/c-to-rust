@@ -20,7 +20,7 @@
   },
   "competition_profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-    "sha256": "1d40599f0717f8f2cf08e1612f462113983b32a9986d498f9f305a9cded26e0d"
+    "sha256": "c320621e19c889ff55e434b166259dcb78611f132715439ca9ed11fbb672dc7f"
   },
   "environment_profile": {
     "path": "config/competition-env/environment.json",
@@ -43,7 +43,7 @@
     },
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "7402b044d81efb2cade6ab2acfe408a3363a34533ca1f89814f2339959a16b6a"
+      "sha256": "41111b11e30c32829f83187481abda9ba3ecbc6ac1dc2b951b31bd390555ddda"
     }
   },
   "claim_boundary": {
@@ -66,7 +66,7 @@
   "tracked_artifacts": {
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "7402b044d81efb2cade6ab2acfe408a3363a34533ca1f89814f2339959a16b6a"
+      "sha256": "41111b11e30c32829f83187481abda9ba3ecbc6ac1dc2b951b31bd390555ddda"
     },
     "raw_unsafe_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
@@ -78,7 +78,7 @@
     },
     "oracle_evidence": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-      "sha256": "6fbf71f789baa2c5fbfd49f6638d93c58e21d571d9192d87af4a4b8e0e2c7ccb"
+      "sha256": "ddf5bddec4537c806ffa26fa73ac7b8edd3c655a5c24a8ac5a4ef8b6efacd435"
     },
     "accepted_safety_patch": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
@@ -86,7 +86,7 @@
     },
     "safety_step_log": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",
-      "sha256": "874c14cb74260024182a29a10977b317ef72af37d1d034f5b569a22725cde7ef"
+      "sha256": "6fb0e22bf93b32b045be8464b19f50cfb33e8dfd32e5571a4692c69cee35a664"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-before-after-unsafe-scan.json",
@@ -94,7 +94,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "afee98f42017335e698ce6c7126b6baad65fa6ae02b4f7c5ffb13fd420b57692"
+      "sha256": "8b4054add3949312e313983a5c8e6bb7b9968b2465416236dbf3a9a82046641e"
     },
     "final_source_snapshot": {
       "path": "validation/l2_slices/src/fdb_calc_crc32.rs",
@@ -102,7 +102,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-      "sha256": "5355b01546d5a97d1585d867879217e1baba3a8e39795cb953ef22e0e1510435"
+      "sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147"
     }
   },
   "translation_before_after_summary": {
