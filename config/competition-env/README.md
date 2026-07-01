@@ -44,7 +44,7 @@
 - `toolchain-check.sh`：比赛机环境自检脚本。
 - `smoke.sh`：Linux/WSL/CI 轻量 smoke 入口，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要。
 - `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，在 `auto_retry=true` 时启用 `run-plan --auto-retry`，并用 `max_workers` fan-out 独立 worker。
-- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 FlashDB before/after demo 与显式多 worker evaluate profile 的命令、预期 artifacts、tracked manifest、source pin policy、H1-H6 test contract 和 claim boundary，但不替代 semantic gate。可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 context-pack、agent-index、judge-evidence-index 与 worker 索引一致性。
+- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 FlashDB before/after demo 与显式多 worker evaluate profile 的命令、预期 artifacts、tracked manifest、source pin policy、H1-H6 test contract 和 claim boundary，但不替代 semantic gate。执行入口命令优先用 `python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json`，它会运行入口并在成功后调用本地 artifact 深校验；可加 `--dry-run` 只输出计划。只校验索引时可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 context-pack、agent-index、judge-evidence-index 与 worker 索引一致性。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计。
 
 ## Clang 策略：vendored 本地分发
@@ -118,6 +118,21 @@ python validation/tools/run_competition_smoke.py \
 ```
 
 smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提交 evidence validator、`evidence_governance.py`、`translator_coverage_matrix.py` 和轻量 unittest，并写出 `target/competition-smoke/summary/competition-smoke-summary.json`。该摘要会记录 `execution_environment`、`competition_profile_match`、`environment_deviations`、`clang_source`、`vendored_clang_verification.path`、各 gate 状态和日志路径。非 `competition-exact` proof class 中缺 clang 只会在 `vendored-clang-verification.json` 中标为 `missing_clang_path`；`competition-exact` 会把 vendored clang verifier 作为 required gate。除非在真实比赛机上有外部环境证明，否则不要传 `competition-exact`；该模式默认要求 `--confirm-competition-exact`，避免 CI/WSL/local 结果误标成比赛机精确证明。smoke 不是新 slice 翻译，也不声明新的 semantic pass。
+
+评委一键 harness runner：
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --entrypoint-id before_after_judge_demo \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --dry-run
+```
+
+runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后才执行入口命令；命令成功后再调用本地 artifact 深校验并写出 readiness report。它只是编排证据，语义接受仍只来自 competition summary、workflow metrics、oracle evidence 和 validators。
 
 可复用 planned batch profile 入口：
 

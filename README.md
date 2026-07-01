@@ -165,6 +165,11 @@ python -B -m validation.tools.judge_demo --profile config/competition-env/planne
 # 证据索引: target/competition-out-flashdb-before-after-exhibit/harness/judge-evidence-index.json
 # 保底 demo 输出: target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json
 
+# 评委一键 harness runner（执行入口命令并深校验本地 artifacts）
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+# 只检查将要执行的入口，不运行命令或要求本地 artifacts
+python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --dry-run
+
 # 全量回归
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
 python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence

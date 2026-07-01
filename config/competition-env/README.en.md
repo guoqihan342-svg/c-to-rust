@@ -42,7 +42,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 - `toolchain-check.sh`: competition host self-check script.
 - `smoke.sh`: lightweight Linux/WSL/CI smoke entrypoint; it calls `run_competition_smoke.py` and emits a proof-classed summary.
 - `planned-batches/`: reusable planned batch profile inputs; `run-batch-profile` invokes `init-run`, `plan-source-file`, and `run-plan --execute-merge` from the profile, can enable `run-plan --auto-retry` when `auto_retry=true`, and can fan out independent workers with `max_workers`.
-- `judge-entrypoints/`: judge-facing one-command entrypoint directory. `flashdb-harness.json` binds the FlashDB before/after demo and explicit multi-worker evaluate profile commands, expected artifacts, tracked manifests, source-pin policy, H1-H6 test contracts, and claim boundaries, but it does not replace semantic gates. Run `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` to validate the entrypoint index, hashes, proof classes, source-pin/profile consistency, claim boundaries, and test contracts; add `--require-local-artifacts` after local target artifacts have been generated to deep-check context-pack, agent-index, judge-evidence-index, and worker-index consistency.
+- `judge-entrypoints/`: judge-facing one-command entrypoint directory. `flashdb-harness.json` binds the FlashDB before/after demo and explicit multi-worker evaluate profile commands, expected artifacts, tracked manifests, source-pin policy, H1-H6 test contracts, and claim boundaries, but it does not replace semantic gates. To execute an entrypoint, prefer `python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json`; it runs the entrypoint and then invokes local-artifact deep validation after successful commands. Add `--dry-run` to emit only the execution plan. For index-only validation, run `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` to validate the entrypoint index, hashes, proof classes, source-pin/profile consistency, claim boundaries, and test contracts; add `--require-local-artifacts` after local target artifacts have been generated to deep-check context-pack, agent-index, judge-evidence-index, and worker-index consistency.
 - `opencode-single-interaction.md` / `.en.md`: OpenCode single-interaction competition workflow guide.
 
 ## Clang Policy: Project-Local Vendored Binary
@@ -116,6 +116,21 @@ python validation/tools/run_competition_smoke.py \
 ```
 
 The smoke runs the environment check, the structured vendored clang verifier, the core committed evidence validator, `evidence_governance.py`, `translator_coverage_matrix.py`, and a lightweight unittest subset. It writes `target/competition-smoke/summary/competition-smoke-summary.json` with `execution_environment`, `competition_profile_match`, `environment_deviations`, `clang_source`, `vendored_clang_verification.path`, gate status, and log paths. In non-`competition-exact` proof classes, missing clang is recorded as `missing_clang_path` in `vendored-clang-verification.json`; `competition-exact` treats the vendored clang verifier as a required gate. Do not pass `competition-exact` unless running on the real competition host with external environment proof; that mode requires `--confirm-competition-exact` by default so CI/WSL/local output is not mislabeled as exact competition evidence. The smoke does not translate a new slice and does not claim a new semantic pass.
+
+Judge-facing one-click harness runner:
+
+```bash
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --entrypoint-id before_after_judge_demo \
+  --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+python -B -m validation.tools.run_judge_entrypoints \
+  --config config/competition-env/judge-entrypoints/flashdb-harness.json \
+  --dry-run
+```
+
+The runner performs entrypoint preflight without requiring local artifacts before executing commands. After successful commands, it invokes local-artifact deep validation and writes the readiness report. It is orchestration evidence only; semantic acceptance remains owned by the competition summary, workflow metrics, oracle evidence, and validators.
 
 Reusable planned batch profile entrypoint:
 
