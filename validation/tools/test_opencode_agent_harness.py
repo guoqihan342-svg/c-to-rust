@@ -4164,6 +4164,42 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(verification["tools_before_first_shell"], [])
         self.assertEqual(verification["contract_failure_reason"], "first_shell_command_mismatch_worker_command_seen_later")
 
+    def test_opencode_contract_accepts_argv_equivalent_quoted_worker_command(self) -> None:
+        worker_command = [
+            "python",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker-a/harness/worker-a-request-attempt-1.json",
+        ]
+        quoted_command = (
+            'python -B scripts/c2rust-migrator.py --phase migrate --input '
+            '"target/out/workers/worker-a/harness/worker-a-request-attempt-1.json"'
+        )
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "bash", "state": {"input": {"command": quoted_command}}},
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertEqual(verification["first_shell_command"], quoted_command)
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "")
+
     def test_opencode_contract_rejects_any_tool_before_first_shell_command(self) -> None:
         worker_command = [
             sys.executable,
@@ -4803,6 +4839,75 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ("opencode-preflight-report", repo_rel(preflight_report), "agent-preflight-evidence"),
                 artifact_rows,
             )
+
+    def test_run_worker_opencode_retries_transient_database_lock_before_contract_failure(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(out_root / "harness" / "opencode-preflight-report.json", run_id="run-test")
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                if len(calls) == 1:
+                    return subprocess.CompletedProcess(argv, 1, stdout="", stderr="database is locked\n")
+                contract = json.loads(
+                    (out_root / "workers" / "worker-a" / "harness" / "opencode-handoff-contract.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                request = json.loads((REPO_ROOT / contract["request_path"]).read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                mode="opencode",
+                opencode_preflight_report=preflight_report,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(result["opencode_process_retries"]["transient_lock_retry_count"], 1)
+            self.assertEqual(result["opencode_process_retries"]["status"], "recovered")
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["opencode_process_retries"], result["opencode_process_retries"])
+            event_payload = json.loads(
+                fetch_rows(db_path, "select payload_json from events where event_type='worker_executed'")[-1][0]
+            )
+            self.assertEqual(event_payload["opencode_process_retries"], result["opencode_process_retries"])
 
     def test_run_plan_opencode_passes_preflight_report_to_workers(self) -> None:
         with temp_repo_dir() as tmp:

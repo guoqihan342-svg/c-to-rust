@@ -287,6 +287,11 @@ def blocked_repair_entry(repair: Any) -> dict[str, Any] | None:
         repair.get("smallest_next_test", {}) if isinstance(repair.get("smallest_next_test"), dict) else {}
     )
     source_span = repair.get("source_span", {}) if isinstance(repair.get("source_span"), dict) else {}
+    source_span_entry = {
+        "file": source_span.get("file"),
+        "line_start": source_span.get("line_start"),
+        "line_end": source_span.get("line_end"),
+    }
     candidate_routes = []
     for route in list_or_empty(repair.get("candidate_routes")):
         if isinstance(route, dict):
@@ -302,11 +307,8 @@ def blocked_repair_entry(repair: Any) -> dict[str, Any] | None:
         "blocked_reason": repair.get("blocked_reason"),
         "forbidden_change": repair.get("forbidden_change"),
         "candidate_patch_id": repair.get("candidate_patch_id"),
-        "source_span": {
-            "file": source_span.get("file"),
-            "line_start": source_span.get("line_start"),
-            "line_end": source_span.get("line_end"),
-        },
+        "source_span": source_span_entry,
+        "source_span_kind": classify_source_span(source_span_entry),
         "human_action_required": repair.get("human_action_required") is True,
         "human_intervention_point": repair.get("human_intervention_point"),
         "ir_feature_gap_kind": gap.get("kind"),
@@ -359,12 +361,16 @@ def blocked_repairs_summary(
     callees: list[str] = []
     gap_kinds: dict[str, int] = {}
     forbidden_changes: dict[str, int] = {}
+    blocked_reasons: dict[str, int] = {}
+    source_span_kinds: dict[str, int] = {}
     smallest_tests: list[dict[str, Any]] = []
     next_actions: list[dict[str, Any]] = []
     for entry in entries:
         append_unique(human_points, entry.get("human_intervention_point"))
         for callee in list_or_empty(entry.get("blocked_callees")):
             append_unique(callees, callee)
+        increment_count(blocked_reasons, entry.get("blocked_reason"))
+        increment_count(source_span_kinds, entry.get("source_span_kind"))
         increment_count(gap_kinds, entry.get("ir_feature_gap_kind"))
         increment_count(forbidden_changes, entry.get("forbidden_change"))
         test = entry.get("smallest_next_test")
@@ -383,6 +389,8 @@ def blocked_repairs_summary(
         "blocked_callees": callees,
         "ir_feature_gap_kinds": gap_kinds,
         "forbidden_change_counts": forbidden_changes,
+        "blocked_reason_counts": blocked_reasons,
+        "source_span_kind_counts": source_span_kinds,
         "smallest_next_tests": smallest_tests,
         "next_actions": next_actions,
         "entries": entries,
@@ -415,10 +423,27 @@ def blocked_repair_next_actions(entry: dict[str, Any]) -> list[dict[str, Any]]:
         copy_string(action, "smallest_next_test_command", smallest.get("command"))
         copy_string(action, "expected_gate", smallest.get("expected_gate"))
         copy_string(action, "human_intervention_point", entry.get("human_intervention_point"))
+        copy_string(action, "source_span_kind", entry.get("source_span_kind"))
         if source_span and any(source_span.get(key) is not None for key in ["file", "line_start", "line_end"]):
             action["source_span"] = source_span
         actions.append(action)
     return actions
+
+
+def classify_source_span(source_span: dict[str, Any]) -> str:
+    raw_file = source_span.get("file")
+    if not isinstance(raw_file, str) or not raw_file:
+        return "unknown"
+    normalized = raw_file.replace("\\", "/")
+    if normalized == "slice-spec":
+        return "slice_spec"
+    if normalized.endswith((".c", ".h")):
+        return "c_source"
+    if normalized.endswith(".rs"):
+        return "generated_rust"
+    if normalized.startswith("validation/evidence/") or "/auto-translation/" in normalized:
+        return "generated_artifact"
+    return "unknown"
 
 
 def increment_count(counts: dict[str, int], value: Any) -> None:

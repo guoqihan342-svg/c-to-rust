@@ -80,6 +80,12 @@ def route_metrics_payload(
                 "forbidden_change_counts": {"missing_l1_evidence": blocked_repair_count}
                 if blocked_repair_count
                 else {},
+                "blocked_reason_counts": {
+                    "External callee semantics are not bound to oracle evidence.": blocked_repair_count
+                }
+                if blocked_repair_count
+                else {},
+                "source_span_kind_counts": {"c_source": blocked_repair_count} if blocked_repair_count else {},
                 "smallest_next_tests": [
                     {
                         "kind": "callee_contract_replay",
@@ -102,6 +108,12 @@ def route_metrics_payload(
                         "smallest_next_test_command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
                         "expected_gate": "external callee contract is bound before candidate promotion",
                         "human_intervention_point": "Bind external callee semantics before promotion.",
+                        "source_span": {
+                            "file": "src/demo.c",
+                            "line_start": 12,
+                            "line_end": 14,
+                        },
+                        "source_span_kind": "c_source",
                     }
                 ]
                 if blocked_repair_count
@@ -655,6 +667,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_blocked_next_actions, schema)
 
+        missing_blocked_reason_counts = json.loads(json.dumps(report))
+        missing_blocked_reason_counts["blocked_repairs_rollup"]["rollup"].pop("blocked_reason_counts")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_reason_counts, schema)
+
+        missing_source_span_kind_counts = json.loads(json.dumps(report))
+        missing_source_span_kind_counts["blocked_repairs_rollup"]["rollup"].pop("source_span_kind_counts")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_source_span_kind_counts, schema)
+
         missing_blocked_claim = json.loads(json.dumps(report))
         missing_blocked_claim["must_not_claim"].remove("blocked_repairs_are_not_translation_success")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
@@ -1073,6 +1095,11 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(blocked["blocked_callees"], ["helper_blocked"])
         self.assertEqual(blocked["ir_feature_gap_kinds"], {"external_direct_callee_context": 2})
         self.assertEqual(
+            blocked["blocked_reason_counts"],
+            {"External callee semantics are not bound to oracle evidence.": 2},
+        )
+        self.assertEqual(blocked["source_span_kind_counts"], {"c_source": 2})
+        self.assertEqual(
             blocked["smallest_next_tests"],
             [
                 {
@@ -1098,6 +1125,12 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     "smallest_next_test_command": "python -B validation/tools/validate_auto_translation_evidence.py --target-id demo --slice-id refused --require-semantic-pass",
                     "expected_gate": "external callee contract is bound before candidate promotion",
                     "human_intervention_point": "Bind external callee semantics before promotion.",
+                    "source_span": {
+                        "file": "src/demo.c",
+                        "line_start": 12,
+                        "line_end": 14,
+                    },
+                    "source_span_kind": "c_source",
                 }
             ],
         )

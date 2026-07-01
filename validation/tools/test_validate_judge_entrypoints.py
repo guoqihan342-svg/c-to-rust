@@ -1356,6 +1356,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "blocked_callees": [],
                         "ir_feature_gap_kinds": {},
                         "forbidden_change_counts": {},
+                        "blocked_reason_counts": {},
+                        "source_span_kind_counts": {},
                         "smallest_next_tests": [],
                         "next_actions": [],
                         "semantic_gate": False,

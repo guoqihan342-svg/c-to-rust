@@ -60,6 +60,8 @@ python -B -m validation.tools.opencode_agent_harness evaluate --profile config/c
 
 该路径额外绑定 OpenCode preflight、`opencode_agent_runtime`、worker handoff/session/log、`worker_plan`、`context-pack.json`、`agent-index.json` 和 `judge-evidence-index.json`；`validate_judge_entrypoints --require-local-artifacts` 会校验 runtime contract 与 sha256。边界：OpenCode chat/session 不是语义证据，也不是新的 semantic gate。
 
+如果 OpenCode 在第一条 shell command 前报 `database is locked`，worker 会把有限启动重试记录为 `opencode_process_retries`。这个重试只服务 runtime 稳定性；worker 是否能进入 merge 仍由 contract verification 和 summary validation 决定。
+
 保底 repo-local demo：
 
 ```bash

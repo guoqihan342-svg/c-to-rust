@@ -122,6 +122,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `run-plan --max-workers <N> --auto-retry` is the LangGraph-inspired execution shape without adding a new runtime dependency: `load_plan -> fanout_workers -> worker -> repair_retry -> merge -> report`. Independent workers run in parallel up to `max_workers`, but `run-plan-report.json.graph.parallel_map.result_order=planner_order` keeps the fan-in deterministic. A failed worker can be retried with the same assignment through the persisted `repair_hints` ledger until it revalidates or reaches `REPAIR_ROUND_CAP=5`; failed intermediate attempts stay audit-visible, while semantic acceptance still comes only from the worker summary, final aggregation, and validators.
 
+`run-worker --mode opencode` also records startup-level transient retries as `opencode_process_retries` when OpenCode itself fails with `database is locked` before the first shell command. This is intentionally narrower than repair retry: it only retries the agent process startup, keeps the exact-command verifier unchanged, and still requires the expected worker summary before any merge can pass.
+
 `evaluate` is the judge/regression-first entrypoint: one command chains `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`. It also emits two context-management artifacts:
 
 - `harness/context-pack.json`: a run-level context pack containing the source pin, graph, parallelism, entrypoints, worker summaries/reports, merge summary, and acceptance boundary; it is also written to the SQLite `context_packs` table so the next agent run or a judge can locate the evidence directly.

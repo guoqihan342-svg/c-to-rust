@@ -1390,6 +1390,8 @@ def blocked_repairs_source(value: object) -> dict[str, Any]:
         "blocked_callees": string_list(value.get("blocked_callees")),
         "ir_feature_gap_kinds": int_count_map(value.get("ir_feature_gap_kinds")),
         "forbidden_change_counts": int_count_map(value.get("forbidden_change_counts")),
+        "blocked_reason_counts": int_count_map(value.get("blocked_reason_counts")),
+        "source_span_kind_counts": int_count_map(value.get("source_span_kind_counts")),
         "smallest_next_tests": object_list(value.get("smallest_next_tests")),
         "next_actions": object_list(value.get("next_actions")),
         "semantic_gate": False,
@@ -1403,6 +1405,8 @@ def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[st
     status_counts: dict[str, int] = {}
     gap_kinds: dict[str, int] = {}
     forbidden_changes: dict[str, int] = {}
+    blocked_reasons: dict[str, int] = {}
+    source_span_kinds: dict[str, int] = {}
     smallest_tests: list[dict[str, Any]] = []
     next_actions: list[dict[str, Any]] = []
     blocked_repair_count = 0
@@ -1420,6 +1424,8 @@ def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[st
             append_unique(callees, callee)
         merge_int_counts(gap_kinds, blocked.get("ir_feature_gap_kinds"))
         merge_int_counts(forbidden_changes, blocked.get("forbidden_change_counts"))
+        merge_int_counts(blocked_reasons, blocked.get("blocked_reason_counts"))
+        merge_int_counts(source_span_kinds, blocked.get("source_span_kind_counts"))
         for test in object_list(blocked.get("smallest_next_tests")):
             append_unique_dict(smallest_tests, test)
         for action in object_list(blocked.get("next_actions")):
@@ -1437,6 +1443,8 @@ def build_blocked_repairs_route_rollup(sources: list[dict[str, Any]]) -> dict[st
         "blocked_callees": callees,
         "ir_feature_gap_kinds": gap_kinds,
         "forbidden_change_counts": forbidden_changes,
+        "blocked_reason_counts": blocked_reasons,
+        "source_span_kind_counts": source_span_kinds,
         "smallest_next_tests": smallest_tests,
         "next_actions": next_actions,
         "semantic_gate": False,
@@ -1459,6 +1467,8 @@ def empty_blocked_repairs_rollup() -> dict[str, Any]:
         "blocked_callees": [],
         "ir_feature_gap_kinds": {},
         "forbidden_change_counts": {},
+        "blocked_reason_counts": {},
+        "source_span_kind_counts": {},
         "smallest_next_tests": [],
         "next_actions": [],
         "semantic_gate": False,

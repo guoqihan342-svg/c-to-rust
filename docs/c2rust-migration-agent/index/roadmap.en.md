@@ -68,6 +68,8 @@ This path additionally binds OpenCode preflight, `opencode_agent_runtime`, worke
 
 This entrypoint emits `harness/evaluate-report.json`, `harness/context-pack.json`, `harness/agent-index.json`, and the SQLite `context_packs` index for judge audits and later OpenCode multi-agent continuation; `context_management_contract` / `agent_coordination_contract` make the plan -> worker fan-out -> verify/merge -> repair loop -> report roles, resume protocol, and `chat_output_is_evidence=false` boundary machine-readable.
 
+If OpenCode fails with `database is locked` before issuing the first shell command, the worker records bounded startup retries as `opencode_process_retries`. The retry is runtime stabilization only; contract verification and summary validation still decide whether the worker can be accepted into the merge.
+
 Fallback repo-local demo:
 
 ```bash

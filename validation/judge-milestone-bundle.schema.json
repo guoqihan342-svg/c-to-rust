@@ -250,6 +250,8 @@
             "blocked_callees",
             "ir_feature_gap_kinds",
             "forbidden_change_counts",
+            "blocked_reason_counts",
+            "source_span_kind_counts",
             "smallest_next_tests",
             "next_actions",
             "semantic_gate",
@@ -273,6 +275,14 @@
               "additionalProperties": {"type": "integer", "minimum": 0}
             },
             "forbidden_change_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "blocked_reason_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "source_span_kind_counts": {
               "type": "object",
               "additionalProperties": {"type": "integer", "minimum": 0}
             },
@@ -308,6 +318,7 @@
                   "smallest_next_test_command": {"type": "string", "minLength": 1},
                   "expected_gate": {"type": "string", "minLength": 1},
                   "human_intervention_point": {"type": "string", "minLength": 1},
+                  "source_span_kind": {"type": "string", "minLength": 1},
                   "source_span": {"type": "object"}
                 }
               }

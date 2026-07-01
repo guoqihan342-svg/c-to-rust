@@ -199,6 +199,11 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                 {"external_direct_callee_context": 1},
             )
             self.assertEqual(
+                metrics["blocked_repairs"]["blocked_reason_counts"],
+                {"External callee semantics are not bound to oracle evidence.": 1},
+            )
+            self.assertEqual(metrics["blocked_repairs"]["source_span_kind_counts"], {"c_source": 1})
+            self.assertEqual(
                 metrics["blocked_repairs"]["smallest_next_tests"],
                 [
                     {
@@ -228,6 +233,7 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                             "line_start": 12,
                             "line_end": 14,
                         },
+                        "source_span_kind": "c_source",
                     },
                     {
                         "repair_id": "repair-refused-1",
@@ -246,6 +252,7 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                             "line_start": 12,
                             "line_end": 14,
                         },
+                        "source_span_kind": "c_source",
                     },
                 ],
             )
@@ -264,6 +271,7 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                 context["blocked_repairs"]["entries"][0]["human_intervention_point"],
                 "Bind external callee semantics before promotion.",
             )
+            self.assertEqual(context["blocked_repairs"]["entries"][0]["source_span_kind"], "c_source")
             self.assertEqual(
                 context["blocked_repairs"]["next_actions"][0]["next_action"],
                 "bind_external_callee_semantics",
@@ -301,6 +309,16 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             missing_next_actions["metrics"]["blocked_repairs"].pop("next_actions")
             with self.assertRaises(jsonschema.exceptions.ValidationError):
                 jsonschema.validate(missing_next_actions, schema)
+
+            missing_blocked_reason_counts = json.loads(json.dumps(report))
+            missing_blocked_reason_counts["metrics"]["blocked_repairs"].pop("blocked_reason_counts")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_blocked_reason_counts, schema)
+
+            missing_source_span_kind_counts = json.loads(json.dumps(report))
+            missing_source_span_kind_counts["metrics"]["blocked_repairs"].pop("source_span_kind_counts")
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(missing_source_span_kind_counts, schema)
 
             missing_next_action_route = json.loads(json.dumps(report))
             missing_next_action_route["metrics"]["blocked_repairs"]["next_actions"][0].pop("route")

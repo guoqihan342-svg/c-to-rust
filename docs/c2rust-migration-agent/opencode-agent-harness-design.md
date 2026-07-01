@@ -124,6 +124,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `run-plan --max-workers <N> --auto-retry` 是不新增运行时依赖的 LangGraph-inspired 执行形态：`load_plan -> fanout_workers -> worker -> repair_retry -> merge -> report`。独立 worker 最多并行到 `max_workers`，但 `run-plan-report.json.graph.parallel_map.result_order=planner_order` 固定 planner 顺序 fan-in。失败 worker 会通过已落盘的 `repair_hints` 账本用同一份 assignment 重试，直到重新验证通过或达到 `REPAIR_ROUND_CAP=5`；中间失败尝试保留审计记录，语义接受仍只来自 worker summary、最终聚合和 validator。
 
+`run-worker --mode opencode` 还会在 OpenCode 自身于第一条 shell command 前报 `database is locked` 时，把启动层瞬时重试记录为 `opencode_process_retries`。这比 repair retry 更窄：它只重试 agent 进程启动，不改变 exact-command verifier，且仍要求 expected worker summary 存在后才能让 merge 通过。
+
 `evaluate` 是评委/回归优先入口：一次命令串起 `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`。它额外生成两份上下文管理 artifact：
 
 - `harness/context-pack.json`：run 级上下文包，包含 source pin、graph、parallelism、entrypoints、worker summary/report、merge summary 和 acceptance boundary；同时写入 SQLite `context_packs` 表，供下一轮 agent 或评委直接定位证据。

@@ -16,6 +16,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -3836,6 +3837,82 @@ def worker_attempt_request(
     return attempt_request
 
 
+def run_worker_process(
+    *,
+    argv: list[str],
+    mode: str,
+    command_runner: Any,
+    repo_root: Path,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
+    retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
+    attempts: list[dict[str, Any]] = []
+    for index in range(len(retry_delays) + 1):
+        completed = run_worker_process_once(argv=argv, command_runner=command_runner, repo_root=repo_root)
+        transient_lock = mode == "opencode" and opencode_database_locked(completed)
+        attempts.append(
+            {
+                "attempt": index + 1,
+                "process_returncode": int(completed.returncode),
+                "transient_lock": transient_lock,
+                "stderr_tail": tail_text(completed.stderr or "", 512),
+            }
+        )
+        if not transient_lock or index == len(retry_delays):
+            break
+        time.sleep(retry_delays[index])
+    if len(attempts) == 1:
+        return completed, None
+    final_lock = attempts[-1]["transient_lock"] is True
+    return completed, {
+        "status": "exhausted" if final_lock else "recovered",
+        "reason": "opencode_database_locked",
+        "attempt_count": len(attempts),
+        "transient_lock_retry_count": len(attempts) - 1,
+        "max_transient_lock_retries": len(retry_delays),
+        "attempts": attempts,
+        "evidence_boundary": (
+            "OpenCode process retry only handles transient agent database locks before the worker command executes; "
+            "semantic acceptance still requires the worker summary and contract verifier."
+        ),
+        "semantic_gate": False,
+    }
+
+
+def run_worker_process_once(
+    *,
+    argv: list[str],
+    command_runner: Any,
+    repo_root: Path,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+
+
+def opencode_database_locked(completed: subprocess.CompletedProcess[str]) -> bool:
+    if int(completed.returncode) == 0:
+        return False
+    stderr = (completed.stderr or "").lower()
+    return "database is locked" in stderr
+
+
+def tail_text(value: str, max_chars: int) -> str:
+    return value[-max_chars:]
+
+
 def run_worker(
     *,
     db_path: Path,
@@ -3924,8 +4001,10 @@ def run_worker(
         argv = worker_command
         runner_kind = "repo-local-c2rust-migrator"
         handoff_contract = None
+        opencode_process_retries = None
     elif mode == "opencode":
         handoff_contract_path = report_dir / "opencode-handoff-contract.json"
+        opencode_process_retries = None
         argv = build_opencode_run_argv(
             opencode_command=opencode_command,
             opencode_model=opencode_model,
@@ -3961,22 +4040,12 @@ def run_worker(
     else:
         raise SystemExit(f"unsupported worker mode: {mode}")
 
-    try:
-        completed = command_runner(
-            argv,
-            cwd=repo_root,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-        )
-    except OSError as exc:
-        completed = subprocess.CompletedProcess(
-            argv,
-            127,
-            stdout="",
-            stderr=f"{type(exc).__name__}: {exc}\n",
-        )
+    completed, opencode_process_retries = run_worker_process(
+        argv=argv,
+        mode=mode,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
     stderr_path = logs_dir / "harness-worker-executor.stderr.log"
     stdout_path.write_text(completed.stdout or "", encoding="utf-8")
@@ -4141,6 +4210,8 @@ def run_worker(
     }
     if handoff_contract is not None:
         report["handoff_contract"] = handoff_contract
+    if opencode_process_retries is not None:
+        report["opencode_process_retries"] = opencode_process_retries
     if preflight_binding is not None:
         report["opencode_preflight_report"] = preflight_binding
     if opencode_session_evidence is not None:
@@ -4200,6 +4271,8 @@ def run_worker(
                 payload=load_json(repo_path(Path(handoff_contract["path"]), repo_root=repo_root)),
                 repo_root=repo_root,
             )
+        if opencode_process_retries is not None:
+            event_payload["opencode_process_retries"] = opencode_process_retries
         if preflight_binding is not None:
             event_payload["opencode_preflight_report"] = preflight_binding
             record_artifact(
@@ -5398,9 +5471,8 @@ def verify_opencode_contract_execution(
     expected_worker_command_line = subprocess.list2cmdline(worker_command)
     tool_trace = extract_opencode_tool_trace(session_evidence)
     executed_shell_commands = extract_opencode_shell_commands(session_evidence)
-    normalized_expected = normalize_command_for_contract(expected_worker_command_line)
     exact_worker_command_seen = any(
-        normalize_command_for_contract(command) == normalized_expected for command in executed_shell_commands
+        command_matches_for_contract(command, expected_worker_command_line) for command in executed_shell_commands
     )
     first_shell_command = executed_shell_commands[0] if executed_shell_commands else ""
     first_tool_name = str(tool_trace[0]["tool"]) if tool_trace else ""
@@ -5413,7 +5485,7 @@ def verify_opencode_contract_execution(
         str(item["tool"]) for item in tool_trace[:first_shell_index]
     ] if first_shell_index is not None else [str(item["tool"]) for item in tool_trace[:20]]
     first_shell_command_matches_worker_command = (
-        bool(first_shell_command) and normalize_command_for_contract(first_shell_command) == normalized_expected
+        bool(first_shell_command) and command_matches_for_contract(first_shell_command, expected_worker_command_line)
     )
     status = "not-observed"
     if executed_shell_commands:
@@ -5524,6 +5596,21 @@ def opencode_session_events(session_evidence: dict[str, Any]) -> list[Any]:
 
 def normalize_command_for_contract(command: str) -> str:
     return " ".join(command.strip().split())
+
+
+def command_matches_for_contract(observed_command: str, expected_command: str) -> bool:
+    if normalize_command_for_contract(observed_command) == normalize_command_for_contract(expected_command):
+        return True
+    observed_argv = shell_argv_for_contract(observed_command)
+    expected_argv = shell_argv_for_contract(expected_command)
+    return bool(observed_argv) and observed_argv == expected_argv
+
+
+def shell_argv_for_contract(command: str) -> list[str]:
+    try:
+        return shlex.split(command, posix=True)
+    except ValueError:
+        return []
 
 
 def sha256_text(text: str) -> str:
