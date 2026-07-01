@@ -461,6 +461,11 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
 
             schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
             jsonschema.validate(report, schema)
+            semantic_spoof = json.loads(json.dumps(report))
+            semantic_spoof["metrics"]["c2rust_baseline"]["compile_semantic_pass_count"] = 1
+            with self.assertRaises(jsonschema.exceptions.ValidationError):
+                jsonschema.validate(semantic_spoof, schema)
+
             missing_baseline = json.loads(json.dumps(report))
             missing_baseline["metrics"].pop("c2rust_baseline")
             with self.assertRaises(jsonschema.exceptions.ValidationError):

@@ -64,7 +64,43 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-01T19:30:27Z"
+    "probed_at": "2026-07-01T21:08:53Z"
+  },
+  "toolchain_repair": {
+    "competition_environment": {
+      "profile": "config/competition-env/environment.json",
+      "proof_class": "local_or_wsl_until_competition_run"
+    },
+    "correctness_role": "candidate_context_only",
+    "must_not_claim": [
+      "toolchain repair proves C2Rust generated output",
+      "compile-only C2Rust output proves semantic equivalence"
+    ],
+    "reason": "blocked_by_missing_tools",
+    "required_commands": [
+      "c2rust-transpile",
+      "c2rust"
+    ],
+    "required_dependencies": [
+      "rustc",
+      "cargo",
+      "clang",
+      "libclang"
+    ],
+    "rerun_command": [
+      "python3",
+      "-B",
+      "-m",
+      "validation.tools.auto_migrate",
+      "--slice-spec",
+      "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+      "--out-root",
+      "validation/evidence"
+    ],
+    "rerun_env": {
+      "C2RUST_BASELINE_GENERATION": "1"
+    },
+    "status": "required"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

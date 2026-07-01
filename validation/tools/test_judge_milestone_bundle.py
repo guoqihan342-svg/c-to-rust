@@ -1105,6 +1105,13 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             jsonschema.validate(expanded, schema)
 
         expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"]["c2rust_baseline_rollup"][
+            "compile_semantic_pass_count"
+        ] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
         expanded["quantitative_evaluation"]["baseline_comparison"]["opencode_llm_worker"][
             "chat_output_is_evidence"
         ] = True

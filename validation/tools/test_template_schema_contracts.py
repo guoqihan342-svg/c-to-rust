@@ -303,6 +303,110 @@ class TemplateSchemaContractTests(unittest.TestCase):
             self.assertIn("path", output_ref_schema["anyOf"][1]["required"])
             self.assertIn("sha256", output_ref_schema["anyOf"][1]["required"])
 
+    def test_c2rust_baseline_manifest_schema_rejects_compile_only_spoof_shapes(self) -> None:
+        schema = load_json(REPO_ROOT / "validation" / "auto-translation-template" / "c2rust-baseline-manifest.schema.json")
+        generated = {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "c2rust-generated",
+            "status": "generated",
+            "reason": "generated_by_c2rust",
+            "correctness_role": "candidate_context_only",
+            "fallback_oracle": "original_c_oracle_required",
+            "validation_impact": "candidate context only",
+            "source_commit": "1234567",
+            "slice_spec": {"path": "slice.json", "sha256": "slice-sha"},
+            "build_profile_hash": "profile-sha",
+            "commands": [
+                {
+                    "name": "c2rust",
+                    "path": "fake-c2rust",
+                    "available": True,
+                    "version_status": "OK",
+                    "version": "c2rust 0.18.0",
+                }
+            ],
+            "selected_command": {"name": "c2rust", "path": "fake-c2rust"},
+            "reference_tree": {
+                "path": "tools/c2rust-reference",
+                "status": "missing",
+                "cargo_toml": "",
+                "diagnostic_only": True,
+            },
+            "generation": {
+                "enabled": True,
+                "enabled_by": "C2RUST_BASELINE_GENERATION",
+                "compile_commands": {"path": "compile_commands.json", "sha256": "compile-db-sha"},
+                "command": {
+                    "argv": ["c2rust", "transpile", "--emit-build-files", "compile_commands.json"],
+                    "working_directory": "validation/evidence/demo",
+                    "stdout_log": "baseline.stdout.log",
+                    "stderr_log": "baseline.stderr.log",
+                    "timeout_seconds": 120,
+                    "exit_status": "passed",
+                    "returncode": 0,
+                },
+                "generated_files": [{"path": "src/lib.rs", "sha256": "lib-sha"}],
+            },
+            "output": {"path": "baseline.rs", "status": "generated", "sha256": "output-sha"},
+            "compile": {
+                "status": "passed",
+                "attempted": True,
+                "semantic_pass": False,
+                "candidate_output": {"path": "baseline.rs", "status": "generated", "sha256": "output-sha"},
+                "command": {
+                    "argv": ["rustc", "--crate-type", "lib", "baseline.rs"],
+                    "working_directory": "validation/evidence/demo",
+                    "stdout_log": "baseline.stdout.log",
+                    "stderr_log": "baseline.stderr.log",
+                    "timeout_seconds": 60,
+                    "exit_status": "passed",
+                    "returncode": 0,
+                },
+                "artifact": {"path": "baseline.rlib", "status": "compiled", "sha256": "artifact-sha"},
+                "diagnostics": [],
+            },
+            "diagnostics": [],
+            "must_not_claim": ["C2Rust output proves semantic equivalence"],
+        }
+        jsonschema.validate(generated, schema)
+
+        generated_without_compile = json.loads(json.dumps(generated))
+        generated_without_compile.pop("compile")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(generated_without_compile, schema)
+
+        generated_semantic_spoof = json.loads(json.dumps(generated))
+        generated_semantic_spoof["compile"]["semantic_pass"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(generated_semantic_spoof, schema)
+
+        skipped_with_output = json.loads(json.dumps(generated))
+        skipped_with_output.update(
+            {
+                "status": "skipped",
+                "reason": "blocked_by_missing_tools",
+                "selected_command": None,
+                "compile": None,
+            }
+        )
+        skipped_with_output.pop("generation")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(skipped_with_output, schema)
+
+        blocked_with_compile = json.loads(json.dumps(generated))
+        blocked_with_compile.update(
+            {
+                "status": "blocked",
+                "reason": "blocked_by_missing_compile_commands",
+                "selected_command": None,
+                "output": None,
+            }
+        )
+        blocked_with_compile.pop("generation")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(blocked_with_compile, schema)
+
     def test_route_and_profile_schema_allow_p0_route_governance_summary(self) -> None:
         for schema_name in ["route-decision.schema.json", "validation-profile.schema.json"]:
             schema_path = REPO_ROOT / "validation" / "auto-translation-template" / schema_name

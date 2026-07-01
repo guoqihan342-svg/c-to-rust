@@ -159,6 +159,52 @@
       ]
     },
     "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "toolchain_repair": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "reason",
+            "required_commands",
+            "required_dependencies",
+            "competition_environment",
+            "rerun_env",
+            "rerun_command",
+            "correctness_role",
+            "must_not_claim"
+          ],
+          "properties": {
+            "status": {"const": "required"},
+            "reason": {"type": "string", "minLength": 1},
+            "required_commands": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "required_dependencies": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "competition_environment": {"type": "object"},
+            "rerun_env": {"type": "object"},
+            "rerun_command": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "correctness_role": {"const": "candidate_context_only"},
+            "must_not_claim": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      ]
+    },
     "must_not_claim": {
       "type": "array",
       "items": {"type": "string"},

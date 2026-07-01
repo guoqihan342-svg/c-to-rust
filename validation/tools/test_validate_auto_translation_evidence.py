@@ -24,6 +24,45 @@ def load_validator_module():
 
 
 class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
+    def _c2rust_compile_fixture(self, tmp_path: Path) -> tuple[dict, dict, Path]:
+        output_file = tmp_path / "c2rust-baseline-output.rs"
+        artifact_file = tmp_path / "c2rust-baseline-output.rlib"
+        stdout_log = tmp_path / "rustc.stdout.log"
+        stderr_log = tmp_path / "rustc.stderr.log"
+        output_file.write_text("pub fn generated() {}\n", encoding="utf-8")
+        artifact_file.write_text("fake rlib\n", encoding="utf-8")
+        stdout_log.write_text("rustc ok\n", encoding="utf-8")
+        stderr_log.write_text("", encoding="utf-8")
+        output_ref = {
+            "path": output_file.as_posix(),
+            "status": "generated",
+            "sha256": hashlib.sha256(output_file.read_bytes()).hexdigest(),
+        }
+        baseline = {
+            "compile": {
+                "status": "passed",
+                "attempted": True,
+                "semantic_pass": False,
+                "candidate_output": dict(output_ref),
+                "command": {
+                    "argv": ["rustc", "--crate-type", "lib", output_file.as_posix()],
+                    "working_directory": tmp_path.as_posix(),
+                    "stdout_log": stdout_log.as_posix(),
+                    "stderr_log": stderr_log.as_posix(),
+                    "timeout_seconds": 60,
+                    "exit_status": "passed",
+                    "returncode": 0,
+                },
+                "artifact": {
+                    "path": artifact_file.as_posix(),
+                    "status": "compiled",
+                    "sha256": hashlib.sha256(artifact_file.read_bytes()).hexdigest(),
+                },
+                "diagnostics": [],
+            }
+        }
+        return baseline, output_ref, tmp_path / "c2rust-baseline-manifest.json"
+
     def test_auto_translation_event_schema_accepts_translation_fallback_event(self) -> None:
         module = load_validator_module()
         schema = module.load_json(REPO_ROOT / "validation/auto-translation-template/auto-translation-event.schema.json")
@@ -947,18 +986,51 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
             evidence_dir = Path(tmp)
             prefix = "l3-c2rust-output"
+            compile_commands = evidence_dir / "compile_commands.json"
+            generation_stdout = evidence_dir / "c2rust.stdout.log"
+            generation_stderr = evidence_dir / "c2rust.stderr.log"
+            generated_file = evidence_dir / "generated" / "src" / "lib.rs"
+            generated_file.parent.mkdir(parents=True)
+            compile_commands.write_text(
+                json.dumps([{"directory": evidence_dir.as_posix(), "command": "cc -c demo.c", "file": "demo.c"}]),
+                encoding="utf-8",
+            )
+            generation_stdout.write_text("c2rust ok\n", encoding="utf-8")
+            generation_stderr.write_text("", encoding="utf-8")
+            generated_file.write_text("pub unsafe fn generated() {}\n", encoding="utf-8")
             output_path = evidence_dir / "c2rust-output.rs"
             output_path.write_text("pub unsafe fn generated() {}\n", encoding="utf-8")
+            generated_ref = {
+                "path": generated_file.as_posix(),
+                "sha256": self._sha256(generated_file),
+            }
             baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
             baseline = {
                 "schema_version": 1,
                 "status": "generated",
                 "reason": "generated_by_c2rust",
                 "correctness_role": "candidate_context_only",
+                "generation": {
+                    "compile_commands": {
+                        "path": compile_commands.as_posix(),
+                        "sha256": self._sha256(compile_commands),
+                    },
+                    "command": {
+                        "argv": ["c2rust", "transpile", "--emit-build-files", compile_commands.as_posix()],
+                        "working_directory": evidence_dir.as_posix(),
+                        "stdout_log": generation_stdout.as_posix(),
+                        "stderr_log": generation_stderr.as_posix(),
+                        "timeout_seconds": 120,
+                        "exit_status": "passed",
+                        "returncode": 0,
+                    },
+                    "generated_files": [generated_ref],
+                },
                 "output": {
                     "path": output_path.as_posix(),
                     "status": "generated",
                     "sha256": self._sha256(output_path),
+                    "source_files": [generated_ref],
                 },
                 "compile": {
                     "status": "failed",
@@ -1367,6 +1439,57 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 )
 
             self.assertIn("generated_files[0]", str(raised.exception))
+
+    def test_rejects_c2rust_compile_candidate_output_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            baseline, output_ref, manifest_path = self._c2rust_compile_fixture(Path(tmp))
+            baseline["compile"]["candidate_output"]["sha256"] = "not-the-output-sha"
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_c2rust_baseline_compile_status(baseline, output_ref, manifest_path)
+
+            self.assertIn("c2rust_baseline compile candidate_output drift", str(raised.exception))
+
+    def test_rejects_c2rust_compile_semantic_pass_spoof(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            baseline, output_ref, manifest_path = self._c2rust_compile_fixture(Path(tmp))
+            baseline["compile"]["semantic_pass"] = True
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_c2rust_baseline_compile_status(baseline, output_ref, manifest_path)
+
+            self.assertIn("c2rust_baseline compile status cannot claim semantic_pass", str(raised.exception))
+
+    def test_rejects_c2rust_compile_artifact_contradictions(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            baseline, output_ref, manifest_path = self._c2rust_compile_fixture(Path(tmp))
+            baseline["compile"]["status"] = "failed"
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_c2rust_baseline_compile_status(baseline, output_ref, manifest_path)
+
+            self.assertIn("c2rust_baseline compile artifact must be null unless compile passed", str(raised.exception))
+
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            baseline, output_ref, manifest_path = self._c2rust_compile_fixture(Path(tmp))
+            baseline["compile"]["artifact"] = None
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_c2rust_baseline_compile_status(baseline, output_ref, manifest_path)
+
+            self.assertIn("c2rust_baseline.compile.artifact", str(raised.exception))
+
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            baseline, output_ref, manifest_path = self._c2rust_compile_fixture(Path(tmp))
+            baseline["compile"]["artifact"]["sha256"] = "not-the-artifact-sha"
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_c2rust_baseline_compile_status(baseline, output_ref, manifest_path)
+
+            self.assertIn("c2rust_baseline.compile.artifact sha256 mismatch", str(raised.exception))
 
     def test_rejects_l4_refused_route_with_generated_candidate_manifest(self) -> None:
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"

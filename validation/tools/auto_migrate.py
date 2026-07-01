@@ -4460,6 +4460,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
                     prefix,
                 )
                 diagnostics.extend(compile_status.get("diagnostics", []))
+    toolchain_repair = None if status == "generated" else c2rust_toolchain_repair(reason, slice_spec=slice_spec)
     manifest = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -4484,6 +4485,7 @@ def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, eviden
         "output": output,
         "compile": compile_status,
         "diagnostics": diagnostics,
+        "toolchain_repair": toolchain_repair,
         "must_not_claim": [
             "C2Rust output proves semantic equivalence",
             "C2Rust baseline was generated" if status != "generated" else "",
@@ -4550,7 +4552,7 @@ def run_c2rust_baseline_generation(
     generation: dict[str, Any] = {
         "command": {
             "argv": argv,
-            "working_directory": rel(evidence_dir),
+            "working_directory": rel(REPO_ROOT),
             "output_dir": rel(output_dir),
             "stdout_log": rel(stdout_log),
             "stderr_log": rel(stderr_log),
@@ -4565,7 +4567,7 @@ def run_c2rust_baseline_generation(
         reset_c2rust_output_dir(evidence_dir, output_dir)
         result = subprocess.run(
             argv,
-            cwd=str(evidence_dir),
+            cwd=str(REPO_ROOT),
             text=True,
             capture_output=True,
             timeout=timeout_seconds,
@@ -4814,6 +4816,35 @@ def c2rust_command_version(path: str | None) -> dict[str, str]:
     return {
         "version_status": "OK" if result.returncode == 0 and version else "UNKNOWN",
         "version": version,
+    }
+
+
+def c2rust_toolchain_repair(reason: str, *, slice_spec: Path) -> dict[str, Any]:
+    return {
+        "status": "required",
+        "reason": reason,
+        "required_commands": ["c2rust-transpile", "c2rust"],
+        "required_dependencies": ["rustc", "cargo", "clang", "libclang"],
+        "competition_environment": {
+            "profile": "config/competition-env/environment.json",
+            "proof_class": "local_or_wsl_until_competition_run",
+        },
+        "rerun_env": {"C2RUST_BASELINE_GENERATION": "1"},
+        "rerun_command": [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.auto_migrate",
+            "--slice-spec",
+            rel(slice_spec),
+            "--out-root",
+            "validation/evidence",
+        ],
+        "correctness_role": "candidate_context_only",
+        "must_not_claim": [
+            "toolchain repair proves C2Rust generated output",
+            "compile-only C2Rust output proves semantic equivalence",
+        ],
     }
 
 

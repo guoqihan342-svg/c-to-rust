@@ -6883,6 +6883,19 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertEqual(manifest["tool_probe"]["os_name"], os.name)
             self.assertTrue(manifest["tool_probe"]["diagnostic_only"])
             self.assertIn("environment_profile_hash", manifest["tool_probe"])
+            repair = manifest["toolchain_repair"]
+            self.assertEqual(repair["status"], "required")
+            self.assertEqual(repair["reason"], "blocked_by_missing_tools")
+            self.assertEqual(repair["required_commands"], ["c2rust-transpile", "c2rust"])
+            self.assertIn("clang", repair["required_dependencies"])
+            self.assertEqual(repair["rerun_env"], {"C2RUST_BASELINE_GENERATION": "1"})
+            self.assertEqual(
+                repair["rerun_command"][:5],
+                ["python3", "-B", "-m", "validation.tools.auto_migrate", "--slice-spec"],
+            )
+            self.assertIn("--out-root", repair["rerun_command"])
+            self.assertEqual(repair["correctness_role"], "candidate_context_only")
+            self.assertIn("compile-only C2Rust output proves semantic equivalence", repair["must_not_claim"])
             self.assertEqual(manifest["reference_tree"]["path"], "tools/c2rust-reference")
             self.assertTrue(manifest["reference_tree"]["diagnostic_only"])
             self.assertIn("C2Rust output proves semantic equivalence", manifest["must_not_claim"])
@@ -6993,7 +7006,7 @@ class AutoMigrateTests(unittest.TestCase):
                     artifact.write_text("fake rlib\n", encoding="utf-8")
                     return subprocess.CompletedProcess(argv, 0, stdout="rustc ok\n", stderr="")
                 self.assertEqual(argv[:2], [str(fake_c2rust), "transpile"])
-                self.assertEqual(Path(str(kwargs.get("cwd"))).resolve(), evidence_dir.resolve())
+                self.assertEqual(Path(str(kwargs.get("cwd"))).resolve(), REPO_ROOT.resolve())
                 self.assertIn("--emit-build-files", argv)
                 self.assertIn("--output-dir", argv)
                 self.assertEqual(Path(argv[argv.index("--emit-build-files") + 1]).resolve(), compile_commands.resolve())
@@ -7025,6 +7038,7 @@ class AutoMigrateTests(unittest.TestCase):
             self.assertIn("C2Rust output proves semantic equivalence", manifest["must_not_claim"])
             self.assertTrue(manifest["generation"]["enabled"])
             self.assertEqual(manifest["generation"]["compile_commands"]["path"], compile_commands.resolve().as_posix())
+            self.assertEqual(manifest["generation"]["command"]["working_directory"], ".")
             self.assertEqual(manifest["generation"]["command"]["exit_status"], "passed")
             self.assertEqual(manifest["generation"]["command"]["returncode"], 0)
             self.assertEqual(manifest["generation"]["command"]["timeout_seconds"], 120)
@@ -7056,6 +7070,30 @@ class AutoMigrateTests(unittest.TestCase):
                 ).read_text(encoding="utf-8")
             )
             jsonschema.validate(manifest, schema)
+
+    def test_live_c2rust_baseline_generates_flashdb_crc32_when_enabled(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        c2rust = auto_migrate.shutil.which("c2rust-transpile") or auto_migrate.shutil.which("c2rust")
+        rustc = auto_migrate.shutil.which("rustc")
+        if os.environ.get("C2RUST_BASELINE_LIVE_TEST") != "1" or not c2rust or not rustc:
+            self.skipTest("requires C2RUST_BASELINE_LIVE_TEST=1 plus real c2rust/c2rust-transpile and rustc")
+
+        slice_spec = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+        spec = json.loads(slice_spec.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="c2rust-live-") as tmp:
+            evidence_dir = Path(tmp) / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            evidence_dir.mkdir(parents=True)
+            with mock.patch.dict(os.environ, {"C2RUST_BASELINE_GENERATION": "1"}):
+                manifest = auto_migrate.emit_c2rust_baseline_manifest(spec, slice_spec, evidence_dir)
+
+        self.assertEqual(manifest["status"], "generated")
+        self.assertEqual(manifest["correctness_role"], "candidate_context_only")
+        self.assertIsNotNone(manifest["output"])
+        self.assertEqual(manifest["output"]["status"], "generated")
+        self.assertIsNotNone(manifest["compile"])
+        self.assertEqual(manifest["compile"]["status"], "passed")
+        self.assertTrue(manifest["compile"]["attempted"])
+        self.assertFalse(manifest["compile"]["semantic_pass"])
 
     def test_c2rust_baseline_schema_rejects_hollow_generated_manifest(self) -> None:
         schema = json.loads(
@@ -7195,6 +7233,59 @@ class AutoMigrateTests(unittest.TestCase):
         self.assertFalse(binding["semantic_pass"])
         self.assertFalse(binding["generated_draft_semantic_pass"])
         self.assertEqual(binding["baseline_manifest"], manifest_ref)
+
+    def test_emit_route_decision_carries_generated_c2rust_output_ref(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "route-c2rust",
+            "source_commit": "1234567",
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-route-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-route-c2rust"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+
+            output = evidence_dir / f"{prefix}-c2rust-baseline-output.rs"
+            output.write_text("pub unsafe fn generated() {}\n", encoding="utf-8")
+            output_sha = auto_migrate.sha256(output)
+            baseline = {
+                "status": "generated",
+                "reason": "generated_by_c2rust",
+                "correctness_role": "candidate_context_only",
+                "output": {
+                    "path": output.as_posix(),
+                    "status": "generated",
+                    "sha256": output_sha,
+                },
+                "compile": {
+                    "status": "passed",
+                    "attempted": True,
+                    "semantic_pass": False,
+                },
+            }
+            (evidence_dir / f"{prefix}-c2rust-baseline-manifest.json").write_text(
+                json.dumps(baseline), encoding="utf-8"
+            )
+
+            route = auto_migrate.emit_route_decision(spec, evidence_dir, {"status": "generated"}, baseline)
+
+        c2rust_candidate = route["candidate_generation"]["c2rust_baseline"]
+        self.assertEqual(c2rust_candidate["status"], "generated")
+        self.assertEqual(c2rust_candidate["output_ref"]["sha256"], output_sha)
+        self.assertFalse(c2rust_candidate["semantic_pass"])
+        self.assertFalse(c2rust_candidate["generated_draft_semantic_pass"])
 
     def _accepted_evidence_spec(self, root: Path, include_toolchain_marker: bool) -> dict:
         fixture = root / "fixture.json"
