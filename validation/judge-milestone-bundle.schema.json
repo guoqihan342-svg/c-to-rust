@@ -742,6 +742,7 @@
         "judge_config",
         "competition_config_archive",
         "judge_entrypoints_run_report",
+        "readiness_report",
         "judge_milestone_bundle",
         "supported_subset",
         "published_entrypoints",
@@ -790,6 +791,7 @@
         "judge_config": {"type": "object", "additionalProperties": true, "required": ["path", "status"]},
         "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
         "judge_entrypoints_run_report": {"$ref": "#/definitions/artifactRef"},
+        "readiness_report": {"$ref": "#/definitions/artifactRef"},
         "judge_milestone_bundle": {
           "type": "object",
           "additionalProperties": true,

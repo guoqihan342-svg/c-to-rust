@@ -222,6 +222,7 @@ def write_run_report(
 def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root: Path) -> None:
     bundle_path = out_path.parent / "judge-milestone-bundle.json"
     release_notes_path = out_path.parent / "milestone-release-notes.md"
+    public_packet_path = out_path.parent / "public-release-packet.json"
     report["milestone_bundle"] = {
         "path": validator.repo_relative(bundle_path, repo_root),
         "status": "present",
@@ -232,6 +233,11 @@ def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root
         "status": "derived_after_bundle",
         "hash_boundary": "release_notes_hashes_the_bundle",
     }
+    report["public_release_packet"] = {
+        "path": validator.repo_relative(public_packet_path, repo_root),
+        "status": "derived_after_release_notes",
+        "hash_boundary": "packet_hashes_run_report_bundle_and_release_notes",
+    }
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     bundle = judge_milestone_bundle.build_judge_milestone_bundle(
         run_report_path=out_path,
@@ -239,6 +245,70 @@ def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root
         repo_root=repo_root,
     )
     release_notes_path.write_text(milestone_release_notes.build_release_notes(bundle), encoding="utf-8")
+    write_public_release_packet(
+        report=report,
+        bundle=bundle,
+        run_report_path=out_path,
+        bundle_path=bundle_path,
+        release_notes_path=release_notes_path,
+        public_packet_path=public_packet_path,
+        repo_root=repo_root,
+    )
+
+
+def write_public_release_packet(
+    *,
+    report: dict[str, Any],
+    bundle: dict[str, Any],
+    run_report_path: Path,
+    bundle_path: Path,
+    release_notes_path: Path,
+    public_packet_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    publication = bundle.get("publication_manifest") if isinstance(bundle.get("publication_manifest"), dict) else {}
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    packet = {
+        "schema_version": 1,
+        "report_kind": "public-release-packet",
+        "status": bundle.get("status", report.get("status", "unknown")),
+        "summary": {
+            "entrypoint_count": report.get("entrypoint_count", 0),
+            "publication_scope": publication.get("publication_scope", "unknown"),
+            "readiness": summary.get("readiness", {}),
+            "proof_class_rollup": bundle.get("proof_class_rollup", bundle.get("proof_classes", {})),
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "packet_is_semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "This packet indexes the public release artifacts. It hashes existing validator-owned "
+                "artifacts and does not create semantic acceptance or translator-generated coverage."
+            ),
+        },
+        "judge_entrypoints_run_report": artifact_ref(run_report_path, repo_root=repo_root),
+        "readiness_report": artifact_ref_from_report_ref(report.get("readiness_report"), repo_root=repo_root),
+        "judge_milestone_bundle": artifact_ref(bundle_path, repo_root=repo_root),
+        "milestone_release_notes": artifact_ref(release_notes_path, repo_root=repo_root),
+        "competition_config_archive": report.get("competition_config_archive", {}),
+        "publication_manifest": publication,
+        "known_gaps": bundle.get("known_gaps", []),
+        "must_not_claim": bundle.get("must_not_claim", []),
+        "reproduction_commands": bundle.get("reproduction_commands", {}),
+    }
+    public_packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return packet
+
+
+def artifact_ref_from_report_ref(value: object, *, repo_root: Path) -> dict[str, Any]:
+    if isinstance(value, dict) and isinstance(value.get("path"), str):
+        try:
+            return artifact_ref(resolve_input_path(Path(value["path"]), repo_root=repo_root), repo_root=repo_root)
+        except (OSError, ValueError):
+            return {"path": value["path"], "status": "invalid"}
+    return {"path": "unknown", "status": "absent"}
 
 
 def select_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> list[dict[str, Any]]:

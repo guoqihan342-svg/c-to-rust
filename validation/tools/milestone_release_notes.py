@@ -54,6 +54,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         f"Proof class rollup: `{proof_class_text(bundle)}`",
         f"Bundle: `{text(object_or_empty(publication.get('judge_milestone_bundle')).get('path'), 'unknown')}`",
         "",
+        "## Judge Packet Index",
+        "",
+        *packet_index_lines(publication),
+        "",
         "## What This Milestone Demonstrates",
         "",
         "- One-command judge entrypoints for competition environment smoke, before/after exhibit, multi-worker evaluate, and OpenCode multi-worker evaluate.",
@@ -255,6 +259,53 @@ def architecture_lines(architecture: dict[str, Any], workflow: dict[str, Any]) -
         f"- Roles: `{', '.join(string_list(rollup.get('roles'))) or 'unknown'}`",
         f"- Repair histories: `{int_text(repair.get('repair_history_unit_count'))}`; auto-recovered units: `{int_text(repair.get('auto_recovered_unit_count'))}`",
     ]
+
+
+def packet_index_lines(publication: dict[str, Any]) -> list[str]:
+    rows = [
+        packet_index_row("Judge config", object_or_empty(publication.get("judge_config"))),
+        packet_index_row(
+            "Competition config archive",
+            object_or_empty(object_or_empty(publication.get("competition_config_archive")).get("bundle_manifest")),
+        ),
+        packet_index_row("Judge run report", object_or_empty(publication.get("judge_entrypoints_run_report"))),
+        packet_index_row("Readiness report", object_or_empty(publication.get("readiness_report"))),
+        packet_index_row("Judge milestone bundle", object_or_empty(publication.get("judge_milestone_bundle"))),
+    ]
+    highlighted_refs = [
+        ref
+        for ref in publication.get("published_artifact_refs", [])
+        if isinstance(ref, dict)
+        and ref.get("artifact_name")
+        in {"resume_manifest", "judge_evidence_index", "context_pack", "agent_index"}
+    ]
+    for ref in highlighted_refs:
+        rows.append(packet_index_row(str(ref.get("artifact_name")), ref))
+    return [
+        "| Artifact | Path | SHA/status | Role status |",
+        "| --- | --- | --- | --- |",
+        *rows,
+    ]
+
+
+def packet_index_row(label: str, ref: dict[str, Any]) -> str:
+    path = text(ref.get("path"), "unknown")
+    sha_or_boundary = short_sha_or_boundary(ref)
+    status = text(ref.get("status"), "unknown")
+    return f"| {label} | {path} | {sha_or_boundary} | {status} |"
+
+
+def short_sha_or_boundary(ref: dict[str, Any]) -> str:
+    sha = ref.get("sha256")
+    if isinstance(sha, str) and len(sha) >= 12:
+        return sha[:12]
+    status = ref.get("status")
+    if isinstance(status, str) and status == "self":
+        return "self"
+    boundary = ref.get("hash_boundary")
+    if isinstance(boundary, str) and boundary:
+        return "boundary"
+    return "missing"
 
 
 def baseline_rows(baseline: dict[str, Any]) -> list[str]:

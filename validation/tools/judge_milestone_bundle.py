@@ -1135,6 +1135,8 @@ def build_publication_manifest(
         "judge_config": publication_config_ref(config),
         "competition_config_archive": publication_archive_ref(archive),
         "judge_entrypoints_run_report": judge_entrypoints_run_report,
+        "readiness_report": artifact_ref_from_existing(run_report.get("readiness_report"), repo_root=repo_root)
+        or {"path": "unknown", "status": "absent"},
         "judge_milestone_bundle": {
             "path": validator.repo_relative(out_path, repo_root),
             "status": "self",

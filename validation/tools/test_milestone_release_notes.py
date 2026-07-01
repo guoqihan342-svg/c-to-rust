@@ -18,6 +18,27 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("Proof class rollup: `local-simulation`", notes)
         self.assertIn("Translation coverage numerator: `0`", notes)
         self.assertIn("Semantic gate: `false`", notes)
+        self.assertIn("## Judge Packet Index", notes)
+        self.assertIn(
+            "| Judge config | config/competition-env/judge-entrypoints/flashdb-harness.json | 000000000000 | present |",
+            notes,
+        )
+        self.assertIn(
+            "| Competition config archive | config/competition-env/bundle-manifest.json | 111111111111 | present |",
+            notes,
+        )
+        self.assertIn(
+            "| Judge run report | target/competition-out/summary/judge-entrypoints-run-report.json | 222222222222 | present |",
+            notes,
+        )
+        self.assertIn(
+            "| Readiness report | target/competition-out/summary/judge-entrypoints-readiness.json | 333333333333 | present |",
+            notes,
+        )
+        self.assertIn(
+            "| Judge milestone bundle | target/competition-out/summary/judge-milestone-bundle.json | self | self |",
+            notes,
+        )
         self.assertIn("| raw C2Rust | not_verified_here | no | 0 |", notes)
         self.assertIn("python -B -m validation.tools.run_judge_entrypoints", notes)
         self.assertIn("accepted_evidence_is_not_translator_generated_coverage", notes)
@@ -282,15 +303,29 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "judge_config": {
                     "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
                     "sha256": "0" * 64,
+                    "status": "present",
                 },
                 "competition_config_archive": {
                     "status": "present",
-                    "path": "config/competition-env/bundle-manifest.json",
-                    "sha256": "1" * 64,
+                    "bundle_manifest": {
+                        "path": "config/competition-env/bundle-manifest.json",
+                        "sha256": "1" * 64,
+                        "status": "present",
+                    },
+                },
+                "judge_entrypoints_run_report": {
+                    "path": "target/competition-out/summary/judge-entrypoints-run-report.json",
+                    "sha256": "2" * 64,
+                    "status": "present",
+                },
+                "readiness_report": {
+                    "path": "target/competition-out/summary/judge-entrypoints-readiness.json",
+                    "sha256": "3" * 64,
+                    "status": "present",
                 },
                 "judge_milestone_bundle": {
                     "path": "target/competition-out/summary/judge-milestone-bundle.json",
-                    "status": "present",
+                    "status": "self",
                 },
                 "supported_subset": {
                     "claims": [

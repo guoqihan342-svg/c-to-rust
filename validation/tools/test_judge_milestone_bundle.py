@@ -557,6 +557,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         )
         self.assertEqual(publication_manifest["judge_config"]["path"], "unknown")
         self.assertEqual(publication_manifest["judge_entrypoints_run_report"], report["judge_entrypoints_run_report"])
+        self.assertEqual(publication_manifest["readiness_report"], report["readiness_report"])
         self.assertEqual(publication_manifest["judge_milestone_bundle"]["path"], repo_relative(out_path))
         self.assertEqual(publication_manifest["competition_config_archive"]["status"], "absent")
         self.assertEqual(
