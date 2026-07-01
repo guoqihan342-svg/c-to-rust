@@ -13,6 +13,7 @@
 - Rust 输出项目名：`flashDB_rust`
 - 当前 harness 分支：`codex/agent-harness-flashdb-mvp`
 - OpenCode harness：`opencode_agent_harness.py run-worker` 已支持 `--mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，也支持 `--mode opencode --opencode-variant max` 包装同一 request；`competition-run-summary.json` 存在时自动入 SQLite ledger。
+- 评委 runner：`run_judge_entrypoints` 已把 competition smoke、before/after、显式多 worker 和 OpenCode 入口收敛到一条命令，并在全量通过后生成 `judge-milestone-bundle.json`。该 bundle 输出 `core_translation_quality`、`harness_architecture_summary`、`claim_scope`、`proof_classes`、`publishability`、`known_gaps`、`must_not_claim` 和复现命令，供评委一屏审阅；它不替代 validator/oracle，也不扩大 semantic pass 或 translation coverage。
 - FlashDB accepted evidence：`real-fdb-calc-crc32` 和 `real-fdb-blob-make` 当前通过 L4 accepted-evidence authoritative 语义绑定；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`，不能写成 translator-generated draft 自身已 accepted。
 - FlashDB blocked evidence：`fdb_kv_set` 当前只有 source/signature provenance 和 L4 refused/blocked evidence；`strlen`、`fdb_blob_make`、`fdb_kv_set_blob`、`fdb_kv_del` callee shim/model/oracle 语义尚未关闭。
 - C2Rust 角色：只作为 baseline/oracle，不作为最终交付代码

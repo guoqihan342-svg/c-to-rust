@@ -52,6 +52,32 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             before_index_path,
             {
                 "report_kind": "judge-evidence-index",
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 1,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "core_translation_quality": {
+                    "final_gate_status": "passed",
+                    "semantic_pass_count": 1,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
                 "judge_headline": {
                     "report_kind": "judge-headline",
                     "worker_count": 1,
@@ -176,6 +202,34 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 1)
         self.assertTrue(report["opencode_runtime"]["all_contracts_executed"])
         self.assertTrue(report["opencode_runtime"]["chat_output_is_evidence_false"])
+        self.assertEqual(report["claim_scope"]["external_review_index_ready"], True)
+        self.assertEqual(report["claim_scope"]["semantic_acceptance_ready"], False)
+        self.assertEqual(report["claim_scope"]["competition_exact_ready"], False)
+        self.assertEqual(report["claim_scope"]["translator_generated_coverage_ready"], False)
+        self.assertEqual(report["publishability"]["all_entrypoints_run_publishable"], True)
+        self.assertEqual(report["publishability"]["competition_exact_publishable"], False)
+        self.assertEqual(report["unsafe_reduction_scope"]["scope"], "partial")
+        self.assertFalse(report["unsafe_reduction_scope"]["all_sources_measured"])
+        self.assertEqual(report["unsafe_reduction_scope"]["measured_units"], 1)
+        self.assertEqual(report["unsafe_reduction_scope"]["total_units"], 3)
+        self.assertEqual(report["semantic_evidence_rollup"]["translation_coverage_numerator"], 0)
+        self.assertFalse(report["semantic_evidence_rollup"]["accepted_evidence_counts_as_translator_coverage"])
+        self.assertEqual(report["core_translation_quality"]["final_gate_statuses"], ["passed"])
+        self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["baseline_total_unsafe"], 2)
+        self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["current_total_unsafe"], 0)
+        self.assertFalse(report["core_translation_quality"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["harness_architecture_summary"]["graph_runtime"], "opencode-harness-langgraph-inspired")
+        self.assertEqual(report["harness_architecture_summary"]["repair_round_cap"], 5)
+        self.assertIn("planner", report["harness_architecture_summary"]["roles"])
+        self.assertFalse(report["harness_architecture_summary"]["semantic_gate"])
+        self.assertEqual(report["proof_classes"]["all"], ["local-simulation"])
+        self.assertEqual(report["proof_class_rollup"]["highest_proof_class"], "local-simulation")
+        self.assertFalse(report["proof_classes"]["has_competition_exact"])
+        self.assertIn("local_simulation_not_competition_exact", [gap["gap_id"] for gap in report["known_gaps"]])
+        self.assertIn("accepted_evidence_is_not_translator_generated_coverage", report["must_not_claim"])
+        self.assertIn("opencode_chat_output_is_semantic_evidence", report["must_not_claim"])
+        self.assertIn("run_judge_entrypoints", report["reproduction_commands"])
+        self.assertEqual(len(report["reproduction_commands"]["entrypoints"]), 2)
         self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
@@ -302,6 +356,183 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(workflow_ref["status"], "present")
         self.assertIn("sha256", workflow_ref)
         self.assertEqual(report["workflow_metrics"]["rollup"]["source_count"], 1)
+
+    def test_bundle_blocks_source_translation_coverage_or_generated_semantic_claims(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-overclaim-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": True,
+                        "translation_coverage_numerator": 1,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("source_generated_draft_semantic_pass_must_be_false", report["blockers"])
+        self.assertIn("source_translation_coverage_numerator_must_be_zero", report["blockers"])
+        self.assertFalse(report["claim_boundary"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["claim_boundary"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["semantic_evidence_rollup"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(report["semantic_evidence_rollup"]["source_translation_coverage_numerator"], 1)
+
+    def test_bundle_blocks_core_quality_artifact_translation_coverage_claims(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-core-quality-overclaim-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "final_gate_status": "passed",
+                    "semantic_pass_count": 1,
+                    "translation_coverage_numerator": 1,
+                    "generated_draft_semantic_pass": True,
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("core_quality_generated_draft_semantic_pass_must_be_false", report["blockers"])
+        self.assertIn("core_quality_translation_coverage_numerator_must_be_zero", report["blockers"])
+
+    def test_bundle_blocks_opencode_runtime_missing_explicit_evidence_boundary_fields(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-opencode-missing-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
+        write_json(
+            opencode_index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "judge_headline": {
+                    "opencode_runtime": {
+                        "enabled": True,
+                        "worker_count": 1,
+                        "all_contracts_executed": True,
+                    }
+                },
+                "opencode_agent_runtime": {
+                    "runtime": "opencode",
+                    "worker_count": 1,
+                    "all_contracts_executed": True,
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"judge_evidence_index": repo_relative(opencode_index_path)},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("opencode_runtime_boundary_fields_missing", report["blockers"])
+        self.assertFalse(report["opencode_evidence_policy"]["boundary_fields_explicit"])
 
 
 if __name__ == "__main__":
