@@ -1,6 +1,7 @@
 from contextlib import closing
 import hashlib
 import json
+import shlex
 import sqlite3
 import subprocess
 import sys
@@ -42,6 +43,45 @@ def repo_relative(path: Path) -> str:
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def resume_replay_commands(
+    *,
+    ledger: Path,
+    run_id: str,
+    worker_id: str,
+    assignment: Path,
+    request: Path,
+    summary: Path,
+    report: Path,
+    worker_root: Path,
+) -> dict:
+    argv = [
+        "python3",
+        "-B",
+        "-m",
+        "validation.tools.opencode_agent_harness",
+        "run-worker",
+        "--db",
+        repo_relative(ledger),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+        "--mode",
+        "deterministic",
+    ]
+    return {
+        "run_worker": {
+            "argv": argv,
+            "command": shlex.join(argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(worker_root),
+        }
+    }
 
 
 def write_valid_command_log(path: Path) -> str:
@@ -2581,6 +2621,17 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "request_path": repo_relative(request),
                         "summary_path": repo_relative(summary),
                         "report_path": repo_relative(report),
+                        "isolated_out_root": repo_relative(worker_root),
+                        "replay_commands": resume_replay_commands(
+                            ledger=ledger,
+                            run_id="competition-flashdb-before-after-exhibit",
+                            worker_id="worker-001",
+                            assignment=assignment,
+                            request=request,
+                            summary=summary,
+                            report=report,
+                            worker_root=worker_root,
+                        ),
                     }
                 ],
                 "worker_count": 1,
@@ -2778,6 +2829,16 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     **worker_fields,
                     "worker_id": "stale-worker-999",
                     "isolated_out_root": repo_relative(worker_root),
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-worker-drift",
+                        worker_id="stale-worker-999",
+                        assignment=assignment,
+                        request=request,
+                        summary=summary,
+                        report=report,
+                        worker_root=worker_root,
+                    ),
                 }
             ],
             "worker_count": 1,
@@ -2786,6 +2847,93 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError,
             "resume_manifest.workers worker ids must match context_pack.workers and agent_index",
+        ):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_worker_replay_commands_are_required(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-replay-missing-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        worker_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {
+            "entrypoints": {"resume_manifest": repo_relative(resume_manifest)},
+            "workers": [worker_fields],
+        }
+        agent_payload = {
+            "reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}},
+            "agents": [worker_fields],
+            "agents_by_worker_id": {
+                "worker-001": {
+                    **worker_fields,
+                    "isolated_out_root": repo_relative(worker_root),
+                },
+            },
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-replay-missing",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    **worker_fields,
+                    "isolated_out_root": repo_relative(worker_root),
+                }
+            ],
+            "worker_count": 1,
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"resume_manifest\.workers\[0\]\.replay_commands must be an object",
         ):
             validator.validate_resume_manifest_contract(
                 payload,

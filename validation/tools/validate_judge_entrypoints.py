@@ -2257,6 +2257,12 @@ def validate_resume_manifest_contract(
             value = worker_payload.get(field)
             if isinstance(value, str):
                 assert_repo_relative_posix(value)
+        validate_resume_manifest_worker_replay_commands(
+            worker_payload,
+            index=index,
+            run_id=require_string(payload.get("run_id"), "resume_manifest.run_id"),
+            ledger_path=ledger_path,
+        )
     worker_consistency = validate_resume_manifest_worker_consistency(
         workers,
         context_payload=context_payload,
@@ -2271,6 +2277,112 @@ def validate_resume_manifest_contract(
         "worker_consistency": worker_consistency,
         "local_absolute_path_scan": local_path_scan,
     }
+
+
+def validate_resume_manifest_worker_replay_commands(
+    worker: dict[str, Any],
+    *,
+    index: int,
+    run_id: str,
+    ledger_path: str,
+) -> dict[str, Any]:
+    worker_id = require_string(worker.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
+    replay = require_object(worker.get("replay_commands"), f"resume_manifest.workers[{index}].replay_commands")
+    run_worker = validate_resume_manifest_replay_command(
+        replay.get("run_worker"),
+        label=f"resume_manifest.workers[{index}].replay_commands.run_worker",
+        expected_subcommand="run-worker",
+        worker=worker,
+        worker_id=worker_id,
+        run_id=run_id,
+        ledger_path=ledger_path,
+        require_hint=False,
+    )
+    result: dict[str, Any] = {"run_worker": run_worker}
+    if "retry_worker" in replay:
+        retry_worker = validate_resume_manifest_replay_command(
+            replay.get("retry_worker"),
+            label=f"resume_manifest.workers[{index}].replay_commands.retry_worker",
+            expected_subcommand="retry-worker",
+            worker=worker,
+            worker_id=worker_id,
+            run_id=run_id,
+            ledger_path=ledger_path,
+            require_hint=True,
+        )
+        result["retry_worker"] = retry_worker
+    return result
+
+
+def validate_resume_manifest_replay_command(
+    value: Any,
+    *,
+    label: str,
+    expected_subcommand: str,
+    worker: dict[str, Any],
+    worker_id: str,
+    run_id: str,
+    ledger_path: str,
+    require_hint: bool,
+) -> dict[str, Any]:
+    command_payload = require_object(value, label)
+    argv = command_payload.get("argv")
+    if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
+        raise ValueError(f"{label}.argv must be a non-empty string list")
+    command = require_string(command_payload.get("command"), f"{label}.command")
+    if shlex.split(command, posix=True) != argv:
+        raise ValueError(f"{label}.command must match argv")
+    for argument in argv:
+        assert_no_local_absolute_path(argument)
+    assert_no_local_absolute_path(command)
+    expected_prefix = ["python3", "-B", "-m", "validation.tools.opencode_agent_harness", expected_subcommand]
+    if argv[: len(expected_prefix)] != expected_prefix:
+        raise ValueError(f"{label} command must run opencode_agent_harness {expected_subcommand}")
+    flags = argv_flags(argv)
+    if flags.get("--db") != ledger_path:
+        raise ValueError(f"resume_manifest worker {worker_id} {label} --db must match ledger.path")
+    if flags.get("--run-id") != run_id:
+        raise ValueError(f"resume_manifest worker {worker_id} {label} --run-id must match run_id")
+    if flags.get("--worker-id") != worker_id:
+        raise ValueError(f"resume_manifest worker {worker_id} {label} --worker-id must match worker_id")
+    mode = flags.get("--mode")
+    if mode not in {"deterministic", "opencode"}:
+        raise ValueError(f"resume_manifest worker {worker_id} {label} --mode must be deterministic or opencode")
+    if require_hint and not flags.get("--hint-id"):
+        raise ValueError(f"resume_manifest worker {worker_id} {label} command must include --hint-id")
+    if not require_hint and flags.get("--hint-id"):
+        raise ValueError(f"resume_manifest worker {worker_id} {label} command must not include --hint-id")
+    preflight = worker.get("opencode_preflight_report")
+    if mode == "opencode" and isinstance(preflight, dict) and isinstance(preflight.get("path"), str):
+        if flags.get("--opencode-preflight-report") != preflight["path"]:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} --opencode-preflight-report must match opencode_preflight_report.path"
+            )
+    for field in ("assignment_path", "request_path", "summary_path", "report_path"):
+        expected = worker.get(field)
+        if isinstance(expected, str) and command_payload.get(field) != expected:
+            raise ValueError(f"resume_manifest worker {worker_id} {label}.{field} must match worker {field}")
+    expected_out_root = worker.get("isolated_out_root") or worker.get("out_root")
+    if isinstance(expected_out_root, str) and command_payload.get("out_root") != expected_out_root:
+        raise ValueError(f"resume_manifest worker {worker_id} {label}.out_root must match worker out_root")
+    for field in ("assignment_path", "request_path", "summary_path", "report_path", "out_root"):
+        value_text = command_payload.get(field)
+        if isinstance(value_text, str):
+            assert_repo_relative_posix(value_text)
+    return {"status": "passed", "subcommand": expected_subcommand, "mode": mode}
+
+
+def argv_flags(argv: list[str]) -> dict[str, str]:
+    flags: dict[str, str] = {}
+    index = 0
+    while index < len(argv):
+        part = argv[index]
+        if part.startswith("--") and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
+            flags[part] = argv[index + 1]
+            index += 2
+            continue
+        index += 1
+    return flags
 
 
 def validate_resume_manifest_worker_consistency(

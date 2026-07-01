@@ -2803,6 +2803,113 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             Path("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"),
         )
 
+    def test_build_resume_manifest_records_worker_replay_commands(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = out_root / "state" / "opencode-agent-harness.sqlite3"
+            worker_root = out_root / "workers" / "worker-001"
+            assignment = out_root / "harness" / "assignments" / "worker-001.json"
+            request = out_root / "harness" / "assignments" / "worker-001-request.json"
+            summary = worker_root / "summary" / "competition-run-summary.json"
+            report = worker_root / "harness" / "run-worker-report.json"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            evaluate_report = out_root / "harness" / "evaluate-report.json"
+            judge_index = out_root / "harness" / "judge-evidence-index.json"
+            resume_manifest = out_root / "harness" / "resume-manifest.json"
+            for path in [db_path, assignment, request, summary, report, preflight, evaluate_report, judge_index]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}\n", encoding="utf-8")
+
+            worker_fields = {
+                "worker_id": "worker-001",
+                "slice_id": "demo-unit",
+                "function": "demo_unit",
+                "assignment_path": repo_rel(assignment),
+                "request_path": repo_rel(request),
+                "summary_path": repo_rel(summary),
+                "report_path": repo_rel(report),
+                "out_root": repo_rel(worker_root),
+                "source_commit": "abc123",
+                "source_sha256": "f" * 64,
+                "summary_status": "failed",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": None,
+                        "opencode_agent": None,
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                },
+            }
+            manifest = harness.build_resume_manifest(
+                db_path=db_path,
+                run_id="run-resume",
+                out_root=out_root,
+                status="failed",
+                context_pack={"entrypoints": {}, "workers": [worker_fields]},
+                context_pack_ref={"path": "target/context-pack.json", "sha256": "a" * 64},
+                agent_index={
+                    "agents_by_worker_id": {
+                        "worker-001": {
+                            **worker_fields,
+                            "isolated_out_root": repo_rel(worker_root),
+                        }
+                    }
+                },
+                agent_index_ref={"path": "target/agent-index.json", "sha256": "b" * 64},
+                evaluate_report_path=evaluate_report,
+                batch_profile_report_path="target/batch-profile-report.json",
+                judge_evidence_index_path=judge_index,
+                resume_manifest_path=resume_manifest,
+                repair_hints={
+                    "source": "sqlite repair_hints",
+                    "open_count": 1,
+                    "hints": [
+                        {
+                            "hint_id": "repair:run-resume:worker-001:process_timeout",
+                            "status": "open",
+                            "worker_id": "worker-001",
+                        }
+                    ],
+                },
+                repo_root=REPO_ROOT,
+            )
+
+            worker = manifest["workers"][0]
+            replay = worker["replay_commands"]
+            run_worker = replay["run_worker"]
+            self.assertEqual(
+                run_worker["argv"][:5],
+                ["python3", "-B", "-m", "validation.tools.opencode_agent_harness", "run-worker"],
+            )
+            self.assertEqual(run_worker["argv"][run_worker["argv"].index("--db") + 1], repo_rel(db_path))
+            self.assertEqual(run_worker["argv"][run_worker["argv"].index("--run-id") + 1], "run-resume")
+            self.assertEqual(run_worker["argv"][run_worker["argv"].index("--worker-id") + 1], "worker-001")
+            self.assertEqual(run_worker["argv"][run_worker["argv"].index("--mode") + 1], "opencode")
+            self.assertIn("--opencode-skip-permissions", run_worker["argv"])
+            self.assertEqual(
+                run_worker["argv"][run_worker["argv"].index("--opencode-preflight-report") + 1],
+                repo_rel(preflight),
+            )
+            self.assertEqual(run_worker["assignment_path"], repo_rel(assignment))
+            self.assertEqual(run_worker["request_path"], repo_rel(request))
+            self.assertEqual(run_worker["summary_path"], repo_rel(summary))
+            self.assertEqual(run_worker["out_root"], repo_rel(worker_root))
+            self.assertEqual(run_worker["command"], shlex.join(run_worker["argv"]))
+
+            retry_worker = replay["retry_worker"]
+            self.assertEqual(
+                retry_worker["argv"][:5],
+                ["python3", "-B", "-m", "validation.tools.opencode_agent_harness", "retry-worker"],
+            )
+            self.assertEqual(
+                retry_worker["argv"][retry_worker["argv"].index("--hint-id") + 1],
+                "repair:run-resume:worker-001:process_timeout",
+            )
+            self.assertEqual(retry_worker["command"], shlex.join(retry_worker["argv"]))
+
     def test_write_evaluate_profile_report_updates_context_index_and_ledger(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

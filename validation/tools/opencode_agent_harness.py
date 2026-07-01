@@ -43,6 +43,7 @@ PROCESS_TIMEOUT_EXIT_CODE = 124
 DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 600
 PORTABLE_PYTHON_COMMAND = "python3"
 PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
+HARNESS_MODULE = "validation.tools.opencode_agent_harness"
 _RESOLVED_PYTHON_COMMAND: list[str] | None = None
 LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
     r"(?<![A-Za-z0-9_])(?:"
@@ -2063,28 +2064,42 @@ def update_evaluate_profile_context_refs(
 def repair_hint_resume_summary(connection: sqlite3.Connection, *, run_id: str) -> dict[str, Any]:
     rows = connection.execute(
         """
-        select hint_id, slice_id, root_cause_key, status
+        select hint_id, slice_id, root_cause_key, status, payload_json
         from repair_hints
         where run_id=?
         order by created_at, hint_id
         """,
         (run_id,),
     ).fetchall()
-    hints = [
-        {
-            "hint_id": str(row[0]),
-            "slice_id": row[1],
-            "root_cause_key": str(row[2]),
-            "status": str(row[3]),
-        }
-        for row in rows
-    ]
+    hints = []
+    for row in rows:
+        payload = safe_json_object(row[4])
+        worker_id = payload.get("worker_id") if isinstance(payload.get("worker_id"), str) else None
+        hints.append(
+            {
+                "hint_id": str(row[0]),
+                "slice_id": row[1],
+                "root_cause_key": str(row[2]),
+                "status": str(row[3]),
+                **({"worker_id": worker_id} if worker_id else {}),
+            }
+        )
     return {
         "source": "sqlite repair_hints",
         "total_count": len(hints),
         "open_count": sum(1 for hint in hints if hint["status"] == "open"),
         "hints": hints,
     }
+
+
+def safe_json_object(value: Any) -> dict[str, Any]:
+    if not isinstance(value, str):
+        return {}
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def build_resume_manifest(
@@ -2110,7 +2125,14 @@ def build_resume_manifest(
         else {}
     )
     context_entrypoints["resume_manifest"] = repo_relative(resume_manifest_path, repo_root=repo_root)
-    workers = resume_manifest_workers(context_pack, agent_index)
+    workers = resume_manifest_workers(
+        context_pack,
+        agent_index,
+        db_path=db_path,
+        run_id=run_id,
+        repair_hints=repair_hints,
+        repo_root=repo_root,
+    )
     return {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "resume-manifest",
@@ -2155,13 +2177,23 @@ def build_resume_manifest(
     }
 
 
-def resume_manifest_workers(context_pack: dict[str, Any], agent_index: dict[str, Any]) -> list[dict[str, Any]]:
+def resume_manifest_workers(
+    context_pack: dict[str, Any],
+    agent_index: dict[str, Any],
+    *,
+    db_path: Path,
+    run_id: str,
+    repair_hints: dict[str, Any],
+    repo_root: Path = REPO_ROOT,
+) -> list[dict[str, Any]]:
     agents_by_worker_id = (
         agent_index.get("agents_by_worker_id")
         if isinstance(agent_index.get("agents_by_worker_id"), dict)
         else {}
     )
     workers = context_pack.get("workers") if isinstance(context_pack.get("workers"), list) else []
+    default_mode = str(context_pack.get("mode")) if context_pack.get("mode") in {"deterministic", "opencode"} else None
+    open_hints_by_worker_id = open_repair_hints_by_worker_id(repair_hints, run_id=run_id)
     entries: list[dict[str, Any]] = []
     copied_fields = [
         "worker_id",
@@ -2196,8 +2228,156 @@ def resume_manifest_workers(context_pack: dict[str, Any], agent_index: dict[str,
             entry["agent_status"] = agent.get("status")
             if "isolated_out_root" not in entry and agent.get("isolated_out_root") is not None:
                 entry["isolated_out_root"] = agent.get("isolated_out_root")
+        mode = resume_worker_replay_mode(worker, agent, default_mode=default_mode)
+        open_hint = open_hints_by_worker_id.get(worker_id)
+        entry["replay_commands"] = resume_worker_replay_commands(
+            entry,
+            db_path=db_path,
+            run_id=run_id,
+            mode=mode,
+            open_hint=open_hint,
+            repo_root=repo_root,
+        )
         entries.append(entry)
     return entries
+
+
+def open_repair_hints_by_worker_id(repair_hints: dict[str, Any], *, run_id: str) -> dict[str, dict[str, Any]]:
+    hints = repair_hints.get("hints") if isinstance(repair_hints.get("hints"), list) else []
+    result: dict[str, dict[str, Any]] = {}
+    for hint in hints:
+        if not isinstance(hint, dict) or hint.get("status") != "open":
+            continue
+        worker_id = hint.get("worker_id")
+        if not isinstance(worker_id, str) or not worker_id:
+            worker_id = worker_id_from_repair_hint_id(str(hint.get("hint_id", "")), run_id=run_id)
+        if worker_id:
+            result[worker_id] = hint
+    return result
+
+
+def worker_id_from_repair_hint_id(hint_id: str, *, run_id: str) -> str | None:
+    prefix = f"repair:{run_id}:"
+    if not hint_id.startswith(prefix):
+        return None
+    remainder = hint_id[len(prefix) :]
+    if ":" not in remainder:
+        return None
+    worker_id, _root_cause = remainder.rsplit(":", 1)
+    return worker_id or None
+
+
+def resume_worker_replay_mode(
+    worker: dict[str, Any],
+    agent: Any,
+    *,
+    default_mode: str | None,
+) -> str:
+    for source in (worker, agent if isinstance(agent, dict) else {}):
+        runtime = source.get("runtime")
+        if runtime == "opencode":
+            return "opencode"
+        mode = source.get("mode")
+        if mode in {"deterministic", "opencode"}:
+            return str(mode)
+    if default_mode in {"deterministic", "opencode"}:
+        return default_mode
+    if isinstance(worker.get("opencode_preflight_report"), dict):
+        return "opencode"
+    return "deterministic"
+
+
+def resume_worker_replay_commands(
+    worker: dict[str, Any],
+    *,
+    db_path: Path,
+    run_id: str,
+    mode: str,
+    open_hint: dict[str, Any] | None,
+    repo_root: Path,
+) -> dict[str, Any]:
+    run_worker = resume_worker_replay_command(
+        "run-worker",
+        worker=worker,
+        db_path=db_path,
+        run_id=run_id,
+        mode=mode,
+        repo_root=repo_root,
+    )
+    commands: dict[str, Any] = {"run_worker": run_worker}
+    if open_hint is not None and isinstance(open_hint.get("hint_id"), str):
+        commands["retry_worker"] = resume_worker_replay_command(
+            "retry-worker",
+            worker=worker,
+            db_path=db_path,
+            run_id=run_id,
+            mode=mode,
+            repo_root=repo_root,
+            hint_id=str(open_hint["hint_id"]),
+        )
+    return commands
+
+
+def resume_worker_replay_command(
+    subcommand: str,
+    *,
+    worker: dict[str, Any],
+    db_path: Path,
+    run_id: str,
+    mode: str,
+    repo_root: Path,
+    hint_id: str | None = None,
+) -> dict[str, Any]:
+    worker_id = str(worker["worker_id"])
+    argv = portable_python_module_argv(
+        HARNESS_MODULE,
+        subcommand,
+        "--db",
+        repo_relative(db_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+    )
+    if hint_id is not None:
+        argv.extend(["--hint-id", hint_id])
+    argv.extend(["--mode", mode])
+    if mode == "opencode":
+        append_opencode_replay_flags(argv, worker)
+    payload = {
+        "argv": argv,
+        "command": shell_command_line(argv),
+        "assignment_path": worker.get("assignment_path"),
+        "request_path": worker.get("request_path"),
+        "summary_path": worker.get("summary_path"),
+        "report_path": worker.get("report_path"),
+        "out_root": worker.get("isolated_out_root") or worker.get("out_root"),
+    }
+    return {key: value for key, value in payload.items() if value is not None}
+
+
+def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> None:
+    preflight = worker.get("opencode_preflight_report")
+    if not isinstance(preflight, dict):
+        return
+    policy = preflight.get("launch_policy") if isinstance(preflight.get("launch_policy"), dict) else {}
+    opencode_command = policy.get("opencode_command")
+    if isinstance(opencode_command, str) and opencode_command:
+        argv.extend(["--opencode-command", opencode_command])
+    opencode_model = policy.get("opencode_model")
+    if isinstance(opencode_model, str) and opencode_model:
+        argv.extend(["--opencode-model", opencode_model])
+    opencode_agent = policy.get("opencode_agent")
+    if isinstance(opencode_agent, str) and opencode_agent:
+        argv.extend(["--opencode-agent", opencode_agent])
+    opencode_variant = policy.get("opencode_variant")
+    if isinstance(opencode_variant, str) and opencode_variant:
+        argv.extend(["--opencode-variant", opencode_variant])
+    if policy.get("opencode_skip_permissions") is True:
+        argv.append("--opencode-skip-permissions")
+    preflight_path = preflight.get("path")
+    if isinstance(preflight_path, str) and preflight_path:
+        argv.extend(["--opencode-preflight-report", preflight_path])
 
 
 def update_batch_profile_report_context_refs(
@@ -5695,6 +5875,10 @@ def opencode_launch_policy_sha256(policy: dict[str, Any]) -> str:
 
 def portable_python_script_argv(script: str, *args: str) -> list[str]:
     return [*portable_python_command_argv(), "-B", script, *args]
+
+
+def portable_python_module_argv(module: str, *args: str) -> list[str]:
+    return [PORTABLE_PYTHON_COMMAND, "-B", "-m", module, *args]
 
 
 def portable_python_command_argv() -> list[str]:
