@@ -3,8 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import jsonschema
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = REPO_ROOT / "validation" / "judge-milestone-bundle.schema.json"
 
 
 def repo_relative(path: Path) -> str:
@@ -129,6 +132,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         write_json(
             run_report_path,
             {
+                "schema_version": 1,
                 "report_kind": "judge-entrypoints-run-report",
                 "status": "passed",
                 "entrypoint_count": 2,
@@ -234,6 +238,224 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
 
+    def test_bundle_matches_schema_and_rejects_expanded_claims(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-schema-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 1,
+                "units_converged": 1,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+            },
+        )
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 1,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "core_translation_quality": {
+                    "final_gate_status": "passed",
+                    "semantic_pass_count": 1,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "readiness_report": None,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "purpose": "core-translation-before-after-exhibit",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "run_id": "schema-test",
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(metrics_path),
+                            "judge_evidence_index": repo_relative(index_path),
+                        },
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        jsonschema.validate(report, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["claim_scope"]["semantic_acceptance_ready"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["core_translation_quality"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+    def test_bundle_blocks_malformed_run_report_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-malformed-run-report-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "report_kind": "wrong-report-kind",
+                "status": "passed",
+                "entrypoint_count": 2,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("run_report_schema_version_must_be_1", report["blockers"])
+        self.assertIn("run_report_kind_must_be_judge_entrypoints_run_report", report["blockers"])
+        self.assertIn("run_report_entrypoint_count_mismatch", report["blockers"])
+
+    def test_bundle_blocks_proof_class_escalation_without_validation_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-proof-escalation-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "competition-exact",
+                        "key_artifacts": {},
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "proof_class_contract": {
+                        "status": "passed",
+                        "entrypoints": {"before_after_judge_demo": "local-simulation"},
+                    },
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("proof_class_contract_mismatch:before_after_judge_demo", report["blockers"])
+        self.assertEqual(report["proof_classes"]["all"], ["local-simulation"])
+        self.assertFalse(report["claim_scope"]["competition_exact_ready"])
+        self.assertFalse(report["publishability"]["competition_exact_publishable"])
+
     def test_bundle_blocks_focused_run_from_external_milestone_claim(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
@@ -243,6 +465,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         write_json(
             run_report_path,
             {
+                "schema_version": 1,
                 "report_kind": "judge-entrypoints-run-report",
                 "status": "passed",
                 "entrypoint_count": 1,
@@ -302,6 +525,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         write_json(
             run_report_path,
             {
+                "schema_version": 1,
                 "report_kind": "judge-entrypoints-run-report",
                 "status": "passed",
                 "entrypoint_count": 1,
@@ -366,6 +590,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         write_json(
             run_report_path,
             {
+                "schema_version": 1,
                 "report_kind": "judge-entrypoints-run-report",
                 "status": "passed",
                 "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
@@ -430,6 +655,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         write_json(
             run_report_path,
             {
+                "schema_version": 1,
                 "report_kind": "judge-entrypoints-run-report",
                 "status": "passed",
                 "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
@@ -496,6 +722,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         write_json(
             run_report_path,
             {
+                "schema_version": 1,
                 "report_kind": "judge-entrypoints-run-report",
                 "status": "passed",
                 "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},

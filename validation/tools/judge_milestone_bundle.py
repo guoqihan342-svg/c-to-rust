@@ -48,6 +48,12 @@ def build_judge_milestone_bundle(
     readiness = run_report.get("summary", {}).get("readiness", {}) if isinstance(run_report.get("summary"), dict) else {}
     claim_boundary = milestone_claim_boundary(run_report)
     validated_artifacts = validation_artifacts_by_entrypoint(run_report.get("validation"))
+    run_report_contract = run_report_contract_blockers(run_report, entrypoints=entrypoints)
+    proof_class_contract = validation_proof_class_contract(run_report)
+    proof_class_contract_errors = proof_class_contract_blockers(
+        entrypoints,
+        proof_class_contract=proof_class_contract,
+    )
 
     entrypoint_reports: list[dict[str, Any]] = []
     workflow_sources: list[dict[str, Any]] = []
@@ -64,6 +70,7 @@ def build_judge_milestone_bundle(
         ) = summarize_entrypoint(
             entry,
             validated_artifacts=validated_artifacts.get(str(entry.get("id", "unknown")), {}),
+            proof_class=trusted_entrypoint_proof_class(entry, proof_class_contract=proof_class_contract),
             repo_root=repo_root,
         )
         entrypoint_reports.append(entry_report)
@@ -88,6 +95,8 @@ def build_judge_milestone_bundle(
         run_report,
         readiness,
         claim_boundary,
+        run_report_contract=run_report_contract,
+        proof_class_contract_errors=proof_class_contract_errors,
         opencode_policy=opencode_policy,
         core_translation_quality=core_translation_quality,
     )
@@ -139,6 +148,7 @@ def summarize_entrypoint(
     entry: dict[str, Any],
     *,
     validated_artifacts: dict[str, Any],
+    proof_class: str,
     repo_root: Path,
 ) -> tuple[
     dict[str, Any],
@@ -175,7 +185,8 @@ def summarize_entrypoint(
             "purpose": entry.get("purpose"),
             "status": entry.get("status"),
             "exit_code": entry.get("exit_code"),
-            "proof_class": entry.get("proof_class", "unknown"),
+            "proof_class": proof_class,
+            "source_proof_class": entry.get("proof_class", "unknown"),
             "run_id": entry.get("run_id", "unknown"),
             "judge_focus": entry.get("judge_focus", []) if isinstance(entry.get("judge_focus"), list) else [],
             "artifacts": artifacts,
@@ -229,10 +240,12 @@ def milestone_blockers(
     readiness: dict[str, Any],
     claim_boundary: dict[str, Any],
     *,
+    run_report_contract: list[str],
+    proof_class_contract_errors: list[str],
     opencode_policy: dict[str, Any],
     core_translation_quality: dict[str, Any],
 ) -> list[str]:
-    blockers: list[str] = []
+    blockers: list[str] = list(run_report_contract) + list(proof_class_contract_errors)
     if run_report.get("status") != "passed":
         blockers.append("judge_entrypoints_not_passed")
     if not readiness.get("all_entrypoints_executed"):
@@ -257,6 +270,70 @@ def milestone_blockers(
     if int_or_zero(core_translation_quality.get("translation_coverage_numerator")) != 0:
         blockers.append("core_quality_translation_coverage_numerator_must_be_zero")
     return blockers
+
+
+def run_report_contract_blockers(run_report: dict[str, Any], *, entrypoints: list[dict[str, Any]]) -> list[str]:
+    blockers: list[str] = []
+    if run_report.get("schema_version") != 1:
+        blockers.append("run_report_schema_version_must_be_1")
+    if run_report.get("report_kind") != "judge-entrypoints-run-report":
+        blockers.append("run_report_kind_must_be_judge_entrypoints_run_report")
+    entrypoint_count = run_report.get("entrypoint_count")
+    if isinstance(entrypoint_count, int) and entrypoint_count != len(entrypoints):
+        blockers.append("run_report_entrypoint_count_mismatch")
+    validation = run_report.get("validation")
+    if isinstance(validation, dict) and validation.get("status") not in {None, "passed"}:
+        blockers.append("run_report_validation_not_passed")
+    return blockers
+
+
+def validation_proof_class_contract(run_report: dict[str, Any]) -> dict[str, str]:
+    validation = run_report.get("validation")
+    if not isinstance(validation, dict):
+        return {}
+    contract = validation.get("proof_class_contract")
+    if not isinstance(contract, dict) or contract.get("status") != "passed":
+        return {}
+    entrypoints = contract.get("entrypoints")
+    if not isinstance(entrypoints, dict):
+        return {}
+    return {
+        str(entrypoint_id): proof_class
+        for entrypoint_id, proof_class in entrypoints.items()
+        if isinstance(proof_class, str)
+    }
+
+
+def proof_class_contract_blockers(
+    entrypoints: list[dict[str, Any]],
+    *,
+    proof_class_contract: dict[str, str],
+) -> list[str]:
+    blockers: list[str] = []
+    for entry in entrypoints:
+        entrypoint_id = str(entry.get("id", "unknown"))
+        source_proof_class = entry.get("proof_class", "unknown")
+        contract_proof_class = proof_class_contract.get(entrypoint_id)
+        if contract_proof_class is not None and source_proof_class != contract_proof_class:
+            blockers.append(f"proof_class_contract_mismatch:{entrypoint_id}")
+        if contract_proof_class is None and source_proof_class == "competition-exact":
+            blockers.append(f"proof_class_contract_missing_for_competition_exact:{entrypoint_id}")
+    return blockers
+
+
+def trusted_entrypoint_proof_class(
+    entry: dict[str, Any],
+    *,
+    proof_class_contract: dict[str, str],
+) -> str:
+    entrypoint_id = str(entry.get("id", "unknown"))
+    contract_proof_class = proof_class_contract.get(entrypoint_id)
+    if contract_proof_class is not None:
+        return contract_proof_class
+    source_proof_class = entry.get("proof_class", "unknown")
+    if source_proof_class == "competition-exact":
+        return "unknown"
+    return source_proof_class if isinstance(source_proof_class, str) else "unknown"
 
 
 def source_summary_claim(run_report: dict[str, Any]) -> dict[str, Any]:

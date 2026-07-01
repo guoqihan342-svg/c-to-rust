@@ -139,7 +139,7 @@ python -B -m validation.tools.run_judge_entrypoints \
   --dry-run
 ```
 
-runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后才执行入口命令；命令成功后再调用本地 artifact 深校验并写出 readiness report。非 dry-run 成功执行时，它还会在 run report 同目录写出 `judge-milestone-bundle.json`；bundle 会 hash 绑定 run report 和 validator-owned artifact refs，并把 focused run 标记为不可作为外部全量 milestone 发布。该 bundle 的一屏字段包括 `core_translation_quality`、`harness_architecture_summary`、proof-class rollup、publishability、unsafe reduction scope、OpenCode evidence policy、known gaps、must-not-claim 列表和复现命令；这些字段只服务评委快速审阅，不扩大语义接受范围。它只是编排证据，语义接受仍只来自 competition summary、workflow metrics、oracle evidence 和 validators。
+runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后才执行入口命令；命令成功后再调用本地 artifact 深校验并写出 readiness report。非 dry-run 成功执行时，它还会在 run report 同目录写出 `judge-milestone-bundle.json`；bundle 会 hash 绑定 run report 和 validator-owned artifact refs，并把 focused run 标记为不可作为外部全量 milestone 发布。该 bundle 的一屏字段包括 `core_translation_quality`、`harness_architecture_summary`、proof-class rollup、publishability、unsafe reduction scope、OpenCode evidence policy、known gaps、must-not-claim 列表和复现命令；这些字段只服务评委快速审阅，不扩大语义接受范围。`validation/judge-milestone-bundle.schema.json` 是该公开索引的机器合同：run report 必须声明 `schema_version=1` / `report_kind=judge-entrypoints-run-report`，proof class 以 validator-owned `validation.proof_class_contract` 为准，缺失或冲突时 bundle 会 fail-closed。它只是编排证据，语义接受仍只来自 competition summary、workflow metrics、oracle evidence 和 validators。
 
 可复用 planned batch profile 入口：
 
