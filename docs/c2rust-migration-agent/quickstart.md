@@ -514,6 +514,7 @@ python -B -m validation.tools.milestone_release_notes \
 
 # run_judge_entrypoints 在 bundle 和 release notes 后自动生成
 # target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+# 校验 schema、hash、claim boundary、本机路径泄漏、packet-to-bundle 内容一致性和 release notes 渲染一致性
 python -B -m validation.tools.validate_public_release_packet \
   --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 

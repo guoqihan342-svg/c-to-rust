@@ -18,7 +18,7 @@
 python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 ```
 
-该命令成功后会在同目录生成 `judge-milestone-bundle.json`、`milestone-release-notes.md` 和 `public-release-packet.json`。bundle 是机器可读外部评估索引，Markdown notes 是从 bundle 渲染的人类可读 release notes，JSON public release packet hash 绑定 run report、readiness report、bundle、notes 和 competition config archive，并由 `validate_public_release_packet` 校验 schema、hash、claim boundary 和本机路径泄漏；这些产物都不是 semantic gate，也不增加 `translation_coverage_numerator`。
+该命令成功后会在同目录生成 `judge-milestone-bundle.json`、`milestone-release-notes.md` 和 `public-release-packet.json`。bundle 是机器可读外部评估索引，Markdown notes 是从 bundle 渲染的人类可读 release notes，JSON public release packet hash 绑定 run report、readiness report、bundle、notes 和 competition config archive，并由 `validate_public_release_packet` 校验 schema、hash、claim boundary、本机路径泄漏、packet-to-bundle 内容一致性，以及 notes 是否等于 bundle 渲染结果；这些产物都不是 semantic gate，也不增加 `translation_coverage_numerator`。
 
 首选真实 FlashDB 运行路径：
 

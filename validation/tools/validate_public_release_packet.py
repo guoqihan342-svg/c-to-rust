@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from validation.tools import milestone_release_notes
 from validation.tools import validate_judge_entrypoints as judge_validator
 
 
@@ -86,6 +87,8 @@ def require_packet_contract(packet: dict[str, Any], *, repo_root: Path) -> None:
             raise ValueError(f"{name}.status must be present")
         judge_validator.validate_ref(ref, repo_root=repo_root)
 
+    require_bundle_consistency(packet, repo_root=repo_root)
+
     if "public_release_packet_is_not_semantic_gate" not in set(packet.get("must_not_claim", [])):
         raise ValueError("must_not_claim must include public_release_packet_is_not_semantic_gate")
 
@@ -138,6 +141,50 @@ def checked_artifact_refs(packet: dict[str, Any], *, repo_root: Path) -> dict[st
                 "sha256": value.get("sha256"),
             }
     return {"checked_count": len(refs), "refs": refs}
+
+
+def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> None:
+    bundle_ref = require_object(packet.get("judge_milestone_bundle"), "judge_milestone_bundle")
+    bundle_path = judge_validator.repo_path(str(bundle_ref.get("path")), repo_root=repo_root)
+    bundle = judge_validator.load_json(bundle_path)
+    publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    for field in ("judge_entrypoints_run_report", "readiness_report"):
+        if packet.get(field) != bundle.get(field):
+            raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+        if field in publication and publication.get(field) != packet.get(field):
+            raise ValueError(f"publication_manifest.{field} must match public_release_packet.{field}")
+
+    for field in ("publication_manifest", "known_gaps", "reproduction_commands"):
+        if packet.get(field) != bundle.get(field):
+            raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+
+    require_release_notes_match_bundle(packet, bundle, repo_root=repo_root)
+
+    packet_claims = set(packet.get("must_not_claim", []))
+    bundle_claims = set(bundle.get("must_not_claim", []))
+    missing_claims = sorted(str(claim) for claim in bundle_claims - packet_claims)
+    if missing_claims:
+        raise ValueError(
+            "must_not_claim must include judge_milestone_bundle.must_not_claim entries: "
+            f"{missing_claims}"
+        )
+
+
+def require_release_notes_match_bundle(packet: dict[str, Any], bundle: dict[str, Any], *, repo_root: Path) -> None:
+    notes_ref = require_object(packet.get("milestone_release_notes"), "milestone_release_notes")
+    notes_path = judge_validator.repo_path(str(notes_ref.get("path")), repo_root=repo_root)
+    actual_notes = normalize_markdown(notes_path.read_text(encoding="utf-8-sig"))
+    try:
+        expected_notes = normalize_markdown(milestone_release_notes.build_release_notes(bundle))
+    except SystemExit as error:
+        raise ValueError(f"judge_milestone_bundle release notes contract failed: {error}") from error
+    if actual_notes != expected_notes:
+        raise ValueError("milestone_release_notes must match judge_milestone_bundle rendered release notes")
+
+
+def normalize_markdown(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return normalized.rstrip("\n") + "\n"
 
 
 def resolve_packet_path(path: Path, *, repo_root: Path) -> Path:
