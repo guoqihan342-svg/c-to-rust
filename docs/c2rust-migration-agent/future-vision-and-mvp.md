@@ -59,6 +59,23 @@
 
 执行方案：把 `opencode-agent-harness-逐行稳定性审查.md` 当作 H7 回归清单，而不是继续扩 scope。当前只保留四类后续动作：一是每次触碰 harness 时跑 `test_opencode_agent_harness` / judge validator / local-artifact deep validation，防止 timeout、atomic write、portable command、retry cap、resume manifest 回退；二是立刻收口 P0-B1/P0-B2/P0-B3，补齐 C2Rust baseline 的 `toolchain_repair`、opt-in live test 和 route/validator/reporting 防伪负例；三是在 WSL/Linux 暴露真实 C2Rust 后产出一个 `real-fdb-calc-crc32` generated + compile-only baseline，失败则提交诚实 blocked repair 证据；四是只有 baseline 被 oracle/diff/unsafe ledger 证明后，才进入 P0-D OpenCode/LLM 安全化闭环。
 
+详细落地清单（按评委复现风险排序）：
+
+- [x] **H7-G1 子进程有限时间合同**：`run-worker`、`retry-worker`、OpenCode preflight、merge command 都必须传递 `timeout_seconds`，超时转成结构化 124/timeout 结果并落 stdout/stderr artifact；真实 `subprocess.run` timeout 测试必须保留。
+- [x] **H7-G2 可移植 Python 命令合同**：可复现命令统一使用 `python3 -B -m ...` 或经过探测的非绝对解释器；公开 evidence/replay command 禁止写入本机 `C:\...`、`F:\...`、`/mnt/c/...` 入口。
+- [x] **H7-G3 关键 artifact 原子写**：context-pack、agent-index、resume-manifest、worker report、summary、metrics、preflight/session/handoff evidence 等关键 JSON 只能走 `atomic_write_json/text`；测试要证明 replace 失败时旧文件仍保留。
+- [x] **H7-G4 repair/retry 双重上限**：`REPAIR_ROUND_CAP=5` 是语义上限，`run-plan --auto-retry` 还要有外层 `REPAIR_ROUND_CAP + 2` 防御 cap；超过 cap 必须 fail-closed，而不是无限等待。
+- [x] **H7-G5 SQLite/OpenCode 并发稳定性**：SQLite 连接保留 busy timeout；OpenCode lock 分类至少覆盖 `database is locked`、`database table is locked`、`sqlite_busy` 等等价信号；`assign_slice` 的 check/write 需要 `BEGIN IMMEDIATE`。
+- [x] **H7-G6 fencing 语义诚实**：`fencing_token` 当前只作为 audit counter，不作为真正 fencing 准入；文档和 contract 不能暗示它已经防住过期 writer。
+- [x] **H7-G7 POSIX shell 命令合同**：喂给 OpenCode/bash 的命令使用 `shlex.join`，验证侧用同一 POSIX 拆分语义；禁止回退到 Windows `subprocess.list2cmdline`。
+- [x] **H7-G8 stale summary 和错误路径 fail-closed**：删除旧 summary、写 rollback evidence、记录 rejected summary 时必须保持结构化 artifact；异常不能吞掉，也不能产生半截 JSON。
+- [x] **H7-G9 resume/agent 索引可操作性**：`resume-manifest.json` 必须绑定 SQLite ledger、context-pack、agent-index、worker summary、repair hints，并给每个 worker 生成可复制的 `run-worker` / `retry-worker` replay command；validator 深校验这些命令与当前 run 一致。
+- [ ] **P0-B4 真实 C2Rust binary 闭环**：在 WSL/Linux 暴露真实 `c2rust`/`c2rust-transpile` 后，优先生成 `real-fdb-calc-crc32` raw C2Rust baseline；成功只算 generated + compile-only + `candidate_context_only`，失败则保持 `toolchain_repair`。
+- [ ] **P0-C verified unsafe baseline**：把 baseline 接到 C oracle、Rust replay、diff、negative diff 和 unsafe ledger；只有这些 gate 通过，才能作为 before/after 的 unsafe baseline。
+- [ ] **P0-D OpenCode/LLM 安全化闭环**：同一 unit 每轮只接受一个最小 safe patch；失败回滚到 last-good；最多 5 轮；验收看 oracle/diff/compile 绿、unsafe 单调下降、repair trace 和 workflow metrics。
+
+回归验收命令：每次触碰 harness 先跑 `python -B -m unittest validation.tools.test_opencode_agent_harness -q`；触碰评委入口或 public packet 再跑 judge validator/local-artifact deep validation；触碰 C2Rust baseline 再跑 `test_auto_migrate`、`test_validate_auto_translation_evidence`、schema/reporting/judge bundle 负例组和目标 slice 的 `validate_auto_translation_evidence --require-semantic-pass`。
+
 ### H7 后 P0 冲刺队列
 
 1. **[x] P0-A 已刷新全量评委 public packet**：非 focused `run_judge_entrypoints` 已跑通，4/4 entrypoint 全部 `passed`，并产出 `target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json`、`judge-milestone-bundle.json`、`milestone-release-notes.md`、`public-release-packet.json` 和 competition config archive；本地 artifact 深校验通过后才可引用该包。边界：当前 proof class 仍是 `local-simulation`，`semantic_gate=false`，`translation_coverage_numerator=0`，不能声明 `competition-exact` 或新增 translator-generated coverage。
