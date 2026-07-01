@@ -78,6 +78,10 @@ English: `auto_migrate.py` now emits three first-class evidence files for each a
 
 English: route-governance metrics now summarize status/output/compile-only state from these C2Rust baseline manifests and the milestone scorecard deduplicates that view for review; compile success remains candidate context, not a semantic gate or translation coverage.
 
+中文：`judge-milestone-bundle.json` 的 `harness_architecture_summary.contract_matrix` 现在按 `plan/translate/verify/repair/report` 汇总 stage、role、artifact、validator 和边界；schema 要求矩阵行保持 `semantic_gate=false`、`chat_output_is_evidence=false`、`translation_coverage_numerator=0`。OpenCode `run-plan` graph 也会公开 `opencode_worker.opencode_variant`。
+
+English: `judge-milestone-bundle.json` now carries `harness_architecture_summary.contract_matrix`, grouping stage, role, artifact, validator, and boundary for `plan/translate/verify/repair/report`; the schema requires matrix rows to keep `semantic_gate=false`, `chat_output_is_evidence=false`, and `translation_coverage_numerator=0`. The OpenCode `run-plan` graph also exposes `opencode_worker.opencode_variant`.
+
 中文：route decision 只决定候选生成路径和上下文预算；validation profile 决定本次运行必须通过的 gates。任何 Agent、C2Rust、手写规则或 Rust 编译通过的输出，只有在 selected validation profile 通过且没有 skipped required gate 时，才可以被绑定为 semantic pass。
 
 English: the route decision controls candidate generation path and context budget only; the validation profile controls the required gates for the run. Output from an Agent, C2Rust, deterministic rules, or Rust compilation can be bound as a semantic pass only when the selected validation profile passes with no skipped required gate.

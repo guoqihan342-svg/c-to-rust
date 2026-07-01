@@ -3745,6 +3745,7 @@ def run_plan(
             auto_retry=auto_retry,
             max_workers=max_workers,
             effective_workers=effective_workers,
+            opencode_variant=opencode_variant,
             opencode_preflight_report=opencode_preflight_binding,
         ),
         "parallelism": {
@@ -3793,6 +3794,7 @@ def build_run_plan_graph_contract(
     auto_retry: bool,
     max_workers: int,
     effective_workers: int,
+    opencode_variant: str,
     opencode_preflight_report: dict[str, Any] | None,
 ) -> dict[str, Any]:
     opencode_worker = {
@@ -3800,6 +3802,8 @@ def build_run_plan_graph_contract(
         "preflight_required": mode == "opencode",
         "preflight_bound": opencode_preflight_report is not None,
     }
+    if mode == "opencode":
+        opencode_worker["opencode_variant"] = opencode_variant
     if opencode_preflight_report is not None:
         opencode_worker["preflight_report"] = {
             "path": opencode_preflight_report.get("path"),

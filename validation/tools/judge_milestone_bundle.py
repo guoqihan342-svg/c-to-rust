@@ -803,6 +803,7 @@ def build_harness_architecture_summary(sources: list[dict[str, Any]]) -> dict[st
         ),
         [],
     )
+    contract_matrix = build_harness_contract_matrix(sources=sources, graph_nodes=graph_nodes, roles=roles)
     return {
         "report_kind": "harness-architecture-summary",
         "sources": sources,
@@ -813,6 +814,7 @@ def build_harness_architecture_summary(sources: list[dict[str, Any]]) -> dict[st
         "repair_checkpoint": first_string_value(sources, "repair_checkpoint"),
         "roles": roles,
         "checkpoint_backend": first_string_value(sources, "checkpoint_backend"),
+        "contract_matrix": contract_matrix,
         "chat_output_is_evidence": any(source.get("chat_output_is_evidence") is True for source in sources),
         "semantic_gate": any(source.get("semantic_gate") is True for source in sources),
         "boundary": (
@@ -820,6 +822,134 @@ def build_harness_architecture_summary(sources: list[dict[str, Any]]) -> dict[st
             "remain diagnostic or command-contract evidence unless a validator-owned semantic gate accepts them."
         ),
     }
+
+
+def build_harness_contract_matrix(
+    *,
+    sources: list[dict[str, Any]],
+    graph_nodes: list[Any],
+    roles: list[str],
+) -> list[dict[str, Any]]:
+    observed_artifacts = sorted(
+        {
+            artifact
+            for source in sources
+            for artifact in source.get("evidence_artifact_names", [])
+            if isinstance(artifact, str)
+        }
+    )
+    opencode_enabled = any(source.get("opencode_runtime_enabled") is True for source in sources)
+    matrix = [
+        contract_matrix_entry(
+            stage="plan",
+            graph_nodes=matching_graph_nodes(graph_nodes, ["load_plan", "fanout_workers"]),
+            roles=matching_roles(roles, ["planner"]),
+            artifacts=observed_or_default(
+                observed_artifacts,
+                ["worker_plan", "context_pack", "agent_index", "batch_profile_report"],
+            ),
+            validators=["validate_worker_plan_contract", "validate_context_ledger_contract"],
+            boundary="Planner artifacts select worker assignments and context indexes only.",
+        ),
+        contract_matrix_entry(
+            stage="translate",
+            graph_nodes=matching_graph_nodes(graph_nodes, ["worker"]),
+            roles=matching_roles(roles, ["worker"]),
+            artifacts=observed_or_default(
+                observed_artifacts,
+                [
+                    "assignment_request",
+                    "worker_report",
+                    "handoff_contract",
+                    "opencode_session_evidence",
+                    "opencode_preflight_report",
+                ],
+                extra=["opencode_contract_verification"] if opencode_enabled else [],
+            ),
+            validators=[
+                "validate_opencode_agent_runtime_contract",
+                "opencode_contract_verification",
+                "validate_competition_summary_entrypoint_contract",
+            ],
+            boundary="Worker and OpenCode artifacts are command-contract evidence until validator-owned gates accept outputs.",
+        ),
+        contract_matrix_entry(
+            stage="verify",
+            graph_nodes=matching_graph_nodes(graph_nodes, ["merge"]),
+            roles=matching_roles(roles, ["verifier"]),
+            artifacts=observed_or_default(
+                observed_artifacts,
+                ["competition_summary", "workflow_metrics", "route_governance_metrics_report", "before_after_exhibit"],
+            ),
+            validators=[
+                "validate_competition_summary_entrypoint_contract",
+                "validate_route_governance_metrics_artifact",
+            ],
+            boundary="Verifier artifacts bind oracle, replay, diff, unsafe, and route metrics without creating a new semantic gate.",
+        ),
+        contract_matrix_entry(
+            stage="repair",
+            graph_nodes=matching_graph_nodes(graph_nodes, ["repair_retry"]),
+            roles=matching_roles(roles, ["repairer"]),
+            artifacts=observed_or_default(
+                observed_artifacts,
+                ["repair_hints", "rollback_evidence", "resume_manifest"],
+            ),
+            validators=["validate_repair_self_heal_contract", "validate_resume_manifest_contract"],
+            boundary="Repair artifacts explain retries, rollback, and blocked next actions only.",
+        ),
+        contract_matrix_entry(
+            stage="report",
+            graph_nodes=matching_graph_nodes(graph_nodes, ["report"]),
+            roles=matching_roles(roles, ["reporter"]),
+            artifacts=observed_or_default(
+                observed_artifacts,
+                ["judge_evidence_index", "evaluate_report", "milestone_release_report", "judge_milestone_bundle"],
+            ),
+            validators=["validate_judge_evidence_index_contract", "validate_public_release_packet"],
+            boundary="Reporter artifacts publish hashes, commands, and claim boundaries for judge review.",
+        ),
+    ]
+    return matrix
+
+
+def contract_matrix_entry(
+    *,
+    stage: str,
+    graph_nodes: list[str],
+    roles: list[str],
+    artifacts: list[str],
+    validators: list[str],
+    boundary: str,
+) -> dict[str, Any]:
+    return {
+        "stage": stage,
+        "graph_nodes": graph_nodes,
+        "roles": roles,
+        "artifacts": artifacts,
+        "validators": validators,
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "translation_coverage_numerator": 0,
+        "boundary": boundary,
+    }
+
+
+def matching_graph_nodes(graph_nodes: list[Any], candidates: list[str]) -> list[str]:
+    observed = [node for node in graph_nodes if isinstance(node, str)]
+    return [candidate for candidate in candidates if candidate in observed]
+
+
+def matching_roles(roles: list[str], candidates: list[str]) -> list[str]:
+    return [candidate for candidate in candidates if candidate in roles]
+
+
+def observed_or_default(observed: list[str], defaults: list[str], *, extra: list[str] | None = None) -> list[str]:
+    selected = [artifact for artifact in defaults if artifact in observed or artifact in defaults]
+    for artifact in extra or []:
+        if artifact not in selected:
+            selected.append(artifact)
+    return selected
 
 
 def build_opencode_evidence_policy(sources: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1683,6 +1813,11 @@ def harness_architecture_source_from_artifact(
     roles = agent_contract.get("roles")
     repair_checkpoint = retry_policy.get("checkpoint")
     checkpoint_backend = agent_contract.get("checkpoint_backend")
+    artifact_refs = payload.get("evidence_artifact_refs")
+    evidence_artifact_names = sorted(artifact_refs.keys()) if isinstance(artifact_refs, dict) else []
+    opencode_runtime = payload.get("opencode_agent_runtime")
+    if not isinstance(opencode_runtime, dict):
+        opencode_runtime = {}
     return {
         "entrypoint_id": entrypoint_id,
         "artifact": artifact,
@@ -1693,6 +1828,13 @@ def harness_architecture_source_from_artifact(
         "repair_checkpoint": repair_checkpoint if isinstance(repair_checkpoint, str) else None,
         "roles": [value for value in roles if isinstance(value, str)] if isinstance(roles, list) else [],
         "checkpoint_backend": checkpoint_backend if isinstance(checkpoint_backend, str) else None,
+        "evidence_artifact_names": evidence_artifact_names,
+        "opencode_runtime_enabled": opencode_runtime.get("runtime") == "opencode"
+        or opencode_runtime.get("worker_count") is not None,
+        "opencode_worker_count": int_or_zero(opencode_runtime.get("worker_count")),
+        "opencode_all_contracts_executed": opencode_runtime.get("all_contracts_executed")
+        if isinstance(opencode_runtime.get("all_contracts_executed"), bool)
+        else None,
         "chat_output_is_evidence": agent_contract.get("chat_output_is_evidence")
         if isinstance(agent_contract.get("chat_output_is_evidence"), bool)
         else None,

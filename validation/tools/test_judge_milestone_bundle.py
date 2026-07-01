@@ -417,6 +417,20 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             opencode_index_path,
             {
                 "report_kind": "judge-evidence-index",
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 2,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
                 "judge_headline": {
                     "report_kind": "judge-headline",
                     "worker_count": 2,
@@ -436,6 +450,17 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     "all_contracts_executed": True,
                     "chat_output_is_evidence": False,
                     "semantic_gate": False,
+                    "contract_status_counts": {"executed": 2},
+                    "worker_ids": ["worker-a", "worker-b"],
+                },
+                "evidence_artifact_refs": {
+                    "worker_plan": {"path": "target/opencode/harness/plans/workers.json", "sha256": "a" * 64},
+                    "context_pack": {"path": "target/opencode/harness/context-pack.json", "sha256": "b" * 64},
+                    "agent_index": {"path": "target/opencode/harness/agent-index.json", "sha256": "c" * 64},
+                    "opencode_preflight_report": {
+                        "path": "target/opencode/harness/opencode-preflight-report.json",
+                        "sha256": "d" * 64,
+                    },
                 },
             },
         )
@@ -606,6 +631,19 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["harness_architecture_summary"]["repair_round_cap"], 5)
         self.assertIn("planner", report["harness_architecture_summary"]["roles"])
         self.assertFalse(report["harness_architecture_summary"]["semantic_gate"])
+        contract_matrix = report["harness_architecture_summary"]["contract_matrix"]
+        self.assertEqual(
+            [entry["stage"] for entry in contract_matrix],
+            ["plan", "translate", "verify", "repair", "report"],
+        )
+        translate_contract = next(entry for entry in contract_matrix if entry["stage"] == "translate")
+        self.assertIn("worker", translate_contract["roles"])
+        self.assertIn("handoff_contract", translate_contract["artifacts"])
+        self.assertIn("opencode_session_evidence", translate_contract["artifacts"])
+        self.assertIn("opencode_contract_verification", translate_contract["validators"])
+        self.assertFalse(translate_contract["semantic_gate"])
+        self.assertFalse(translate_contract["chat_output_is_evidence"])
+        self.assertTrue(all(entry["semantic_gate"] is False for entry in contract_matrix))
         self.assertEqual(report["proof_classes"]["all"], ["local-simulation"])
         self.assertEqual(report["proof_class_rollup"]["highest_proof_class"], "local-simulation")
         self.assertFalse(report["proof_classes"]["has_competition_exact"])
@@ -820,6 +858,16 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         missing_evidence_cost.pop("evidence_cost_retention")
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_evidence_cost, schema)
+
+        missing_contract_matrix = json.loads(json.dumps(report))
+        missing_contract_matrix["harness_architecture_summary"].pop("contract_matrix")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_contract_matrix, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["harness_architecture_summary"]["contract_matrix"][1]["chat_output_is_evidence"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
 
         missing_publication_manifest = json.loads(json.dumps(report))
         missing_publication_manifest.pop("publication_manifest")

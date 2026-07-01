@@ -1772,6 +1772,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 run_plan["graph"]["opencode_worker"]["preflight_report"]["path"],
                 repo_rel(preflight_report),
             )
+            self.assertEqual(run_plan["graph"]["opencode_worker"]["opencode_variant"], "max")
             context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
             agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
             self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
@@ -5106,6 +5107,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertFalse(result["opencode_preflight_report"]["launch_policy"]["opencode_skip_permissions"])
             self.assertEqual(result["graph"]["opencode_worker"]["preflight_report"]["status"], "passed")
             self.assertEqual(result["graph"]["opencode_worker"]["preflight_report"]["contract_status"], "executed")
+            self.assertEqual(result["graph"]["opencode_worker"]["opencode_variant"], "max")
             first_attempt = result["workers"][0]["attempts"][0]
             self.assertEqual(first_attempt["handoff_contract"], handoff_contract)
             self.assertEqual(first_attempt["opencode_session_evidence"], session_evidence)

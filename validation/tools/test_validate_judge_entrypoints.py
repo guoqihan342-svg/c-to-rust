@@ -3178,6 +3178,28 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
+    def test_competition_smoke_command_log_rejects_wsl_drive_mount_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": [
+                            "/mnt/c/Users/runner/toolchain-check.sh",
+                            "bash -lc 'python /mnt/c/Users/runner/tool.py'",
+                        ],
+                        "returncode": 0,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
     def test_merge_execution_argv_allows_host_trace(self) -> None:
         result = validator.validate_local_absolute_path_policy(
             {"merge_execution": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},

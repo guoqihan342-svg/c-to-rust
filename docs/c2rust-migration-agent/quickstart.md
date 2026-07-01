@@ -509,6 +509,9 @@ python -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 
+# milestone bundle 会包含 harness_architecture_summary.contract_matrix：
+# plan/translate/verify/repair/report -> roles、artifacts、validators 和非语义边界。
+
 python -B -m validation.tools.milestone_release_notes \
   --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
