@@ -58,6 +58,8 @@
 
 本轮补充：非 smoke `competition_summary` 的本地 artifact 深校验也会读取 summary 内容，并把 `schema_version`、`profile_id/profile_sha256`、`proof_class` 和 `run_id` 绑定到当前 `flashdb-harness.json` 的 environment profile 与 entrypoint；summary 若声明 `workflow_metrics`，还会校验其 path/sha256 并要求 path 与 `expected_artifacts.workflow_metrics` 一致。这样可以防止旧 run、错 profile、错 proof class 或 hash 漂移的 summary 被索引为评委证据。边界：该校验不要求 `final_gate.status=passed`，因为 before/after 展示和 repair/baseline 证据允许包含 failed summary；它只是 evidence identity gate，不是新的 semantic gate。
 
+本轮补充：`judge-milestone-bundle.json` 顶层新增 `before_after_repair_exhibit`，从已绑定的 `judge-evidence-index.json` 中汇总 `translation_before_after`、unit 级 baseline/final/accepted patch/oracle evidence、`repair_summary`、repair round cap、rollback evidence count 和 measured unsafe delta。schema 要求该块显式声明 `semantic_gate=false`、`generated_draft_semantic_pass=false`、`translation_coverage_numerator=0`，并要求 `must_not_claim` 包含 `before_after_exhibit_is_not_new_semantic_gate`。边界：这是评委一屏展示 before/after + 自愈链路的 evidence rollup，不把 accepted evidence 转成 translator-generated coverage，也不新增 semantic gate。
+
 冻结/后置项：
 
 - 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H6 的真实样例。

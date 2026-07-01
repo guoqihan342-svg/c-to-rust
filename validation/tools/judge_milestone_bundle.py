@@ -94,6 +94,7 @@ def build_judge_milestone_bundle(
     proof_classes = build_proof_classes(entrypoint_reports)
     workflow_metrics = build_workflow_metrics_rollup(workflow_sources)
     core_translation_quality = build_core_translation_quality_rollup(core_quality_sources)
+    before_after_repair_exhibit = build_before_after_repair_exhibit_rollup(core_quality_sources)
     harness_architecture_summary = build_harness_architecture_summary(architecture_sources)
     route_governance_metrics = build_route_governance_metrics_rollup(route_governance_sources)
     evidence_cost_retention = build_evidence_cost_retention_rollup(evidence_cost_sources)
@@ -136,6 +137,7 @@ def build_judge_milestone_bundle(
         "publishability": publishability,
         "semantic_evidence_rollup": semantic_evidence,
         "core_translation_quality": core_translation_quality,
+        "before_after_repair_exhibit": before_after_repair_exhibit,
         "harness_architecture_summary": harness_architecture_summary,
         "route_governance_metrics": route_governance_metrics,
         "evidence_cost_retention": evidence_cost_retention,
@@ -579,6 +581,134 @@ def build_core_translation_quality_rollup(sources: list[dict[str, Any]]) -> dict
     }
 
 
+def build_before_after_repair_exhibit_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    exhibit_sources: list[dict[str, Any]] = []
+    for source in sources:
+        translation = source.get("translation_before_after", {})
+        repair = source.get("repair_summary", {})
+        units = source.get("before_after_units", [])
+        if not isinstance(translation, dict):
+            translation = before_after_summary(None)
+        if not isinstance(repair, dict):
+            repair = repair_summary_for_bundle(None)
+        if not isinstance(units, list):
+            units = []
+        has_exhibit = (
+            bool(units)
+            or repair.get("status") == "verified"
+            or int_or_zero(repair.get("observed_repair_unit_count")) > 0
+            or int_or_zero(repair.get("rollback_evidence_count")) > 0
+        )
+        if not has_exhibit:
+            continue
+        exhibit_sources.append(
+            {
+                "entrypoint_id": source.get("entrypoint_id"),
+                "artifact": source.get("artifact"),
+                "final_gate_status": source.get("final_gate_status"),
+                "translation_before_after": translation,
+                "before_after_units": units,
+                "repair_summary": repair,
+                "unsafe_reduction": source.get("unsafe_reduction", {}),
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+            }
+        )
+
+    measured = [
+        source.get("unsafe_reduction", {})
+        for source in exhibit_sources
+        if isinstance(source.get("unsafe_reduction"), dict)
+        and source.get("unsafe_reduction", {}).get("status") == "measured"
+    ]
+    baseline_values = [value.get("baseline_total_unsafe") for value in measured]
+    current_values = [value.get("current_total_unsafe") for value in measured]
+    reduced_values = [value.get("reduced_by") for value in measured]
+    measured_complete = bool(measured) and all(value is not None for value in baseline_values + current_values + reduced_values)
+    return {
+        "report_kind": "before-after-repair-exhibit-rollup",
+        "sources": exhibit_sources,
+        "rollup": {
+            "source_count": len(exhibit_sources),
+            "bound_unit_count": sum(
+                len(source.get("before_after_units", []))
+                for source in exhibit_sources
+                if isinstance(source.get("before_after_units"), list)
+            ),
+            "measured_unsafe_unit_count": sum(
+                sum(
+                    1
+                    for unit in source.get("before_after_units", [])
+                    if isinstance(unit, dict)
+                    and isinstance(unit.get("unsafe_reduction"), dict)
+                    and unit.get("unsafe_reduction", {}).get("status") == "measured"
+                )
+                for source in exhibit_sources
+                if isinstance(source.get("before_after_units"), list)
+            ),
+            "accepted_patch_unit_count": sum(
+                sum(
+                    1
+                    for unit in source.get("before_after_units", [])
+                    if isinstance(unit, dict) and isinstance(unit.get("accepted_patch"), dict)
+                )
+                for source in exhibit_sources
+                if isinstance(source.get("before_after_units"), list)
+            ),
+            "verified_repair_source_count": sum(
+                1
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+                and source.get("repair_summary", {}).get("status") == "verified"
+            ),
+            "observed_repair_unit_count": sum(
+                int_or_zero(source.get("repair_summary", {}).get("observed_repair_unit_count"))
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+            ),
+            "auto_recovered_unit_count": sum(
+                int_or_zero(source.get("repair_summary", {}).get("auto_recovered_unit_count"))
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+            ),
+            "rollback_evidence_count": sum(
+                int_or_zero(source.get("repair_summary", {}).get("rollback_evidence_count"))
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+            ),
+            "repair_round_cap": max(
+                [
+                    int_or_zero(source.get("repair_summary", {}).get("repair_round_cap"))
+                    for source in exhibit_sources
+                    if isinstance(source.get("repair_summary"), dict)
+                ],
+                default=0,
+            ),
+            "unsafe_reduced_by": sum(int_or_zero(value) for value in reduced_values),
+            "unsafe_reduction": {
+                "status": "measured" if measured else "not_measured",
+                "baseline_total_unsafe": sum(baseline_values) if measured_complete else None,
+                "current_total_unsafe": sum(current_values) if measured_complete else None,
+                "reduced_by": sum(reduced_values) if measured_complete else None,
+            },
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": (
+            "This exhibit binds before/after unsafe-reduction and repair evidence for judge review. "
+            "It is not a semantic gate and does not increase translator-generated coverage."
+        ),
+    }
+
+
 def build_harness_architecture_summary(sources: list[dict[str, Any]]) -> dict[str, Any]:
     roles = sorted(
         {
@@ -892,6 +1022,9 @@ def core_translation_quality_source_from_artifact(
     if not isinstance(unsafe_reduction, dict):
         unsafe_reduction = {}
     final_gate_status = quality.get("final_gate_status")
+    translation_before_after = before_after_summary(quality.get("translation_before_after"))
+    before_after_units = before_after_unit_summaries(quality.get("before_after_units"))
+    repair_summary = repair_summary_for_bundle(quality.get("repair_summary"))
     return {
         "entrypoint_id": entrypoint_id,
         "artifact": artifact,
@@ -899,12 +1032,105 @@ def core_translation_quality_source_from_artifact(
         "semantic_pass_count": int_or_zero(quality.get("semantic_pass_count")),
         "translation_coverage_numerator": int_or_zero(quality.get("translation_coverage_numerator")),
         "generated_draft_semantic_pass": bool(quality.get("generated_draft_semantic_pass")),
+        "translation_before_after": translation_before_after,
+        "before_after_units": before_after_units,
+        "repair_summary": repair_summary,
         "unsafe_reduction": {
             "status": unsafe_reduction.get("status", "unknown"),
             "baseline_total_unsafe": int_or_none(unsafe_reduction.get("baseline_total_unsafe")),
             "current_total_unsafe": int_or_none(unsafe_reduction.get("current_total_unsafe")),
             "reduced_by": int_or_none(unsafe_reduction.get("reduced_by")),
         },
+    }
+
+
+def before_after_summary(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {
+            "status": "not_provided",
+            "unit_count": 0,
+            "measured_unsafe_unit_count": 0,
+            "accepted_patch_unit_count": 0,
+        }
+    status = value.get("status")
+    return {
+        "status": status if isinstance(status, str) else "unknown",
+        "unit_count": int_or_zero(value.get("unit_count")),
+        "measured_unsafe_unit_count": int_or_zero(value.get("measured_unsafe_unit_count")),
+        "accepted_patch_unit_count": int_or_zero(value.get("accepted_patch_unit_count")),
+    }
+
+
+def artifact_binding_summary(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    path = value.get("path")
+    sha256 = value.get("sha256")
+    if not isinstance(path, str) or not isinstance(sha256, str):
+        return None
+    return {"path": path, "sha256": sha256}
+
+
+def before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        unsafe_reduction = item.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict):
+            unsafe_reduction = {}
+        unit: dict[str, Any] = {
+            "unit_id": item.get("unit_id") if isinstance(item.get("unit_id"), str) else "unknown",
+            "status": item.get("status") if isinstance(item.get("status"), str) else "unknown",
+            "unsafe_reduction": {
+                "status": unsafe_reduction.get("status", "unknown"),
+                "baseline_total_unsafe": int_or_none(unsafe_reduction.get("baseline_total_unsafe")),
+                "current_total_unsafe": int_or_none(unsafe_reduction.get("current_total_unsafe")),
+                "reduced_by": int_or_none(unsafe_reduction.get("reduced_by")),
+            },
+        }
+        for key in ["baseline", "final", "accepted_patch", "oracle_evidence"]:
+            binding = artifact_binding_summary(item.get(key))
+            if binding is not None:
+                unit[key] = binding
+        result.append(unit)
+    return result
+
+
+def repair_summary_for_bundle(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {
+            "status": "not_provided",
+            "repair_round_cap": 0,
+            "observed_repair_unit_count": 0,
+            "auto_recovered_unit_count": 0,
+            "rollback_evidence_count": 0,
+        }
+    observed = int_or_zero(value.get("observed_repair_unit_count"))
+    if observed == 0:
+        observed = int_or_zero(value.get("repair_history_unit_count"))
+    auto_recovered = int_or_zero(value.get("auto_recovered_unit_count"))
+    if auto_recovered == 0:
+        auto_recovered = int_or_zero(value.get("auto_recovered_units"))
+    rollback_evidence_count = int_or_zero(value.get("rollback_evidence_count"))
+    if rollback_evidence_count == 0 and isinstance(value.get("histories"), list):
+        rollback_evidence_count = sum(
+            len(history.get("repair_history", {}).get("rollback_ids", []))
+            for history in value["histories"]
+            if isinstance(history, dict) and isinstance(history.get("repair_history"), dict)
+        )
+    status = value.get("status")
+    return {
+        "status": status if isinstance(status, str) else "unknown",
+        "repair_round_cap": int_or_zero(value.get("repair_round_cap")),
+        "observed_repair_unit_count": observed,
+        "auto_recovered_unit_count": auto_recovered,
+        "rollback_evidence_count": rollback_evidence_count,
+        "avg_repair_rounds": number_or_zero(value.get("avg_repair_rounds")),
+        "auto_recovery_rate": number_or_zero(value.get("auto_recovery_rate")),
+        "human_interventions": int_or_zero(value.get("human_interventions")),
     }
 
 

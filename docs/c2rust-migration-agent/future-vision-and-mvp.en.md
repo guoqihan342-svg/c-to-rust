@@ -52,6 +52,8 @@ Active items:
 
 Current supplement: non-smoke local `competition_summary` artifacts are now deeply validated as well. The validator reads the summary and binds `schema_version`, `profile_id/profile_sha256`, `proof_class`, and `run_id` to the current `flashdb-harness.json` environment profile and entrypoint; when the summary declares `workflow_metrics`, its path/sha256 is validated and the path must match `expected_artifacts.workflow_metrics`. This prevents stale runs, wrong profiles, wrong proof classes, or hash-drifted summaries from being indexed as judge evidence. Boundary: this does not require `final_gate.status=passed`, because before/after exhibits and repair/baseline evidence may legitimately include failed summaries. It is an evidence identity gate, not a new semantic gate.
 
+Current supplement: `judge-milestone-bundle.json` now exposes a top-level `before_after_repair_exhibit` that rolls up `translation_before_after`, unit-level baseline/final/accepted patch/oracle evidence, `repair_summary`, repair round cap, rollback evidence count, and measured unsafe delta from the bound `judge-evidence-index.json` artifacts. The schema requires this block to declare `semantic_gate=false`, `generated_draft_semantic_pass=false`, and `translation_coverage_numerator=0`, and it requires `must_not_claim` to include `before_after_exhibit_is_not_new_semantic_gate`. Boundary: this is a judge-facing before/after plus self-healing evidence rollup. It does not convert accepted evidence into translator-generated coverage and it is not a new semantic gate.
+
 Frozen/deferred items:
 
 - Do not expand handwritten-emitter C syntax coverage unless it directly blocks a real H1-H6 sample.

@@ -207,8 +207,37 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     },
                 },
                 "core_translation_quality": {
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "status": "converged",
+                            "baseline": {"path": "validation/evidence/baseline.rs", "sha256": "a" * 64},
+                            "final": {"path": "validation/evidence/final.rs", "sha256": "b" * 64},
+                            "accepted_patch": {"path": "validation/evidence/accepted.patch", "sha256": "c" * 64},
+                            "oracle_evidence": {"path": "validation/evidence/final-verification.json", "sha256": "d" * 64},
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                        }
+                    ],
                     "final_gate_status": "passed",
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 1,
+                    },
                     "semantic_pass_count": 1,
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                    },
                     "translation_coverage_numerator": 0,
                     "generated_draft_semantic_pass": False,
                     "unsafe_reduction": {
@@ -393,6 +422,20 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["baseline_total_unsafe"], 2)
         self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["current_total_unsafe"], 0)
         self.assertFalse(report["core_translation_quality"]["generated_draft_semantic_pass"])
+        self.assertIn("before_after_repair_exhibit", report)
+        self.assertEqual(report["before_after_repair_exhibit"]["report_kind"], "before-after-repair-exhibit-rollup")
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["source_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["bound_unit_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["verified_repair_source_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["auto_recovered_unit_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["unsafe_reduced_by"], 2)
+        self.assertFalse(report["before_after_repair_exhibit"]["rollup"]["semantic_gate"])
+        self.assertFalse(report["before_after_repair_exhibit"]["rollup"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["translation_coverage_numerator"], 0)
+        self.assertEqual(
+            report["before_after_repair_exhibit"]["sources"][0]["before_after_units"][0]["unit_id"],
+            "flashdb/real-fdb-calc-crc32",
+        )
         self.assertEqual(report["harness_architecture_summary"]["graph_runtime"], "opencode-harness-langgraph-inspired")
         self.assertEqual(report["harness_architecture_summary"]["repair_round_cap"], 5)
         self.assertIn("planner", report["harness_architecture_summary"]["roles"])

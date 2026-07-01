@@ -17,6 +17,7 @@
     "publishability",
     "semantic_evidence_rollup",
     "core_translation_quality",
+    "before_after_repair_exhibit",
     "harness_architecture_summary",
     "route_governance_metrics",
     "evidence_cost_retention",
@@ -157,6 +158,65 @@
         "translation_coverage_numerator": {"const": 0},
         "generated_draft_semantic_pass": {"const": false},
         "unsafe_reduction": {"$ref": "#/definitions/unsafeReduction"}
+      }
+    },
+    "before_after_repair_exhibit": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "sources",
+        "rollup",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "accepted_evidence_counts_as_translator_coverage",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "before-after-repair-exhibit-rollup"},
+        "sources": {"type": "array", "items": {"type": "object"}},
+        "rollup": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "source_count",
+            "bound_unit_count",
+            "measured_unsafe_unit_count",
+            "accepted_patch_unit_count",
+            "verified_repair_source_count",
+            "observed_repair_unit_count",
+            "auto_recovered_unit_count",
+            "rollback_evidence_count",
+            "repair_round_cap",
+            "unsafe_reduced_by",
+            "unsafe_reduction",
+            "semantic_gate",
+            "generated_draft_semantic_pass",
+            "translation_coverage_numerator"
+          ],
+          "properties": {
+            "source_count": {"type": "integer", "minimum": 0},
+            "bound_unit_count": {"type": "integer", "minimum": 0},
+            "measured_unsafe_unit_count": {"type": "integer", "minimum": 0},
+            "accepted_patch_unit_count": {"type": "integer", "minimum": 0},
+            "verified_repair_source_count": {"type": "integer", "minimum": 0},
+            "observed_repair_unit_count": {"type": "integer", "minimum": 0},
+            "auto_recovered_unit_count": {"type": "integer", "minimum": 0},
+            "rollback_evidence_count": {"type": "integer", "minimum": 0},
+            "repair_round_cap": {"type": "integer", "minimum": 0, "maximum": 5},
+            "unsafe_reduced_by": {"type": "integer", "minimum": 0},
+            "unsafe_reduction": {"$ref": "#/definitions/unsafeReduction"},
+            "semantic_gate": {"const": false},
+            "generated_draft_semantic_pass": {"const": false},
+            "translation_coverage_numerator": {"const": 0}
+          }
+        },
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "accepted_evidence_counts_as_translator_coverage": {"const": false},
+        "boundary": {"type": "string", "minLength": 1}
       }
     },
     "harness_architecture_summary": {
@@ -347,6 +407,7 @@
       "minItems": 1,
       "allOf": [
         {"contains": {"const": "accepted_evidence_is_not_translator_generated_coverage"}},
+        {"contains": {"const": "before_after_exhibit_is_not_new_semantic_gate"}},
         {"contains": {"const": "bundle_status_passed_is_not_project_level_translation_success"}},
         {"contains": {"const": "local_simulation_is_not_competition_exact"}}
       ]
