@@ -45,18 +45,27 @@
 
 活跃项：
 
-外部审查合并结论（2026-07-02）：两份外部报告的大方向成立，但必须按评分主线重排。`opencode-agent-harness-逐行稳定性审查.md` 指出的无外部进程 timeout、`python`/`python3` 命令不一致、关键证据非原子写、OpenCode lock 匹配过窄、retry 外层缺防御 cap、fencing token 语义不清、并行 lease 竞争窗口、Windows 命令串与 POSIX shell 合同混用，都是评委现场会直接放大的 harness 稳定性风险，应进入当前 P0。`c-to-rust-flashdb-rust-skeleton-评估报告.md` 指出的 showcase 边界也要保留：`flashDB_rust` 手写安全实现不能被写成自动翻译产物；before/after 展示必须说明 baseline/final/oracle 的来源、source pin、proof class 和 semantic gate 边界。详细执行方案见 `../superpowers/plans/2026-07-02-harness-stability-hardening.md`。
+### H7 稳定性审查整合状态
 
-当前代码复核（2026-07-02 二次审查）：`C:\Users\Administrator\Downloads\opencode-agent-harness-逐行稳定性审查.md` 作为风险识别报告有道理，但在当前分支上不应再被理解成“这些 P0 还没做”。已落地的 H7/P0 包括外部子进程 finite timeout 与真实 `subprocess.run` 超时测试、比赛环境优先 `python3 -B` 且本地执行层会探测可运行非绝对解释器的 portable command、关键 artifact 原子写、`run-plan --auto-retry` 外层防御 cap、OpenCode SQLite lock 扩展分类、`fencing_token` audit-only contract、`assign_slice` 的 `BEGIN IMMEDIATE` 事务、POSIX `shlex.join` 命令合同、stale summary cleanup fail-closed、以及 nullable pointer translator smoke 修复。后续 agent 不应重复实现这些项；只有回归测试失败或 validator 发现漂移时才回到 H7/P0 修复。
+外部审查合并结论（2026-07-02）：两份外部报告的大方向成立，但必须按评分主线重排。`opencode-agent-harness-逐行稳定性审查.md` 是有效的 risk discovery，不再是当前分支的未完成 P0 清单；`c-to-rust-flashdb-rust-skeleton-评估报告.md` 对 showcase 边界的提醒仍然有效：`flashDB_rust` 手写安全实现不能写成自动翻译产物，before/after 展示必须说明 baseline/final/oracle 的来源、source pin、proof class 和 semantic gate 边界。详细历史实施方案见 `../superpowers/plans/2026-07-02-harness-stability-hardening.md`。
 
-H7 后详细冲刺方案：
+当前代码复核（2026-07-02 二次审查）：H7/P0 已覆盖外部子进程 finite timeout 与真实 `subprocess.run` 超时测试、比赛环境优先 `python3 -B` 且本地执行层探测可运行非绝对解释器的 portable command、关键 artifact 原子写、`run-plan --auto-retry` 外层防御 cap、OpenCode SQLite lock 扩展分类、`fencing_token` audit-only contract、`assign_slice` 的 `BEGIN IMMEDIATE` 事务、POSIX `shlex.join` 命令合同、stale summary cleanup fail-closed、以及 nullable pointer translator smoke 修复。后续 agent 只有在 `test_opencode_agent_harness`、judge validator、competition smoke 或 local-artifact deep validation 证明漂移时，才重新打开 H7/P0 修复。
+
+架构取舍：采用 SWE-bench/LangGraph 的工程思想，不在当前冲刺引入新的 LangGraph 运行时或 Docker farm。当前 harness 的正确方向是可恢复 DAG、stage contract、worker 隔离、SQLite checkpoint、context-pack/agent-index/resume manifest 和 validator-owned final gate；OpenCode 多 agent 只能通过 `run-plan --max-workers`、显式 workers profile、隔离 out-root、preflight/runtime contract 和统一 validator 汇总进入证据链，不能让 chat/session 输出直接成为 semantic evidence。
+
+不可声明边界：OpenCode chat/session 只是命令契约审计证据，不是 semantic gate；review checklist 不是 semantic acceptance；本机 `local-simulation` 不能改名成 `competition-exact`；before/after 展品只能证明当前 artifact 中的 unsafe-reduction 与 oracle/diff 通过，不能把手写 baseline 或 accepted evidence 转成 translator-generated coverage。
+
+### H7 后 P0 冲刺队列
 
 1. **P0-A 先刷新全量评委 public packet**：运行非 focused `run_judge_entrypoints`，生成并验证 `judge-milestone-bundle.json`、`milestone-release-notes.md`、`public-release-packet.json` 和 competition config archive；若 `--require-local-artifacts` 失败，优先重新生成对应 entrypoint 的 `target/` artifact，不能把 config hash 改回旧值来迁就 stale output。验收是全量评委入口、bundle、release notes、public packet 和本地 artifact 深校验全部通过，并保留 proof class 边界。
-2. **P0-B 再补 S1 C2Rust baseline compile-only**：选择 FlashDB `fdb_calc_crc32`，若 C2Rust 工具链阻塞则切 zlib-ng `adler32`，要求真实 slice 产生 C2Rust Rust output、output path/status/sha256、compile-only status，并保持 `candidate_context_only`；skipped/blocked 不能算生成成功。
-3. **P0-C 把 baseline 升级为 verified unsafe baseline**：复用 C oracle、Rust replay、diff、negative diff 和 unsafe ledger；通过才进入 before/after 安全化，不通过则输出 fixture/observable diff/下一步 repair hint。
-4. **P0-D 接 OpenCode/LLM 安全化闭环**：同一单元每轮只接受一个最小 unsafe-reduction patch，失败回滚到 last-good，repair hint 消费最多 5 轮；验收必须同时有 compile/diff/oracle 绿、unsafe 严格下降、repair/rollback trace 和 workflow metrics。
+2. **P0-B 再补 S1 C2Rust baseline compile-only**：首选 FlashDB `fdb_calc_crc32`，但必须先满足真实 C2Rust 命令、真实 source checkout 和可解析 `compile_commands.json` 这三个前置；当前本机若缺 C2Rust/clang/gcc/compile commands，只能记录 blocked/toolchain repair，不得算 generated success。验收是一个真实 slice 产生 C2Rust Rust output、output path/status/sha256、compile-only status，并保持 `candidate_context_only`；skipped/blocked 不能计入 generated、compiled、accepted 或 semantic pass。
+3. **P0-C 把 baseline 升级为 verified unsafe baseline**：复用 C oracle、Rust replay、diff、negative diff 和 unsafe ledger；通过才进入 before/after 安全化，不通过则输出 fixture/observable diff、source/observable 边界和下一步 repair hint。若 oracle 仍是手写等价实现，公开说明必须把它标为 harness/verifier 展品，而不是“真实 FlashDB 源码已自动翻译通过”。
+4. **P0-D 接 OpenCode/LLM 安全化闭环**：同一单元每轮只接受一个最小 unsafe-reduction patch，失败回滚到 last-good，repair hint 消费最多 5 轮；验收必须同时有 compile/diff/oracle 绿、unsafe 严格下降、repair/rollback trace、workflow metrics 和上下文索引更新。
 5. **P0-E 保持 proof class 诚实**：本机 `local-simulation` 可以作为开发证据，但外部发布前必须要么在真实比赛/等价 Linux 环境刷新 `competition-exact` 或 `ci-approximation` 证据，要么在 public packet 中把缺口列为 release blocker；不得把本机 artifact 改名成更高 proof class。
-6. **P1 仅在不抢 P0 时做**：顶层 JSON error envelope、deterministic worker 短重试策略、更细 retention policy、文档/示例中裸 `python` 命令一致性清理、以及旧 `docs/superpowers/plans/**` checklist 的历史标记/lint 都是有价值的硬化，但必须排在全量 public packet、S1 baseline 和 S2 safety loop 之后。
+
+### P1 后置硬化
+
+顶层 JSON error envelope、deterministic worker 基础设施错误短重试、更细 retention policy、文档/示例中裸 `python` 命令一致性清理、OpenCode lock 信号继续扩展、以及旧 `docs/superpowers/plans/**` checklist 的历史标记/lint 都是有价值的硬化，但必须排在 P0-A 全量 public packet、P0-B S1 baseline、P0-C verified unsafe baseline 和 P0-D safety loop 之后；其中 deterministic worker 不允许泛重试语义失败，只能在有明确幂等/副作用合同和基础设施错误分类后再做。
 
 - [x] H1 一键 `evaluate` 入口：一次命令完成 `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`，并产出 `context-pack.json`、`agent-index.json` 和 SQLite `context_packs` 索引。验收：`harness-h1-evaluate-verify` FlashDB smoke 已通过，`context_packs.payload_json` 与落盘 context-pack 一致；`evaluate --profile` 现在也会落 `harness/evaluate-report.json` wrapper 和 `harness/judge-evidence-index.json`，把完整 batch-profile run 作为评委可发现的一键入口索引。
 - [x] H2 多 worker fan-out/fan-in：`run-plan --max-workers` 固定按 planner 顺序汇总，所有 worker 隔离输出，SQLite 开启 busy timeout，OpenCode wrapper 可以并行跑互不依赖的 slice。验收：`run-plan` 已使用 `ThreadPoolExecutor` 并在 graph 中记录 `parallel_map.result_order=planner_order`，worker out-root 由 SQLite agent ledger 约束，`connect()` 设置 `busy_timeout=30000`；关键测试覆盖并行执行、重复 out-root 拒绝和 busy timeout；`workers[]` 显式 profile 已在真实 FlashDB 双 worker smoke 中跑通，`harness-flashdb-explicit-workers-20260701` 聚合 `real-fdb-calc-crc32` 与 `real-fdb-blob-make`，final gate passed，accepted-evidence `semantic_pass=2`，并由 `l3-flashdb-explicit-workers-harness-run.json` 记录复现命令与 hash。
