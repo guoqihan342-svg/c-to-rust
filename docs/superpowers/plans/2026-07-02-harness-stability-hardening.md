@@ -57,12 +57,22 @@
 
 ## 当前核对表
 
+- 二次审查复核：`C:\Users\Administrator\Downloads\opencode-agent-harness-逐行稳定性审查.md` 的技术判断总体成立，但当前代码已吸收其中 H7/P0 稳定性项。后续执行时把该报告作为已关闭风险清单和回归测试来源，而不是重新打开同一批 P0 工作。
 - H7/P0 implemented：timeout、portable command、atomic write、retry cap、OpenCode lock、fencing audit contract、assignment transaction、POSIX shell contract、translator smoke fix 均已落到代码和测试。
 - stale summary cleanup included in H7/P0：旧 summary 删除失败现在 fail-closed，不启动 worker，不记录旧 summary，并打开 `stale_summary_cleanup_failed` repair hint。
 - judge smoke refreshed：focused `competition_environment_smoke` runner 已通过，post-run 深校验使用选中入口过滤配置；本地 proof class 明确保持 `local-simulation`。
 - post-H7 verification strengthened：真实 `subprocess.run` sleep timeout 集成测试已通过，覆盖 mock 不到的 OS timeout 行为。
 - command-log drift guard strengthened：本地 artifact 深校验现在要求 `commands.jsonl` 覆盖 smoke summary 的全部 steps。
-- P1 deferred：top-level JSON error envelope、deterministic worker short retry policy。
+- P1 deferred：top-level JSON error envelope、deterministic worker short retry policy、文档/示例中裸 `python` 命令的一致性清理。
+
+## H7 后执行方案
+
+1. 全量 public packet 优先：运行非 focused `run_judge_entrypoints`，生成并验证 `judge-milestone-bundle.json`、`milestone-release-notes.md`、`public-release-packet.json` 和 competition config archive。若深校验失败，优先刷新对应 entrypoint 的 `target/` artifact，不修改当前 config/profile hash 去迎合旧输出。
+2. S1 C2Rust baseline 次优先：让一个真实 slice 产出 C2Rust Rust output、output sha256 和 compile-only status，保持 `candidate_context_only`；blocked/skipped 只能作为失败证据和 repair 输入。
+3. S1 verifier：把 compile-only baseline 接进 C oracle、Rust replay、diff、negative diff 和 unsafe ledger，成功后才称为 `verified-unsafe-baseline`。
+4. S2 safety loop：在同一单元上接 OpenCode/LLM patch，每轮只收一个最小 unsafe-reduction diff；失败回滚，repair hint 最多 5 轮，验收以 compile/diff/oracle 绿和 unsafe 严格下降为准。
+5. proof class 收尾：真实比赛/等价 Linux 环境刷新前，本机 artifact 只能保持 `local-simulation`；若外部发布仍没有 `competition-exact` 或 `ci-approximation` 证据，必须在 public packet 中列为 release blocker。
+6. P1 hardening timebox：顶层 JSON error envelope、deterministic worker 短重试、文档命令一致性清理和旧计划 checklist 历史标记只在 P0-A 到 P0-D 不被挤占时执行。
 
 ---
 

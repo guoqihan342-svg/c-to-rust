@@ -57,12 +57,22 @@ All agents should hand back small patches or worktree diffs. One main integrator
 
 ## Current Checklist
 
+- Second-review recheck: `C:\Users\Administrator\Downloads\opencode-agent-harness-逐行稳定性审查.md` is directionally correct, but the current code has absorbed its H7/P0 stability items. Treat that report as a closed risk checklist and regression-test source, not as a reason to reopen the same P0 work.
 - H7/P0 implemented: timeout, portable command, atomic write, retry cap, OpenCode lock classification, fencing audit contract, assignment transaction, POSIX shell contract, and translator smoke fix are implemented in code and tests.
 - Stale summary cleanup included in H7/P0: old-summary removal failures now fail closed, do not launch the worker, do not record the old summary, and open a `stale_summary_cleanup_failed` repair hint.
 - Judge smoke refreshed: the focused `competition_environment_smoke` runner passed, and post-run validation uses the generated selected-entrypoint config; local proof class remains `local-simulation`.
 - Post-H7 verification strengthened: the real `subprocess.run` sleep timeout integration test passed, covering OS timeout behavior that mocks do not cover.
 - Command-log drift guard strengthened: local-artifact deep validation now requires `commands.jsonl` to cover every smoke-summary step.
-- P1 deferred: top-level JSON error envelope and deterministic-worker short retry policy.
+- P1 deferred: top-level JSON error envelope, deterministic-worker short retry policy, and consistency cleanup for bare `python` commands in docs/examples.
+
+## Post-H7 Execution Plan
+
+1. Full public packet first: run non-focused `run_judge_entrypoints`, generate and validate `judge-milestone-bundle.json`, `milestone-release-notes.md`, `public-release-packet.json`, and the competition config archive. If deep validation fails, refresh the affected entrypoint's `target/` artifact first; do not weaken the current config/profile hashes to match stale output.
+2. S1 C2Rust baseline next: make one real slice produce C2Rust Rust output, output sha256, and compile-only status while staying `candidate_context_only`; blocked or skipped states are failure evidence and repair input only.
+3. S1 verifier: connect the compile-only baseline to the C oracle, Rust replay, diff, negative diff, and unsafe ledger. Only a passing run may be called a `verified-unsafe-baseline`.
+4. S2 safety loop: wire OpenCode/LLM patches on the same unit, accepting only one minimal unsafe-reduction diff per round. Failed rounds roll back, repair hints are capped at five rounds, and acceptance requires green compile/diff/oracle gates plus strictly lower unsafe count.
+5. Proof-class closeout: until evidence is refreshed on the real competition or equivalent Linux environment, local artifacts remain `local-simulation`; if an external release still lacks `competition-exact` or `ci-approximation` evidence, the public packet must list that gap as a release blocker.
+6. P1 hardening timebox: the top-level JSON error envelope, deterministic-worker short retry policy, doc-command consistency cleanup, and historical marking for old plan checklists run only when P0-A through P0-D are not displaced.
 
 ---
 

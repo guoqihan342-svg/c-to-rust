@@ -47,6 +47,17 @@
 
 外部审查合并结论（2026-07-02）：两份外部报告的大方向成立，但必须按评分主线重排。`opencode-agent-harness-逐行稳定性审查.md` 指出的无外部进程 timeout、`python`/`python3` 命令不一致、关键证据非原子写、OpenCode lock 匹配过窄、retry 外层缺防御 cap、fencing token 语义不清、并行 lease 竞争窗口、Windows 命令串与 POSIX shell 合同混用，都是评委现场会直接放大的 harness 稳定性风险，应进入当前 P0。`c-to-rust-flashdb-rust-skeleton-评估报告.md` 指出的 showcase 边界也要保留：`flashDB_rust` 手写安全实现不能被写成自动翻译产物；before/after 展示必须说明 baseline/final/oracle 的来源、source pin、proof class 和 semantic gate 边界。详细执行方案见 `../superpowers/plans/2026-07-02-harness-stability-hardening.md`。
 
+当前代码复核（2026-07-02 二次审查）：`C:\Users\Administrator\Downloads\opencode-agent-harness-逐行稳定性审查.md` 作为风险识别报告有道理，但在当前分支上不应再被理解成“这些 P0 还没做”。已落地的 H7/P0 包括外部子进程 finite timeout 与真实 `subprocess.run` 超时测试、`python3 -B` portable command、关键 artifact 原子写、`run-plan --auto-retry` 外层防御 cap、OpenCode SQLite lock 扩展分类、`fencing_token` audit-only contract、`assign_slice` 的 `BEGIN IMMEDIATE` 事务、POSIX `shlex.join` 命令合同、stale summary cleanup fail-closed、以及 nullable pointer translator smoke 修复。后续 agent 不应重复实现这些项；只有回归测试失败或 validator 发现漂移时才回到 H7/P0 修复。
+
+H7 后详细冲刺方案：
+
+1. **P0-A 先刷新全量评委 public packet**：运行非 focused `run_judge_entrypoints`，生成并验证 `judge-milestone-bundle.json`、`milestone-release-notes.md`、`public-release-packet.json` 和 competition config archive；若 `--require-local-artifacts` 失败，优先重新生成对应 entrypoint 的 `target/` artifact，不能把 config hash 改回旧值来迁就 stale output。验收是全量评委入口、bundle、release notes、public packet 和本地 artifact 深校验全部通过，并保留 proof class 边界。
+2. **P0-B 再补 S1 C2Rust baseline compile-only**：选择 FlashDB `fdb_calc_crc32`，若 C2Rust 工具链阻塞则切 zlib-ng `adler32`，要求真实 slice 产生 C2Rust Rust output、output path/status/sha256、compile-only status，并保持 `candidate_context_only`；skipped/blocked 不能算生成成功。
+3. **P0-C 把 baseline 升级为 verified unsafe baseline**：复用 C oracle、Rust replay、diff、negative diff 和 unsafe ledger；通过才进入 before/after 安全化，不通过则输出 fixture/observable diff/下一步 repair hint。
+4. **P0-D 接 OpenCode/LLM 安全化闭环**：同一单元每轮只接受一个最小 unsafe-reduction patch，失败回滚到 last-good，repair hint 消费最多 5 轮；验收必须同时有 compile/diff/oracle 绿、unsafe 严格下降、repair/rollback trace 和 workflow metrics。
+5. **P0-E 保持 proof class 诚实**：本机 `local-simulation` 可以作为开发证据，但外部发布前必须要么在真实比赛/等价 Linux 环境刷新 `competition-exact` 或 `ci-approximation` 证据，要么在 public packet 中把缺口列为 release blocker；不得把本机 artifact 改名成更高 proof class。
+6. **P1 仅在不抢 P0 时做**：顶层 JSON error envelope、deterministic worker 短重试策略、更细 retention policy、文档/示例中裸 `python` 命令一致性清理、以及旧 `docs/superpowers/plans/**` checklist 的历史标记/lint 都是有价值的硬化，但必须排在全量 public packet、S1 baseline 和 S2 safety loop 之后。
+
 - [x] H1 一键 `evaluate` 入口：一次命令完成 `init-run -> plan-source-file -> run-plan -> merge -> evaluate-report`，并产出 `context-pack.json`、`agent-index.json` 和 SQLite `context_packs` 索引。验收：`harness-h1-evaluate-verify` FlashDB smoke 已通过，`context_packs.payload_json` 与落盘 context-pack 一致；`evaluate --profile` 现在也会落 `harness/evaluate-report.json` wrapper 和 `harness/judge-evidence-index.json`，把完整 batch-profile run 作为评委可发现的一键入口索引。
 - [x] H2 多 worker fan-out/fan-in：`run-plan --max-workers` 固定按 planner 顺序汇总，所有 worker 隔离输出，SQLite 开启 busy timeout，OpenCode wrapper 可以并行跑互不依赖的 slice。验收：`run-plan` 已使用 `ThreadPoolExecutor` 并在 graph 中记录 `parallel_map.result_order=planner_order`，worker out-root 由 SQLite agent ledger 约束，`connect()` 设置 `busy_timeout=30000`；关键测试覆盖并行执行、重复 out-root 拒绝和 busy timeout；`workers[]` 显式 profile 已在真实 FlashDB 双 worker smoke 中跑通，`harness-flashdb-explicit-workers-20260701` 聚合 `real-fdb-calc-crc32` 与 `real-fdb-blob-make`，final gate passed，accepted-evidence `semantic_pass=2`，并由 `l3-flashdb-explicit-workers-harness-run.json` 记录复现命令与 hash。
 - [x] H3 精准 repair 自愈：失败 worker 必须落 `repair_hints`，同一 assignment 最多自动重试 5 轮；每次失败、回滚和最终接受/拒绝都要进入报告。验收：`run-plan --auto-retry`、`retry-worker`、5 轮 cap、rollback evidence、attempt timeline、final decision、context-pack/agent-index retry 状态和 before/after verified repair trace 均有测试覆盖。
@@ -83,6 +94,7 @@
 
 - 不扩手写 emitter 的 C 语法覆盖，除非直接阻塞 H1-H7 的真实样例。
 - 不做 `typed_ir.rs` / `clang_frontend.rs` 等大文件拆分，除非是 harness 必需的小修。
+- 不把 `docs/superpowers/plans/**` 中历史实施计划的未勾选 checkbox 当成当前全局待办；当前全局优先级只看本文件。
 - 不在 D7 后新增功能；D7 后只修复、验证、写文档和打磨演示。
 - Phase 2/3/4 的 CFG/relooper、union、一般指针图、多 TU、完整 function pointer 和工业级 coverage 继续保留为长期路线，但不再抢占当前 10 天主线。
 
