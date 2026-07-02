@@ -300,7 +300,13 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(before_after["target_id"], "flashdb")
         self.assertEqual(before_after["slice_id"], "real-fdb-calc-crc32")
         self.assertEqual(before_after["claim_boundary"]["source_commit"], commit)
-        self.assertIn("C2Rust baseline output is still skipped", before_after["claim_boundary"]["boundary"])
+        self.assertIn("baseline_verification", before_after["claim_boundary"]["boundary"])
+        verified_ref = batch["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"]
+        self.assertEqual(verified_ref, before_after["baseline_verification"])
+        verified_payload = load_json(REPO_ROOT / verified_ref["path"])
+        self.assertEqual(verified_payload["status"], "passed")
+        self.assertIs(verified_payload["semantic_pass"], True)
+        self.assertEqual(verified_payload["semantic_claim_source"], "verified_unsafe_baseline_gates")
         self.assertEqual(before_after["unsafe_reduction"]["status"], "measured")
         self.assertGreater(before_after["unsafe_reduction"]["baseline_total_unsafe"], 0)
         self.assertEqual(before_after["unsafe_reduction"]["current_total_unsafe"], 0)
@@ -314,6 +320,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "oracle_evidence",
             "accepted_patch",
             "patch_log",
+            "baseline_verification",
             "unsafe_scan_evidence",
         ]:
             artifact = before_after[key]

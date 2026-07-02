@@ -13,7 +13,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-    "sha256": "ddf5bddec4537c806ffa26fa73ac7b8edd3c655a5c24a8ac5a4ef8b6efacd435"
+    "sha256": "938be7bee669b32a5cfcc83f78548908e57faf53ad520561e464590b3af0cb29"
   },
   "accepted_patch": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
@@ -22,6 +22,14 @@
   "patch_log": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",
     "sha256": "6fb0e22bf93b32b045be8464b19f50cfb33e8dfd32e5571a4692c69cee35a664"
+  },
+  "baseline_verification": {
+    "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
+    "sha256": "615628ab6655d5cc798edfb064c580235b4aae17d5cf8623f3743241bc5623ed",
+    "status": "passed",
+    "semantic_pass": true,
+    "semantic_claim_source": "verified_unsafe_baseline_gates",
+    "generated_draft_semantic_pass": false
   },
   "unsafe_reduction": {
     "status": "measured",
@@ -37,7 +45,7 @@
   "semantic_evidence": {
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "8b4054add3949312e313983a5c8e6bb7b9968b2465416236dbf3a9a82046641e"
+      "sha256": "89fa62baed0abd02d4e616311986f7e920cef1bfe19ce9ec9579e62a64a59ba7"
     },
     "final_source_snapshot": {
       "path": "validation/l2_slices/src/fdb_calc_crc32.rs",
@@ -50,7 +58,7 @@
     "source_file": "sources/FlashDB/src/fdb_utils.c",
     "semantic_claim_source": "accepted_evidence_binding",
     "generated_draft_semantic_pass": false,
-    "boundary": "This is a real FlashDB before/after exhibit. The baseline is a reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust baseline output is still skipped and is not claimed as the source of this baseline.",
+    "boundary": "This is a real FlashDB before/after exhibit. The baseline is a reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust output is bound separately through baseline_verification for repair-gate context, while accepted evidence remains the semantic source.",
     "observable_fields": [
       "return_code"
     ],

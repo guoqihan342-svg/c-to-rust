@@ -908,13 +908,15 @@ def summarize_translation_before_after(unit_statuses: list[dict[str, Any]]) -> d
                 measured_unsafe_unit_count += 1
         if isinstance(evidence.get("accepted_patch"), dict) or isinstance(evidence.get("patch_log"), dict):
             accepted_patch_unit_count += 1
-        bound_units.append(
-            {
-                "unit_id": unit.get("unit_id", "unknown"),
-                "status": evidence.get("status", "bound"),
-                "unsafe_reduction": unsafe_reduction if isinstance(unsafe_reduction, dict) else {},
-            }
-        )
+        bound_unit = {
+            "unit_id": unit.get("unit_id", "unknown"),
+            "status": evidence.get("status", "bound"),
+            "unsafe_reduction": unsafe_reduction if isinstance(unsafe_reduction, dict) else {},
+        }
+        baseline_verification = evidence.get("baseline_verification")
+        if isinstance(baseline_verification, dict):
+            bound_unit["baseline_verification"] = baseline_verification
+        bound_units.append(bound_unit)
     return {
         "status": "bound" if bound_units else "not_provided",
         "unit_count": len(bound_units),

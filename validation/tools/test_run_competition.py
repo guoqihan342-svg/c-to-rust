@@ -213,10 +213,26 @@ def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> di
         "oracle_evidence": evidence_dir / "oracle-diff.json",
         "accepted_patch": evidence_dir / "accepted.patch",
         "patch_log": evidence_dir / "safety-step-log.jsonl",
+        "baseline_verification": evidence_dir / "verified-baseline.json",
     }
     for name, path in artifacts.items():
-        path.write_text(f"{name}\n", encoding="utf-8")
-    return {
+        if name == "baseline_verification":
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "semantic_pass": True,
+                        "semantic_claim_source": "verified_unsafe_baseline_gates",
+                        "generated_draft_semantic_pass": False,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(f"{name}\n", encoding="utf-8")
+    manifest = {
         "schema_version": 1,
         "status": "bound",
         **{
@@ -234,6 +250,15 @@ def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> di
             "ratio": 2 / 6,
         },
     }
+    manifest["baseline_verification"].update(
+        {
+            "status": "passed",
+            "semantic_pass": True,
+            "semantic_claim_source": "verified_unsafe_baseline_gates",
+            "generated_draft_semantic_pass": False,
+        }
+    )
+    return manifest
 
 
 def write_direct_before_after_manifest(out_root: Path, target_id: str, slice_id: str) -> dict:
@@ -245,9 +270,25 @@ def write_direct_before_after_manifest(out_root: Path, target_id: str, slice_id:
         "oracle_evidence": evidence_dir / "oracle-diff.json",
         "accepted_patch": evidence_dir / "accepted.patch",
         "patch_log": evidence_dir / "safety-step-log.jsonl",
+        "baseline_verification": evidence_dir / "verified-baseline.json",
     }
     for name, path in artifacts.items():
-        path.write_text(f"{name}\n", encoding="utf-8")
+        if name == "baseline_verification":
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "semantic_pass": True,
+                        "semantic_claim_source": "verified_unsafe_baseline_gates",
+                        "generated_draft_semantic_pass": False,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(f"{name}\n", encoding="utf-8")
     manifest = {
         "schema_version": 1,
         "status": "bound",
@@ -266,6 +307,14 @@ def write_direct_before_after_manifest(out_root: Path, target_id: str, slice_id:
             "ratio": 0.0,
         },
     }
+    manifest["baseline_verification"].update(
+        {
+            "status": "passed",
+            "semantic_pass": True,
+            "semantic_claim_source": "verified_unsafe_baseline_gates",
+            "generated_draft_semantic_pass": False,
+        }
+    )
     (evidence_dir / f"l3-{slice_id}-translation-before-after.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -511,6 +560,10 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(metrics["translation_before_after"]["unit_count"], 1)
             self.assertEqual(metrics["translation_before_after"]["measured_unsafe_unit_count"], 1)
             self.assertEqual(metrics["translation_before_after"]["accepted_patch_unit_count"], 1)
+            self.assertEqual(
+                metrics["translation_before_after"]["units"][0]["baseline_verification"],
+                before_after["baseline_verification"],
+            )
             self.assertEqual(metrics["unsafe_reduction"]["status"], "measured")
             self.assertEqual(metrics["unsafe_reduction"]["baseline_total_unsafe"], 3)
             self.assertEqual(metrics["unsafe_reduction"]["current_total_unsafe"], 0)

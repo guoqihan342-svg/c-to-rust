@@ -17,6 +17,17 @@ def flashdb_translation_before_after_ref() -> dict:
     return dict(profile["attempt_evidence_policy"]["translation_before_after"])
 
 
+def flashdb_verified_unsafe_baseline_ref() -> dict:
+    profile_path = REPO_ROOT / "config" / "competition-env" / "planned-batches" / "flashdb-fdb-utils-before-after.json"
+    profile = json.loads(profile_path.read_text(encoding="utf-8"))
+    return dict(profile["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"])
+
+
+def flashdb_translation_before_after_payload() -> dict:
+    ref = flashdb_translation_before_after_ref()
+    return json.loads((REPO_ROOT / ref["path"]).read_text(encoding="utf-8"))
+
+
 class C2RustMigratorTest(unittest.TestCase):
     def test_baseline_repair_gate_writes_failed_summary_from_bound_flashdb_evidence(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -39,6 +50,7 @@ class C2RustMigratorTest(unittest.TestCase):
                     "baseline_attempt": {
                         "attempt_number": 1,
                         "root_cause_key": "unsafe_baseline_requires_repair",
+                        "verified_unsafe_baseline": flashdb_verified_unsafe_baseline_ref(),
                     },
                     "accepted_attempt": {
                         "min_attempt_number": 2,
@@ -62,6 +74,86 @@ class C2RustMigratorTest(unittest.TestCase):
             self.assertEqual(unit["root_cause_key"], "unsafe_baseline_requires_repair")
             self.assertEqual(unit["translation_before_after"]["unsafe_reduction"]["baseline_total_unsafe"], 2)
             self.assertEqual(unit["translation_before_after"]["unsafe_reduction"]["current_total_unsafe"], 0)
+
+    def test_baseline_repair_gate_rejects_failed_verified_unsafe_baseline_ref(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="c2rust-migrator-test-", dir=target_dir) as tmp:
+            tmp_path = Path(tmp)
+            verified_path = tmp_path / "failed-verified-baseline.json"
+            verified_path.write_text(
+                json.dumps(
+                    {
+                        "status": "failed",
+                        "semantic_pass": False,
+                        "semantic_claim_source": "verified_unsafe_baseline_gates",
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            verified_ref = {
+                "path": verified_path.relative_to(REPO_ROOT).as_posix(),
+                "sha256": c2rust_migrator.sha256_file(verified_path),
+                "status": "failed",
+                "semantic_pass": False,
+                "semantic_claim_source": "verified_unsafe_baseline_gates",
+            }
+            before_after_artifacts = {}
+            for name in ["baseline", "final", "oracle_evidence", "accepted_patch", "patch_log"]:
+                artifact_path = tmp_path / f"{name}.txt"
+                artifact_path.write_text(f"{name}\n", encoding="utf-8")
+                before_after_artifacts[name] = {
+                    "path": artifact_path.relative_to(REPO_ROOT).as_posix(),
+                    "sha256": c2rust_migrator.sha256_file(artifact_path),
+                }
+            before_after_path = tmp_path / "translation-before-after.json"
+            before_after = {
+                "schema_version": 1,
+                "status": "bound",
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                **before_after_artifacts,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                    "ratio": 0.0,
+                },
+            }
+            before_after["baseline_verification"] = dict(verified_ref)
+            before_after_path.write_text(json.dumps(before_after, sort_keys=True), encoding="utf-8")
+            request = {
+                "slice_specs": ["validation/slice-specs/flashdb-real-fdb-calc-crc32.json"],
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                "proof_class": "local-simulation",
+                "out_root": (tmp_path / "worker-a").relative_to(REPO_ROOT).as_posix(),
+                "run_id": "run-test-worker-a",
+                "harness_attempt_number": 1,
+                "harness_repair_trace": {
+                    "mode": "baseline_repair_gate",
+                    "translation_before_after": {
+                        "path": before_after_path.relative_to(REPO_ROOT).as_posix(),
+                        "sha256": c2rust_migrator.sha256_file(before_after_path),
+                    },
+                    "baseline_attempt": {
+                        "attempt_number": 1,
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                        "verified_unsafe_baseline": verified_ref,
+                    },
+                    "accepted_attempt": {
+                        "min_attempt_number": 2,
+                        "require_hint_id": True,
+                    },
+                },
+            }
+
+            with self.assertRaisesRegex(SystemExit, "verified_unsafe_baseline status must be passed"):
+                c2rust_migrator.maybe_write_harness_repair_trace_summary(request)
 
     def test_baseline_repair_gate_acceptance_attempt_requires_hint_id(self) -> None:
         request = {

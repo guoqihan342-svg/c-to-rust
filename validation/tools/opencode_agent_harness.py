@@ -3520,6 +3520,8 @@ def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[st
             exhibit_unit["repair_history"] = unit["repair_history"]
         if isinstance(evidence.get("patch_log"), dict):
             exhibit_unit["patch_log"] = evidence["patch_log"]
+        if isinstance(evidence.get("baseline_verification"), dict):
+            exhibit_unit["baseline_verification"] = evidence["baseline_verification"]
         if isinstance(evidence.get("claim_boundary"), dict):
             exhibit_unit["claim_boundary"] = evidence["claim_boundary"]
         units.append(exhibit_unit)

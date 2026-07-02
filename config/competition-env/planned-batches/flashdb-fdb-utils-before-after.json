@@ -30,12 +30,20 @@
     "mode": "baseline_repair_gate",
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "41111b11e30c32829f83187481abda9ba3ecbc6ac1dc2b951b31bd390555ddda"
+      "sha256": "80ce2ad28f4703e6c9ab847eae68f85474b1bd8df4684c3ec9a4bf3d37becfaa"
     },
     "baseline_attempt": {
       "attempt_number": 1,
       "expected_final_gate": "failed",
-      "root_cause_key": "unsafe_baseline_requires_repair"
+      "root_cause_key": "unsafe_baseline_requires_repair",
+      "verified_unsafe_baseline": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
+        "sha256": "615628ab6655d5cc798edfb064c580235b4aae17d5cf8623f3743241bc5623ed",
+        "status": "passed",
+        "semantic_pass": true,
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": false
+      }
     },
     "accepted_attempt": {
       "min_attempt_number": 2,

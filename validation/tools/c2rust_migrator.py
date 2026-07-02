@@ -239,7 +239,58 @@ def load_bound_translation_before_after(policy: dict[str, Any]) -> dict[str, Any
     current_total = unsafe_reduction.get("current_total_unsafe")
     if not isinstance(baseline_total, int) or not isinstance(current_total, int) or baseline_total <= current_total:
         raise SystemExit("baseline_repair_gate requires baseline unsafe count above current unsafe count")
+    validate_bound_verified_unsafe_baseline(policy, payload)
     return payload
+
+
+def validate_bound_verified_unsafe_baseline(policy: dict[str, Any], before_after: dict[str, Any]) -> None:
+    baseline_attempt = policy.get("baseline_attempt") if isinstance(policy.get("baseline_attempt"), dict) else {}
+    policy_ref = baseline_attempt.get("verified_unsafe_baseline")
+    if policy_ref is None:
+        policy_ref = policy.get("verified_unsafe_baseline")
+    evidence_ref = before_after.get("baseline_verification")
+    if policy_ref is None and evidence_ref is None:
+        return
+    if not isinstance(policy_ref, dict):
+        raise SystemExit("baseline_repair_gate verified_unsafe_baseline is required")
+    if not isinstance(evidence_ref, dict):
+        raise SystemExit("baseline_repair_gate translation_before_after.baseline_verification is required")
+    policy_path = verified_unsafe_baseline_ref_path(policy_ref, "verified_unsafe_baseline")
+    evidence_path = verified_unsafe_baseline_ref_path(evidence_ref, "translation_before_after.baseline_verification")
+    if str(policy_ref.get("path")) != str(evidence_ref.get("path")) or str(policy_ref.get("sha256")) != str(evidence_ref.get("sha256")):
+        raise SystemExit("baseline_repair_gate verified_unsafe_baseline must match translation_before_after.baseline_verification")
+    if policy_path != evidence_path:
+        raise SystemExit("baseline_repair_gate verified_unsafe_baseline path mismatch")
+    validate_verified_unsafe_baseline_status(policy_ref, "verified_unsafe_baseline")
+    validate_verified_unsafe_baseline_status(evidence_ref, "translation_before_after.baseline_verification")
+    payload = json.loads(policy_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit("baseline_repair_gate verified_unsafe_baseline artifact must be an object")
+    validate_verified_unsafe_baseline_status(payload, "verified_unsafe_baseline")
+
+
+def verified_unsafe_baseline_ref_path(ref: dict[str, Any], label: str) -> Path:
+    path_text = ref.get("path")
+    expected_sha = ref.get("sha256")
+    if not isinstance(path_text, str) or not isinstance(expected_sha, str):
+        raise SystemExit(f"baseline_repair_gate {label}.path and sha256 are required")
+    path = REPO_ROOT / checked_posix_path(path_text)
+    if not path.exists():
+        raise SystemExit(f"baseline_repair_gate {label}.path does not exist: {path_text}")
+    if sha256_file(path) != expected_sha:
+        raise SystemExit(f"baseline_repair_gate {label}.sha256 mismatch")
+    return path
+
+
+def validate_verified_unsafe_baseline_status(payload: dict[str, Any], label: str) -> None:
+    if payload.get("status") is not None and payload.get("status") != "passed":
+        raise SystemExit(f"baseline_repair_gate {label} status must be passed")
+    if payload.get("semantic_pass") is not None and payload.get("semantic_pass") is not True:
+        raise SystemExit(f"baseline_repair_gate {label} semantic_pass must be true")
+    if payload.get("semantic_claim_source") is not None and payload.get("semantic_claim_source") != "verified_unsafe_baseline_gates":
+        raise SystemExit(f"baseline_repair_gate {label} semantic_claim_source must be verified_unsafe_baseline_gates")
+    if payload.get("generated_draft_semantic_pass") is not None and payload.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(f"baseline_repair_gate {label} generated_draft_semantic_pass must be false")
 
 
 def validate_path_sha_binding(payload: dict[str, Any], field: str) -> None:

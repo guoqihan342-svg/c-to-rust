@@ -2508,6 +2508,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "store_add_one",
                 "abc123",
             )
+            verified_baseline_ref = verified_unsafe_baseline_ref_for_tests()
             profile_path = Path(tmp) / "planned-batch.json"
             profile_path.write_text(
                 json.dumps(
@@ -2532,7 +2533,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "require_repair_trace": True,
                         "attempt_evidence_policy": {
                             "mode": "baseline_repair_gate",
-                            "baseline_attempt": {"attempt_number": 1},
+                            "baseline_attempt": {
+                                "attempt_number": 1,
+                                "verified_unsafe_baseline": verified_baseline_ref,
+                            },
                             "accepted_attempt": {"min_attempt_number": 2, "require_hint_id": True},
                         },
                         "acceptance_boundary": {
@@ -2545,6 +2549,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 encoding="utf-8",
             )
             worker_attempts = 0
+            seen_requests: list[dict] = []
 
             def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 nonlocal worker_attempts
@@ -2552,6 +2557,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     worker_attempts += 1
                     request_path = REPO_ROOT / argv[argv.index("--input") + 1]
                     request = json.loads(request_path.read_text(encoding="utf-8"))
+                    seen_requests.append(request)
                     summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
                     if worker_attempts == 1:
                         write_worker_summary(summary_path, request["run_id"], status="failed", failed=1, semantic_pass=0)
@@ -2562,7 +2568,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                             status="passed",
                             failed=0,
                             semantic_pass=1,
-                            workflow_metrics=before_after_worker_metrics(out_root, request["run_id"]),
+                            workflow_metrics=before_after_worker_metrics(
+                                out_root,
+                                request["run_id"],
+                                baseline_verification=verified_baseline_ref,
+                            ),
                         )
                     return subprocess.CompletedProcess(argv, 0, stdout=f"worker attempt {worker_attempts}\n", stderr="")
                 if "validation/tools/run_competition.py" in argv:
@@ -2594,6 +2604,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             self.assertEqual(result["status"], "completed")
             self.assertEqual(worker_attempts, 2)
+            self.assertEqual(
+                seen_requests[0]["harness_repair_trace"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
+            self.assertEqual(
+                seen_requests[1]["harness_repair_trace"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
             self.assertEqual(result["run_plan"]["auto_retry"]["retried_worker_count"], 1)
             exhibit_ref = result["before_after_exhibit_report"]
             exhibit = json.loads((out_root / "summary" / "before-after-exhibit.json").read_text(encoding="utf-8"))
@@ -2610,9 +2628,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertTrue((REPO_ROOT / repair_history["patch_events_path"]).exists())
             unit = exhibit["units"][0]
             self.assertEqual(unit["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(unit["baseline_verification"], verified_baseline_ref)
             self.assertEqual(unit["repair_history"], repair_history)
             summary_metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(summary_metrics["translation_before_after"]["status"], "bound")
+            self.assertEqual(
+                summary_metrics["translation_before_after"]["units"][0]["baseline_verification"],
+                verified_baseline_ref,
+            )
             self.assertEqual(summary_metrics["root_cause_counts"], {"final_gate_failed": 1})
             self.assertEqual(summary_metrics["per_unit_statuses"][0]["root_cause_key"], "final_gate_failed")
             self.assertEqual(summary_metrics["per_unit_statuses"][0]["repair_history"], repair_history)
@@ -2620,6 +2643,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
             self.assertEqual(context_pack["attempt_evidence_policy"]["mode"], "baseline_repair_gate")
             self.assertEqual(agent_index["attempt_evidence_policy"]["mode"], "baseline_repair_gate")
+            self.assertEqual(
+                context_pack["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
+            self.assertEqual(
+                agent_index["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
             self.assertEqual(context_pack["entrypoints"]["before_after_exhibit_report"], exhibit_ref["path"])
             self.assertEqual(context_pack["report_artifacts"]["before_after_exhibit_report"], exhibit_ref)
             self.assertEqual(agent_index["reports"]["before_after_exhibit_report"], exhibit_ref)
@@ -6301,7 +6332,28 @@ def measured_unsafe_worker_metrics(run_id: str) -> dict:
     }
 
 
-def before_after_worker_metrics(out_root: Path, run_id: str) -> dict:
+def verified_unsafe_baseline_ref_for_tests() -> dict:
+    path = (
+        REPO_ROOT
+        / "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/"
+        "l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json"
+    )
+    return {
+        "path": repo_rel(path),
+        "sha256": harness.sha256_file(path),
+        "status": "passed",
+        "semantic_pass": True,
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
+def before_after_worker_metrics(
+    out_root: Path,
+    run_id: str,
+    *,
+    baseline_verification: dict | None = None,
+) -> dict:
     evidence_dir = out_root / "evidence" / "before-after"
     evidence_dir.mkdir(parents=True, exist_ok=True)
     artifacts = {
@@ -6335,6 +6387,15 @@ def before_after_worker_metrics(out_root: Path, run_id: str) -> dict:
             "non_goals": ["whole-program translation"],
         },
     }
+    if baseline_verification is not None:
+        before_after["baseline_verification"] = baseline_verification
+    summary_unit = {
+        "unit_id": "demo/store-add-one",
+        "status": "bound",
+        "unsafe_reduction": before_after["unsafe_reduction"],
+    }
+    if baseline_verification is not None:
+        summary_unit["baseline_verification"] = baseline_verification
     return {
         "schema_version": 1,
         "run_id": run_id,
@@ -6348,13 +6409,7 @@ def before_after_worker_metrics(out_root: Path, run_id: str) -> dict:
             "unit_count": 1,
             "measured_unsafe_unit_count": 1,
             "accepted_patch_unit_count": 1,
-            "units": [
-                {
-                    "unit_id": "demo/store-add-one",
-                    "status": "bound",
-                    "unsafe_reduction": before_after["unsafe_reduction"],
-                }
-            ],
+            "units": [summary_unit],
         },
         "avg_repair_rounds": 0.0,
         "auto_recovery_rate": 0.0,

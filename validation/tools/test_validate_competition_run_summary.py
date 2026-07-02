@@ -571,6 +571,76 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertIn("translation_before_after.final.sha256", str(raised.exception))
 
+    def test_rejects_translation_before_after_baseline_verification_sha_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["slices"] = {
+            "attempted": 1,
+            "typed_ir_generated": 1,
+            "compiled": 1,
+            "semantic_pass": 1,
+            "refused": 0,
+            "blocked": 0,
+            "failed": 0,
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-run-summary.json"
+            summary_path.parent.mkdir(parents=True, exist_ok=True)
+            evidence_dir = root / "evidence"
+            evidence_dir.mkdir()
+            artifact_paths = {}
+            for name in ["baseline", "final", "oracle_evidence", "accepted_patch", "baseline_verification"]:
+                path = evidence_dir / f"{name}.txt"
+                path.write_text(name, encoding="utf-8")
+                artifact_paths[name] = path
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            before_after = {
+                "schema_version": 1,
+                "status": "bound",
+                **{
+                    name: {
+                        "path": f"evidence/{path.name}",
+                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    }
+                    for name, path in artifact_paths.items()
+                },
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 4,
+                    "current_total_unsafe": 1,
+                    "reduced_by": 3,
+                    "ratio": 0.25,
+                },
+            }
+            before_after["baseline_verification"]["sha256"] = "0" * 64
+            metrics["translation_before_after"] = {
+                "status": "bound",
+                "unit_count": 1,
+                "measured_unsafe_unit_count": 1,
+                "accepted_patch_unit_count": 1,
+                "units": [
+                    {
+                        "unit_id": "demo/unit-1",
+                        "status": "bound",
+                        "unsafe_reduction": before_after["unsafe_reduction"],
+                        "baseline_verification": before_after["baseline_verification"],
+                    }
+                ],
+            }
+            metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
+            metrics["unsafe_reduction"] = before_after["unsafe_reduction"]
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("translation_before_after.baseline_verification.sha256", str(raised.exception))
+
     def test_rejects_workflow_root_cause_count_mismatch(self) -> None:
         module = load_validator_module()
         summary = valid_summary()

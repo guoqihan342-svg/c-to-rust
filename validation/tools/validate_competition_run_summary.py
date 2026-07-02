@@ -293,6 +293,21 @@ def validate_translation_before_after_unit(
             summary_path=summary_path,
             repo_root=repo_root,
         )
+    baseline_verification = evidence.get("baseline_verification")
+    if baseline_verification is not None:
+        baseline_verification_path = validate_before_after_artifact_ref(
+            baseline_verification,
+            key="baseline_verification",
+            unit=unit,
+            index=index,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        validate_before_after_baseline_verification(
+            baseline_verification,
+            baseline_verification_path,
+            index=index,
+        )
     unsafe_reduction = evidence.get("unsafe_reduction")
     if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
         raise SystemExit(
@@ -365,7 +380,7 @@ def validate_before_after_artifact_ref(
     index: int,
     summary_path: Path,
     repo_root: Path,
-) -> None:
+) -> Path:
     if not isinstance(artifact, dict):
         raise SystemExit(
             f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key} must be an object"
@@ -396,6 +411,33 @@ def validate_before_after_artifact_ref(
         raise SystemExit(
             f"workflow metrics per_unit_statuses[{index}].translation_before_after.{key}.sha256 does not match"
         )
+    return artifact_path
+
+
+def validate_before_after_baseline_verification(artifact: dict[str, Any], artifact_path: Path, *, index: int) -> None:
+    prefix = f"workflow metrics per_unit_statuses[{index}].translation_before_after.baseline_verification"
+    if artifact.get("status") is not None and artifact.get("status") != "passed":
+        raise SystemExit(f"{prefix}.status must be passed")
+    if artifact.get("semantic_pass") is not None and artifact.get("semantic_pass") is not True:
+        raise SystemExit(f"{prefix}.semantic_pass must be true")
+    if artifact.get("semantic_claim_source") is not None and artifact.get("semantic_claim_source") != "verified_unsafe_baseline_gates":
+        raise SystemExit(f"{prefix}.semantic_claim_source must be verified_unsafe_baseline_gates")
+    if artifact.get("generated_draft_semantic_pass") is not None and artifact.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(f"{prefix}.generated_draft_semantic_pass must be false")
+    try:
+        payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{prefix} artifact must be JSON") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"{prefix} artifact must be an object")
+    if payload.get("status") != "passed":
+        raise SystemExit(f"{prefix}.status must be passed")
+    if payload.get("semantic_pass") is not True:
+        raise SystemExit(f"{prefix}.semantic_pass must be true")
+    if payload.get("semantic_claim_source") != "verified_unsafe_baseline_gates":
+        raise SystemExit(f"{prefix}.semantic_claim_source must be verified_unsafe_baseline_gates")
+    if payload.get("generated_draft_semantic_pass") is not False:
+        raise SystemExit(f"{prefix}.generated_draft_semantic_pass must be false")
 
 
 def resolve_unit_artifact(
