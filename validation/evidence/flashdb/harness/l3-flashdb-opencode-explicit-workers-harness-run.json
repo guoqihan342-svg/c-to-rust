@@ -20,57 +20,65 @@
     "artifacts": {
       "agent_index": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
-        "sha256": "1de903c2b6295711ad67f9155a95189eef2c43292060caf5411432b374643fe4"
+        "sha256": "7dfbd3659d98c8b9facc2d418c7cbec7b76771cf32b0a92d67e09b01d391619a"
       },
       "batch_profile_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
-        "sha256": "fd29b28869a10cff5b7301c8dd1cca020e0a0e120cb784ac49280a2a516dff69"
+        "sha256": "0f259aa4762d820ea375c0b70f3fce1fb9c1e57a2740bce2ddb8c120134d433f"
       },
       "competition_summary": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
-        "sha256": "34f1dbcee489f65053e70bae094b86de740b90544c4ea47b287dbf2e90411ca8"
+        "sha256": "0c05280809cf5477d15e87b0ddb026d11e409bba24d8847dad8c4d56e72e9d72"
       },
       "context_pack": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
-        "sha256": "3180e2db2cf662746b587c48aa88ef5c04be961a50b8a7e54ac923a2130b7284"
+        "sha256": "a81a6680d84d4600b0f916d9693fa36872e921e9a907aa97b0a77bffe1fbd0ad"
       },
       "evaluate_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
-        "sha256": "d9686cebf8334275316381e7c68c367118dce03ad227973f881b1bd658668759"
+        "sha256": "eb193d9de9856132d9a9d7944a60065c005dbb8e269409ac13acc193c39e69d1"
       },
       "judge_evidence_index": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
-        "sha256": "8c2720c826c56fe7241140725290bae5f5dae7d2f0fef2585fef2da12e1f986b"
+        "sha256": "bd187b6f192131c061266005d50d93f3badef363a007647bad4a62170f7d2a55"
       },
       "merge_plan": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
-        "sha256": "0217646918a9a036a41d7e3c51a275846f2c27c974e2ed10d97d603628422276"
+        "sha256": "fcb5009420741ee6563fb2b1dcfad930de60ba03698e1cca51b7a49ed92884c2"
+      },
+      "opencode_safety_transform_attempt": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/opencode-safety-transform-attempt-1.json",
+        "sha256": "745930c770136ea1205e3661441dc2f536084cf4caaf83da6f96e427af6497da"
+      },
+      "resume_manifest": {
+        "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json",
+        "sha256": "3dd965162dc4ad2d142172f948a00a0db9a67486db8f9d6b82e3e1ac14f3061e"
       },
       "route_governance_metrics_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
-        "sha256": "947fe04b5ce59bab71c5e748845d6adc35db3a0afcbb54f253fdbe59620544c1"
+        "sha256": "bf3e4fc0e4a886972433116d6935e33a29c42497975438fce943b397825abc0d"
       },
       "run_plan_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
-        "sha256": "8f9ae7fa4e1b71465da318813002c470c947e31bfd78137ee63eb02d38182c25"
+        "sha256": "138bdcd34b361d4830ffa6c5c3bb833f6d48840dbd6eb9add9c61f0269a71d98"
       },
       "worker_plan": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/plans/flashdb-flashdb-fdb-utils-opencode-explicit-workers-workers.json",
-        "sha256": "53b57351889c4e3d10fdacbdaaa3a7676c50c583c686c4b3e1165d86e6204ba2"
+        "sha256": "2c6cff63a63ead88abcd6d1e02eddc1f132a14fac0cdf4f498d111abae3088bf"
       },
       "workflow_metrics": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/workflow-metrics.json",
-        "sha256": "6b454a63c4299dffaec6886570d9b9daf2a25263b4d6989a121c4a4c1d780a5a"
+        "sha256": "ff425452225f0b23983f2fc5bc8733fb102648af55948b9d9ce1d90c156488b3"
       }
     },
     "opencode_runtime_artifacts": {
       "opencode_preflight_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/opencode-preflight-report.json",
-        "sha256": "8beb55b4b48a5871a02bed1d5f81d1b76e04f20fa145485b02462232e8d8516d"
+        "sha256": "5da834dd781b684cc051f14ecd0b631546c9f65e9643c70d00b397e4a17c0dda"
       },
       "opencode_preflight_session_evidence": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/logs/opencode-preflight-session-evidence.json",
-        "sha256": "7973d9a293d3be340097703bc17414e2c7a8d2cba02870e8bb6d0f4753ef2024"
+        "sha256": "a765d820b94d7f118f1bbbc13c436216d11fe3e4aa1337d58699958cad781594"
       }
     },
     "status": "recorded_not_tracked"
@@ -154,13 +162,13 @@
       "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
       "summary": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/summary/competition-run-summary.json",
-        "sha256": "d454f572e3db2b105d1b06e255dfd42bc36987f73b7a1aec280803b3fc62e331"
+        "sha256": "7ad275b2243582a25ba5fdadb33192cf09016694bbb33a6cc514d463b98aaecf"
       },
       "summary_status": "passed",
       "worker_id": "flashdb-opencode-worker-001-fdb-calc-crc32",
       "worker_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/run-worker-report.json",
-        "sha256": "3948e3a73e2749dfbc248e426f86741888119278dbcdd9a08a0441c45610e113"
+        "sha256": "a3ca02c495ca406dcfc3274048fa2dd94d82c74a5253daa31585e1c20791024a"
       }
     },
     {
@@ -175,13 +183,13 @@
       "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
       "summary": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-002-fdb-blob-make/summary/competition-run-summary.json",
-        "sha256": "a28fa50d65d02edcca13f6b46d785e74ff643e40f9504d5cfb4d556ca51e799f"
+        "sha256": "0fb3b9bf03d097f972c55343e9962c4654e7ac83aeaadb10a801803968a347bb"
       },
       "summary_status": "passed",
       "worker_id": "flashdb-opencode-worker-002-fdb-blob-make",
       "worker_report": {
         "path": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-002-fdb-blob-make/harness/run-worker-report.json",
-        "sha256": "e8e452e82b0556d96957dbeff6ad79e99d2f3d3424ca3f6c59d2b4e36f7ae668"
+        "sha256": "885079077c0ce44a34d57aa17fec7ace131ca929a005a19975d8817267f352bb"
       }
     }
   ]
