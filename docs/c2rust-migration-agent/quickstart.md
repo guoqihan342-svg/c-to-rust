@@ -207,6 +207,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
+`--mode opencode` 除了隔离 worker out-root，还会隔离 OpenCode runtime env，并在 preflight/worker contract、session evidence 和 report 中记录 `opencode_runtime_env`；缺失或 hash 漂移会在启动 worker 前 fail-closed。runtime env 目录形态为 `opencode-runtime/<scope>/{config,data,cache,tmp}`，它只是运行时审计，不是 semantic gate。
+
 预期 worker 输出是 `target/competition-out/workers/worker-a/summary/competition-run-summary.json`。缺少 summary 输出就是交互失败，不能算部分成功。
 
 ## 7. 多 Agent / 并行 Worker
@@ -276,6 +278,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
+OpenCode worker 会在 `target/competition-out/workers/<worker-id>/opencode-runtime/<worker-id>/` 下创建隔离的 config/data/cache/tmp，并把 repo-relative 的 `opencode_runtime_env` 绑定进审计 artifact。
+
 ### 7.4 生成合并计划并执行
 
 ```bash
@@ -319,6 +323,7 @@ target/competition-out/
 │   ├── assignments/<worker-id>-request.json
 │   └── merge-plan.json
 ├── workers/<worker-id>/                  # 每个 worker 隔离输出
+│   ├── opencode-runtime/<worker-id>/...   # OpenCode config/data/cache/tmp 隔离目录
 │   ├── evidence/
 │   ├── summary/competition-run-summary.json
 │   ├── harness/run-worker-report.json

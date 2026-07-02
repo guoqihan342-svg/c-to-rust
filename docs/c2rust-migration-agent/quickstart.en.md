@@ -207,6 +207,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
+`--mode opencode` isolates the worker out-root and the OpenCode runtime env, then records `opencode_runtime_env` in the preflight/worker contracts, session evidence, and reports. Missing fields or hash drift fail closed before the worker launches. The runtime env shape is `opencode-runtime/<scope>/{config,data,cache,tmp}`; it is runtime audit only, not a semantic gate.
+
 Expected worker output: `target/competition-out/workers/worker-a/summary/competition-run-summary.json`. Missing summary output is a failed interaction, not a partial success.
 
 ## 7. Multi-Agent / Parallel Workers
@@ -276,6 +278,8 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
 
+OpenCode workers create isolated config/data/cache/tmp under `target/competition-out/workers/<worker-id>/opencode-runtime/<worker-id>/` and bind the repo-relative `opencode_runtime_env` into audit artifacts.
+
 ### 7.4 Generate and Execute the Merge Plan
 
 ```bash
@@ -319,6 +323,7 @@ target/competition-out/
 │   ├── assignments/<worker-id>-request.json
 │   └── merge-plan.json
 ├── workers/<worker-id>/                  # Isolated output per worker
+│   ├── opencode-runtime/<worker-id>/...   # Isolated OpenCode config/data/cache/tmp
 │   ├── evidence/
 │   ├── summary/competition-run-summary.json
 │   ├── harness/run-worker-report.json

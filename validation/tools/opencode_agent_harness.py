@@ -61,6 +61,15 @@ OPENCODE_WORKER_EVIDENCE_FIELDS = (
     "opencode_session_evidence",
     "opencode_contract_verification",
     "opencode_preflight_report",
+    "opencode_runtime_env",
+)
+OPENCODE_RUNTIME_ENV_KEYS = (
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
 )
 
 
@@ -1860,6 +1869,8 @@ def opencode_agent_runtime_evidence(
             binding = artifact_binding_from_value(worker.get(field), repo_root=repo_root)
             if binding is not None:
                 runtime_entry[field] = binding
+        if isinstance(worker.get("opencode_runtime_env"), dict):
+            runtime_entry["opencode_runtime_env"] = json.loads(json.dumps(worker["opencode_runtime_env"]))
         verification = worker.get("opencode_contract_verification")
         if isinstance(verification, dict):
             runtime_entry["opencode_contract_verification"] = json.loads(json.dumps(verification))
@@ -2286,6 +2297,7 @@ def resume_manifest_workers(
         "handoff_contract",
         "opencode_session_evidence",
         "opencode_preflight_report",
+        "opencode_runtime_env",
     ]
     for worker in workers:
         if not isinstance(worker, dict) or not worker.get("worker_id"):
@@ -2454,6 +2466,13 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
         missing.append("opencode_preflight_report.launch_policy.opencode_command")
     if not isinstance(policy.get("opencode_skip_permissions"), bool):
         missing.append("opencode_preflight_report.launch_policy.opencode_skip_permissions")
+    runtime_env = preflight.get("opencode_runtime_env")
+    if not isinstance(runtime_env, dict):
+        missing.append("opencode_preflight_report.opencode_runtime_env")
+        runtime_env = {}
+    runtime_env_sha256 = runtime_env.get("env_sha256")
+    if not isinstance(runtime_env_sha256, str) or not runtime_env_sha256:
+        missing.append("opencode_preflight_report.opencode_runtime_env.env_sha256")
     if missing:
         return {
             "status": "blocked",
@@ -2470,6 +2489,7 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
         "preflight_report": preflight_path,
         "launch_policy_sha256": preflight.get("launch_policy_sha256")
         or opencode_launch_policy_sha256(normalize_opencode_launch_policy(policy)),
+        "opencode_runtime_env_sha256": runtime_env_sha256,
     }
 
 
@@ -4244,6 +4264,7 @@ def build_run_plan_graph_contract(
             "contract_status": opencode_preflight_report.get("contract_status"),
             "launch_policy": opencode_preflight_report.get("launch_policy"),
             "launch_policy_sha256": opencode_preflight_report.get("launch_policy_sha256"),
+            "opencode_runtime_env": opencode_preflight_report.get("opencode_runtime_env"),
         }
     return {
         "runtime": "opencode-harness-langgraph-inspired",
@@ -4496,6 +4517,7 @@ def run_worker_process(
     command_runner: Any,
     repo_root: Path,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    env: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
     retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
     attempts: list[dict[str, Any]] = []
@@ -4505,6 +4527,7 @@ def run_worker_process(
             command_runner=command_runner,
             repo_root=repo_root,
             timeout_seconds=timeout_seconds,
+            env=env,
         )
         transient_lock = mode == "opencode" and opencode_database_locked(completed)
         attempts.append(
@@ -4566,6 +4589,7 @@ def run_worker_process_once(
     command_runner: Any,
     repo_root: Path,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
         return command_runner(
@@ -4576,6 +4600,7 @@ def run_worker_process_once(
             errors="replace",
             capture_output=True,
             timeout=timeout_seconds,
+            env=env,
         )
     except subprocess.TimeoutExpired as exc:
         return completed_process_from_timeout(argv, exc, timeout_seconds)
@@ -4683,6 +4708,8 @@ def run_worker(
         repo_relative(attempt_request_path, repo_root=repo_root),
     )
     preflight_binding = None
+    opencode_runtime_env = None
+    opencode_process_env = None
     if mode == "opencode" and stale_summary_cleanup_error is None:
         preflight_binding = validate_opencode_preflight_report(
             opencode_preflight_report,
@@ -4716,6 +4743,12 @@ def run_worker(
     elif mode == "opencode":
         handoff_contract_path = report_dir / "opencode-handoff-contract.json"
         opencode_process_retries = None
+        opencode_runtime_env = opencode_runtime_env_contract(
+            base_root=worker_out_root,
+            scope=worker_id,
+            repo_root=repo_root,
+        )
+        opencode_process_env = opencode_runtime_process_env(opencode_runtime_env, repo_root=repo_root)
         argv = build_opencode_run_argv(
             opencode_command=opencode_command,
             opencode_model=opencode_model,
@@ -4746,6 +4779,7 @@ def run_worker(
                 opencode_variant=opencode_variant,
                 opencode_skip_permissions=opencode_skip_permissions,
             ),
+            opencode_runtime_env=opencode_runtime_env,
             repo_root=repo_root,
         )
     else:
@@ -4758,6 +4792,7 @@ def run_worker(
             command_runner=command_runner,
             repo_root=repo_root,
             timeout_seconds=timeout_seconds,
+            env=opencode_process_env,
         )
     timed_out = completed_process_timed_out(completed)
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
@@ -4771,6 +4806,7 @@ def run_worker(
             evidence_path=logs_dir / "opencode-session-evidence.json",
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            opencode_runtime_env=opencode_runtime_env,
             repo_root=repo_root,
         )
     opencode_contract_verification = None
@@ -4933,6 +4969,8 @@ def run_worker(
         report["opencode_process_retries"] = opencode_process_retries
     if preflight_binding is not None:
         report["opencode_preflight_report"] = preflight_binding
+    if opencode_runtime_env is not None:
+        report["opencode_runtime_env"] = opencode_runtime_env
     if opencode_session_evidence is not None:
         report["opencode_session_evidence"] = opencode_session_evidence
     if opencode_contract_verification is not None:
@@ -5005,6 +5043,8 @@ def run_worker(
                 payload=load_json(repo_path(Path(preflight_binding["path"]), repo_root=repo_root)),
                 repo_root=repo_root,
             )
+        if opencode_runtime_env is not None:
+            event_payload["opencode_runtime_env"] = opencode_runtime_env
         if opencode_session_evidence is not None:
             event_payload["opencode_session_evidence"] = opencode_session_evidence
             record_artifact(
@@ -5200,6 +5240,12 @@ def run_opencode_preflight(
     contract_path = harness_dir / "opencode-preflight-contract.json"
     if marker_path.exists():
         marker_path.unlink()
+    opencode_runtime_env = opencode_runtime_env_contract(
+        base_root=out_root,
+        scope="preflight",
+        repo_root=repo_root,
+    )
+    opencode_process_env = opencode_runtime_process_env(opencode_runtime_env, repo_root=repo_root)
 
     marker_command = portable_python_script_argv(
         "validation/tools/opencode_agent_harness.py",
@@ -5234,6 +5280,7 @@ def run_opencode_preflight(
         marker_command=marker_command,
         opencode_argv=argv,
         launch_policy=launch_policy,
+        opencode_runtime_env=opencode_runtime_env,
         repo_root=repo_root,
     )
     started = time.monotonic()
@@ -5246,6 +5293,7 @@ def run_opencode_preflight(
             errors="replace",
             capture_output=True,
             timeout=timeout_seconds,
+            env=opencode_process_env,
         )
     except subprocess.TimeoutExpired as exc:
         completed = completed_process_from_timeout(argv, exc, timeout_seconds)
@@ -5266,6 +5314,7 @@ def run_opencode_preflight(
         evidence_path=logs_dir / "opencode-preflight-session-evidence.json",
         stdout_path=stdout_path,
         stderr_path=stderr_path,
+        opencode_runtime_env=opencode_runtime_env,
         repo_root=repo_root,
     )
     session_evidence = load_json(repo_path(Path(session_binding["path"]), repo_root=repo_root))
@@ -5305,6 +5354,7 @@ def run_opencode_preflight(
         "marker_exists": marker_exists,
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "opencode_runtime_env": opencode_runtime_env,
         "handoff_contract": contract_binding,
         "opencode_session_evidence": session_binding,
         "contract_verification": contract_verification,
@@ -5378,6 +5428,11 @@ def validate_opencode_preflight_report(
             "opencode preflight launch policy mismatch: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    opencode_runtime_env = validate_opencode_runtime_env_contract(
+        report.get("opencode_runtime_env"),
+        context="opencode preflight report",
+        repo_root=repo_root,
+    )
     report_run_id = str(report.get("run_id", ""))
     if expected_run_id is not None and report_run_id != expected_run_id:
         raise SystemExit(f"opencode preflight run_id mismatch: {report_run_id} != {expected_run_id}")
@@ -5389,6 +5444,7 @@ def validate_opencode_preflight_report(
         "contract_status": "executed",
         "launch_policy": actual_launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(actual_launch_policy),
+        "opencode_runtime_env": opencode_runtime_env,
         "evidence_boundary": str(
             report.get(
                 "evidence_boundary",
@@ -6024,6 +6080,109 @@ def safe_file_component(value: str) -> str:
     return "".join(char if char.isalnum() or char in ("-", "_") else "-" for char in value)
 
 
+def opencode_runtime_env_contract(
+    *,
+    base_root: Path,
+    scope: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    base_root = repo_path(base_root, repo_root=repo_root)
+    scope_text = safe_file_component(scope) or "opencode"
+    runtime_root = base_root / "opencode-runtime" / scope_text
+    runtime_paths = {
+        "XDG_CONFIG_HOME": runtime_root / "config",
+        "XDG_DATA_HOME": runtime_root / "data",
+        "XDG_CACHE_HOME": runtime_root / "cache",
+        "TMPDIR": runtime_root / "tmp",
+        "TEMP": runtime_root / "tmp",
+        "TMP": runtime_root / "tmp",
+    }
+    for path in {path for path in runtime_paths.values()}:
+        path.mkdir(parents=True, exist_ok=True)
+    env = {key: repo_relative(runtime_paths[key], repo_root=repo_root) for key in OPENCODE_RUNTIME_ENV_KEYS}
+    runtime_root_rel = repo_relative(runtime_root, repo_root=repo_root)
+    digest_payload = {
+        "scope": scope_text,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+    }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "status": "isolated",
+        "scope": scope_text,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+        "env_sha256": sha256_text(json.dumps(digest_payload, sort_keys=True)),
+        "semantic_gate": False,
+        "evidence_boundary": (
+            "OpenCode runtime env isolation controls process-local agent state only; "
+            "semantic acceptance still requires worker summaries and validators."
+        ),
+    }
+
+
+def validate_opencode_runtime_env_contract(
+    value: Any,
+    *,
+    context: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SystemExit(f"{context} opencode_runtime_env is missing")
+    if value.get("status") != "isolated":
+        raise SystemExit(f"{context} opencode_runtime_env is not isolated")
+    scope = value.get("scope")
+    runtime_root = value.get("runtime_root")
+    env = value.get("env")
+    if not isinstance(scope, str) or not scope:
+        raise SystemExit(f"{context} opencode_runtime_env.scope is missing")
+    if not isinstance(runtime_root, str) or not runtime_root:
+        raise SystemExit(f"{context} opencode_runtime_env.runtime_root is missing")
+    repo_path(Path(runtime_root), repo_root=repo_root)
+    if not isinstance(env, dict):
+        raise SystemExit(f"{context} opencode_runtime_env.env is missing")
+    normalized_env: dict[str, str] = {}
+    for key in OPENCODE_RUNTIME_ENV_KEYS:
+        path_text_value = env.get(key)
+        if not isinstance(path_text_value, str) or not path_text_value:
+            raise SystemExit(f"{context} opencode_runtime_env.env.{key} is missing")
+        repo_path(Path(path_text_value), repo_root=repo_root)
+        normalized_env[key] = path_text_value
+    expected_digest = sha256_text(
+        json.dumps(
+            {
+                "scope": scope,
+                "runtime_root": runtime_root,
+                "env": normalized_env,
+            },
+            sort_keys=True,
+        )
+    )
+    if value.get("env_sha256") != expected_digest:
+        raise SystemExit(f"{context} opencode_runtime_env.env_sha256 mismatch")
+    return {
+        **value,
+        "scope": scope,
+        "runtime_root": runtime_root,
+        "env": normalized_env,
+        "env_sha256": expected_digest,
+    }
+
+
+def opencode_runtime_process_env(
+    runtime_env: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, str]:
+    process_env = dict(os.environ)
+    env = runtime_env.get("env") if isinstance(runtime_env.get("env"), dict) else {}
+    for key in OPENCODE_RUNTIME_ENV_KEYS:
+        value = env.get(key)
+        if isinstance(value, str):
+            process_env[key] = str(repo_path(Path(value), repo_root=repo_root))
+    return process_env
+
+
 def opencode_launch_policy(
     *,
     opencode_command: str,
@@ -6545,6 +6704,7 @@ def write_opencode_handoff_contract(
     opencode_argv: list[str],
     launch_policy: dict[str, Any],
     repo_root: Path,
+    opencode_runtime_env: dict[str, Any] | None = None,
     assignment_request_path: Path | None = None,
 ) -> dict[str, str]:
     if not opencode_argv:
@@ -6567,6 +6727,8 @@ def write_opencode_handoff_contract(
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
     }
+    if opencode_runtime_env is not None:
+        contract["opencode_runtime_env"] = opencode_runtime_env
     if assignment_request_path is not None:
         contract["assignment_request_path"] = repo_relative(assignment_request_path, repo_root=repo_root)
     contract_path.parent.mkdir(parents=True, exist_ok=True)
@@ -6583,6 +6745,7 @@ def write_opencode_preflight_contract(
     opencode_argv: list[str],
     launch_policy: dict[str, Any],
     repo_root: Path,
+    opencode_runtime_env: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     if not opencode_argv:
         raise SystemExit("opencode argv must not be empty")
@@ -6601,6 +6764,8 @@ def write_opencode_preflight_contract(
         "prompt": str(opencode_argv[-1]),
         "evidence_boundary": "preflight proves exact-command compliance only; semantic acceptance requires worker summary and validators",
     }
+    if opencode_runtime_env is not None:
+        contract["opencode_runtime_env"] = opencode_runtime_env
     contract_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(contract_path, contract)
     return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
@@ -6613,6 +6778,7 @@ def write_opencode_session_evidence(
     stdout_path: Path,
     stderr_path: Path,
     repo_root: Path,
+    opencode_runtime_env: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     stdout = completed.stdout or ""
     evidence: dict[str, Any] = {
@@ -6621,6 +6787,8 @@ def write_opencode_session_evidence(
         "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
         "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
     }
+    if opencode_runtime_env is not None:
+        evidence["opencode_runtime_env"] = opencode_runtime_env
     try:
         parsed = json.loads(stdout)
     except json.JSONDecodeError as error:

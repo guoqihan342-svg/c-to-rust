@@ -263,6 +263,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertIn("repair", text)
                 self.assertIn("5", text)
                 self.assertIn("validator", text)
+                self.assertIn("opencode_runtime_env", text)
+                self.assertIn("opencode-runtime", text)
 
     def test_flashdb_real_before_after_profile_contract(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
@@ -644,6 +646,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "python -m validation.tools.opencode_agent_harness run-worker",
             "--mode opencode",
             "--opencode-variant max",
+            "opencode_runtime_env",
+            "opencode-runtime",
             '"run_id"',
             '"schema_version"',
             '"proof_class"',
