@@ -44,7 +44,19 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                             "purpose": "harness-architecture-multi-worker-evaluate",
                             "command": "python3 -B -m validation.tools.opencode_agent_harness evaluate",
                         },
+                        {
+                            "id": "opencode_multi_worker_evaluate_profile",
+                            "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                            "command": "python3 -B -m validation.tools.opencode_agent_harness evaluate --mode opencode",
+                        },
                     ],
+                    "test_contract": {
+                        "required_entrypoint_ids": [
+                            "before_after_judge_demo",
+                            "multi_worker_evaluate_profile",
+                            "opencode_multi_worker_evaluate_profile",
+                        ]
+                    },
                 },
                 sort_keys=True,
             )
@@ -85,7 +97,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["entrypoint_count"], 1)
         self.assertFalse(report["summary"]["readiness"]["all_entrypoints_executed"])
         self.assertEqual(report["summary"]["readiness"]["executed_count"], 1)
-        self.assertEqual(report["summary"]["readiness"]["configured_count"], 2)
+        self.assertEqual(report["summary"]["readiness"]["configured_count"], 3)
         self.assertEqual(report["summary"]["entrypoints"][0]["id"], "before_after_judge_demo")
         self.assertEqual(report["summary"]["entrypoints"][0]["proof_class"], "unknown")
         self.assertEqual(report["entrypoints"][0]["id"], "before_after_judge_demo")
@@ -99,6 +111,14 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(
             [entry["id"] for entry in validation_config["entrypoints"]],
             ["before_after_judge_demo"],
+        )
+        self.assertEqual(
+            validation_config["test_contract"]["required_entrypoint_ids"],
+            ["before_after_judge_demo"],
+        )
+        self.assertNotIn(
+            "opencode_multi_worker_evaluate_profile",
+            [entry["id"] for entry in validation_config["entrypoints"]],
         )
         self.assertEqual(report["validation"]["status"], "passed")
         self.assertEqual(

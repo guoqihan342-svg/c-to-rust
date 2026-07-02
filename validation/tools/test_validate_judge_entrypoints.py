@@ -696,6 +696,13 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
         "run_id": run_id,
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "opencode_model_availability": {
+            "status": "available",
+            "opencode_command": "opencode",
+            "required_model": "GLM-5.1",
+            "model_listed": True,
+            "process_returncode": 0,
+        },
         "contract_verification": {
             "status": "executed",
             "first_shell_command_matches_worker_command": True,
@@ -1349,6 +1356,78 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         smoke_focus = " ".join(report["summary"]["entrypoints"][0]["judge_focus"]).lower()
         self.assertIn("competition environment", smoke_focus)
         self.assertIn("smoke", smoke_focus)
+
+    def test_validate_config_can_focus_selected_entrypoints(self) -> None:
+        result = validator.validate_config(
+            validator.DEFAULT_CONFIG,
+            repo_root=REPO_ROOT,
+            entrypoint_ids=["competition_environment_smoke", "before_after_judge_demo"],
+        )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["entrypoint_count"], 2)
+        self.assertEqual(
+            [entry["id"] for entry in result["entrypoints"]],
+            ["competition_environment_smoke", "before_after_judge_demo"],
+        )
+        self.assertEqual(
+            result["test_contract"]["required_entrypoint_ids"],
+            ["competition_environment_smoke", "before_after_judge_demo"],
+        )
+
+    def test_validate_config_unknown_entrypoint_id_fails_closed(self) -> None:
+        result = validator.validate_config(
+            validator.DEFAULT_CONFIG,
+            repo_root=REPO_ROOT,
+            entrypoint_ids=["missing-entrypoint"],
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["errors"], ["unknown entrypoint id: missing-entrypoint"])
+        self.assertEqual(result["entrypoint_count"], 0)
+        self.assertEqual(result["entrypoints"], [])
+
+    def test_cli_entrypoint_id_writes_focused_readiness_report(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-readiness-focused-", dir=target_dir))
+        report_path = temp_dir / "summary" / "judge-entrypoints-readiness.json"
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "validation.tools.validate_judge_entrypoints",
+                "--config",
+                validator.DEFAULT_CONFIG.relative_to(REPO_ROOT).as_posix(),
+                "--entrypoint-id",
+                "multi_worker_evaluate_profile",
+                "--out",
+                repo_relative(report_path),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["entrypoint_count"], 1)
+        self.assertEqual(report["validation"]["entrypoints"][0]["id"], "multi_worker_evaluate_profile")
+        self.assertEqual(
+            report["validation"]["test_contract"]["required_entrypoint_ids"],
+            ["multi_worker_evaluate_profile"],
+        )
+        self.assertIn("1 judge entrypoints ready", report["summary"]["headline"])
+        self.assertEqual(report["summary"]["readiness"]["configured_count"], 1)
+        self.assertEqual(report["summary"]["readiness"]["validation_status"], "passed")
+        self.assertFalse(report["summary"]["claim_boundary"]["semantic_gate"])
+        self.assertEqual(
+            [entry["id"] for entry in report["summary"]["entrypoints"]],
+            ["multi_worker_evaluate_profile"],
+        )
 
     def test_competition_smoke_summary_contract_rejects_semantic_gate_claim(self) -> None:
         payload = {

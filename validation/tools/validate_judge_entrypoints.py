@@ -81,6 +81,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument(
+        "--entrypoint-id",
+        action="append",
+        default=[],
+        help="Entrypoint id to validate. Omit to validate every entrypoint in config order.",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         help="Optional repo-relative or local output path for a judge entrypoints readiness report.",
@@ -96,6 +102,7 @@ def main() -> int:
         args.config,
         require_local_artifacts=args.require_local_artifacts,
         repo_root=REPO_ROOT,
+        entrypoint_ids=args.entrypoint_id,
     )
     if args.out is not None:
         write_readiness_report(result, args.out, repo_root=REPO_ROOT)
@@ -3499,6 +3506,7 @@ def validate_config(
     *,
     require_local_artifacts: bool = False,
     repo_root: Path = REPO_ROOT,
+    entrypoint_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     config_path = config_path if config_path.is_absolute() else repo_root / config_path
     config = load_json(config_path)
@@ -3506,6 +3514,7 @@ def validate_config(
     entrypoint_results: list[dict[str, Any]] = []
     claim_boundary: dict[str, Any] = {}
     competition_env_bundle_contract: dict[str, Any] = {}
+    source_pin_contract: dict[str, Any] = {}
 
     try:
         if config.get("schema_version") != 1:
@@ -3528,6 +3537,24 @@ def validate_config(
         assert_no_local_absolute_path(str(config.get("source_pin", {}).get("checkout_command", "")))
     except (KeyError, ValueError) as error:
         errors.append(str(error))
+
+    try:
+        config = config_for_selected_entrypoints(config, entrypoint_ids or [])
+    except ValueError as error:
+        errors.append(str(error))
+        return {
+            "status": "failed",
+            "config": {"path": repo_relative(config_path, repo_root), "sha256": sha256_file(config_path)},
+            "entrypoint_count": 0,
+            "entrypoints": [],
+            "claim_boundary": claim_boundary,
+            "competition_env_bundle_contract": competition_env_bundle_contract,
+            "proof_class_contract": {},
+            "source_pin_contract": source_pin_contract,
+            "test_contract": {},
+            "require_local_artifacts": require_local_artifacts,
+            "errors": errors,
+        }
 
     entrypoints = config.get("entrypoints")
     if not isinstance(entrypoints, list) or not entrypoints:
@@ -3655,6 +3682,26 @@ def validate_config(
         "require_local_artifacts": require_local_artifacts,
         "errors": errors,
     }
+
+
+def config_for_selected_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> dict[str, Any]:
+    if not entrypoint_ids:
+        return config
+    raw_entrypoints = config.get("entrypoints")
+    if not isinstance(raw_entrypoints, list) or not raw_entrypoints:
+        raise ValueError("entrypoints must be a non-empty list")
+    entrypoints = [entry for entry in raw_entrypoints if isinstance(entry, dict)]
+    by_id = {str(entry.get("id")): entry for entry in entrypoints}
+    missing = [entrypoint_id for entrypoint_id in entrypoint_ids if entrypoint_id not in by_id]
+    if missing:
+        raise ValueError(f"unknown entrypoint id: {', '.join(missing)}")
+
+    filtered = json.loads(json.dumps(config))
+    filtered["entrypoints"] = [by_id[entrypoint_id] for entrypoint_id in entrypoint_ids]
+    contract = filtered.get("test_contract")
+    if isinstance(contract, dict) and isinstance(contract.get("required_entrypoint_ids"), list):
+        contract["required_entrypoint_ids"] = list(entrypoint_ids)
+    return filtered
 
 
 if __name__ == "__main__":
