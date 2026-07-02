@@ -2503,6 +2503,24 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
     runtime_env_sha256 = runtime_env.get("env_sha256")
     if not isinstance(runtime_env_sha256, str) or not runtime_env_sha256:
         missing.append("opencode_preflight_report.opencode_runtime_env.env_sha256")
+    availability = preflight.get("opencode_model_availability")
+    if not isinstance(availability, dict):
+        missing.append("opencode_preflight_report.opencode_model_availability")
+        availability = {}
+    if availability.get("status") != "available":
+        missing.append("opencode_preflight_report.opencode_model_availability.status")
+    if availability.get("opencode_command") != opencode_command:
+        missing.append("opencode_preflight_report.opencode_model_availability.opencode_command")
+    if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        missing.append("opencode_preflight_report.opencode_model_availability.required_model")
+    if availability.get("model_listed") is not True:
+        missing.append("opencode_preflight_report.opencode_model_availability.model_listed")
+    try:
+        model_probe_returncode = int(availability.get("process_returncode", 1))
+    except (TypeError, ValueError):
+        model_probe_returncode = 1
+    if model_probe_returncode != 0:
+        missing.append("opencode_preflight_report.opencode_model_availability.process_returncode")
     if missing:
         return {
             "status": "blocked",
@@ -2520,6 +2538,13 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
         "launch_policy_sha256": preflight.get("launch_policy_sha256")
         or opencode_launch_policy_sha256(normalize_opencode_launch_policy(policy)),
         "opencode_runtime_env_sha256": runtime_env_sha256,
+        "opencode_model_availability": {
+            "status": "available",
+            "opencode_command": opencode_command,
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "process_returncode": model_probe_returncode,
+            "model_listed": True,
+        },
     }
 
 

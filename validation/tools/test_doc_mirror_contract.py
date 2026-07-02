@@ -1,4 +1,5 @@
 import unittest
+import subprocess
 from pathlib import Path
 
 
@@ -44,18 +45,20 @@ def _is_excluded(path: Path) -> bool:
 
 def _iter_chinese_docs():
     docs = []
-    for root in DOC_ROOTS:
-        absolute = REPO_ROOT / root
-        if not absolute.exists():
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", *(root.as_posix() for root in DOC_ROOTS)],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+    ).stdout
+    for item in tracked.split("\0"):
+        if not item or not item.endswith(".md"):
             continue
-        if absolute.is_file():
-            candidates = [absolute]
-        else:
-            candidates = sorted(absolute.rglob("*.md"))
-        for candidate in candidates:
-            if candidate.name.endswith(".en.md") or _is_excluded(candidate):
-                continue
-            docs.append(candidate)
+        candidate = REPO_ROOT / item
+        if candidate.name.endswith(".en.md") or _is_excluded(candidate):
+            continue
+        docs.append(candidate)
     return sorted(set(docs))
 
 

@@ -3033,6 +3033,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "opencode_skip_permissions": True,
                     },
                     "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "opencode",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
                 },
             }
             manifest = harness.build_resume_manifest(
@@ -3164,6 +3171,47 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
             self.assertIn(
                 "opencode_preflight_report.launch_policy.opencode_model",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_model_availability_is_missing(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": None,
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertIn("--opencode-model", replay["argv"])
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.opencode_model_availability",
                 replay["replay_safety"]["missing_constraints"],
             )
 
@@ -6483,7 +6531,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "contract_verification": {"status": "executed"},
                         "launch_policy": {
                             "opencode_command": "opencode",
-                            "opencode_model": None,
+                            "opencode_model": "GLM-5.1",
                             "opencode_agent": None,
                             "opencode_variant": "max",
                             "opencode_skip_permissions": False,
