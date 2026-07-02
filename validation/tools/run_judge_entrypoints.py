@@ -31,6 +31,13 @@ DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS = 600 * 60
 PORTABLE_PYTHON_COMMAND = "python3"
 PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
 _RESOLVED_PYTHON_COMMAND: list[str] | None = None
+DERIVED_ARTIFACT_FILENAMES = (
+    "judge-entrypoints-readiness.json",
+    "judge-milestone-bundle.json",
+    "milestone-release-notes.md",
+    "public-release-packet.json",
+    "selected-entrypoints-validation-config.json",
+)
 
 
 def main() -> int:
@@ -80,6 +87,7 @@ def run_judge_entrypoints(
 ) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     out_path = resolve_output_path(out_path, repo_root=repo_root)
+    remove_stale_derived_artifacts(out_path)
     log_dir = out_path.parent / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     config_archive = build_competition_config_archive(repo_root=repo_root)
@@ -191,6 +199,15 @@ def run_judge_entrypoints(
     if not dry_run and status == "passed":
         attach_milestone_bundle(report, out_path=out_path, repo_root=repo_root)
     return report
+
+
+def remove_stale_derived_artifacts(out_path: Path) -> None:
+    for filename in DERIVED_ARTIFACT_FILENAMES:
+        artifact_path = out_path.parent / filename
+        if artifact_path.is_dir() and not artifact_path.is_symlink():
+            raise IsADirectoryError(f"derived artifact path is a directory: {artifact_path}")
+        if artifact_path.exists() or artifact_path.is_symlink():
+            artifact_path.unlink()
 
 
 def post_run_validation_config_path(

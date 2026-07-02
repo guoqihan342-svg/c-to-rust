@@ -675,6 +675,55 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["summary"]["competition_config_archive"]["file_count"], archive["file_count"])
         self.assertTrue(out_path.is_file())
 
+    def test_dry_run_removes_stale_publishable_artifacts(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-dry-stale-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        stale_artifacts = [
+            "judge-entrypoints-readiness.json",
+            "judge-milestone-bundle.json",
+            "milestone-release-notes.md",
+            "public-release-packet.json",
+            "selected-entrypoints-validation-config.json",
+        ]
+        for artifact_name in stale_artifacts:
+            (out_path.parent / artifact_name).write_text('{"status":"stale"}\n', encoding="utf-8")
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("dry-run must not execute commands")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                dry_run=True,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "planned")
+        for artifact_name in stale_artifacts:
+            self.assertFalse((out_path.parent / artifact_name).exists(), artifact_name)
+
     def test_dry_run_preflight_failure_is_not_planned(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 
