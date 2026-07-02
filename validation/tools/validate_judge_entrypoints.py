@@ -1561,6 +1561,71 @@ def validate_artifact_binding_shape(
     return {"path": path_text, "sha256": sha256}
 
 
+def validate_verified_unsafe_baseline_ref(
+    value: Any,
+    label: str,
+    *,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    binding = validate_artifact_binding_shape(value, label, repo_root=repo_root)
+    payload = require_object(value, label)
+    status = payload.get("status")
+    if status is not None and status != "passed":
+        raise ValueError(f"{label}.status must be passed")
+    semantic_pass = payload.get("semantic_pass")
+    if semantic_pass is not None and semantic_pass is not True:
+        raise ValueError(f"{label}.semantic_pass must be true")
+    source = payload.get("semantic_claim_source")
+    if source is not None and source != "verified_unsafe_baseline_gates":
+        raise ValueError(f"{label}.semantic_claim_source must be verified_unsafe_baseline_gates")
+    generated = payload.get("generated_draft_semantic_pass")
+    if generated is not None and generated is not False:
+        raise ValueError(f"{label}.generated_draft_semantic_pass must be false")
+    result = dict(payload)
+    result.update(binding)
+    if repo_root is not None:
+        artifact_payload = load_json(repo_path(binding["path"], repo_root=repo_root))
+        if artifact_payload.get("status") != "passed":
+            raise ValueError(f"{label}.status must be passed")
+        if artifact_payload.get("semantic_pass") is not True:
+            raise ValueError(f"{label}.semantic_pass must be true")
+        if artifact_payload.get("semantic_claim_source") != "verified_unsafe_baseline_gates":
+            raise ValueError(f"{label}.semantic_claim_source must be verified_unsafe_baseline_gates")
+        if artifact_payload.get("generated_draft_semantic_pass") is not False:
+            raise ValueError(f"{label}.generated_draft_semantic_pass must be false")
+    return result
+
+
+def verified_unsafe_baseline_ref_from_container(value: Any) -> Any | None:
+    if not isinstance(value, dict):
+        return None
+    direct = value.get("verified_unsafe_baseline")
+    if isinstance(direct, dict):
+        return direct
+    policy = value.get("attempt_evidence_policy")
+    if isinstance(policy, dict):
+        policy_ref = verified_unsafe_baseline_ref_from_container(policy)
+        if isinstance(policy_ref, dict):
+            return policy_ref
+    baseline_attempt = value.get("baseline_attempt")
+    if isinstance(baseline_attempt, dict):
+        candidate = baseline_attempt.get("verified_unsafe_baseline")
+        if isinstance(candidate, dict):
+            return candidate
+    return None
+
+
+def compare_verified_unsafe_baseline_refs(candidates: list[tuple[str, Any]]) -> None:
+    if len(candidates) < 2:
+        return
+    first_label, first_ref = candidates[0]
+    first_binding = validate_artifact_binding_shape(first_ref, first_label, repo_root=None)
+    for label, ref in candidates[1:]:
+        binding = validate_artifact_binding_shape(ref, label, repo_root=None)
+        if binding != first_binding:
+            raise ValueError("verified_unsafe_baseline must match across resume_manifest, context_pack, and agent_index")
+
+
 def validate_route_governance_metrics_report_contract(ref: dict[str, str], *, repo_root: Path) -> dict[str, Any]:
     path_text = ref["path"]
     path = repo_path(path_text, repo_root=repo_root)
@@ -1978,6 +2043,14 @@ def validate_judge_evidence_artifact_refs(
             "judge_evidence_index.evidence_artifact_refs.opencode_preflight_report",
         )
 
+    verified_baseline_contract = None
+    if "verified_unsafe_baseline" in refs_payload:
+        verified_baseline_contract = validate_verified_unsafe_baseline_ref(
+            refs_payload["verified_unsafe_baseline"],
+            "judge_evidence_index.evidence_artifact_refs.verified_unsafe_baseline",
+            repo_root=repo_root,
+        )
+
     route_metrics_contract = None
     if repo_root is not None and "route_governance_metrics_report" in validated_refs:
         route_metrics_contract = validate_route_governance_metrics_report_contract(
@@ -2032,6 +2105,8 @@ def validate_judge_evidence_artifact_refs(
     }
     if route_metrics_contract is not None:
         result["route_governance_metrics_report"] = route_metrics_contract
+    if verified_baseline_contract is not None:
+        result["verified_unsafe_baseline"] = verified_baseline_contract
     if profile_launch_policy is not None:
         result["profile_launch_policy"] = profile_launch_policy
     return result
@@ -2238,6 +2313,50 @@ def validate_resume_manifest_contract(
         if resume_report.get("path") != path_text:
             raise ValueError("agent_index.reports.resume_manifest.path must match expected_artifacts.resume_manifest")
 
+    verified_candidates: list[tuple[str, Any]] = []
+    if isinstance(payload.get("verified_unsafe_baseline"), dict):
+        verified_candidates.append(("resume_manifest.verified_unsafe_baseline", payload["verified_unsafe_baseline"]))
+    payload_policy_ref = verified_unsafe_baseline_ref_from_container(payload.get("attempt_evidence_policy"))
+    if isinstance(payload_policy_ref, dict):
+        verified_candidates.append(("resume_manifest.attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline", payload_policy_ref))
+    if context_payload is not None:
+        context_ref = verified_unsafe_baseline_ref_from_container(context_payload)
+        if isinstance(context_ref, dict):
+            verified_candidates.append(("context_pack.attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline", context_ref))
+    if agent_payload is not None:
+        agent_ref = verified_unsafe_baseline_ref_from_container(agent_payload)
+        if isinstance(agent_ref, dict):
+            verified_candidates.append(("agent_index.attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline", agent_ref))
+        reports = agent_payload.get("reports") if isinstance(agent_payload.get("reports"), dict) else {}
+        reports_ref = reports.get("verified_unsafe_baseline") if isinstance(reports, dict) else None
+        if isinstance(reports_ref, dict):
+            verified_candidates.append(("agent_index.reports.verified_unsafe_baseline", reports_ref))
+    if "verified_unsafe_baseline" in expected_artifacts and not verified_candidates:
+        raise ValueError("resume_manifest.verified_unsafe_baseline is required when expected_artifacts.verified_unsafe_baseline is declared")
+    verified_baseline_contract = None
+    if verified_candidates:
+        compare_verified_unsafe_baseline_refs(verified_candidates)
+        primary_label, primary_ref = verified_candidates[0]
+        verified_baseline_contract = validate_verified_unsafe_baseline_ref(
+            primary_ref,
+            primary_label,
+            repo_root=repo_root,
+        )
+        expected_verified = expected_artifacts.get("verified_unsafe_baseline")
+        if isinstance(expected_verified, str) and verified_baseline_contract["path"] != expected_verified:
+            raise ValueError("resume_manifest.verified_unsafe_baseline.path must match expected_artifacts.verified_unsafe_baseline")
+        entrypoint_map = payload.get("entrypoints")
+        if isinstance(entrypoint_map, dict) and entrypoint_map.get("verified_unsafe_baseline") != verified_baseline_contract["path"]:
+            raise ValueError("resume_manifest.entrypoints.verified_unsafe_baseline must match verified_unsafe_baseline.path")
+        if context_payload is not None:
+            context_entrypoints = context_payload.get("entrypoints") if isinstance(context_payload.get("entrypoints"), dict) else {}
+            if (
+                isinstance(context_entrypoints, dict)
+                and "verified_unsafe_baseline" in context_entrypoints
+                and context_entrypoints.get("verified_unsafe_baseline") != verified_baseline_contract["path"]
+            ):
+                raise ValueError("context_pack.entrypoints.verified_unsafe_baseline must match verified_unsafe_baseline.path")
+
     entrypoints = payload.get("resume_entrypoints")
     if not isinstance(entrypoints, list):
         raise ValueError("resume_manifest.resume_entrypoints must be a list")
@@ -2275,6 +2394,7 @@ def validate_resume_manifest_contract(
         "checkpoint_backend": "sqlite",
         "worker_count": len(workers),
         "worker_consistency": worker_consistency,
+        **({"verified_unsafe_baseline": verified_baseline_contract} if verified_baseline_contract is not None else {}),
         "local_absolute_path_scan": local_path_scan,
     }
 

@@ -179,7 +179,29 @@
       ],
       "properties": {
         "report_kind": {"const": "before-after-repair-exhibit-rollup"},
-        "sources": {"type": "array", "items": {"type": "object"}},
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "before_after_units": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "baseline_verification": {"$ref": "#/definitions/baselineVerificationSummary"},
+                    "repair_history": {"$ref": "#/definitions/repairHistorySummary"},
+                    "repair_rounds": {"type": "integer", "minimum": 0},
+                    "auto_recovered": {"type": "boolean"},
+                    "root_cause_key": {"type": "string", "minLength": 1}
+                  }
+                }
+              }
+            }
+          }
+        },
         "rollup": {
           "type": "object",
           "additionalProperties": true,
@@ -1005,6 +1027,31 @@
         "path": {"type": "string", "minLength": 1},
         "status": {"type": "string"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "baselineVerificationSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "status": {"const": "passed"},
+        "semantic_pass": {"const": true},
+        "semantic_claim_source": {"const": "verified_unsafe_baseline_gates"},
+        "generated_draft_semantic_pass": {"const": false}
+      }
+    },
+    "repairHistorySummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["patch_events_path", "patch_events_sha256"],
+      "properties": {
+        "patch_events_path": {"type": "string", "minLength": 1},
+        "patch_events_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "statuses": {"type": "array", "items": {"type": "string"}},
+        "rollback_ids": {"type": "array", "items": {"type": "string"}},
+        "verified": {"type": "boolean"}
       }
     },
     "comparisonRow": {

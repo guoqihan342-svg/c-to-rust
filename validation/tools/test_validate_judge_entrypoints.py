@@ -115,6 +115,29 @@ def artifact_ref(path: str, sha_char: str) -> dict:
     return {"path": path, "sha256": sha_char * 64}
 
 
+def verified_unsafe_baseline_payload(*, status: str = "passed") -> dict:
+    return {
+        "report_kind": "c2rust-verified-unsafe-baseline",
+        "status": status,
+        "semantic_pass": status == "passed",
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
+def write_verified_unsafe_baseline_ref(path: Path, *, status: str = "passed") -> dict:
+    payload = verified_unsafe_baseline_payload(status=status)
+    write_json(path, payload)
+    return {
+        "path": repo_relative(path),
+        "sha256": validator.sha256_file(path),
+        "status": status,
+        "semantic_pass": status == "passed",
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
 def competition_smoke_expected_artifacts() -> dict:
     return {
         "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
@@ -1510,6 +1533,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_judge_evidence_index_rejects_failed_verified_unsafe_baseline_ref(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-index-verified-baseline-", dir=target_dir))
+        root = temp_dir / "out"
+        payload = valid_deterministic_judge_index_payload()
+        for ref_name, artifact_path in {
+            "competition_run_summary": root / "summary" / "competition-run-summary.json",
+            "workflow_metrics": root / "summary" / "workflow-metrics.json",
+            "worker_plan": root / "harness" / "plans" / "workers.json",
+            "profile": root / "profile.json",
+        }.items():
+            set_artifact_ref(payload["evidence_artifact_refs"][ref_name], artifact_path)
+        payload["evidence_artifact_refs"]["verified_unsafe_baseline"] = write_verified_unsafe_baseline_ref(
+            root / "evidence" / "verified-baseline.json",
+            status="failed",
+        )
+
+        with self.assertRaisesRegex(ValueError, "verified_unsafe_baseline.status must be passed"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(root / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
     def test_judge_evidence_index_route_governance_metrics_report_must_match_schema(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
@@ -2855,6 +2903,155 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "context_pack": repo_relative(context_pack),
                     "agent_index": repo_relative(agent_index),
                     "resume_manifest": repo_relative(resume_manifest),
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_rejects_failed_verified_unsafe_baseline_ref(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-verified-baseline-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text("{}\n", encoding="utf-8")
+        verified_ref = write_verified_unsafe_baseline_ref(
+            out_root / "evidence" / "verified-baseline.json",
+            status="failed",
+        )
+        policy = {"baseline_attempt": {"verified_unsafe_baseline": verified_ref}}
+        context_payload = {
+            "entrypoints": {
+                "resume_manifest": repo_relative(resume_manifest),
+                "verified_unsafe_baseline": verified_ref["path"],
+            },
+            "attempt_evidence_policy": policy,
+        }
+        agent_payload = {
+            "reports": {
+                "resume_manifest": {"path": repo_relative(resume_manifest)},
+                "verified_unsafe_baseline": verified_ref,
+            },
+            "attempt_evidence_policy": policy,
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-verified-baseline",
+            "status": "failed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "entrypoints": {
+                "resume_manifest": repo_relative(resume_manifest),
+                "verified_unsafe_baseline": verified_ref["path"],
+            },
+            "attempt_evidence_policy": policy,
+            "verified_unsafe_baseline": verified_ref,
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [],
+            "worker_count": 0,
+        }
+
+        with self.assertRaisesRegex(ValueError, "resume_manifest.verified_unsafe_baseline.status must be passed"):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                    "verified_unsafe_baseline": verified_ref["path"],
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_verified_unsafe_baseline_must_match_context_and_agent_policy(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-verified-baseline-drift-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text("{}\n", encoding="utf-8")
+        verified_ref = write_verified_unsafe_baseline_ref(out_root / "evidence" / "verified-baseline.json")
+        drifted_ref = dict(verified_ref)
+        drifted_ref["sha256"] = "0" * 64
+        context_payload = {
+            "entrypoints": {
+                "resume_manifest": repo_relative(resume_manifest),
+                "verified_unsafe_baseline": verified_ref["path"],
+            },
+            "attempt_evidence_policy": {"baseline_attempt": {"verified_unsafe_baseline": verified_ref}},
+        }
+        agent_payload = {
+            "reports": {
+                "resume_manifest": {"path": repo_relative(resume_manifest)},
+                "verified_unsafe_baseline": drifted_ref,
+            },
+            "attempt_evidence_policy": {"baseline_attempt": {"verified_unsafe_baseline": drifted_ref}},
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-verified-baseline-drift",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "entrypoints": {
+                "resume_manifest": repo_relative(resume_manifest),
+                "verified_unsafe_baseline": verified_ref["path"],
+            },
+            "attempt_evidence_policy": {"baseline_attempt": {"verified_unsafe_baseline": verified_ref}},
+            "verified_unsafe_baseline": verified_ref,
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [],
+            "worker_count": 0,
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "verified_unsafe_baseline must match across resume_manifest, context_pack, and agent_index",
+        ):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                    "verified_unsafe_baseline": verified_ref["path"],
                 },
                 context_payload=context_payload,
                 agent_payload=agent_payload,

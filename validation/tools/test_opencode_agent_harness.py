@@ -2655,6 +2655,24 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["report_artifacts"]["before_after_exhibit_report"], exhibit_ref)
             self.assertEqual(agent_index["reports"]["before_after_exhibit_report"], exhibit_ref)
 
+            worker_attempts = 0
+            seen_requests.clear()
+            rerun = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-before-after-auto-repair",
+                out_root=out_root,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(rerun["status"], "completed")
+            self.assertEqual(worker_attempts, 2)
+            self.assertEqual(rerun["run_plan"]["auto_retry"]["retried_worker_count"], 1)
+            rerun_exhibit = json.loads((out_root / "summary" / "before-after-exhibit.json").read_text(encoding="utf-8"))
+            rerun_repairer = rerun_exhibit["stage_contracts"]["repairer"]
+            self.assertEqual(rerun_repairer["status"], "verified")
+            self.assertEqual(rerun_repairer["histories"][0]["repair_rounds"], 1)
+
     def test_run_batch_profile_cli_dispatches_profile_flags(self) -> None:
         argv = [
             "opencode_agent_harness.py",
@@ -2847,6 +2865,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             evaluate_report = out_root / "harness" / "evaluate-report.json"
             judge_index = out_root / "harness" / "judge-evidence-index.json"
             resume_manifest = out_root / "harness" / "resume-manifest.json"
+            verified_baseline_ref = verified_unsafe_baseline_ref_for_tests()
             for path in [db_path, assignment, request, summary, report, preflight, evaluate_report, judge_index]:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("{}\n", encoding="utf-8")
@@ -2879,9 +2898,22 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 run_id="run-resume",
                 out_root=out_root,
                 status="failed",
-                context_pack={"entrypoints": {}, "workers": [worker_fields]},
+                context_pack={
+                    "entrypoints": {},
+                    "attempt_evidence_policy": {
+                        "baseline_attempt": {
+                            "verified_unsafe_baseline": verified_baseline_ref,
+                        }
+                    },
+                    "workers": [worker_fields],
+                },
                 context_pack_ref={"path": "target/context-pack.json", "sha256": "a" * 64},
                 agent_index={
+                    "attempt_evidence_policy": {
+                        "baseline_attempt": {
+                            "verified_unsafe_baseline": verified_baseline_ref,
+                        }
+                    },
                     "agents_by_worker_id": {
                         "worker-001": {
                             **worker_fields,
@@ -2908,6 +2940,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+            self.assertEqual(
+                manifest["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
+            self.assertEqual(manifest["verified_unsafe_baseline"], verified_baseline_ref)
+            self.assertEqual(manifest["entrypoints"]["verified_unsafe_baseline"], verified_baseline_ref["path"])
             worker = manifest["workers"][0]
             replay = worker["replay_commands"]
             run_worker = replay["run_worker"]
@@ -2950,6 +2988,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 proof_class="local-simulation",
                 repo_root=REPO_ROOT,
             )
+            verified_baseline_ref = verified_unsafe_baseline_ref_for_tests()
             profile_path = out_root / "profile.json"
             profile_path.write_text(
                 json.dumps({"schema_version": 1, "profile_id": "demo-profile"}),
@@ -2983,6 +3022,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "target_id": "demo",
                         "budget": {"depth": 1, "max_tokens": 20000},
                         "entrypoints": {"primary_report": repo_rel(batch_report_path)},
+                        "attempt_evidence_policy": {
+                            "baseline_attempt": {
+                                "verified_unsafe_baseline": verified_baseline_ref,
+                            }
+                        },
                     },
                     sort_keys=True,
                 ),
@@ -2997,6 +3041,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "run_id": "run-evaluate-profile",
                         "target_id": "demo",
                         "reports": {},
+                        "attempt_evidence_policy": {
+                            "baseline_attempt": {
+                                "verified_unsafe_baseline": verified_baseline_ref,
+                            }
+                        },
                     },
                     sort_keys=True,
                 ),
@@ -3047,6 +3096,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 },
                 "context_pack": {"path": repo_rel(context_pack_path), "sha256": "old"},
                 "agent_index": {"path": repo_rel(agent_index_path), "sha256": "old"},
+                "attempt_evidence_policy": {
+                    "baseline_attempt": {
+                        "verified_unsafe_baseline": verified_baseline_ref,
+                    }
+                },
                 "judge_summary": {
                     "entrypoint": "run-batch-profile",
                     "harness_architecture": {"entrypoint": "run-batch-profile"},
@@ -3103,6 +3157,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["entrypoints"]["batch_profile_report"], repo_rel(batch_report_path))
             self.assertEqual(context_pack["entrypoints"]["judge_evidence_index"], repo_rel(index_path))
             self.assertEqual(context_pack["entrypoints"]["resume_manifest"], repo_rel(resume_manifest_path))
+            self.assertEqual(context_pack["entrypoints"]["verified_unsafe_baseline"], verified_baseline_ref["path"])
+            self.assertEqual(context_pack["report_artifacts"]["verified_unsafe_baseline"], verified_baseline_ref)
+            self.assertEqual(
+                context_pack["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
             self.assert_context_management_contract(context_pack["context_management_contract"])
             agent_index = json.loads(agent_index_path.read_text(encoding="utf-8"))
             self.assertEqual(agent_index["reports"]["evaluate_report"]["path"], repo_rel(report_path))
@@ -3111,6 +3171,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertNotIn("sha256", agent_index["reports"]["judge_evidence_index"])
             self.assertEqual(agent_index["reports"]["resume_manifest"]["path"], repo_rel(resume_manifest_path))
             self.assertNotIn("sha256", agent_index["reports"]["resume_manifest"])
+            self.assertEqual(agent_index["reports"]["verified_unsafe_baseline"], verified_baseline_ref)
+            self.assertEqual(
+                agent_index["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
             self.assert_agent_coordination_contract(agent_index["agent_coordination_contract"], expected_worker_count=0)
             resume_manifest = json.loads(resume_manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(resume_manifest["report_kind"], "resume-manifest")
@@ -3126,6 +3191,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(resume_manifest["agent_index"]["path"], repo_rel(agent_index_path))
             self.assertEqual(resume_manifest["agent_index"]["sha256"], harness.sha256_file(agent_index_path))
             self.assertEqual(resume_manifest["expected_judge_evidence_index"], repo_rel(index_path))
+            self.assertEqual(resume_manifest["entrypoints"]["verified_unsafe_baseline"], verified_baseline_ref["path"])
+            self.assertEqual(resume_manifest["verified_unsafe_baseline"], verified_baseline_ref)
+            self.assertEqual(
+                resume_manifest["attempt_evidence_policy"]["baseline_attempt"]["verified_unsafe_baseline"],
+                verified_baseline_ref,
+            )
             self.assertIn("evaluate --profile", resume_manifest["resume_entrypoints"])
             self.assertIn("run-plan --plan", resume_manifest["resume_entrypoints"])
             self.assertIn("run-worker --assignment", resume_manifest["resume_entrypoints"])
@@ -3163,6 +3234,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(artifact_refs["agent_index"]["sha256"], harness.sha256_file(agent_index_path))
             self.assertEqual(artifact_refs["resume_manifest"]["path"], report["resume_manifest"]["path"])
             self.assertEqual(artifact_refs["resume_manifest"]["sha256"], harness.sha256_file(resume_manifest_path))
+            self.assertEqual(artifact_refs["verified_unsafe_baseline"]["path"], verified_baseline_ref["path"])
+            self.assertEqual(artifact_refs["verified_unsafe_baseline"]["sha256"], verified_baseline_ref["sha256"])
+            self.assertEqual(
+                artifact_refs["verified_unsafe_baseline"]["semantic_claim_source"],
+                "verified_unsafe_baseline_gates",
+            )
             self.assertEqual(artifact_refs["competition_run_summary"]["path"], repo_rel(summary_path))
             self.assertEqual(artifact_refs["workflow_metrics"]["path"], repo_rel(workflow_metrics_path))
             self.assertEqual(

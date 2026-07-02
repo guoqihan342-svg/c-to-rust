@@ -521,6 +521,17 @@ def init_run(
     return db_path
 
 
+def reset_batch_profile_ledger(*, out_root: Path, repo_root: Path = REPO_ROOT) -> None:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    db_path = out_root / DB_REL_PATH
+    for path in [db_path, Path(str(db_path) + "-wal"), Path(str(db_path) + "-shm")]:
+        if not path.exists():
+            continue
+        if not path.is_file():
+            raise SystemExit(f"batch profile ledger reset refused non-file path: {repo_relative(path, repo_root=repo_root)}")
+        path.unlink()
+
+
 def assign_slice(
     *,
     db_path: Path,
@@ -1211,6 +1222,7 @@ def run_batch_profile(
                 f"{repo_relative(repo_path(opencode_preflight_report, repo_root=repo_root), repo_root=repo_root)}"
             )
 
+    reset_batch_profile_ledger(out_root=out_root, repo_root=repo_root)
     db_path = init_run(
         out_root=out_root,
         run_id=run_id,
@@ -1328,6 +1340,12 @@ def run_batch_profile(
         report_artifacts["route_governance_metrics_report"] = route_metrics_artifact["binding"]
     if before_after_exhibit_artifact is not None:
         report_artifacts["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
+    verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+        {"attempt_evidence_policy": attempt_evidence_policy} if attempt_evidence_policy is not None else None,
+        repo_root=repo_root,
+    )
+    if verified_baseline_ref is not None:
+        report_artifacts["verified_unsafe_baseline"] = verified_baseline_ref
     context_refs = write_context_pack_and_agent_index(
         db_path=db_path,
         run_id=run_id,
@@ -1508,6 +1526,9 @@ def write_evaluate_profile_report(
             batch_profile_report_path=batch_report_ref["path"],
             judge_evidence_index_path=judge_index_path,
             status=str(payload["status"]),
+            attempt_evidence_policy=batch_result.get("attempt_evidence_policy")
+            if isinstance(batch_result.get("attempt_evidence_policy"), dict)
+            else None,
             repo_root=repo_root,
         )
         if batch_report_path is not None and batch_report_path.is_file():
@@ -1655,6 +1676,10 @@ def write_judge_evidence_index(
     add_binding("agent_index", evaluate_report.get("agent_index"))
     add_binding("route_governance_metrics_report", evaluate_report.get("route_governance_metrics_report"))
     add_binding("before_after_exhibit_report", evaluate_report.get("before_after_exhibit_report"))
+    add_binding(
+        "verified_unsafe_baseline",
+        verified_unsafe_baseline_ref_from_sources(batch_result, evaluate_report, core_quality),
+    )
 
     summary_validation = (
         evaluate_report.get("summary_validation")
@@ -1891,6 +1916,7 @@ def update_evaluate_profile_context_refs(
     batch_profile_report_path: str,
     judge_evidence_index_path: Path,
     status: str,
+    attempt_evidence_policy: dict[str, Any] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
     context_pack_path = out_root / "harness" / "context-pack.json"
@@ -1900,10 +1926,18 @@ def update_evaluate_profile_context_refs(
     judge_index_rel = repo_relative(judge_evidence_index_path, repo_root=repo_root)
     resume_manifest_rel = repo_relative(resume_manifest_path, repo_root=repo_root)
     context_graph: dict[str, Any] = {}
+    verified_policy: dict[str, Any] | None = None
+    verified_baseline_ref: dict[str, Any] | None = None
 
     if context_pack_path.exists():
         context_pack = load_json(context_pack_path)
         context_graph = context_pack.get("graph") if isinstance(context_pack.get("graph"), dict) else {}
+        verified_policy = attempt_evidence_policy_from_sources(attempt_evidence_policy, context_pack)
+        verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+            {"attempt_evidence_policy": verified_policy} if verified_policy is not None else None,
+            context_pack,
+            repo_root=repo_root,
+        )
         entrypoints = context_pack.setdefault("entrypoints", {})
         if isinstance(entrypoints, dict):
             entrypoints["primary_report"] = evaluate_report_rel
@@ -1912,6 +1946,17 @@ def update_evaluate_profile_context_refs(
             entrypoints["resume_manifest"] = resume_manifest_rel
             if batch_profile_report_path:
                 entrypoints["batch_profile_report"] = batch_profile_report_path
+            if verified_baseline_ref is not None:
+                entrypoints["verified_unsafe_baseline"] = verified_baseline_ref["path"]
+        if verified_policy is not None:
+            context_pack["attempt_evidence_policy"] = bind_verified_baseline_into_policy(
+                verified_policy,
+                verified_baseline_ref,
+            )
+        if verified_baseline_ref is not None:
+            report_artifacts = context_pack.setdefault("report_artifacts", {})
+            if isinstance(report_artifacts, dict):
+                report_artifacts["verified_unsafe_baseline"] = verified_baseline_ref
         context_pack["context_management_contract"] = build_context_management_contract(
             graph=context_graph,
             db_path=db_path,
@@ -1925,6 +1970,12 @@ def update_evaluate_profile_context_refs(
 
     if agent_index_path.exists():
         agent_index = load_json(agent_index_path)
+        verified_policy = attempt_evidence_policy_from_sources(verified_policy, attempt_evidence_policy, agent_index)
+        verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+            {"attempt_evidence_policy": verified_policy} if verified_policy is not None else None,
+            agent_index,
+            repo_root=repo_root,
+        ) or verified_baseline_ref
         reports = agent_index.setdefault("reports", {})
         if isinstance(reports, dict):
             reports["evaluate_report"] = {
@@ -1948,6 +1999,13 @@ def update_evaluate_profile_context_refs(
                     "report_kind": "batch-profile-report",
                     "status": status,
                 }
+            if verified_baseline_ref is not None:
+                reports["verified_unsafe_baseline"] = verified_baseline_ref
+        if verified_policy is not None:
+            agent_index["attempt_evidence_policy"] = bind_verified_baseline_into_policy(
+                verified_policy,
+                verified_baseline_ref,
+            )
         agents = agent_index.get("agents") if isinstance(agent_index.get("agents"), list) else []
         agent_index["agent_coordination_contract"] = build_agent_coordination_contract(
             graph=context_graph,
@@ -1979,6 +2037,7 @@ def update_evaluate_profile_context_refs(
             judge_evidence_index_path=judge_evidence_index_path,
             resume_manifest_path=resume_manifest_path,
             repair_hints=repair_hint_resume_summary(connection, run_id=run_id),
+            attempt_evidence_policy=verified_policy,
             repo_root=repo_root,
         )
         atomic_write_json(resume_manifest_path, resume_manifest_payload)
@@ -2117,6 +2176,7 @@ def build_resume_manifest(
     judge_evidence_index_path: Path,
     resume_manifest_path: Path,
     repair_hints: dict[str, Any],
+    attempt_evidence_policy: dict[str, Any] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     context_entrypoints = (
@@ -2125,6 +2185,15 @@ def build_resume_manifest(
         else {}
     )
     context_entrypoints["resume_manifest"] = repo_relative(resume_manifest_path, repo_root=repo_root)
+    policy = attempt_evidence_policy_from_sources(attempt_evidence_policy, context_pack, agent_index)
+    verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+        {"attempt_evidence_policy": policy} if policy is not None else None,
+        context_pack,
+        agent_index,
+        repo_root=repo_root,
+    )
+    if verified_baseline_ref is not None:
+        context_entrypoints["verified_unsafe_baseline"] = verified_baseline_ref["path"]
     workers = resume_manifest_workers(
         context_pack,
         agent_index,
@@ -2133,7 +2202,7 @@ def build_resume_manifest(
         repair_hints=repair_hints,
         repo_root=repo_root,
     )
-    return {
+    payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "resume-manifest",
         "run_id": run_id,
@@ -2175,6 +2244,11 @@ def build_resume_manifest(
         "worker_count": len(workers),
         "workers": workers,
     }
+    if policy is not None:
+        payload["attempt_evidence_policy"] = bind_verified_baseline_into_policy(policy, verified_baseline_ref)
+    if verified_baseline_ref is not None:
+        payload["verified_unsafe_baseline"] = verified_baseline_ref
+    return payload
 
 
 def resume_manifest_workers(
@@ -3145,6 +3219,13 @@ def write_context_pack_and_agent_index(
     report_artifacts = dict(report_artifacts or {})
     if isinstance(run_result.get("opencode_preflight_report"), dict):
         report_artifacts.setdefault("opencode_preflight_report", run_result["opencode_preflight_report"])
+    verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+        {"attempt_evidence_policy": attempt_evidence_policy} if attempt_evidence_policy is not None else None,
+        run_result,
+        repo_root=repo_root,
+    )
+    if verified_baseline_ref is not None:
+        report_artifacts.setdefault("verified_unsafe_baseline", verified_baseline_ref)
     report_entrypoints = {
         name: artifact.get("path")
         for name, artifact in report_artifacts.items()
@@ -3657,6 +3738,72 @@ def artifact_binding_from_value(value: Any, *, repo_root: Path) -> dict[str, Any
     else:
         binding["sha256"] = str(value.get("sha256", ""))
     return binding
+
+
+def verified_unsafe_baseline_ref_from_value(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    direct_keys = ("verified_unsafe_baseline", "baseline_verification")
+    for key in direct_keys:
+        candidate = value.get(key)
+        if isinstance(candidate, dict) and isinstance(candidate.get("path"), str) and candidate["path"]:
+            return dict(candidate)
+    attempt_policy = value.get("attempt_evidence_policy")
+    if isinstance(attempt_policy, dict):
+        candidate = verified_unsafe_baseline_ref_from_value(attempt_policy)
+        if candidate is not None:
+            return candidate
+    baseline_attempt = value.get("baseline_attempt")
+    if isinstance(baseline_attempt, dict):
+        candidate = baseline_attempt.get("verified_unsafe_baseline")
+        if isinstance(candidate, dict) and isinstance(candidate.get("path"), str) and candidate["path"]:
+            return dict(candidate)
+    translation_before_after = value.get("translation_before_after")
+    if isinstance(translation_before_after, dict):
+        candidate = translation_before_after.get("baseline_verification")
+        if isinstance(candidate, dict) and isinstance(candidate.get("path"), str) and candidate["path"]:
+            return dict(candidate)
+    return None
+
+
+def verified_unsafe_baseline_ref_from_sources(*sources: Any) -> dict[str, Any] | None:
+    for source in sources:
+        candidate = verified_unsafe_baseline_ref_from_value(source)
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def verified_unsafe_baseline_binding_from_sources(*sources: Any, repo_root: Path) -> dict[str, Any] | None:
+    candidate = verified_unsafe_baseline_ref_from_sources(*sources)
+    if candidate is None:
+        return None
+    return artifact_binding_from_value(candidate, repo_root=repo_root)
+
+
+def attempt_evidence_policy_from_sources(*sources: Any) -> dict[str, Any] | None:
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        if "baseline_attempt" in source or "verified_unsafe_baseline" in source:
+            return json.loads(json.dumps(source))
+        policy = source.get("attempt_evidence_policy")
+        if isinstance(policy, dict):
+            return json.loads(json.dumps(policy))
+    return None
+
+
+def bind_verified_baseline_into_policy(
+    policy: dict[str, Any],
+    verified_baseline_ref: dict[str, Any] | None,
+) -> dict[str, Any]:
+    result = json.loads(json.dumps(policy))
+    if verified_baseline_ref is None:
+        return result
+    baseline_attempt = result.setdefault("baseline_attempt", {})
+    if isinstance(baseline_attempt, dict):
+        baseline_attempt["verified_unsafe_baseline"] = verified_baseline_ref
+    return result
 
 
 def route_governance_competition_summary_paths(out_root: Path) -> list[Path]:

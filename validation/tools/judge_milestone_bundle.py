@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from copy import deepcopy
 import json
 from pathlib import Path
 import subprocess
@@ -1686,6 +1687,10 @@ def core_translation_quality_source_from_artifact(
     final_gate_status = quality.get("final_gate_status")
     translation_before_after = before_after_summary(quality.get("translation_before_after"))
     before_after_units = before_after_unit_summaries(quality.get("before_after_units"))
+    before_after_units = merge_before_after_exhibit_unit_overlays(
+        before_after_units,
+        before_after_exhibit_unit_overlays(payload, repo_root=repo_root),
+    )
     repair_summary = repair_summary_for_bundle(quality.get("repair_summary"))
     return {
         "entrypoint_id": entrypoint_id,
@@ -1723,6 +1728,64 @@ def before_after_summary(value: object) -> dict[str, Any]:
     }
 
 
+def before_after_exhibit_unit_overlays(
+    payload: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, dict[str, Any]]:
+    refs = payload.get("evidence_artifact_refs")
+    if not isinstance(refs, dict):
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for ref_name in ["before_after_exhibit", "before_after_exhibit_report"]:
+        exhibit = load_present_json_artifact(refs.get(ref_name), repo_root=repo_root)
+        if not isinstance(exhibit, dict):
+            continue
+        units = exhibit.get("units")
+        if not isinstance(units, list):
+            continue
+        for unit in units:
+            if not isinstance(unit, dict):
+                continue
+            unit_id = unit.get("unit_id")
+            if not isinstance(unit_id, str) or unit_id in result:
+                continue
+            overlay: dict[str, Any] = {}
+            baseline_verification = baseline_verification_summary(unit.get("baseline_verification"))
+            if baseline_verification is not None:
+                overlay["baseline_verification"] = baseline_verification
+            repair_history = repair_history_summary(unit.get("repair_history"))
+            if repair_history is not None:
+                overlay["repair_history"] = repair_history
+            repair_rounds = int_or_none(unit.get("repair_rounds"))
+            if repair_rounds is not None:
+                overlay["repair_rounds"] = repair_rounds
+            if isinstance(unit.get("auto_recovered"), bool):
+                overlay["auto_recovered"] = unit["auto_recovered"]
+            root_cause_key = unit.get("root_cause_key")
+            if isinstance(root_cause_key, str) and root_cause_key:
+                overlay["root_cause_key"] = root_cause_key
+            if overlay:
+                result[unit_id] = overlay
+    return result
+
+
+def merge_before_after_exhibit_unit_overlays(
+    units: list[dict[str, Any]],
+    overlays: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not overlays:
+        return units
+    for unit in units:
+        unit_id = unit.get("unit_id")
+        if not isinstance(unit_id, str) or unit_id not in overlays:
+            continue
+        for key, value in overlays[unit_id].items():
+            if key not in unit:
+                unit[key] = deepcopy(value)
+    return units
+
+
 def artifact_binding_summary(value: object) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -1731,6 +1794,47 @@ def artifact_binding_summary(value: object) -> dict[str, Any] | None:
     if not isinstance(path, str) or not isinstance(sha256, str):
         return None
     return {"path": path, "sha256": sha256}
+
+
+def baseline_verification_summary(value: object) -> dict[str, Any] | None:
+    binding = artifact_binding_summary(value)
+    if binding is None or not isinstance(value, dict):
+        return None
+    status = value.get("status")
+    semantic_pass = value.get("semantic_pass")
+    semantic_claim_source = value.get("semantic_claim_source")
+    generated_draft_semantic_pass = value.get("generated_draft_semantic_pass")
+    if isinstance(status, str):
+        binding["status"] = status
+    if isinstance(semantic_pass, bool):
+        binding["semantic_pass"] = semantic_pass
+    if isinstance(semantic_claim_source, str):
+        binding["semantic_claim_source"] = semantic_claim_source
+    if isinstance(generated_draft_semantic_pass, bool):
+        binding["generated_draft_semantic_pass"] = generated_draft_semantic_pass
+    return binding
+
+
+def repair_history_summary(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    patch_events_path = value.get("patch_events_path")
+    patch_events_sha256 = value.get("patch_events_sha256")
+    if not isinstance(patch_events_path, str) or not isinstance(patch_events_sha256, str):
+        return None
+    result: dict[str, Any] = {
+        "patch_events_path": patch_events_path,
+        "patch_events_sha256": patch_events_sha256,
+    }
+    statuses = value.get("statuses")
+    if isinstance(statuses, list):
+        result["statuses"] = [status for status in statuses if isinstance(status, str)]
+    rollback_ids = value.get("rollback_ids")
+    if isinstance(rollback_ids, list):
+        result["rollback_ids"] = [rollback_id for rollback_id in rollback_ids if isinstance(rollback_id, str)]
+    if isinstance(value.get("verified"), bool):
+        result["verified"] = value["verified"]
+    return result
 
 
 def before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
@@ -1757,6 +1861,20 @@ def before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
             binding = artifact_binding_summary(item.get(key))
             if binding is not None:
                 unit[key] = binding
+        baseline_verification = baseline_verification_summary(item.get("baseline_verification"))
+        if baseline_verification is not None:
+            unit["baseline_verification"] = baseline_verification
+        repair_history = repair_history_summary(item.get("repair_history"))
+        if repair_history is not None:
+            unit["repair_history"] = repair_history
+        repair_rounds = int_or_none(item.get("repair_rounds"))
+        if repair_rounds is not None:
+            unit["repair_rounds"] = repair_rounds
+        if isinstance(item.get("auto_recovered"), bool):
+            unit["auto_recovered"] = item["auto_recovered"]
+        root_cause_key = item.get("root_cause_key")
+        if isinstance(root_cause_key, str) and root_cause_key:
+            unit["root_cause_key"] = root_cause_key
         result.append(unit)
     return result
 

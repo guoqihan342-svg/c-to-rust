@@ -284,6 +284,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
         before_metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
         before_route_metrics_path = temp_dir / "before-after" / "summary" / "route-governance-metrics-report.json"
+        before_exhibit_path = temp_dir / "before-after" / "summary" / "before-after-exhibit.json"
         evidence_governance_path = temp_dir / "competition-smoke" / "reports" / "evidence-governance.json"
         before_index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
@@ -331,9 +332,46 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         )
         write_json(evidence_governance_path, evidence_governance_payload())
         write_json(
+            before_exhibit_path,
+            {
+                "report_kind": "before-after-exhibit",
+                "status": "passed",
+                "units": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "baseline_verification": {
+                            "path": "validation/evidence/baseline-verification.json",
+                            "sha256": "e" * 64,
+                            "status": "passed",
+                            "semantic_pass": True,
+                            "semantic_claim_source": "verified_unsafe_baseline_gates",
+                            "generated_draft_semantic_pass": False,
+                        },
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                        "repair_history": {
+                            "patch_events_path": "target/demo/retry-repair-history.jsonl",
+                            "patch_events_sha256": "f" * 64,
+                            "rollback_ids": ["rollback-001"],
+                            "statuses": ["failed", "passed", "verified"],
+                            "verified": True,
+                        },
+                    }
+                ],
+            },
+        )
+        write_json(
             before_index_path,
             {
                 "report_kind": "judge-evidence-index",
+                "evidence_artifact_refs": {
+                    "before_after_exhibit": {
+                        "path": repo_relative(before_exhibit_path),
+                        "sha256": bundle.validator.sha256_file(before_exhibit_path),
+                        "status": "present",
+                    }
+                },
                 "harness_architecture": {
                     "graph_runtime": "opencode-harness-langgraph-inspired",
                     "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
@@ -640,6 +678,35 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             report["before_after_repair_exhibit"]["sources"][0]["before_after_units"][0]["unit_id"],
             "flashdb/real-fdb-calc-crc32",
         )
+        before_after_unit = report["before_after_repair_exhibit"]["sources"][0]["before_after_units"][0]
+        self.assertIn("baseline_verification", before_after_unit)
+        self.assertEqual(
+            before_after_unit["baseline_verification"],
+            {
+                "path": "validation/evidence/baseline-verification.json",
+                "sha256": "e" * 64,
+                "status": "passed",
+                "semantic_pass": True,
+                "semantic_claim_source": "verified_unsafe_baseline_gates",
+                "generated_draft_semantic_pass": False,
+            },
+        )
+        self.assertEqual(before_after_unit["repair_rounds"], 1)
+        self.assertTrue(before_after_unit["auto_recovered"])
+        self.assertEqual(before_after_unit["root_cause_key"], "unsafe_baseline_requires_repair")
+        self.assertEqual(
+            before_after_unit["repair_history"],
+            {
+                "patch_events_path": "target/demo/retry-repair-history.jsonl",
+                "patch_events_sha256": "f" * 64,
+                "rollback_ids": ["rollback-001"],
+                "statuses": ["failed", "passed", "verified"],
+                "verified": True,
+            },
+        )
+        self.assertFalse(report["before_after_repair_exhibit"]["semantic_gate"])
+        self.assertFalse(report["before_after_repair_exhibit"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
         self.assertEqual(report["harness_architecture_summary"]["graph_runtime"], "opencode-harness-langgraph-inspired")
         self.assertEqual(report["harness_architecture_summary"]["repair_round_cap"], 5)
         self.assertIn("planner", report["harness_architecture_summary"]["roles"])
