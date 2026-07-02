@@ -383,6 +383,43 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             "round_count": 1,
         }
         attempt_path.write_text(json.dumps(attempt_payload, sort_keys=True) + "\n", encoding="utf-8")
+        preflight_summary = {
+            "status": "passed",
+            "required_when_opencode_runtime_enabled": True,
+            "preflight_report": {
+                "path": "target/opencode/harness/opencode-preflight-report.json",
+                "status": "present",
+                "sha256": "d" * 64,
+            },
+            "run_id": "opencode-run",
+            "opencode_command": "opencode",
+            "opencode_model": "GLM-5.1",
+            "required_model": "GLM-5.1",
+            "model_availability_status": "available",
+            "model_listed": True,
+            "model_probe_argv": ["opencode", "models"],
+            "process_returncode": 0,
+            "model_probe_logs": {
+                "stdout": {
+                    "path": "target/opencode/logs/opencode-models.stdout.log",
+                    "status": "present",
+                    "sha256": "e" * 64,
+                },
+                "stderr": {
+                    "path": "target/opencode/logs/opencode-models.stderr.log",
+                    "status": "present",
+                    "sha256": "f" * 64,
+                },
+            },
+            "contract_status": "executed",
+            "marker_exists": True,
+            "opencode_run_launched": True,
+            "proof_class": "local-simulation",
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "OpenCode preflight proves GLM-5.1 command-contract availability only.",
+        }
 
         boundary = runner.public_packet_opencode_patch_boundary(
             {
@@ -410,7 +447,10 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                         }
                     ]
                 },
-                "opencode_runtime": {"enabled_entrypoint_count": 1},
+                "opencode_runtime": {
+                    "enabled_entrypoint_count": 1,
+                    "preflight_proof_summary": preflight_summary,
+                },
             },
             repo_root=REPO_ROOT,
         )
@@ -427,6 +467,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(boundary["opencode_safety_transform_attempt"]["accepted_retry_hint_status"], "not_exercised")
         self.assertEqual(boundary["opencode_safety_transform_attempt"]["rollback_ref_count"], 0)
         self.assertEqual(boundary["opencode_safety_transform_attempt"]["max_repair_rounds"], 5)
+        self.assertEqual(boundary["opencode_preflight_proof_summary"], preflight_summary)
 
     def test_public_packet_opencode_patch_boundary_summarizes_unit_retry_hint(self) -> None:
         from validation.tools import run_judge_entrypoints as runner

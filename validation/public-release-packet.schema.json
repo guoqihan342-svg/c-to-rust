@@ -112,6 +112,7 @@
       "additionalProperties": true,
       "required": [
         "report_kind",
+        "opencode_preflight_proof_summary",
         "chat_output_is_evidence",
         "semantic_gate",
         "translation_coverage_numerator",
@@ -119,6 +120,7 @@
       ],
       "properties": {
         "report_kind": {"const": "opencode-patch-boundary"},
+        "opencode_preflight_proof_summary": {"$ref": "#/$defs/opencodePreflightProofSummary"},
         "chat_output_is_evidence": {"const": false},
         "semantic_gate": {"const": false},
         "translation_coverage_numerator": {"const": 0},
@@ -203,6 +205,48 @@
           }
         },
         "boundary": {"type": "string"}
+      }
+    },
+    "opencodePreflightProofSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "required_when_opencode_runtime_enabled",
+        "chat_output_is_evidence",
+        "semantic_gate",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "status": {"type": "string"},
+        "required_when_opencode_runtime_enabled": {"type": "boolean"},
+        "preflight_report": {"$ref": "#/$defs/artifactRef"},
+        "run_id": {"type": "string"},
+        "opencode_command": {"type": "string"},
+        "opencode_model": {"type": "string"},
+        "required_model": {"type": "string"},
+        "model_availability_status": {"type": "string"},
+        "model_listed": {"type": "boolean"},
+        "model_probe_argv": {"type": "array", "items": {"type": "string"}},
+        "process_returncode": {"type": "integer"},
+        "model_probe_logs": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["stdout", "stderr"],
+          "properties": {
+            "stdout": {"$ref": "#/$defs/artifactRef"},
+            "stderr": {"$ref": "#/$defs/artifactRef"}
+          }
+        },
+        "contract_status": {"type": "string"},
+        "marker_exists": {"type": "boolean"},
+        "opencode_run_launched": {"type": "boolean"},
+        "proof_class": {"type": "string"},
+        "chat_output_is_evidence": {"const": false},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
       }
     }
   }

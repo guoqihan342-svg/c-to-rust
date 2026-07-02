@@ -658,7 +658,8 @@
         "worker_count",
         "all_contracts_executed",
         "chat_output_is_evidence_false",
-        "semantic_gate_false"
+        "semantic_gate_false",
+        "preflight_proof_summary"
       ],
       "properties": {
         "report_kind": {"const": "opencode-runtime-rollup"},
@@ -666,7 +667,8 @@
         "worker_count": {"type": "integer", "minimum": 0},
         "all_contracts_executed": {"type": "boolean"},
         "chat_output_is_evidence_false": {"type": "boolean"},
-        "semantic_gate_false": {"type": "boolean"}
+        "semantic_gate_false": {"type": "boolean"},
+        "preflight_proof_summary": {"$ref": "#/definitions/opencodePreflightProofSummary"}
       }
     },
     "opencode_evidence_policy": {
@@ -1238,6 +1240,48 @@
         "baseline_total_unsafe": {"type": ["integer", "null"], "minimum": 0},
         "current_total_unsafe": {"type": ["integer", "null"], "minimum": 0},
         "reduced_by": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "opencodePreflightProofSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "required_when_opencode_runtime_enabled",
+        "chat_output_is_evidence",
+        "semantic_gate",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "status": {"type": "string"},
+        "required_when_opencode_runtime_enabled": {"type": "boolean"},
+        "preflight_report": {"$ref": "#/definitions/artifactRef"},
+        "run_id": {"type": "string"},
+        "opencode_command": {"type": "string"},
+        "opencode_model": {"type": "string"},
+        "required_model": {"type": "string"},
+        "model_availability_status": {"type": "string"},
+        "model_listed": {"type": "boolean"},
+        "model_probe_argv": {"type": "array", "items": {"type": "string"}},
+        "process_returncode": {"type": "integer"},
+        "model_probe_logs": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["stdout", "stderr"],
+          "properties": {
+            "stdout": {"$ref": "#/definitions/artifactRef"},
+            "stderr": {"$ref": "#/definitions/artifactRef"}
+          }
+        },
+        "contract_status": {"type": "string"},
+        "marker_exists": {"type": "boolean"},
+        "opencode_run_launched": {"type": "boolean"},
+        "proof_class": {"type": "string"},
+        "chat_output_is_evidence": {"const": false},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
       }
     }
   }

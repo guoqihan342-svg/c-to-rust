@@ -290,9 +290,63 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
         opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
         opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
+        opencode_preflight_path = temp_dir / "opencode" / "harness" / "opencode-preflight-report.json"
+        opencode_models_stdout_path = temp_dir / "opencode" / "logs" / "opencode-models.stdout.log"
+        opencode_models_stderr_path = temp_dir / "opencode" / "logs" / "opencode-models.stderr.log"
         c2rust_baseline = c2rust_baseline_rollup_fixture()
 
         write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
+        opencode_models_stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        opencode_models_stdout_path.write_bytes(b"zhipu/GLM-5.1\n")
+        opencode_models_stderr_path.write_bytes(b"")
+        launch_policy = {
+            "opencode_command": "opencode",
+            "opencode_model": "GLM-5.1",
+            "opencode_variant": "max",
+            "opencode_skip_permissions": False,
+        }
+        launch_policy_sha256 = bundle.validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
+        write_json(
+            opencode_preflight_path,
+            {
+                "schema_version": 1,
+                "run_id": "opencode",
+                "status": "passed",
+                "marker_exists": True,
+                "opencode_run_launched": True,
+                "launch_policy": launch_policy,
+                "launch_policy_sha256": launch_policy_sha256,
+                "contract_verification": {"status": "executed"},
+                "opencode_model_availability": {
+                    "status": "available",
+                    "opencode_command": "opencode",
+                    "required_model": "GLM-5.1",
+                    "argv": ["opencode", "models"],
+                    "process_returncode": 0,
+                    "model_listed": True,
+                    "stdout_sha256": bundle.validator.sha256_file(opencode_models_stdout_path),
+                    "stderr_sha256": bundle.validator.sha256_file(opencode_models_stderr_path),
+                    "logs": {
+                        "stdout": repo_relative(opencode_models_stdout_path),
+                        "stderr": repo_relative(opencode_models_stderr_path),
+                    },
+                },
+            },
+        )
+        preflight_binding = {
+            "path": repo_relative(opencode_preflight_path),
+            "sha256": bundle.validator.sha256_file(opencode_preflight_path),
+            "status": "passed",
+            "contract_status": "executed",
+            "run_id": "opencode",
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": launch_policy_sha256,
+        }
+        preflight_artifact_ref = {
+            "path": repo_relative(opencode_preflight_path),
+            "sha256": bundle.validator.sha256_file(opencode_preflight_path),
+            "status": "present",
+        }
         write_json(
             before_metrics_path,
             {
@@ -530,15 +584,13 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     "semantic_gate": False,
                     "contract_status_counts": {"executed": 2},
                     "worker_ids": ["worker-a", "worker-b"],
+                    "opencode_preflight_report": preflight_binding,
                 },
                 "evidence_artifact_refs": {
                     "worker_plan": {"path": "target/opencode/harness/plans/workers.json", "sha256": "a" * 64},
                     "context_pack": {"path": "target/opencode/harness/context-pack.json", "sha256": "b" * 64},
                     "agent_index": {"path": "target/opencode/harness/agent-index.json", "sha256": "c" * 64},
-                    "opencode_preflight_report": {
-                        "path": "target/opencode/harness/opencode-preflight-report.json",
-                        "sha256": "d" * 64,
-                    },
+                    "opencode_preflight_report": preflight_artifact_ref,
                 },
             },
         )
@@ -675,6 +727,18 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 1)
         self.assertTrue(report["opencode_runtime"]["all_contracts_executed"])
         self.assertTrue(report["opencode_runtime"]["chat_output_is_evidence_false"])
+        preflight_summary = report["opencode_runtime"]["preflight_proof_summary"]
+        self.assertEqual(preflight_summary["status"], "passed")
+        self.assertEqual(preflight_summary["opencode_model"], "GLM-5.1")
+        self.assertEqual(preflight_summary["required_model"], "GLM-5.1")
+        self.assertTrue(preflight_summary["model_listed"])
+        self.assertEqual(preflight_summary["preflight_report"]["sha256"], bundle.validator.sha256_file(opencode_preflight_path))
+        self.assertEqual(
+            preflight_summary["model_probe_logs"]["stdout"]["sha256"],
+            bundle.validator.sha256_file(opencode_models_stdout_path),
+        )
+        self.assertFalse(preflight_summary["semantic_gate"])
+        self.assertEqual(preflight_summary["translation_coverage_numerator"], 0)
         self.assertEqual(report["claim_scope"]["external_review_index_ready"], True)
         self.assertEqual(report["claim_scope"]["semantic_acceptance_ready"], False)
         self.assertEqual(report["claim_scope"]["competition_exact_ready"], False)

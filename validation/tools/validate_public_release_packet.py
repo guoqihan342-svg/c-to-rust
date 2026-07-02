@@ -89,6 +89,7 @@ def require_packet_contract(packet: dict[str, Any], *, repo_root: Path) -> None:
         judge_validator.validate_ref(ref, repo_root=repo_root)
 
     require_competition_config_archive_contract(packet, repo_root=repo_root)
+    require_opencode_patch_boundary_contract(packet, repo_root=repo_root)
     require_bundle_consistency(packet, repo_root=repo_root)
 
     if "public_release_packet_is_not_semantic_gate" not in set(packet.get("must_not_claim", [])):
@@ -182,6 +183,120 @@ def checked_artifact_refs(packet: dict[str, Any], *, repo_root: Path) -> dict[st
     return {"checked_count": len(refs), "refs": refs}
 
 
+def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_root: Path) -> None:
+    boundary = require_object(packet.get("opencode_patch_boundary"), "opencode_patch_boundary")
+    require_false(boundary.get("chat_output_is_evidence"), "opencode_patch_boundary.chat_output_is_evidence")
+    require_false(boundary.get("semantic_gate"), "opencode_patch_boundary.semantic_gate")
+    require_zero(
+        boundary.get("translation_coverage_numerator"),
+        "opencode_patch_boundary.translation_coverage_numerator",
+    )
+    if boundary.get("opencode_runtime_enabled") is True:
+        proof = require_object(
+            boundary.get("opencode_preflight_proof_summary"),
+            "opencode_patch_boundary.opencode_preflight_proof_summary",
+        )
+        require_opencode_preflight_proof_summary_contract(
+            proof,
+            "opencode_patch_boundary.opencode_preflight_proof_summary",
+            repo_root=repo_root,
+        )
+
+
+def require_opencode_preflight_proof_summary_contract(
+    proof: dict[str, Any],
+    label: str,
+    *,
+    repo_root: Path,
+) -> None:
+    if proof.get("status") != "passed":
+        raise ValueError(f"{label}.status must be passed")
+    if proof.get("required_when_opencode_runtime_enabled") is not True:
+        raise ValueError(f"{label}.required_when_opencode_runtime_enabled must be true")
+    require_false(proof.get("chat_output_is_evidence"), f"{label}.chat_output_is_evidence")
+    require_false(proof.get("semantic_gate"), f"{label}.semantic_gate")
+    require_zero(proof.get("translation_coverage_numerator"), f"{label}.translation_coverage_numerator")
+    if proof.get("opencode_command") != judge_validator.COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"{label}.opencode_command must be {judge_validator.COMPETITION_OPENCODE_COMMAND}")
+    if proof.get("opencode_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{label}.opencode_model must be {judge_validator.COMPETITION_OPENCODE_MODEL}")
+    if proof.get("required_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{label}.required_model must be {judge_validator.COMPETITION_OPENCODE_MODEL}")
+    if proof.get("model_availability_status") != "available":
+        raise ValueError(f"{label}.model_availability_status must be available")
+    if proof.get("model_listed") is not True:
+        raise ValueError(f"{label}.model_listed must be true")
+    if proof.get("process_returncode") != 0:
+        raise ValueError(f"{label}.process_returncode must be 0")
+    if proof.get("contract_status") != "executed":
+        raise ValueError(f"{label}.contract_status must be executed")
+    if proof.get("marker_exists") is not True:
+        raise ValueError(f"{label}.marker_exists must be true")
+    if proof.get("opencode_run_launched") is not True:
+        raise ValueError(f"{label}.opencode_run_launched must be true")
+    if proof.get("proof_class") == "competition-exact":
+        raise ValueError(f"{label}.proof_class must not claim competition-exact without host attestation")
+    if not judge_validator.opencode_models_argv_matches(
+        proof.get("model_probe_argv"),
+        expected_command=judge_validator.COMPETITION_OPENCODE_COMMAND,
+    ):
+        raise ValueError(f"{label}.model_probe_argv must be opencode models")
+
+    preflight_ref = require_object(proof.get("preflight_report"), f"{label}.preflight_report")
+    checked_preflight_ref = judge_validator.validate_ref(preflight_ref, repo_root=repo_root)
+    logs = require_object(proof.get("model_probe_logs"), f"{label}.model_probe_logs")
+    checked_logs: dict[str, dict[str, Any]] = {}
+    for stream in ("stdout", "stderr"):
+        checked_logs[stream] = judge_validator.validate_ref(
+            require_object(logs.get(stream), f"{label}.model_probe_logs.{stream}"),
+            repo_root=repo_root,
+        )
+
+    preflight_payload = judge_validator.load_json(
+        judge_validator.repo_path(str(checked_preflight_ref["path"]), repo_root=repo_root)
+    )
+    if preflight_payload.get("status") != "passed":
+        raise ValueError(f"{label}.preflight_report file status must be passed")
+    if preflight_payload.get("marker_exists") is not True:
+        raise ValueError(f"{label}.preflight_report file marker_exists must be true")
+    if preflight_payload.get("opencode_run_launched") is not True:
+        raise ValueError(f"{label}.preflight_report file opencode_run_launched must be true")
+    launch_policy = require_object(preflight_payload.get("launch_policy"), f"{label}.preflight_report.launch_policy")
+    if launch_policy.get("opencode_model") != proof.get("opencode_model"):
+        raise ValueError(f"{label}.opencode_model must match preflight_report.launch_policy.opencode_model")
+    contract = require_object(
+        preflight_payload.get("contract_verification"),
+        f"{label}.preflight_report.contract_verification",
+    )
+    if contract.get("status") != proof.get("contract_status"):
+        raise ValueError(f"{label}.contract_status must match preflight_report.contract_verification.status")
+
+    availability = require_object(
+        preflight_payload.get("opencode_model_availability"),
+        f"{label}.preflight_report.opencode_model_availability",
+    )
+    if availability.get("status") != proof.get("model_availability_status"):
+        raise ValueError(f"{label}.model_availability_status must match preflight_report.opencode_model_availability.status")
+    if availability.get("required_model") != proof.get("required_model"):
+        raise ValueError(f"{label}.required_model must match preflight_report.opencode_model_availability.required_model")
+    if availability.get("opencode_command") != proof.get("opencode_command"):
+        raise ValueError(f"{label}.opencode_command must match preflight_report.opencode_model_availability.opencode_command")
+    if availability.get("model_listed") is not proof.get("model_listed"):
+        raise ValueError(f"{label}.model_listed must match preflight_report.opencode_model_availability.model_listed")
+    if int(availability.get("process_returncode", -1)) != proof.get("process_returncode"):
+        raise ValueError(f"{label}.process_returncode must match preflight_report.opencode_model_availability.process_returncode")
+    if availability.get("argv") != proof.get("model_probe_argv"):
+        raise ValueError(f"{label}.model_probe_argv must match preflight_report.opencode_model_availability.argv")
+    availability_logs = require_object(availability.get("logs"), f"{label}.preflight_report.opencode_model_availability.logs")
+    for stream in ("stdout", "stderr"):
+        if availability_logs.get(stream) != checked_logs[stream]["path"]:
+            raise ValueError(f"{label}.model_probe_logs.{stream}.path must match preflight_report log path")
+        expected_hash = availability.get(f"{stream}_sha256")
+        if expected_hash != checked_logs[stream]["sha256"]:
+            raise ValueError(f"{label}.model_probe_logs.{stream}.sha256 must match preflight_report log sha256")
+    judge_validator.validate_opencode_model_probe_log_hashes(availability, label, repo_root=repo_root)
+
+
 def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> None:
     bundle_ref = require_object(packet.get("judge_milestone_bundle"), "judge_milestone_bundle")
     bundle_path = judge_validator.repo_path(str(bundle_ref.get("path")), repo_root=repo_root)
@@ -211,6 +326,16 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         )
     if summary.get("progress_delta_ledger") != bundle.get("progress_delta_ledger"):
         raise ValueError("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger")
+
+    runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
+    expected_preflight = runtime.get("preflight_proof_summary")
+    if isinstance(expected_preflight, dict):
+        boundary = require_object(packet.get("opencode_patch_boundary"), "opencode_patch_boundary")
+        if boundary.get("opencode_preflight_proof_summary") != expected_preflight:
+            raise ValueError(
+                "opencode_patch_boundary.opencode_preflight_proof_summary must match "
+                "judge_milestone_bundle.opencode_runtime.preflight_proof_summary"
+            )
 
     require_release_notes_match_bundle(packet, bundle, repo_root=repo_root)
 

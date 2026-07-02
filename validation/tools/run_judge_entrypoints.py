@@ -387,12 +387,17 @@ def public_packet_opencode_patch_boundary(bundle: dict[str, Any], *, repo_root: 
     )
     attempt_summary = public_packet_opencode_attempt_summary(attempt_ref, repo_root=repo_root)
     runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
+    opencode_runtime_enabled = int(runtime.get("enabled_entrypoint_count", 0) or 0) > 0
     return {
         "report_kind": "opencode-patch-boundary",
-        "opencode_runtime_enabled": int(runtime.get("enabled_entrypoint_count", 0) or 0) > 0,
+        "opencode_runtime_enabled": opencode_runtime_enabled,
         "before_after_patch_sources": sorted(patch_sources),
         "before_after_opencode_session_bound_count": opencode_session_bound_count,
         "opencode_safety_transform_attempt": attempt_summary,
+        "opencode_preflight_proof_summary": public_packet_opencode_preflight_proof_summary(
+            runtime,
+            opencode_runtime_enabled=opencode_runtime_enabled,
+        ),
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
@@ -400,6 +405,27 @@ def public_packet_opencode_patch_boundary(bundle: dict[str, Any], *, repo_root: 
             "OpenCode runtime and safety-transform attempt artifacts audit command-contract execution and "
             "candidate patch attempts. They do not make chat output semantic evidence; before/after patch "
             "origin remains the bound on-disk patch_origin evidence."
+        ),
+    }
+
+
+def public_packet_opencode_preflight_proof_summary(
+    runtime: dict[str, Any],
+    *,
+    opencode_runtime_enabled: bool,
+) -> dict[str, Any]:
+    summary = runtime.get("preflight_proof_summary")
+    if isinstance(summary, dict):
+        return json.loads(json.dumps(summary))
+    return {
+        "status": "absent",
+        "required_when_opencode_runtime_enabled": opencode_runtime_enabled,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode preflight proof is absent; runtime output is not semantic evidence "
+            "and does not increase translator coverage."
         ),
     }
 

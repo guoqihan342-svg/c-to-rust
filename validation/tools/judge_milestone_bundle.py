@@ -123,6 +123,7 @@ def build_judge_milestone_bundle(
         blocked_repairs_rollup=blocked_repairs_rollup,
         route_governance_metrics=route_governance_metrics,
         evidence_cost_retention=evidence_cost_retention,
+        opencode_runtime=opencode_runtime,
     )
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
@@ -235,6 +236,7 @@ def summarize_entrypoint(
     opencode_source = opencode_source_from_artifact(
         entrypoint_id=str(entry.get("id", "unknown")),
         artifact=artifacts.get("judge_evidence_index"),
+        proof_class=proof_class,
         repo_root=repo_root,
     )
     core_quality_source = core_translation_quality_source_from_artifact(
@@ -328,6 +330,7 @@ def milestone_blockers(
     blocked_repairs_rollup: dict[str, Any],
     route_governance_metrics: dict[str, Any],
     evidence_cost_retention: dict[str, Any],
+    opencode_runtime: dict[str, Any],
 ) -> list[str]:
     blockers: list[str] = list(run_report_contract) + list(proof_class_contract_errors)
     if run_report.get("status") != "passed":
@@ -349,6 +352,13 @@ def milestone_blockers(
         blockers.append("opencode_chat_output_must_not_be_evidence")
     if opencode_policy.get("enabled") and not opencode_policy.get("semantic_gate_false"):
         blockers.append("opencode_semantic_gate_must_be_false")
+    preflight_summary = (
+        opencode_runtime.get("preflight_proof_summary", {})
+        if isinstance(opencode_runtime.get("preflight_proof_summary"), dict)
+        else {}
+    )
+    if int_or_zero(opencode_runtime.get("enabled_entrypoint_count")) > 0 and preflight_summary.get("status") != "passed":
+        blockers.append("opencode_preflight_proof_summary_missing")
     if bool(core_translation_quality.get("generated_draft_semantic_pass")):
         blockers.append("core_quality_generated_draft_semantic_pass_must_be_false")
     if int_or_zero(core_translation_quality.get("translation_coverage_numerator")) != 0:
@@ -1668,6 +1678,7 @@ def opencode_source_from_artifact(
     *,
     entrypoint_id: str,
     artifact: dict[str, Any] | None,
+    proof_class: str,
     repo_root: Path,
 ) -> dict[str, Any] | None:
     payload = load_present_json_artifact(artifact, repo_root=repo_root)
@@ -1693,7 +1704,157 @@ def opencode_source_from_artifact(
         "semantic_gate": semantic_value if isinstance(semantic_value, bool) else None,
         "boundary_fields_explicit": boundary_fields_explicit,
         "repair_round_cap": int_or_zero(headline.get("repair_round_cap")),
+        "preflight_proof_summary": opencode_preflight_proof_summary_from_index(
+            payload,
+            entrypoint_id=entrypoint_id,
+            proof_class=proof_class,
+            repo_root=repo_root,
+        ),
     }
+
+
+def opencode_preflight_proof_summary_from_index(
+    payload: dict[str, Any],
+    *,
+    entrypoint_id: str,
+    proof_class: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    runtime = payload.get("opencode_agent_runtime") if isinstance(payload.get("opencode_agent_runtime"), dict) else {}
+    refs = payload.get("evidence_artifact_refs") if isinstance(payload.get("evidence_artifact_refs"), dict) else {}
+    raw_ref = runtime.get("opencode_preflight_report")
+    if not isinstance(raw_ref, dict):
+        raw_ref = refs.get("opencode_preflight_report")
+    preflight_ref = artifact_ref_from_existing(raw_ref, repo_root=repo_root)
+    if preflight_ref is None:
+        return opencode_preflight_absent_summary(required=True, entrypoint_id=entrypoint_id)
+
+    result: dict[str, Any] = {
+        "status": "missing" if preflight_ref.get("status") != "present" else "failed",
+        "required_when_opencode_runtime_enabled": True,
+        "entrypoint_id": entrypoint_id,
+        "preflight_report": preflight_ref,
+        "proof_class": proof_class,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode preflight proves GLM-5.1 command-contract availability only; "
+            "it is not semantic acceptance or translator coverage."
+        ),
+    }
+    if preflight_ref.get("status") != "present":
+        return result
+
+    try:
+        preflight_payload = validator.load_json(resolve_input_path(Path(str(preflight_ref["path"])), repo_root=repo_root))
+    except (OSError, ValueError, json.JSONDecodeError):
+        result["status"] = "read_failed"
+        return result
+
+    availability = (
+        preflight_payload.get("opencode_model_availability")
+        if isinstance(preflight_payload.get("opencode_model_availability"), dict)
+        else {}
+    )
+    launch_policy = (
+        preflight_payload.get("launch_policy") if isinstance(preflight_payload.get("launch_policy"), dict) else {}
+    )
+    contract = (
+        preflight_payload.get("contract_verification")
+        if isinstance(preflight_payload.get("contract_verification"), dict)
+        else {}
+    )
+    result.update(
+        {
+            "run_id": preflight_payload.get("run_id"),
+            "opencode_command": availability.get("opencode_command"),
+            "opencode_model": launch_policy.get("opencode_model"),
+            "required_model": availability.get("required_model"),
+            "model_availability_status": availability.get("status"),
+            "model_listed": availability.get("model_listed"),
+            "model_probe_argv": availability.get("argv") if isinstance(availability.get("argv"), list) else [],
+            "process_returncode": int_or_none(availability.get("process_returncode")),
+            "model_probe_logs": opencode_model_probe_log_refs(availability, repo_root=repo_root),
+            "contract_status": contract.get("status"),
+            "marker_exists": preflight_payload.get("marker_exists"),
+            "opencode_run_launched": preflight_payload.get("opencode_run_launched"),
+        }
+    )
+    result["status"] = "passed" if opencode_preflight_summary_passed(result, availability, repo_root=repo_root) else "failed"
+    return result
+
+
+def opencode_preflight_absent_summary(*, required: bool, entrypoint_id: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "absent",
+        "required_when_opencode_runtime_enabled": required,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode preflight proof is absent; runtime output is not semantic evidence "
+            "and does not increase translator coverage."
+        ),
+    }
+    if entrypoint_id is not None:
+        result["entrypoint_id"] = entrypoint_id
+    return result
+
+
+def opencode_model_probe_log_refs(availability: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    logs = availability.get("logs") if isinstance(availability.get("logs"), dict) else {}
+    result: dict[str, Any] = {}
+    for stream in ("stdout", "stderr"):
+        path_text = logs.get(stream)
+        if not isinstance(path_text, str):
+            result[stream] = {"path": "unknown", "status": "absent"}
+            continue
+        try:
+            result[stream] = artifact_ref(resolve_input_path(Path(path_text), repo_root=repo_root), repo_root=repo_root)
+        except (OSError, ValueError):
+            result[stream] = {"path": path_text, "status": "invalid"}
+    return result
+
+
+def opencode_preflight_summary_passed(
+    summary: dict[str, Any],
+    availability: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> bool:
+    if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
+        return False
+    if summary.get("opencode_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("model_availability_status") != "available":
+        return False
+    if summary.get("model_listed") is not True:
+        return False
+    if int_or_zero(summary.get("process_returncode")) != 0:
+        return False
+    if summary.get("contract_status") != "executed":
+        return False
+    if summary.get("marker_exists") is not True:
+        return False
+    if summary.get("opencode_run_launched") is not True:
+        return False
+    if not validator.opencode_models_argv_matches(
+        summary.get("model_probe_argv"),
+        expected_command=validator.COMPETITION_OPENCODE_COMMAND,
+    ):
+        return False
+    try:
+        validator.validate_opencode_model_probe_log_hashes(
+            availability,
+            "opencode_preflight_proof_summary",
+            repo_root=repo_root,
+        )
+    except ValueError:
+        return False
+    return True
 
 
 def core_translation_quality_source_from_artifact(
@@ -2721,7 +2882,26 @@ def build_opencode_runtime_rollup(sources: list[dict[str, Any]]) -> dict[str, An
         "all_contracts_executed": bool(sources) and all(bool(source.get("all_contracts_executed")) for source in sources),
         "chat_output_is_evidence_false": all(source.get("chat_output_is_evidence") is False for source in sources),
         "semantic_gate_false": all(source.get("semantic_gate") is False for source in sources),
+        "preflight_proof_summary": build_opencode_preflight_proof_rollup(sources),
     }
+
+
+def build_opencode_preflight_proof_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    if not sources:
+        return opencode_preflight_absent_summary(required=False)
+    summaries = [
+        source.get("preflight_proof_summary")
+        for source in sources
+        if isinstance(source.get("preflight_proof_summary"), dict)
+    ]
+    passed = [summary for summary in summaries if summary.get("status") == "passed"]
+    selected = deepcopy(passed[0] if passed else summaries[0]) if summaries else opencode_preflight_absent_summary(required=True)
+    selected["required_when_opencode_runtime_enabled"] = True
+    selected["source_count"] = len(sources)
+    selected["passed_source_count"] = len(passed)
+    if len(passed) != len(sources):
+        selected["status"] = "failed"
+    return selected
 
 
 def build_retention_policy() -> dict[str, Any]:

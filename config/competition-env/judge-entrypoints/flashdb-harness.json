@@ -170,6 +170,7 @@
         "evaluate_report": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
         "judge_evidence_index": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
         "merge_plan": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
+        "opencode_preflight_report": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/opencode-preflight-report.json",
         "opencode_safety_transform_attempt": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/opencode-safety-transform-attempt-1.json",
         "resume_manifest": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json",
         "route_governance_metrics_report": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",

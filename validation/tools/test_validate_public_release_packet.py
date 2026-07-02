@@ -30,10 +30,89 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run") -> dict:
+    stdout_path = root / "logs" / "opencode-models.stdout.log"
+    stderr_path = root / "logs" / "opencode-models.stderr.log"
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_bytes(b"zhipu/GLM-5.1\n")
+    stderr_path.write_bytes(b"")
+    preflight_path = root / "harness" / "opencode-preflight-report.json"
+    preflight_payload = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "status": "passed",
+        "marker_exists": True,
+        "opencode_run_launched": True,
+        "launch_policy": {
+            "opencode_command": "opencode",
+            "opencode_model": "GLM-5.1",
+            "opencode_variant": "max",
+            "opencode_skip_permissions": False,
+        },
+        "contract_verification": {"status": "executed"},
+        "opencode_model_availability": {
+            "status": "available",
+            "opencode_command": "opencode",
+            "required_model": "GLM-5.1",
+            "argv": ["opencode", "models"],
+            "process_returncode": 0,
+            "model_listed": True,
+            "stdout_sha256": judge_validator.sha256_file(stdout_path),
+            "stderr_sha256": judge_validator.sha256_file(stderr_path),
+            "logs": {
+                "stdout": repo_relative(stdout_path),
+                "stderr": repo_relative(stderr_path),
+            },
+        },
+    }
+    write_json(preflight_path, preflight_payload)
+    return {
+        "status": "passed",
+        "required_when_opencode_runtime_enabled": True,
+        "preflight_report": {
+            "path": repo_relative(preflight_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(preflight_path),
+        },
+        "run_id": run_id,
+        "opencode_command": "opencode",
+        "opencode_model": "GLM-5.1",
+        "required_model": "GLM-5.1",
+        "model_availability_status": "available",
+        "model_listed": True,
+        "model_probe_argv": ["opencode", "models"],
+        "process_returncode": 0,
+        "model_probe_logs": {
+            "stdout": {
+                "path": repo_relative(stdout_path),
+                "status": "present",
+                "sha256": judge_validator.sha256_file(stdout_path),
+            },
+            "stderr": {
+                "path": repo_relative(stderr_path),
+                "status": "present",
+                "sha256": judge_validator.sha256_file(stderr_path),
+            },
+        },
+        "contract_status": "executed",
+        "marker_exists": True,
+        "opencode_run_launched": True,
+        "proof_class": "local-simulation",
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode preflight proves GLM-5.1 command-contract availability only; "
+            "it is not semantic acceptance or translator coverage."
+        ),
+    }
+
+
 def valid_packet(root: Path) -> dict:
     run_report = write_text_artifact(root / "summary" / "judge-entrypoints-run-report.json", "{}\n")
     readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
     bundle_path = root / "summary" / "judge-milestone-bundle.json"
+    opencode_preflight_proof = write_opencode_preflight_fixture(root)
     config_bundle_manifest = REPO_ROOT / "config" / "competition-env" / "bundle-manifest.json"
     config_bundle_ref = {
         "path": repo_relative(config_bundle_manifest),
@@ -266,8 +345,13 @@ def valid_packet(root: Path) -> dict:
             },
         },
         "opencode_runtime": {
+            "report_kind": "opencode-runtime-rollup",
+            "enabled_entrypoint_count": 1,
+            "worker_count": 1,
+            "all_contracts_executed": True,
             "chat_output_is_evidence_false": True,
             "semantic_gate_false": True,
+            "preflight_proof_summary": opencode_preflight_proof,
         },
         "opencode_evidence_policy": {
             "boundary_fields_explicit": True,
@@ -333,6 +417,7 @@ def valid_packet(root: Path) -> dict:
             "before_after_patch_sources": ["accepted_safe_evidence"],
             "before_after_opencode_session_bound_count": 0,
             "opencode_safety_transform_attempt": {"status": "absent"},
+            "opencode_preflight_proof_summary": opencode_preflight_proof,
             "chat_output_is_evidence": False,
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
@@ -380,6 +465,33 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("opencode_patch_boundary" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_requires_glm_preflight_proof_when_opencode_runtime_enabled(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-preflight-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"].pop("opencode_preflight_proof_summary")
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("opencode_preflight_proof_summary" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_non_glm_preflight_proof(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-non-glm-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["required_model"] = "gpt-5.1"
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any("required_model must be GLM-5.1" in error for error in result["errors"]), result["errors"])
 
     def test_validate_packet_rejects_artifact_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-drift-", dir=REPO_ROOT / "target"))
