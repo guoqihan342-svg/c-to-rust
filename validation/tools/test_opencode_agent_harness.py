@@ -5585,6 +5585,12 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             stdout = (REPO_ROOT / report["opencode_model_availability"]["logs"]["stdout"]).read_text(encoding="utf-8")
             self.assertIn("openai/gpt-5.1", stdout)
 
+    def test_opencode_model_probe_rejects_near_match_model_ids(self) -> None:
+        stdout = "zhipu/GLM-5.10\nopencode/not-GLM-5.1\n"
+        self.assertFalse(harness.opencode_models_output_mentions_required_model(stdout, "GLM-5.1"))
+        self.assertTrue(harness.opencode_models_output_mentions_required_model("GLM-5.1\n", "GLM-5.1"))
+        self.assertTrue(harness.opencode_models_output_mentions_required_model("zhipu/GLM-5.1\n", "GLM-5.1"))
+
     def test_validate_opencode_preflight_report_rejects_missing_model_availability(self) -> None:
         with temp_repo_dir() as tmp:
             preflight_report = write_passing_opencode_preflight_report(

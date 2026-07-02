@@ -6993,8 +6993,22 @@ def build_opencode_models_argv(*, opencode_command: str) -> list[str]:
     return [resolve_subprocess_command(opencode_command), "models"]
 
 
+def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
+    candidate = model_id.strip().strip("`'\"*,")
+    required = required_model.casefold()
+    if candidate.casefold() == required:
+        return True
+    if "/" in candidate:
+        return candidate.rsplit("/", 1)[1].casefold() == required
+    return False
+
+
 def opencode_models_output_mentions_required_model(stdout: str, required_model: str) -> bool:
-    return required_model.casefold() in stdout.casefold()
+    for line in stdout.splitlines():
+        for token in re.split(r"\s+", line.strip()):
+            if token and opencode_model_id_matches_required(token, required_model):
+                return True
+    return False
 
 
 def opencode_models_output_sample(stdout: str, *, limit: int = 40) -> list[str]:
