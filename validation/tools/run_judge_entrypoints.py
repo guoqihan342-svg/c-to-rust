@@ -332,6 +332,7 @@ def write_public_release_packet(
         "milestone_release_notes": artifact_ref(release_notes_path, repo_root=repo_root),
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
+        "before_after_repair_exhibit": bundle.get("before_after_repair_exhibit", {}),
         "quantitative_evaluation": bundle.get("quantitative_evaluation", {}),
         "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
         "known_gaps": bundle.get("known_gaps", []),

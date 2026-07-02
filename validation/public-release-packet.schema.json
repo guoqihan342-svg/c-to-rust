@@ -15,6 +15,7 @@
     "milestone_release_notes",
     "competition_config_archive",
     "publication_manifest",
+    "before_after_repair_exhibit",
     "quantitative_evaluation",
     "progress_delta_ledger",
     "known_gaps",
@@ -81,6 +82,30 @@
     "milestone_release_notes": {"$ref": "#/$defs/artifactRef"},
     "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
     "publication_manifest": {"type": "object", "additionalProperties": true},
+    "before_after_repair_exhibit": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "sources",
+        "rollup",
+        "semantic_gate",
+        "generated_draft_semantic_pass",
+        "translation_coverage_numerator",
+        "accepted_evidence_counts_as_translator_coverage",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "before-after-repair-exhibit-rollup"},
+        "sources": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+        "rollup": {"type": "object", "additionalProperties": true},
+        "semantic_gate": {"const": false},
+        "generated_draft_semantic_pass": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "accepted_evidence_counts_as_translator_coverage": {"const": false},
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
     "quantitative_evaluation": {
       "type": "object",
       "additionalProperties": true,

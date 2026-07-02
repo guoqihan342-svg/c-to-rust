@@ -89,6 +89,72 @@ def valid_packet(root: Path) -> dict:
     reproduction_commands = {
         "run_judge_entrypoints": "python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json"
     }
+    before_after_repair_exhibit = {
+        "report_kind": "before-after-repair-exhibit-rollup",
+        "sources": [
+            {
+                "entrypoint_id": "before_after_judge_demo",
+                "before_after_units": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "status": "converged",
+                        "patch_origin": {
+                            "source": "accepted_safe_evidence",
+                            "accepted_patch_bound": True,
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                        "safety_loop_provenance": {
+                            "status": "accepted_evidence_bound",
+                            "patch_source": "accepted_safe_evidence",
+                            "unsafe_delta": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "repair_rounds": 1,
+                            "auto_recovered": True,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                    }
+                ],
+            }
+        ],
+        "rollup": {
+            "source_count": 1,
+            "bound_unit_count": 1,
+            "measured_unsafe_unit_count": 1,
+            "accepted_patch_unit_count": 1,
+            "verified_repair_source_count": 1,
+            "observed_repair_unit_count": 1,
+            "auto_recovered_unit_count": 1,
+            "rollback_evidence_count": 1,
+            "repair_round_cap": 5,
+            "unsafe_reduced_by": 2,
+            "unsafe_reduction": {
+                "status": "measured",
+                "baseline_total_unsafe": 2,
+                "current_total_unsafe": 0,
+                "reduced_by": 2,
+            },
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": "Before/after repair exhibit is a review rollup, not a semantic gate.",
+    }
     bundle_payload = {
         "schema_version": 1,
         "report_kind": "judge-milestone-bundle",
@@ -212,6 +278,7 @@ def valid_packet(root: Path) -> dict:
         "judge_entrypoints_run_report": run_report,
         "readiness_report": readiness,
         "publication_manifest": publication_manifest,
+        "before_after_repair_exhibit": before_after_repair_exhibit,
         "known_gaps": known_gaps,
         "must_not_claim": bundle_must_not_claim,
         "reproduction_commands": reproduction_commands,
@@ -259,6 +326,7 @@ def valid_packet(root: Path) -> dict:
         "milestone_release_notes": notes,
         "competition_config_archive": competition_config_archive,
         "publication_manifest": publication_manifest,
+        "before_after_repair_exhibit": before_after_repair_exhibit,
         "quantitative_evaluation": bundle_payload["quantitative_evaluation"],
         "progress_delta_ledger": bundle_payload["progress_delta_ledger"],
         "known_gaps": known_gaps,
@@ -281,6 +349,12 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["artifact_refs"]["checked_count"], 4)
         self.assertFalse(result["claim_boundary"]["semantic_gate"])
         self.assertEqual(result["claim_boundary"]["translation_coverage_numerator"], 0)
+        self.assertEqual(
+            packet["before_after_repair_exhibit"]["sources"][0]["before_after_units"][0]["patch_origin"]["source"],
+            "accepted_safe_evidence",
+        )
+        self.assertFalse(packet["before_after_repair_exhibit"]["semantic_gate"])
+        self.assertEqual(packet["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
 
@@ -362,6 +436,30 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("quantitative_evaluation must match judge_milestone_bundle.quantitative_evaluation" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_before_after_repair_exhibit_drift_from_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-before-after-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["before_after_repair_exhibit"] = {
+            **packet["before_after_repair_exhibit"],
+            "rollup": {
+                **packet["before_after_repair_exhibit"]["rollup"],
+                "bound_unit_count": 999,
+            },
+        }
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "before_after_repair_exhibit must match judge_milestone_bundle.before_after_repair_exhibit" in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 
