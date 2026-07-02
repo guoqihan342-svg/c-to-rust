@@ -689,6 +689,106 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             for command in [entry["command"], entry.get("audit_command", ""), *entry["verification_commands"]]:
                 assert_no_local_absolute_path(self, command)
 
+    def test_judge_validator_rejects_preflight_without_glm_model_availability_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            preflight_path = repo_root / "target" / "harness" / "opencode-preflight-report.json"
+            preflight_path.parent.mkdir(parents=True)
+            launch_policy = {
+                "opencode_command": "opencode",
+                "opencode_model": "GLM-5.1",
+                "opencode_agent": None,
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            }
+            launch_policy_sha = judge_validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
+            preflight_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "preflight-run",
+                        "status": "passed",
+                        "marker_exists": True,
+                        "launch_policy": launch_policy,
+                        "launch_policy_sha256": launch_policy_sha,
+                        "contract_verification": {
+                            "status": "executed",
+                            "first_shell_command_matches_worker_command": True,
+                            "worker_command_seen": True,
+                            "summary_exists": True,
+                            "tools_before_first_shell": [],
+                        },
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            binding = {
+                "path": "target/harness/opencode-preflight-report.json",
+                "sha256": sha256_file(preflight_path),
+                "status": "passed",
+                "contract_status": "executed",
+                "run_id": "preflight-run",
+                "launch_policy": launch_policy,
+                "launch_policy_sha256": launch_policy_sha,
+            }
+
+            with self.assertRaisesRegex(ValueError, "opencode_model_availability is required"):
+                judge_validator.validate_opencode_preflight_binding(
+                    binding,
+                    "opencode_agent_runtime.opencode_preflight_report",
+                    repo_root=repo_root,
+                )
+
+    def test_judge_validator_rejects_resume_replay_with_non_glm_preflight_model(self) -> None:
+        worker = {
+            "worker_id": "worker-001",
+            "opencode_preflight_report": {
+                "path": "target/harness/opencode-preflight-report.json",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": None,
+                    "opencode_agent": None,
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": True,
+                },
+            },
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-preflight-report",
+            "target/harness/opencode-preflight-report.json",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "--opencode-model must be GLM-5.1"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
     def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]

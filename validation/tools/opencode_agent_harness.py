@@ -2491,6 +2491,9 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
     opencode_command = policy.get("opencode_command")
     if not isinstance(opencode_command, str) or not opencode_command:
         missing.append("opencode_preflight_report.launch_policy.opencode_command")
+    opencode_model = policy.get("opencode_model")
+    if opencode_model != COMPETITION_OPENCODE_MODEL:
+        missing.append("opencode_preflight_report.launch_policy.opencode_model")
     if not isinstance(policy.get("opencode_skip_permissions"), bool):
         missing.append("opencode_preflight_report.launch_policy.opencode_skip_permissions")
     runtime_env = preflight.get("opencode_runtime_env")

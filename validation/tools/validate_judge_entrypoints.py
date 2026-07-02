@@ -1932,6 +1932,24 @@ def validate_opencode_preflight_binding(
                 raise ValueError(f"{label}.contract_verification.{field} must be true")
         if verification.get("tools_before_first_shell") != []:
             raise ValueError(f"{label}.contract_verification.tools_before_first_shell must be []")
+        availability = require_object(
+            preflight_payload.get("opencode_model_availability"),
+            f"{label}.opencode_model_availability is required",
+        )
+        if availability.get("status") != "available":
+            raise ValueError(f"{label}.opencode_model_availability.status must be available")
+        if availability.get("model_listed") is not True:
+            raise ValueError(f"{label}.opencode_model_availability.model_listed must be true")
+        if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+            raise ValueError(
+                f"{label}.opencode_model_availability.required_model must be {COMPETITION_OPENCODE_MODEL}"
+            )
+        if availability.get("opencode_command") != COMPETITION_OPENCODE_COMMAND:
+            raise ValueError(
+                f"{label}.opencode_model_availability.opencode_command must be {COMPETITION_OPENCODE_COMMAND}"
+            )
+        if int(availability.get("process_returncode", -1)) != 0:
+            raise ValueError(f"{label}.opencode_model_availability.process_returncode must be 0")
     return result
 
 
@@ -2850,6 +2868,16 @@ def validate_resume_manifest_replay_command(
         if flags.get("--opencode-preflight-report") != preflight["path"]:
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} --opencode-preflight-report must match opencode_preflight_report.path"
+            )
+        if flags.get("--opencode-model") != COMPETITION_OPENCODE_MODEL:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} --opencode-model must be {COMPETITION_OPENCODE_MODEL}"
+            )
+        policy = preflight.get("launch_policy")
+        if not isinstance(policy, dict) or policy.get("opencode_model") != COMPETITION_OPENCODE_MODEL:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} opencode_preflight_report.launch_policy.opencode_model "
+                f"must be {COMPETITION_OPENCODE_MODEL}"
             )
     for field in ("assignment_path", "request_path", "summary_path", "report_path"):
         expected = worker.get(field)
