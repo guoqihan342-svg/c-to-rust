@@ -19,6 +19,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -4444,15 +4445,22 @@ def execute_merge_plan(
     stdout_path = logs_dir / "run-plan-merge.stdout.log"
     stderr_path = logs_dir / "run-plan-merge.stderr.log"
     try:
-        completed = command_runner(
-            argv,
-            cwd=repo_root,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            timeout=timeout_seconds,
-        )
+        if command_runner is subprocess.run:
+            completed = run_captured_process_with_timeout(
+                argv,
+                cwd=repo_root,
+                timeout_seconds=timeout_seconds,
+            )
+        else:
+            completed = command_runner(
+                argv,
+                cwd=repo_root,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout_seconds,
+            )
     except subprocess.TimeoutExpired as exc:
         completed = completed_process_from_timeout(argv, exc, timeout_seconds)
     except OSError as exc:
@@ -4708,6 +4716,68 @@ def completed_process_timed_out(completed: subprocess.CompletedProcess[str]) -> 
     return int(completed.returncode) == PROCESS_TIMEOUT_EXIT_CODE
 
 
+def kill_process_tree(process: subprocess.Popen[str]) -> None:
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            return
+        except (OSError, ProcessLookupError):
+            pass
+    try:
+        process.kill()
+    except OSError:
+        pass
+
+
+def run_captured_process_with_timeout(
+    argv: list[str],
+    *,
+    cwd: Path,
+    timeout_seconds: int,
+    env: dict[str, str] | None = None,
+    popen_factory: Any = subprocess.Popen,
+    process_tree_killer: Any = kill_process_tree,
+) -> subprocess.CompletedProcess[str]:
+    popen_kwargs: dict[str, Any] = {
+        "cwd": cwd,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "env": env,
+    }
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        popen_kwargs["start_new_session"] = True
+    process = popen_factory(argv, **popen_kwargs)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        return subprocess.CompletedProcess(argv, int(process.returncode), stdout=stdout, stderr=stderr)
+    except subprocess.TimeoutExpired as exc:
+        process_tree_killer(process)
+        try:
+            process.communicate(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return completed_process_from_timeout(argv, exc, timeout_seconds)
+
+
 def run_worker_process_once(
     *,
     argv: list[str],
@@ -4717,6 +4787,13 @@ def run_worker_process_once(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
+        if command_runner is subprocess.run:
+            return run_captured_process_with_timeout(
+                argv,
+                cwd=repo_root,
+                timeout_seconds=timeout_seconds,
+                env=env,
+            )
         return command_runner(
             argv,
             cwd=repo_root,
@@ -5453,16 +5530,24 @@ def run_opencode_preflight(
     )
     started = time.monotonic()
     try:
-        completed = command_runner(
-            argv,
-            cwd=repo_root,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            timeout=timeout_seconds,
-            env=opencode_process_env,
-        )
+        if command_runner is subprocess.run:
+            completed = run_captured_process_with_timeout(
+                argv,
+                cwd=repo_root,
+                timeout_seconds=timeout_seconds,
+                env=opencode_process_env,
+            )
+        else:
+            completed = command_runner(
+                argv,
+                cwd=repo_root,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout_seconds,
+                env=opencode_process_env,
+            )
     except subprocess.TimeoutExpired as exc:
         completed = completed_process_from_timeout(argv, exc, timeout_seconds)
     except OSError as exc:

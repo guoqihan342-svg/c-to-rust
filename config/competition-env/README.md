@@ -56,6 +56,7 @@
 - OpenCode 诊断脱敏：worker repair diagnostics 在写入 repair hint、agent index、resume manifest 和 judge evidence 前，会把 stdout/stderr/python traceback 中的 Windows、WSL、Linux 本机绝对路径替换为 `<local-absolute-path>`；路径治理失败会作为 harness 证据 fail-closed，而不是进入公开发布包。
 - `review-checklists/`：milestone/release review gate 输入目录；`flashdb-harness-internal-review.json` 记录 harness architecture、unsafe ledger、coverage matrix、真实切片证据、公开 claim boundary 和已知拒绝项的人工 review 覆盖。`milestone_release_report.py --review-checklist ...` 会把它作为 release readiness 输入；`judge_demo.py --review-checklist ...` 会在 out-root 下生成 `summary/milestone-review-checklist.json` 副本并由 `harness/judge-evidence-index.json` 绑定原始输入与副本；review checklist 不是 semantic gate。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计；OpenCode preflight report 必须同时匹配当前 `run_id` 和 launch policy，旧 run 的 preflight 不可复用。
+- Windows/OpenCode preflight 已知状态：一次本机 focused `opencode_multi_worker_evaluate_profile` 运行曾卡在 Windows/OpenCode preflight 阶段并被人工终止；这不是 passed preflight，也不会生成可复用或可发布的本地 OpenCode safety-transform attempt artifact。下一步必须先依赖 harness 进程树 timeout/cleanup 重新跑真实 smoke/OpenCode entrypoint，或转到 Linux/CI runner 复现；该事项只是 runtime/reproduction blocker，不是 semantic gate，也不改变 `translation_coverage_numerator`。
 
 ## Clang 策略：vendored 本地分发
 

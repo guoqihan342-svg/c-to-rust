@@ -5451,6 +5451,52 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertIn("partial stderr", completed.stderr)
         self.assertIn("timed out after 7 seconds", completed.stderr)
 
+    def test_run_captured_process_with_timeout_kills_process_tree(self) -> None:
+        seen_kwargs: dict[str, object] = {}
+        killed_pids: list[int] = []
+
+        class HungProcess:
+            pid = 4321
+            returncode = None
+
+            def communicate(self, timeout: int | None = None) -> tuple[str, str]:
+                raise subprocess.TimeoutExpired(
+                    ["opencode", "run"],
+                    timeout,
+                    output="partial stdout",
+                    stderr="partial stderr",
+                )
+
+        def popen_factory(argv: list[str], **kwargs: object) -> HungProcess:
+            seen_kwargs.update(kwargs)
+            return HungProcess()
+
+        def kill_process_tree(process: HungProcess) -> None:
+            killed_pids.append(process.pid)
+            process.returncode = -9
+
+        completed = harness.run_captured_process_with_timeout(
+            ["opencode", "run"],
+            cwd=REPO_ROOT,
+            env={"OPENCODE_CONFIG_HOME": "isolated"},
+            timeout_seconds=3,
+            popen_factory=popen_factory,
+            process_tree_killer=kill_process_tree,
+        )
+
+        self.assertEqual(killed_pids, [4321])
+        self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
+        self.assertTrue(seen_kwargs["text"])
+        self.assertEqual(seen_kwargs["encoding"], "utf-8")
+        self.assertEqual(seen_kwargs["errors"], "replace")
+        self.assertIs(seen_kwargs["stdout"], subprocess.PIPE)
+        self.assertIs(seen_kwargs["stderr"], subprocess.PIPE)
+        self.assertEqual(seen_kwargs["env"], {"OPENCODE_CONFIG_HOME": "isolated"})
+        self.assertEqual(completed.returncode, 124)
+        self.assertIn("partial stdout", completed.stdout)
+        self.assertIn("partial stderr", completed.stderr)
+        self.assertIn("timed out after 3 seconds", completed.stderr)
+
     def test_run_worker_process_once_real_subprocess_timeout(self) -> None:
         started_at = time.monotonic()
 
@@ -5466,6 +5512,50 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 124)
         self.assertEqual(completed.stdout, "")
         self.assertIn("timed out after 1 seconds", completed.stderr)
+
+    def test_run_captured_process_with_timeout_stops_child_holding_pipes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat = Path(tmp) / "child-heartbeat.txt"
+            child_code = (
+                "import pathlib, sys, time\n"
+                "path = pathlib.Path(sys.argv[1])\n"
+                "for idx in range(80):\n"
+                "    path.write_text(str(idx), encoding='utf-8')\n"
+                "    print(f'child heartbeat {idx}', flush=True)\n"
+                "    time.sleep(0.1)\n"
+            )
+            parent_code = (
+                "import os, subprocess, sys, time\n"
+                "heartbeat = sys.argv[1]\n"
+                "child_code = sys.argv[2]\n"
+                "subprocess.Popen(\n"
+                "    [sys.executable, '-B', '-c', child_code, heartbeat],\n"
+                "    stdout=sys.stdout,\n"
+                "    stderr=sys.stderr,\n"
+                "    close_fds=False,\n"
+                ")\n"
+                "deadline = time.time() + 3\n"
+                "while not os.path.exists(heartbeat) and time.time() < deadline:\n"
+                "    time.sleep(0.05)\n"
+                "print('parent ready', flush=True)\n"
+                "time.sleep(30)\n"
+            )
+
+            started_at = time.monotonic()
+            completed = harness.run_captured_process_with_timeout(
+                [sys.executable, "-B", "-c", parent_code, str(heartbeat), child_code],
+                cwd=REPO_ROOT,
+                timeout_seconds=1,
+            )
+
+            elapsed = time.monotonic() - started_at
+            self.assertLess(elapsed, 7.0)
+            self.assertEqual(completed.returncode, 124)
+            self.assertTrue(heartbeat.exists())
+            first_heartbeat = heartbeat.read_text(encoding="utf-8")
+            time.sleep(0.6)
+            self.assertEqual(heartbeat.read_text(encoding="utf-8"), first_heartbeat)
+            self.assertIn("timed out after 1 seconds", completed.stderr)
 
     def test_opencode_preflight_timeout_records_124_and_logs(self) -> None:
         with temp_repo_dir() as tmp:
@@ -5495,6 +5585,37 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             stderr = (REPO_ROOT / report["logs"]["stderr"]).read_text(encoding="utf-8")
             self.assertIn("agent hung", stderr)
             self.assertIn("timed out after 9 seconds", stderr)
+
+    def test_opencode_preflight_default_runner_uses_process_tree_timeout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+            seen_kwargs: dict[str, object] = {}
+
+            def captured_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                return subprocess.CompletedProcess(
+                    argv,
+                    124,
+                    stdout="",
+                    stderr="timed out after 5 seconds\n",
+                )
+
+            with patch.object(harness, "run_captured_process_with_timeout", side_effect=captured_runner) as runner:
+                result = harness.run_opencode_preflight(
+                    out_root=out_root,
+                    run_id="preflight-run",
+                    timeout_seconds=5,
+                    repo_root=REPO_ROOT,
+                )
+
+            runner.assert_called_once()
+            self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
+            self.assertEqual(seen_kwargs["timeout_seconds"], 5)
+            self.assertIn("XDG_CONFIG_HOME", seen_kwargs["env"])
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["root_cause_key"], "process_timeout")
 
     def test_run_worker_timeout_writes_blocked_summary_and_repair_hint(self) -> None:
         with temp_repo_dir() as tmp:
@@ -5579,6 +5700,45 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             stderr = (out_root / "harness" / "run-plan-merge.stderr.log").read_text(encoding="utf-8")
             self.assertIn("merge stderr", stderr)
             self.assertIn("timed out after 11 seconds", stderr)
+
+    def test_execute_merge_plan_default_runner_uses_process_tree_timeout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-timeout",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            seen_kwargs: dict[str, object] = {}
+
+            def captured_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                return subprocess.CompletedProcess(
+                    argv,
+                    124,
+                    stdout="",
+                    stderr="timed out after 13 seconds\n",
+                )
+
+            with patch.object(harness, "run_captured_process_with_timeout", side_effect=captured_runner) as runner:
+                result = harness.execute_merge_plan(
+                    db_path=db_path,
+                    run_id="run-timeout",
+                    out_root=out_root,
+                    merge_plan={"argv": ["python3", "-B", "validation/tools/run_competition.py"]},
+                    timeout_seconds=13,
+                    repo_root=REPO_ROOT,
+                )
+
+            runner.assert_called_once()
+            self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
+            self.assertEqual(seen_kwargs["timeout_seconds"], 13)
+            self.assertIsNone(seen_kwargs.get("env"))
+            self.assertEqual(result["exit_code"], 124)
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["root_cause_key"], "process_timeout")
 
     def test_opencode_database_locked_matches_equivalent_sqlite_busy_signals(self) -> None:
         for stderr in [
