@@ -1921,6 +1921,232 @@ def opencode_models_output_mentions_required_model(stdout: str, required_model: 
     return False
 
 
+def shell_command_line(argv: list[Any]) -> str:
+    return shlex.join([str(item) for item in argv])
+
+
+def normalize_command_for_contract(command: str) -> str:
+    return " ".join(command.strip().split())
+
+
+def shell_argv_for_contract(command: str) -> list[str]:
+    try:
+        return shlex.split(command, posix=True)
+    except ValueError:
+        return []
+
+
+def command_matches_for_contract(observed_command: str, expected_command: str) -> bool:
+    if normalize_command_for_contract(observed_command) == normalize_command_for_contract(expected_command):
+        return True
+    observed_argv = shell_argv_for_contract(observed_command)
+    expected_argv = shell_argv_for_contract(expected_command)
+    return bool(observed_argv) and observed_argv == expected_argv
+
+
+def opencode_session_events(session_evidence: dict[str, Any]) -> list[Any]:
+    events = session_evidence.get("session_events")
+    if isinstance(events, list):
+        return events
+    session = session_evidence.get("session")
+    if isinstance(session, list):
+        return session
+    if isinstance(session, dict):
+        if "part" in session or "type" in session:
+            return [session]
+        events = session.get("events")
+        if isinstance(events, list):
+            return events
+    return []
+
+
+def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    tools: list[dict[str, Any]] = []
+    for event in opencode_session_events(session_evidence):
+        if not isinstance(event, dict):
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        tool = str(part.get("tool", "")).lower().strip()
+        if not tool:
+            continue
+        command = ""
+        workdir = ""
+        state = part.get("state")
+        if isinstance(state, dict):
+            tool_input = state.get("input")
+            if isinstance(tool_input, dict):
+                raw_command = tool_input.get("command") or tool_input.get("cmd")
+                if isinstance(raw_command, str):
+                    command = raw_command.strip()
+                raw_workdir = tool_input.get("workdir") or tool_input.get("cwd")
+                if isinstance(raw_workdir, str):
+                    workdir = raw_workdir.strip()
+        tools.append(
+            {
+                "tool": tool,
+                "command": command,
+                "workdir": workdir,
+                "is_shell_command": tool in {"bash", "shell", "cmd", "powershell"} and bool(command),
+            }
+        )
+    return tools
+
+
+def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[str]:
+    commands: list[str] = []
+    for item in extract_opencode_tool_trace(session_evidence):
+        if item.get("is_shell_command") and isinstance(item.get("command"), str):
+            commands.append(str(item["command"]))
+    return commands
+
+
+def opencode_workdir_matches_repo_root(workdir: str, *, repo_root: Path) -> bool:
+    if not workdir:
+        return True
+    try:
+        return Path(workdir).resolve() == repo_root.resolve()
+    except OSError:
+        return False
+
+
+def recompute_opencode_contract_execution(
+    *,
+    session_evidence: dict[str, Any],
+    worker_command: list[Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    expected_worker_command_line = shell_command_line(worker_command)
+    tool_trace = extract_opencode_tool_trace(session_evidence)
+    executed_shell_commands = extract_opencode_shell_commands(session_evidence)
+    exact_worker_command_seen = any(
+        command_matches_for_contract(command, expected_worker_command_line) for command in executed_shell_commands
+    )
+    first_shell_command = executed_shell_commands[0] if executed_shell_commands else ""
+    first_tool_name = str(tool_trace[0]["tool"]) if tool_trace else ""
+    first_shell_index = next((index for index, item in enumerate(tool_trace) if item.get("is_shell_command")), None)
+    first_shell_tool_name = str(tool_trace[first_shell_index]["tool"]) if first_shell_index is not None else ""
+    first_shell_workdir = str(tool_trace[first_shell_index].get("workdir", "")) if first_shell_index is not None else ""
+    tools_before_first_shell = (
+        [str(item["tool"]) for item in tool_trace[:first_shell_index]]
+        if first_shell_index is not None
+        else [str(item["tool"]) for item in tool_trace[:20]]
+    )
+    first_shell_command_matches_worker_command = (
+        bool(first_shell_command) and command_matches_for_contract(first_shell_command, expected_worker_command_line)
+    )
+    workdir_matches_repo_root = opencode_workdir_matches_repo_root(first_shell_workdir, repo_root=repo_root)
+    status = "not-observed"
+    if executed_shell_commands:
+        status = (
+            "executed"
+            if first_shell_command_matches_worker_command and workdir_matches_repo_root and not tools_before_first_shell
+            else "not-executed"
+        )
+    contract_failure_reason = ""
+    if status == "not-observed":
+        contract_failure_reason = "no_shell_command_observed"
+    elif status == "not-executed":
+        if tools_before_first_shell:
+            contract_failure_reason = "tool_before_first_shell_command"
+        elif not workdir_matches_repo_root:
+            contract_failure_reason = "opencode_workdir_mismatch"
+        else:
+            contract_failure_reason = (
+                "first_shell_command_mismatch_worker_command_seen_later"
+                if exact_worker_command_seen
+                else "first_shell_command_mismatch"
+            )
+    return {
+        "expected_worker_command_line": expected_worker_command_line,
+        "expected_summary_path": repo_relative(summary_path, repo_root),
+        "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
+        "executed_shell_command_count": len(executed_shell_commands),
+        "executed_shell_commands": executed_shell_commands[:20],
+        "first_tool_name": first_tool_name,
+        "first_shell_command": first_shell_command,
+        "first_shell_tool_name": first_shell_tool_name,
+        "first_shell_workdir_status": "repo_root" if workdir_matches_repo_root else "non_repo_root",
+        "expected_workdir_status": "repo_root",
+        "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
+        "first_shell_workdir_matches_repo_root": workdir_matches_repo_root,
+        "tools_before_first_shell": tools_before_first_shell[:20],
+        "contract_failure_reason": contract_failure_reason,
+        "worker_command_seen": exact_worker_command_seen,
+        "summary_exists": summary_path.exists(),
+        "status": status,
+    }
+
+
+def validate_opencode_contract_recomputed_from_session(
+    *,
+    embedded_verification: dict[str, Any],
+    session_evidence: dict[str, Any],
+    worker_command: list[Any],
+    summary_path: Path,
+    label: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    recomputed = recompute_opencode_contract_execution(
+        session_evidence=session_evidence,
+        worker_command=worker_command,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    reason = recomputed.get("contract_failure_reason") or recomputed.get("status")
+    if recomputed.get("status") != "executed":
+        raise ValueError(
+            f"{label}.contract_verification.status recomputed from opencode_session_evidence "
+            f"must be executed: {reason}"
+        )
+    for field in (
+        "expected_worker_command_line",
+        "expected_summary_path",
+        "expected_worker_command_sha256",
+        "executed_shell_command_count",
+        "executed_shell_commands",
+        "first_shell_command",
+        "first_shell_tool_name",
+        "first_shell_workdir_status",
+        "first_shell_command_matches_worker_command",
+        "first_shell_workdir_matches_repo_root",
+        "tools_before_first_shell",
+        "contract_failure_reason",
+        "worker_command_seen",
+        "summary_exists",
+        "status",
+    ):
+        if field in embedded_verification and embedded_verification.get(field) != recomputed.get(field):
+            raise ValueError(
+                f"{label}.contract_verification.{field} must match recomputed opencode_session_evidence"
+            )
+    if recomputed.get("first_shell_workdir_matches_repo_root") is not True:
+        raise ValueError(f"{label}.contract_verification.first_shell_workdir_matches_repo_root must be true")
+    if recomputed.get("expected_workdir_status") != "repo_root":
+        raise ValueError(f"{label}.contract_verification.expected_workdir_status must be repo_root")
+    if recomputed.get("contract_failure_reason") != "":
+        raise ValueError(f"{label}.contract_verification.contract_failure_reason must be empty")
+    for command in recomputed.get("executed_shell_commands", []):
+        assert_no_local_absolute_path(command)
+    return recomputed
+
+
+def validate_hash_bound_artifact_binding(
+    value: Any,
+    label: str,
+    *,
+    repo_root: Path,
+) -> dict[str, str]:
+    try:
+        return validate_artifact_binding_shape(value, label, repo_root=repo_root)
+    except ValueError as error:
+        if "sha256 mismatch" in str(error):
+            raise ValueError(f"{label} sha256 mismatch") from error
+        raise
+
+
 def validate_opencode_model_probe_log_hashes(
     availability: dict[str, Any],
     label: str,
@@ -1981,6 +2207,11 @@ def validate_opencode_preflight_binding(
         preflight_payload = load_json(repo_path(result["path"], repo_root=repo_root))
         if preflight_payload.get("status") != "passed":
             raise ValueError(f"{label} file status must be passed")
+        if preflight_payload.get("opencode_run_launched") is not True:
+            raise ValueError(f"{label} file opencode_run_launched must be true")
+        process_returncode = preflight_payload.get("process_returncode")
+        if not isinstance(process_returncode, int) or process_returncode != 0:
+            raise ValueError(f"{label} file process_returncode must be 0")
         if preflight_payload.get("marker_exists") is not True:
             raise ValueError(f"{label} file marker_exists must be true")
         if "run_id" in preflight_payload:
@@ -2003,6 +2234,70 @@ def validate_opencode_preflight_binding(
                 raise ValueError(f"{label}.contract_verification.{field} must be true")
         if verification.get("tools_before_first_shell") != []:
             raise ValueError(f"{label}.contract_verification.tools_before_first_shell must be []")
+        handoff_binding = validate_hash_bound_artifact_binding(
+            preflight_payload.get("handoff_contract"),
+            f"{label}.handoff_contract",
+            repo_root=repo_root,
+        )
+        handoff_payload = require_object(
+            load_json(repo_path(handoff_binding["path"], repo_root=repo_root)),
+            f"{label}.handoff_contract file",
+        )
+        if handoff_payload.get("runner_kind") != "opencode-preflight":
+            raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-preflight")
+        if handoff_payload.get("run_id") != result.get("run_id"):
+            raise ValueError(f"{label}.handoff_contract.run_id must match preflight run_id")
+        handoff_policy = validate_opencode_launch_policy_binding(
+            handoff_payload.get("launch_policy"),
+            handoff_payload.get("launch_policy_sha256"),
+            f"{label}.handoff_contract",
+        )
+        if handoff_policy != launch_policy:
+            raise ValueError(f"{label}.handoff_contract.launch_policy must match preflight launch_policy")
+        worker_command = handoff_payload.get("worker_command")
+        if not isinstance(worker_command, list) or not worker_command or not all(
+            isinstance(item, str) and item for item in worker_command
+        ):
+            raise ValueError(f"{label}.handoff_contract.worker_command must be a non-empty string list")
+        worker_command_line = require_string(
+            handoff_payload.get("worker_command_line"),
+            f"{label}.handoff_contract.worker_command_line",
+        )
+        if worker_command_line != shell_command_line(worker_command):
+            raise ValueError(f"{label}.handoff_contract.worker_command_line must match worker_command")
+        worker_command_sha256 = validate_sha256_hex(
+            handoff_payload.get("worker_command_sha256"),
+            f"{label}.handoff_contract.worker_command_sha256",
+        )
+        if worker_command_sha256 != sha256_text(worker_command_line):
+            raise ValueError(f"{label}.handoff_contract.worker_command_sha256 must match worker_command_line")
+        expected_marker_path = require_string(
+            handoff_payload.get("expected_marker_path"),
+            f"{label}.handoff_contract.expected_marker_path",
+        )
+        marker_path_text = require_string(preflight_payload.get("marker_path"), f"{label}.marker_path")
+        if marker_path_text != expected_marker_path:
+            raise ValueError(f"{label}.marker_path must match handoff_contract.expected_marker_path")
+        marker_path = repo_path(marker_path_text, repo_root=repo_root)
+        if not marker_path.is_file():
+            raise ValueError(f"{label}.marker_path must exist")
+        session_binding = validate_hash_bound_artifact_binding(
+            preflight_payload.get("opencode_session_evidence"),
+            f"{label}.opencode_session_evidence",
+            repo_root=repo_root,
+        )
+        session_evidence = require_object(
+            load_json(repo_path(session_binding["path"], repo_root=repo_root)),
+            f"{label}.opencode_session_evidence file",
+        )
+        validate_opencode_contract_recomputed_from_session(
+            embedded_verification=verification,
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=marker_path,
+            label=label,
+            repo_root=repo_root,
+        )
         availability = require_object(
             preflight_payload.get("opencode_model_availability"),
             f"{label}.opencode_model_availability is required",

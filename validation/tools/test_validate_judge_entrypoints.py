@@ -690,8 +690,69 @@ def set_artifact_ref(ref: dict, path: Path, payload: dict | None = None) -> None
 
 def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, launch_policy: dict) -> None:
     base_root = path.parent.parent if path.parent.name == "harness" else path.parent
+    harness_dir = base_root / "harness"
     logs_dir = base_root / "logs"
+    harness_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = harness_dir / "opencode-preflight-marker.json"
+    contract_path = harness_dir / "opencode-preflight-contract.json"
+    session_path = logs_dir / "opencode-preflight-session-evidence.json"
+    marker_command = [
+        "python3",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_relative(marker_path),
+        "--run-id",
+        run_id,
+    ]
+    marker_command_line = shlex.join(marker_command)
+    write_json(
+        marker_path,
+        {
+            "schema_version": 1,
+            "report_kind": "opencode-preflight-marker",
+            "run_id": run_id,
+            "status": "written",
+        },
+    )
+    write_json(
+        contract_path,
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "runner_kind": "opencode-preflight",
+            "expected_marker_path": repo_relative(marker_path),
+            "worker_command": marker_command,
+            "worker_command_line": marker_command_line,
+            "worker_command_sha256": validator.sha256_text(marker_command_line),
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        },
+    )
+    write_json(
+        session_path,
+        {
+            "schema_version": 1,
+            "process_returncode": 0,
+            "parsed": True,
+            "format": "jsonl",
+            "session_events": [
+                {
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": marker_command_line,
+                                "workdir": str(REPO_ROOT),
+                            }
+                        },
+                    }
+                }
+            ],
+        },
+    )
     model_stdout = "GLM-5.1\n"
     model_stderr = ""
     model_stdout_path = logs_dir / "opencode-models.stdout.log"
@@ -701,10 +762,21 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
     preflight_payload = {
         "report_kind": "opencode-preflight-report",
         "status": "passed",
+        "process_returncode": 0,
         "marker_exists": True,
+        "marker_path": repo_relative(marker_path),
+        "opencode_run_launched": True,
         "run_id": run_id,
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "handoff_contract": {
+            "path": repo_relative(contract_path),
+            "sha256": validator.sha256_file(contract_path),
+        },
+        "opencode_session_evidence": {
+            "path": repo_relative(session_path),
+            "sha256": validator.sha256_file(session_path),
+        },
         "opencode_model_availability": {
             "status": "available",
             "opencode_command": "opencode",
@@ -721,10 +793,22 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
         },
         "contract_verification": {
             "status": "executed",
+            "expected_worker_command_line": marker_command_line,
+            "expected_summary_path": repo_relative(marker_path),
+            "expected_worker_command_sha256": validator.sha256_text(marker_command_line),
+            "executed_shell_command_count": 1,
+            "executed_shell_commands": [marker_command_line],
+            "first_tool_name": "bash",
+            "first_shell_command": marker_command_line,
+            "first_shell_tool_name": "bash",
+            "first_shell_workdir_status": "repo_root",
+            "expected_workdir_status": "repo_root",
             "first_shell_command_matches_worker_command": True,
+            "first_shell_workdir_matches_repo_root": True,
             "worker_command_seen": True,
             "summary_exists": True,
             "tools_before_first_shell": [],
+            "contract_failure_reason": "",
         },
     }
     write_json(path, preflight_payload)
@@ -741,6 +825,33 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
     payload["opencode_agent_runtime"]["opencode_preflight_report"] = json.loads(json.dumps(binding))
     for worker in payload["opencode_agent_runtime"]["workers"]:
         worker["opencode_preflight_report"] = json.loads(json.dumps(binding))
+
+
+def refresh_all_opencode_preflight_ref_hashes(payload: dict, path: Path) -> None:
+    new_sha = validator.sha256_file(path)
+    for ref in (
+        payload["evidence_artifact_refs"]["opencode_preflight_report"],
+        payload["opencode_agent_runtime"]["opencode_preflight_report"],
+        payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"],
+    ):
+        ref["sha256"] = new_sha
+
+
+def rewrite_preflight_session_evidence(preflight_path: Path, session_payload: dict) -> dict:
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    session_ref = preflight_payload["opencode_session_evidence"]
+    session_path = REPO_ROOT / session_ref["path"]
+    write_json(session_path, session_payload)
+    session_ref["sha256"] = validator.sha256_file(session_path)
+    write_json(preflight_path, preflight_payload)
+    return preflight_payload
+
+
+def preflight_marker_command_line(preflight_path: Path) -> str:
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    contract_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+    contract_payload = json.loads(contract_path.read_text(encoding="utf-8"))
+    return contract_payload["worker_command_line"]
 
 
 def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, profile_payload: dict) -> None:
@@ -2462,6 +2573,206 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]["sha256"] = new_sha
 
         with self.assertRaisesRegex(ValueError, "opencode_model_availability.logs.stdout must list GLM-5.1"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_without_opencode_launch(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-launch-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_payload["opencode_run_launched"] = False
+        write_json(preflight_path, preflight_payload)
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_run_launched must be true"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_without_session_evidence(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-no-session-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_payload.pop("opencode_session_evidence")
+        write_json(preflight_path, preflight_payload)
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_session_evidence"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_session_evidence_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-session-drift-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        session_path = REPO_ROOT / preflight_payload["opencode_session_evidence"]["path"]
+        session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+        session_payload["session_events"] = []
+        write_json(session_path, session_payload)
+
+        with self.assertRaisesRegex(ValueError, "opencode_session_evidence sha256 mismatch"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_session_without_shell_call(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-no-shell-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        rewrite_preflight_session_evidence(
+            preflight_path,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [],
+            },
+        )
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, "contract_verification.status recomputed from opencode_session_evidence must be executed"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_first_shell_mismatch_even_if_marker_runs_later(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-late-marker-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        marker_command_line = preflight_marker_command_line(preflight_path)
+        rewrite_preflight_session_evidence(
+            preflight_path,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": "python3 -B -c 'print(1)'", "workdir": str(REPO_ROOT)}},
+                        }
+                    },
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": marker_command_line, "workdir": str(REPO_ROOT)}},
+                        }
+                    },
+                ],
+            },
+        )
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, "first_shell_command_mismatch_worker_command_seen_later"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_non_repo_workdir(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-workdir-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        marker_command_line = preflight_marker_command_line(preflight_path)
+        rewrite_preflight_session_evidence(
+            preflight_path,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": marker_command_line, "workdir": str(REPO_ROOT.parent)}},
+                        }
+                    }
+                ],
+            },
+        )
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_workdir_mismatch"):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
