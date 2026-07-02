@@ -49,7 +49,7 @@ cd c-to-rust
 If working on an existing checkout, ensure you are on the correct branch:
 
 ```bash
-git checkout codex/agent-harness-flashdb-mvp
+git checkout codex/flashdb-rust-skeleton
 ```
 
 ## 3. Activate the Competition Environment

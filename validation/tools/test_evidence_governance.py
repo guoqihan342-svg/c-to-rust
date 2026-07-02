@@ -291,6 +291,32 @@ class EvidenceGovernanceTests(unittest.TestCase):
             self.assertEqual(report["portability"]["claim_anchor_issue_count"], 0)
             self.assertEqual(report["portability"]["diagnostic_host_metadata_count"], 2)
 
+    def test_c2rust_selected_command_path_is_diagnostic_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
+            root = Path(tmp)
+            self._write_json(
+                root / "validation/evidence/flashdb/auto-translation/example/l3-example-c2rust-baseline-manifest.json",
+                {
+                    "status": "generated",
+                    "correctness_role": "candidate_context_only",
+                    "selected_command": {
+                        "name": "c2rust-transpile",
+                        "path": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
+                        "source": "env:C2RUST_COMMAND",
+                    },
+                },
+            )
+
+            report = evidence_governance.build_report(root, evidence_root=Path("validation/evidence"))
+
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["portability"]["claim_anchor_issue_count"], 0)
+            self.assertEqual(report["portability"]["diagnostic_host_metadata_count"], 1)
+            self.assertEqual(
+                report["portability"]["diagnostic_host_metadata"][0]["json_path"],
+                "$.selected_command.path",
+            )
+
     def test_core_ci_runs_evidence_governance_tests(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
 

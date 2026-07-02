@@ -98,8 +98,8 @@
 
 ## 当前 Harness MVP 状态
 
-- 当前分支：`codex/agent-harness-flashdb-mvp`
-- OpenCode harness 已有最小执行器：`python -m validation.tools.opencode_agent_harness run-worker --mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 worker summary 存在时自动入 SQLite ledger。
+- 当前分支：`codex/flashdb-rust-skeleton`
+- OpenCode harness 已有最小执行器：`python3 -B -m validation.tools.opencode_agent_harness run-worker --mode deterministic` 调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 worker summary 存在时自动入 SQLite ledger。
 - OpenCode 包装入口已接好：`run-worker --mode opencode --opencode-variant max` 执行同一份 assignment request；preflight、run-plan、worker report 和 handoff contract 会绑定结构化 launch policy（command/model/agent/variant/skip-permissions），缺失或漂移会在启动 OpenCode 前 fail-closed；OpenCode/LLM 输出仍不是 evidence。
 - accepted evidence 复用链路已接好：`assign-slice --reuse-accepted-evidence --accepted-evidence-root validation/evidence --slice-spec <maintained-spec>` 可在 worker 隔离目录下验证已提交 evidence。
 - 评委 before/after demo 入口：`docs/c2rust-migration-agent/judge-demo.md`。首选真实 FlashDB profile 生成 `target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json`，并绑定 competition summary、workflow metrics、before/after exhibit、milestone report 与复制后的 `target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json` 的路径和 sha256；保底 demo profile 仍生成 `target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json` 和 `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`。二者展示 baseline unsafe Rust → final safe Rust、accepted patch、oracle evidence、unsafe reduction，以及 planner/worker/verifier/repairer/reporter 五阶段 contract；review gate 只解除 release readiness 的 review blocker，不是 semantic acceptance gate；accepted-evidence before/after artifact 不增加 `translation_coverage_numerator`。
@@ -165,7 +165,7 @@ python validation/tools/validate_auto_translation_evidence.py --target-id flashd
 python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
 
 # Harness worker accepted-evidence 复用 smoke
-python -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
+python3 -B -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
 
 # 评委 before/after demo（首选真实 FlashDB 路径）
 python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
@@ -214,6 +214,5 @@ openspec validate --all --strict
 
 ## 代码分支
 
-- 当前文档更新分支：`codex/agent-harness-flashdb-mvp`
-- 主开发基线分支：`codex/flashdb-rust-skeleton`
+- 当前主开发分支：`codex/flashdb-rust-skeleton`
 - GitHub: `https://github.com/guoqihan342-svg/c-to-rust`

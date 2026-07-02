@@ -1,7 +1,7 @@
 # c-to-rust Translator Strengthening Analysis
 
 > Date: 2026-06-27
-> Historical analysis based on the `codex/flashdb-rust-skeleton` branch; current maintenance branch is `codex/agent-harness-flashdb-mvp`
+> Historical analysis based on the `codex/flashdb-rust-skeleton` branch; current maintenance branch is `codex/flashdb-rust-skeleton`
 > Chinese primary: `translator-strengthening-analysis.md`
 > Note: this is analysis material, not the canonical backlog; the current global todo source is `../future-vision-and-mvp.md`.
 

@@ -47,7 +47,7 @@
       "FlashDB harness fan-out/fan-in, context/index, merge evidence",
       "real-fdb-calc-crc32 before/after unsafe reduction exhibit"
     ],
-    "baseline_boundary": "reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust baseline output remains skipped",
+    "baseline_boundary": "reviewed unsafe Rust baseline derived from the real C slice signature; C2Rust baseline has generated + compile-only + direct replay observable-passed evidence but remains candidate_context_only / semantic_pass=false",
     "allowed_claims": [
       "FlashDB real-fdb-calc-crc32 before/after safety exhibit with unsafe 2 -> 0 and accepted oracle evidence",
       "Harness planner/worker/verifier/repairer/reporter contract with repair trace and rollback evidence",
@@ -113,11 +113,11 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "c320621e19c889ff55e434b166259dcb78611f132715439ca9ed11fbb672dc7f"
+        "sha256": "9b50b6f343e38b3deee18f683b5cd41fb179769a15222b271d47b39043adfc51"
       },
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "494c23548a63cf8ff0924f61183f3135a7bd091442fc4777e687319228ce24a4"
+        "sha256": "2908a18ba19281e9d41c9f051e1b16f013a5bb4e5d2af879b411fc7ed83d6ce2"
       },
       "review_checklist": {
         "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",

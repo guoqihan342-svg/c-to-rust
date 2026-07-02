@@ -42,7 +42,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 
 绑定的真实 slice 是 `sources/FlashDB/src/fdb_utils.c#fdb_calc_crc32`，commit 为 `f9d0421315c564fb890a1b14eee77b290e0d7bbe`。核心 per-unit unsafe 数字是 `real-fdb-calc-crc32`：baseline unsafe count `2`，final unsafe count `0`，`reduced_by=2`。
 
-边界：baseline 是从真实 C slice signature 派生并人工 review 的 unsafe Rust baseline。C2Rust baseline output remains skipped，因此不能声称该 baseline 来自真实 C2Rust 输出。`generated_draft_semantic_pass=false`，该 exhibit 也不增加 `translation_coverage_numerator`。
+边界：before/after exhibit 当前 baseline 仍是从真实 C slice signature 派生并人工 review 的 unsafe Rust baseline；C2Rust baseline 现在已有 generated + compile-only + direct replay observable-passed evidence，但仍是 `candidate_context_only` / `semantic_pass=false`，不能声称 before/after baseline 来自 verified C2Rust output。`generated_draft_semantic_pass=false`，该 exhibit 也不增加 `translation_coverage_numerator`。
 
 Harness 自愈展示：`flashdb-fdb-utils-before-after` profile 现在声明 `attempt_evidence_policy.mode=baseline_repair_gate`。第 1 轮 worker 产出 baseline unsafe gate 失败 summary，root cause 为 `unsafe_baseline_requires_repair`；第 2 轮必须携带 repair hint，随后复验 accepted safe evidence。`harness/context-pack.json` 和 `harness/agent-index.json` 都索引该 policy 与两轮 attempt timeline。
 

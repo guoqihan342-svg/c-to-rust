@@ -42,7 +42,7 @@ Key FlashDB artifacts:
 
 The bound real slice is `sources/FlashDB/src/fdb_utils.c#fdb_calc_crc32` at commit `f9d0421315c564fb890a1b14eee77b290e0d7bbe`. The core per-unit unsafe number is `real-fdb-calc-crc32`: baseline unsafe count `2`, final unsafe count `0`, `reduced_by=2`.
 
-Boundary: the baseline is a reviewed unsafe Rust baseline derived from the real C slice signature. C2Rust baseline output remains skipped, so do not claim that this baseline came from real C2Rust output. `generated_draft_semantic_pass=false`, and this exhibit still does not increase `translation_coverage_numerator`.
+Boundary: the before/after exhibit baseline is still a reviewed unsafe Rust baseline derived from the real C slice signature. The C2Rust baseline now has generated + compile-only + direct replay observable-passed evidence, but it remains `candidate_context_only` / `semantic_pass=false`; do not claim that the before/after baseline came from a verified C2Rust output. `generated_draft_semantic_pass=false`, and this exhibit still does not increase `translation_coverage_numerator`.
 
 Harness self-repair exhibit: the `flashdb-fdb-utils-before-after` profile now declares `attempt_evidence_policy.mode=baseline_repair_gate`. Worker attempt 1 writes a failed baseline unsafe gate summary with root cause `unsafe_baseline_requires_repair`; attempt 2 must carry the repair hint before revalidating accepted safe evidence. Both `harness/context-pack.json` and `harness/agent-index.json` index this policy and the two-attempt timeline.
 

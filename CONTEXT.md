@@ -6,8 +6,8 @@
 
 ## 当前工作区
 
-- 工作目录：`F:\agent\crustpaper\0625ctr`
-- 当前分支：`codex/agent-harness-flashdb-mvp`
+- 工作目录：`F:\agent\crustpaper\0630`
+- 当前分支：`codex/flashdb-rust-skeleton`
 - 远端仓库：`https://github.com/guoqihan342-svg/c-to-rust.git`
 - 比赛环境默认入口：`config/competition-env/environment.json`
 - 当前全局待办唯一来源：`docs/c2rust-migration-agent/future-vision-and-mvp.md`
@@ -35,6 +35,7 @@
 
 - Candidate generation 不等于 semantic pass；typed IR、C2Rust、LLM 和手写规则都只是候选来源。
 - `real-fdb-calc-crc32` 和 `real-fdb-blob-make` 当前通过的是 L4 accepted-evidence authoritative 语义证据绑定；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`。
+- `real-fdb-calc-crc32` 的真实 C2Rust baseline 已能生成并 compile-only 通过；direct replay evidence 已刷新为 `status=passed` / `observable_replay_pass=true` / `semantic_pass=false`，但 `verified unsafe baseline` 仍正确 blocked 在 `c2rust_bound_gate_refs_not_implemented`，下一步是同一 C2Rust output 的 C oracle/Rust replay/diff/negative diff/unsafe/final 绑定。
 - `fdb_kv_set` 当前只有 source/signature provenance 和 L4 refused/blocked evidence；external callee shim/model/oracle 语义未关闭。
 - OpenCode harness 当前已有 `run-worker --mode deterministic` 最小执行器和 `--mode opencode --opencode-variant max` 包装入口；SQLite 只做调度账本，不能替代落盘 evidence。
 - FlashDB 只是回归用例，不能恢复 FlashDB/crc32 专用 recognizer、模板或特判路径。
@@ -62,4 +63,5 @@ python validation/tools/unsafe_budget.py --max-ratio 0.10
 - 2026-06-28：开始整理文档分类索引，并补核心 translator/validation 注释。
 - 2026-06-29：在 `codex/agent-harness-flashdb-mvp` 分支同步 docs 到当前 harness/FlashDB MVP 状态：`run-worker`、accepted-evidence 复用、`real-fdb-blob-make` L4 accepted evidence、`fdb_kv_set` blocked callee 边界。
 - 2026-07-01：H4 harness 已接入真实 FlashDB `baseline_repair_gate`：`real-fdb-calc-crc32` 第 1 轮产出 baseline unsafe gate 失败证据，root cause 为 `unsafe_baseline_requires_repair`；第 2 轮必须携带 repair hint 并复验 accepted safe evidence。最新验证产物：`target/competition-out-h4-flashdb-context-index-20260701`，其中 `context-pack.json` 和 `agent-index.json` 都索引 `attempt_evidence_policy`。
+- 2026-07-02：结合 `opencode-agent-harness-逐行稳定性审查.md` 复核：审查方向有道理，但当前分支已吸收 timeout、atomic write、portable python、retry cap、SQLite lock、fencing audit、`BEGIN IMMEDIATE` 和 POSIX command contract；H7 只保留为回归门禁。待办主线收敛到 P0-C verified unsafe baseline 和 P0-D safety loop。
 - 保留未跟踪文件：`opencode.json`，除非用户明确要求，不要提交或删除。

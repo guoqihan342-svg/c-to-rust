@@ -49,6 +49,6 @@
     "semantic_claim_source": "accepted_evidence_binding",
     "translation_before_after": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
     "generated_draft_semantic_pass": false,
-    "claim": "real FlashDB fdb_calc_crc32 before/after exhibit; baseline is reviewed unsafe Rust derived from the real C slice signature, while C2Rust baseline output remains skipped"
+    "claim": "real FlashDB fdb_calc_crc32 before/after exhibit; baseline is reviewed unsafe Rust derived from the real C slice signature; C2Rust baseline has generated + compile-only + direct replay observable-passed evidence but remains candidate_context_only / semantic_pass=false"
   }
 }

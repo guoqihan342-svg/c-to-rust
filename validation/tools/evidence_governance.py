@@ -52,6 +52,7 @@ DIAGNOSTIC_SEGMENTS = {
     "host",
     "environment",
     "reference_tree",
+    "selected_command",
     "worker_result_sources",
 }
 DIAGNOSTIC_KEYS = {

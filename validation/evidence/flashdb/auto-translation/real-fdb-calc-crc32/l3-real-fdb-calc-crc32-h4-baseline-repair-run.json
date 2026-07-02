@@ -20,7 +20,7 @@
   },
   "competition_profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-    "sha256": "c320621e19c889ff55e434b166259dcb78611f132715439ca9ed11fbb672dc7f"
+    "sha256": "9b50b6f343e38b3deee18f683b5cd41fb179769a15222b271d47b39043adfc51"
   },
   "environment_profile": {
     "path": "config/competition-env/environment.json",

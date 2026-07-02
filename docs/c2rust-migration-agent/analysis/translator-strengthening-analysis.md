@@ -3,7 +3,7 @@
 # c-to-rust 翻译器加强分析
 
 > 日期：2026-06-27
-> 历史分析基于 `codex/flashdb-rust-skeleton` 分支代码审查；当前维护分支为 `codex/agent-harness-flashdb-mvp`
+> 历史分析基于 `codex/flashdb-rust-skeleton` 分支代码审查；当前维护分支为 `codex/flashdb-rust-skeleton`
 > 英文镜像：`translator-strengthening-analysis.en.md`
 > 说明：本文是分析材料，不是 canonical backlog；当前全局待办只看 `../future-vision-and-mvp.md`。
 

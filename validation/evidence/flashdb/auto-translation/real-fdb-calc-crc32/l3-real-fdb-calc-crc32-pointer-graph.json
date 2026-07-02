@@ -19,7 +19,7 @@
   "context_pack_ref": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-context-pack.json",
   "level": "L3",
   "not_applicable_reason": "slice has no pointer surface",
-  "repo_commit": "4c2ec129195f4c5bb828fd70556519451ea1da21",
+  "repo_commit": "47a155ca9666f16312284b4d2faf6900c23184f8",
   "schema_version": 2,
   "slice_id": "real-fdb-calc-crc32",
   "source_boundary": {

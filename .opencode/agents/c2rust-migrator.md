@@ -9,7 +9,7 @@ Purpose: OpenCode-facing Agent wrapper for the C-to-Rust migration harness.
 Initialize the SQLite harness ledger:
 
 ```bash
-python -m validation.tools.opencode_agent_harness init-run \
+python3 -B -m validation.tools.opencode_agent_harness init-run \
   --run-id <run-id> \
   --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation> \
   --out-root target/competition-out
@@ -18,7 +18,7 @@ python -m validation.tools.opencode_agent_harness init-run \
 Assign a slice to a worker:
 
 ```bash
-python -m validation.tools.opencode_agent_harness assign-slice \
+python3 -B -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
@@ -37,13 +37,13 @@ python -m validation.tools.opencode_agent_harness assign-slice \
 Run one worker request:
 
 ```bash
-python scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
+python3 -B scripts/c2rust-migrator.py --phase migrate --input target/competition-out/harness/assignments/worker-a-request.json
 ```
 
 Record a worker summary:
 
 ```bash
-python -m validation.tools.opencode_agent_harness record-worker-summary \
+python3 -B -m validation.tools.opencode_agent_harness record-worker-summary \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
@@ -53,7 +53,7 @@ python -m validation.tools.opencode_agent_harness record-worker-summary \
 Write a merge plan:
 
 ```bash
-python -m validation.tools.opencode_agent_harness write-merge-plan \
+python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --proof-class <proof-class> \
@@ -63,7 +63,7 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 The merge plan still calls the existing runner:
 
 ```bash
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --worker-summary target/competition-out/workers/worker-a/summary/competition-run-summary.json \
   --out-root target/competition-out \
   --proof-class <proof-class>

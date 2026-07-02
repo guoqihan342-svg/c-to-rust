@@ -2,24 +2,36 @@
   "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
   "commands": [
     {
+      "argv_prefix": [
+        "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile"
+      ],
       "available": true,
+      "configured_command": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
       "name": "c2rust-transpile",
       "path": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
+      "source": "env:C2RUST_COMMAND",
       "version": "transpile 0.22.1",
       "version_status": "OK"
     },
     {
-      "available": true,
+      "available": false,
+      "name": "c2rust-transpile",
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
+    },
+    {
+      "available": false,
       "name": "c2rust",
-      "path": "/mnt/f/agent/c2rust-master/target/release/c2rust",
-      "version": "C2Rust 0.22.1",
-      "version_status": "OK"
+      "path": "",
+      "version": "",
+      "version_status": "NOT_FOUND"
     }
   ],
   "compile": {
     "artifact": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib",
-      "sha256": "9c31a2b135e546da2e94c7de437415b67bd2ac17fbf0777262fbfeb71c33af00",
+      "sha256": "093925a4bc90c4e49ed037f700cba43718230885532eafafbd5e3391fa53ae60",
       "status": "compiled"
     },
     "attempted": true,
@@ -130,9 +142,14 @@
   },
   "schema_version": 1,
   "selected_command": {
+    "argv_prefix": [
+      "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile"
+    ],
     "available": true,
+    "configured_command": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
     "name": "c2rust-transpile",
     "path": "/mnt/f/agent/c2rust-master/target/release/c2rust-transpile",
+    "source": "env:C2RUST_COMMAND",
     "version": "transpile 0.22.1",
     "version_status": "OK"
   },
@@ -157,7 +174,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-01T22:43:54Z"
+    "probed_at": "2026-07-01T23:43:41Z"
   },
   "toolchain_repair": null,
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"

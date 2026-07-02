@@ -108,7 +108,7 @@ Deferred:
 
 ## Operational Commands
 
-Run these commands from repository root `C:\Users\Administrator\Documents\c-to-rust-flashdb`. Some commands are expected interfaces for this change; until schema, translator, and `auto_migrate` work lands, they define the agent contract rather than current availability.
+Run these commands from the current repository root. Some commands are expected interfaces for this change; until schema, translator, and `auto_migrate` work lands, they define the agent contract rather than current availability.
 
 ### OpenSpec Status And Tasks
 

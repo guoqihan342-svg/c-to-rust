@@ -110,7 +110,7 @@ safe promotion 是可审计优化，不是默认猜测。每一次从 raw pointe
 
 ## 运行命令
 
-以下命令从仓库根目录 `C:\Users\Administrator\Documents\c-to-rust-flashdb` 运行。部分命令是本 change 预期新增的接口；在 schema、translator、auto_migrate 并行实现完成前，它们用于 Agent 对齐调用约定。
+以下命令从当前仓库根目录运行。部分命令是本 change 预期新增的接口；在 schema、translator、auto_migrate 并行实现完成前，它们用于 Agent 对齐调用约定。
 
 ### OpenSpec 状态和任务
 

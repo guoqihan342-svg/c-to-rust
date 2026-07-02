@@ -1,0 +1,8 @@
+[package]
+name = "l3_real_fdb_calc_crc32_c2rust_direct_replay"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+l3_real_fdb_calc_crc32_c2rust_baseline_generated = { path = "../l3-real-fdb-calc-crc32-c2rust-baseline-generated" }

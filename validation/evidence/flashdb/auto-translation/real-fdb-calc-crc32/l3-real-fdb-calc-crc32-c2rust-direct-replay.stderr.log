@@ -1,0 +1,14 @@
+warning: the feature `label_break_value` has been stable since 1.65.0 and no longer requires an attribute to enable
+ --> /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/lib.rs:8:12
+  |
+8 | ...re(label_...alue)]
+  |       ^^^^^^...^^^^
+  |
+  = note: `#[warn(stable_features)]` on by default
+
+warning: the feature `raw_ref_op` has been stable since 1.82.0 and no longer requires an attribute to enable
+ --> /mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-generated/lib.rs:9:12
+  |
+9 | ...re(raw_ref_op)]
+  |       ^^^^^^^^^^
+
