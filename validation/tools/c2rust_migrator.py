@@ -50,7 +50,7 @@ def load_request(path: str | PurePosixPath) -> dict[str, Any]:
 
 
 def build_run_competition_argv(request: dict[str, Any]) -> list[str]:
-    argv = ["python3", "-B", RUN_COMPETITION]
+    argv = [sys.executable, "-B", RUN_COMPETITION]
     worker_summaries = request.get("worker_summaries") or []
     slice_specs = request.get("slice_specs") or ([request["slice_spec"]] if request.get("slice_spec") else [])
     if worker_summaries:

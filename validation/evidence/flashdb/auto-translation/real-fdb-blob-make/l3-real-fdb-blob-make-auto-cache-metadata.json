@@ -10,7 +10,7 @@
   },
   "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
   "c2rust_baseline_identity": {
-    "sha256": "c73f4003d90f4fb428cffb60c22c46b22db4bdd2bb0638561900ad84ae05a55a",
+    "sha256": "04d44572534b1114c83c180551b77b5272dc7bdcf3401c019a8ad9326f48ff23",
     "status": "skipped"
   },
   "c_oracle_harness_identity": {
@@ -139,7 +139,7 @@
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "77759d1f8f92c0230e236aebd0c0c6ece9c5ad7324a26685fe3a5c9919b962f1",
+    "sha256": "42b93b0777bb09668cf073bc2d362c03ed0721c0e67b11bc0cdd8c9debcfe484",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {
@@ -174,7 +174,7 @@
   "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "6e98e0a7192e8daea0cc56d53dff791778ba172d9ae8cd3edf852a198ae7aac0",
+    "sha256": "e756d670e59e267c0ad283a606733ebc7f60d33cb3e761d8391c684b29e582df",
     "status": "passed"
   }
 }

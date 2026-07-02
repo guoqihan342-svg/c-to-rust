@@ -100,7 +100,7 @@
     "source_test_inputs": {
       "fixtures": [
         {
-          "hash": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
+          "hash": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b",
           "operation_count": 3,
           "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
           "source_kind": "fixture"

@@ -23,7 +23,7 @@
     "mode": "baseline_repair_gate",
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "eb4c4e991df2a976b4fca1fd8b52af42b9fc12f41944a242f540ccac045be13f"
+      "sha256": "9561a6771564a30740c20b8e43e6ad338253fbde4b713a43b30163ccbe93d4ac"
     }
   },
   "claim_boundary": {
@@ -40,7 +40,7 @@
   },
   "competition_profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-    "sha256": "ad00248c5df76fe439f8153f4cd9e088b20480ed4e1fd0a23ae13a6279ae9d78"
+    "sha256": "824831132187f5312bb9dfc3883eb23922f08f464691f6a74bcee1e5f966123e"
   },
   "environment_profile": {
     "path": "config/competition-env/environment.json",
@@ -110,7 +110,7 @@
   "slice_id": "real-fdb-calc-crc32",
   "source": {
     "path": "sources/FlashDB/src/fdb_utils.c",
-    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+    "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
     "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe"
   },
   "status": "passed",
@@ -201,7 +201,7 @@
     },
     "oracle_evidence": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-      "sha256": "3b98fdefe8465e475f756a1aa8f8c14eeb76999c08e6f38e6ea2d509461af0dc"
+      "sha256": "4a18fe983cdd5b02c731f407484ed31703d3c79c16b9215edbc0e1aef1d9cfa3"
     },
     "raw_unsafe_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
@@ -221,7 +221,7 @@
     },
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "eb4c4e991df2a976b4fca1fd8b52af42b9fc12f41944a242f540ccac045be13f"
+      "sha256": "9561a6771564a30740c20b8e43e6ad338253fbde4b713a43b30163ccbe93d4ac"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-before-after-unsafe-scan.json",

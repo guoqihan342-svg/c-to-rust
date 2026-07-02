@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -113,6 +114,33 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             )
             self.assertFalse(summary["milestone_release_report"]["semantic_acceptance_claim"])
             self.assertNotIn("slices", summary)
+
+    def test_lf_stable_sha256_normalizes_crlf_for_jsonl_artifacts(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            artifact = Path(tmp) / "commands.jsonl"
+            artifact.write_bytes(b'{"step":"one"}\r\n{"step":"two"}\r\n')
+
+            expected = hashlib.sha256(b'{"step":"one"}\n{"step":"two"}\n').hexdigest()
+            self.assertEqual(module.sha256_lf_stable(artifact), expected)
+
+    def test_smoke_summary_command_log_sha256_uses_lf_stable_hash(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-hash-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_log = out_root / "logs" / "commands.jsonl"
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["command_log"]["sha256"], module.sha256_lf_stable(command_log))
 
     def test_smoke_runner_requires_explicit_confirmation_for_competition_exact(self) -> None:
         module = load_smoke_module()
@@ -492,7 +520,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
 
         self.assertIn("validation.tools.test_run_competition_smoke", workflow)
         self.assertIn("validation.tools.test_verify_vendored_clang", workflow)
-        self.assertIn("python validation/tools/run_competition_smoke.py", workflow)
+        self.assertIn("python3 -B validation/tools/run_competition_smoke.py", workflow)
 
     def test_clang_source_detects_windows_project_local_clang_exe(self) -> None:
         module = load_smoke_module()

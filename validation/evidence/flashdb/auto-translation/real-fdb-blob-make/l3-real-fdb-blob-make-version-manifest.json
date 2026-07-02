@@ -2,10 +2,10 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-    "fixture_sha256": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f",
+    "fixture_sha256": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
+      "c_oracle": "d2d84fc1f7ce28877e59f5d99c632ff1c64ea4e4b2b348bc45d9f877d65564d8",
       "diff": "dfa777e2925152cd9716453ff66cf53adebe9bbeb843840a311e06bfcd70617c",
       "negative_diff": "0a2875f167a11800d0ff57b5a292fa32aaee6025fc7c02f414db8ae495e08037",
       "rust_report": "b3014cba9de0353ef6959a60731ff0fba90da362621c4abdb375a3cd302d2762",
@@ -38,7 +38,7 @@
     },
     "build_profile_hash": "37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "c2rust_baseline_identity": {
-      "sha256": "c73f4003d90f4fb428cffb60c22c46b22db4bdd2bb0638561900ad84ae05a55a",
+      "sha256": "04d44572534b1114c83c180551b77b5272dc7bdcf3401c019a8ad9326f48ff23",
       "status": "skipped"
     },
     "c_oracle_harness_identity": {
@@ -167,7 +167,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "77759d1f8f92c0230e236aebd0c0c6ece9c5ad7324a26685fe3a5c9919b962f1",
+      "sha256": "42b93b0777bb09668cf073bc2d362c03ed0721c0e67b11bc0cdd8c9debcfe484",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -202,7 +202,7 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "6e98e0a7192e8daea0cc56d53dff791778ba172d9ae8cd3edf852a198ae7aac0",
+      "sha256": "e756d670e59e267c0ad283a606733ebc7f60d33cb3e761d8391c684b29e582df",
       "status": "passed"
     }
   },

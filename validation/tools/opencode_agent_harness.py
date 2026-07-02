@@ -3574,6 +3574,88 @@ def write_before_after_exhibit_profile_report(
     report_path = out_root / "summary" / "before-after-exhibit.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if not summary_path.exists():
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "report_kind": "before-after-exhibit",
+            "status": "failed",
+            "reason": "competition_summary_missing",
+            "run_id": run_id,
+            "profile_id": profile_required_string(profile, "profile_id"),
+            "proof_class": proof_class,
+            "mode": mode,
+            "claim_boundary": {
+                "source": "batch_profile_acceptance_boundary",
+                "value": profile.get("acceptance_boundary", {}),
+                "boundary": (
+                    "This fail-closed exhibit records that the batch profile did not produce a "
+                    "validated competition summary. It is harness failure evidence only and does "
+                    "not create a translation or semantic acceptance claim."
+                ),
+            },
+            "inputs": {
+                "profile": artifact_ref(profile_path, repo_root=repo_root),
+                "competition_summary": {
+                    "path": repo_relative(summary_path, repo_root=repo_root),
+                    "status": "missing",
+                },
+                "summary_validation": {
+                    "status": "missing",
+                    "reason": "competition_summary_missing",
+                },
+            },
+            "core_translation_quality": {
+                "final_gate_status": "missing",
+                "semantic_pass_count": 0,
+                "translation_before_after": {"status": "not_provided", "unit_count": 0},
+                "unsafe_reduction": {"status": "not_measured"},
+            },
+            "harness_architecture": {
+                "entrypoint": "before-after-exhibit",
+                "command_status": str(run_result.get("status", "unknown")),
+                "pipeline": [
+                    "run-batch-profile",
+                    "validate-summary",
+                    "before-after-exhibit",
+                ],
+                "merge_execution": run_result.get("merge_execution")
+                if isinstance(run_result.get("merge_execution"), dict)
+                else {},
+            },
+            "translation_before_after": {
+                "status": "not_provided",
+                "unit_count": 0,
+                "measured_unsafe_unit_count": 0,
+                "accepted_patch_unit_count": 0,
+            },
+            "safety_loop_provenance": before_after_safety_loop_provenance_rollup([]),
+            "units": [],
+            "stage_contracts": {},
+            "reproduction": {
+                "run_command": (
+                    "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
+                    f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
+                    f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
+                ),
+                "verify_command": (
+                    "python3 -B validation/tools/validate_competition_run_summary.py "
+                    f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
+                ),
+            },
+        }
+        atomic_write_json(report_path, payload)
+        binding = {
+            "path": repo_relative(report_path, repo_root=repo_root),
+            "sha256": sha256_file(report_path),
+            "status": "failed",
+            "reason": "competition_summary_missing",
+            "report_kind": "before-after-exhibit",
+            "unit_count": 0,
+            "measured_unsafe_unit_count": 0,
+            "accepted_patch_unit_count": 0,
+        }
+        return {"binding": binding, "payload": payload}
+
     summary_validation = validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
     summary = load_json(summary_path)
     workflow_ref = summary["workflow_metrics"]

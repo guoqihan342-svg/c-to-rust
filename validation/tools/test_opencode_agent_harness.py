@@ -1375,6 +1375,50 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             ]:
                 self.assert_repo_relative_posix_path(path_value)
 
+    def test_before_after_exhibit_profile_report_fails_closed_when_summary_missing(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after",
+                "proof_class": "local-simulation",
+                "target_id": "demo",
+                "emit_before_after_exhibit_report": True,
+                "require_repair_trace": True,
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+
+            artifact = harness.write_before_after_exhibit_profile_report(
+                profile=profile,
+                profile_path=profile_path,
+                run_id="run-missing-summary",
+                proof_class="local-simulation",
+                mode="deterministic",
+                plan={"units": []},
+                run_result={
+                    "status": "failed",
+                    "exit_code": 1,
+                    "merge_execution": {
+                        "summary_path": repo_rel(out_root / "summary" / "competition-run-summary.json"),
+                        "summary_exists": False,
+                    },
+                },
+                route_metrics_artifact=None,
+                out_root=out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertIsNotNone(artifact)
+            self.assertEqual(artifact["binding"]["status"], "failed")
+            self.assertEqual(artifact["binding"]["reason"], "competition_summary_missing")
+            report_path = REPO_ROOT / artifact["binding"]["path"]
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["reason"], "competition_summary_missing")
+            self.assertEqual(report["core_translation_quality"]["final_gate_status"], "missing")
+            self.assertEqual(report["harness_architecture"]["command_status"], "failed")
+
     def test_run_batch_profile_supports_explicit_worker_source_pins(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

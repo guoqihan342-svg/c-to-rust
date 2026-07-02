@@ -277,7 +277,7 @@ def run_competition_smoke(
         ],
         "command_log": {
             "path": summary_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
-            "sha256": sha256(command_log_path),
+            "sha256": sha256_lf_stable(command_log_path),
         },
         "reports": {
             "evidence_governance": {
@@ -473,7 +473,7 @@ def run_logged_step(
         **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
         **({"failure_class": failure_class} if failure_class else {}),
     }
-    with (logs_dir / "commands.jsonl").open("a", encoding="utf-8") as handle:
+    with (logs_dir / "commands.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")
     return result
 
@@ -748,6 +748,10 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def sha256_lf_stable(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")).hexdigest()
 
 
 if __name__ == "__main__":

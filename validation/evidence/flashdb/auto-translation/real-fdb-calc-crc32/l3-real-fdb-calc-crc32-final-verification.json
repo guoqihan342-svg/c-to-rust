@@ -3,7 +3,7 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
+    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "8b15e66c32350820553deafe019fe5d964ed431c7d83d173c009efc11e44ae88",

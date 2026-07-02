@@ -5,12 +5,12 @@
     "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "8b15e66c32350820553deafe019fe5d964ed431c7d83d173c009efc11e44ae88",
+      "c_oracle": "e90c3d8c485601055a332cc66c76c9b29e7f64b1596653784466f0c954628cef",
       "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
       "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
       "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-      "unsafe_ledger": "29082bd72a84611c9895856813883c61483354160dada733ec713363d2bda1f3",
-      "unsafe_scan": "23b91f39469d56adef0f5c5c5973f0a515b559d601753e9ad35607c80b687e0f"
+      "unsafe_ledger": "35e597f473445155765b61405c9aa771d71dd991404f79472eb4fb2af1aa3913",
+      "unsafe_scan": "2a34a3d370f59c5e91b6bec068b5d03e9b48ad35fb851fb2f52092fbaee151b5"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -43,7 +43,7 @@
     },
     "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "c2rust_baseline_identity": {
-      "sha256": "d399ecc825c41e46d0758a3b41ab678d394280ca9b2641e365c62d5be64a24f9",
+      "sha256": "257e69752bee580e315d5224aba3c5a2496befd74e0258501419bd10e23b29cf",
       "status": "generated"
     },
     "c_oracle_harness_identity": {
@@ -148,7 +148,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "60557edf45f2ddc8d4d88547123dcffb33c95da4dfadf74927b7c95244a80bf1",
+      "sha256": "05993f49b9bfde378aabb10cb28eba045d496d1a2b1d6121bda0acb4e7c69422",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -180,7 +180,7 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "bb1901d171e98a52578e3a1322b05b4f1b897dec77e3f47edefbe38c86cac4be",
+      "sha256": "25f300f59d14ae0b8de2bd7c4bbb37c62199e24b04265840bd87703e02c8f902",
       "status": "passed"
     }
   },

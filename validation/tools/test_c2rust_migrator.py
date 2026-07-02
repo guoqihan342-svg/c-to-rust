@@ -192,7 +192,8 @@ class C2RustMigratorTest(unittest.TestCase):
 
         argv = c2rust_migrator.build_run_competition_argv(request)
 
-        self.assertEqual(argv[0:2], ["python", "validation/tools/run_competition.py"])
+        self.assertEqual(argv[0:3], [sys.executable, "-B", "validation/tools/run_competition.py"])
+        self.assertNotEqual(argv[0], "python3")
         self.assertIn("--source-repo-root", argv)
         self.assertIn("external/demo", argv)
         self.assertIn("--source-repository", argv)
