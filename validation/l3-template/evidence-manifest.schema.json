@@ -153,6 +153,9 @@
         "c2rust_baseline": {
           "$ref": "#/definitions/evidenceRef"
         },
+        "verified_unsafe_baseline": {
+          "$ref": "#/definitions/evidenceRef"
+        },
         "route_decision": {
           "allOf": [
             {

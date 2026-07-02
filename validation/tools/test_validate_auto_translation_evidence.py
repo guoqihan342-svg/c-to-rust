@@ -3311,33 +3311,22 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             self._add_call_expression_oracle_boundary_contract(evidence_dir)
 
             prefix = "l3-call-expression"
-            verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
-            self._write_json(
-                verified_path,
-                {
-                    "schema_version": 1,
-                    "target_id": "demo",
-                    "slice_id": "call-expression",
-                    "status": "blocked",
-                    "semantic_pass": False,
-                    "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
-                    "generated_draft_semantic_pass": False,
-                },
+            output_ref, compile_ref, baseline_ref = self._install_generated_c2rust_baseline_for_verified_tests(
+                evidence_dir,
+                prefix,
             )
-            verified_ref = self._ref(verified_path, "blocked")
-
-            auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
-            auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
-            auto_manifest["verified_unsafe_baseline"] = verified_ref
-            self._write_json(auto_manifest_path, auto_manifest)
-
+            self._install_verified_baseline_direct_replay_for_tests(
+                evidence_dir,
+                prefix,
+                baseline_ref,
+                output_ref,
+                compile_ref,
+            )
             manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest["evidence"]["verified_unsafe_baseline"] = verified_ref
 
             final_path = evidence_dir / f"{prefix}-final-verification.json"
             final = json.loads(final_path.read_text(encoding="utf-8"))
-            final["verified_unsafe_baseline"] = dict(verified_ref)
             final["verified_unsafe_baseline"]["sha256"] = "stale-verified-baseline-sha"
             self._write_json(final_path, final)
             manifest["evidence"]["final_verification"] = self._ref(final_path, "passed")
@@ -3405,6 +3394,90 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("direct_c2rust_replay c2rust_output drift", result.stderr + result.stdout)
+
+    def test_rejects_verified_unsafe_baseline_missing_target_id_via_schema(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            prefix = "l3-call-expression"
+            output_ref, compile_ref, baseline_ref = self._install_generated_c2rust_baseline_for_verified_tests(
+                evidence_dir,
+                prefix,
+            )
+            self._install_verified_baseline_direct_replay_for_tests(
+                evidence_dir,
+                prefix,
+                baseline_ref,
+                output_ref,
+                compile_ref,
+            )
+            verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+            verified = json.loads(verified_path.read_text(encoding="utf-8"))
+            verified.pop("target_id")
+            self._write_json(verified_path, verified)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("target_id", result.stderr + result.stdout)
+
+    def test_rejects_verified_unsafe_baseline_generated_draft_semantic_pass_spoof(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            prefix = "l3-call-expression"
+            output_ref, compile_ref, baseline_ref = self._install_generated_c2rust_baseline_for_verified_tests(
+                evidence_dir,
+                prefix,
+            )
+            self._install_verified_baseline_direct_replay_for_tests(
+                evidence_dir,
+                prefix,
+                baseline_ref,
+                output_ref,
+                compile_ref,
+            )
+            verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+            verified = json.loads(verified_path.read_text(encoding="utf-8"))
+            verified["generated_draft_semantic_pass"] = True
+            self._write_json(verified_path, verified)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("generated_draft_semantic_pass", result.stderr + result.stdout)
 
     def test_rejects_verified_unsafe_baseline_compile_only_semantic_source_spoof(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
@@ -3482,6 +3555,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             verified["semantic_pass"] = True
             verified["semantic_claim_source"] = "verified_unsafe_baseline_gates"
             verified["blocked_reasons"] = []
+            verified["claim_boundary"]["semantic_pass"] = True
             verified.pop("same_output_gate_refs", None)
             self._write_json(verified_path, verified)
             verified_ref = self._ref(verified_path, "passed")
@@ -3540,6 +3614,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             verified["semantic_pass"] = True
             verified["semantic_claim_source"] = "verified_unsafe_baseline_gates"
             verified["blocked_reasons"] = []
+            verified["claim_boundary"]["semantic_pass"] = True
             verified["same_output_gate_refs"] = self._verified_baseline_same_output_gate_refs_for_tests(
                 evidence_dir,
                 prefix,
@@ -4851,7 +4926,9 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         route = json.loads(route_path.read_text(encoding="utf-8"))
         route["source_artifacts"]["c2rust_baseline"] = baseline_ref
         self._write_json(route_path, route)
-        route_ref = self._ref(route_path, "recorded")
+        route_ref = self._ref(route_path, route.get("status", "recorded"))
+        if route.get("level") is not None:
+            route_ref["level"] = route.get("level")
 
         auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
         auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
@@ -4916,6 +4993,8 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             "schema_version": 1,
             "target_id": "demo",
             "slice_id": prefix.removeprefix("l3-"),
+            "source_commit": "1234567",
+            "entry_function": prefix.removeprefix("l3-").replace("-", "_"),
             "status": "blocked",
             "semantic_pass": False,
             "semantic_claim_source": "blocked_missing_c2rust_bound_gates",
@@ -4923,6 +5002,24 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             "c2rust_baseline": baseline_ref,
             "c2rust_output": dict(output_ref),
             "compile_artifact": dict(compile_ref),
+            "fixture": {
+                "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+                "hash": "call-expression-fixture",
+            },
+            "route_decision": self._ref(
+                evidence_dir / f"{prefix}-route-decision.json",
+                json.loads((evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8")).get(
+                    "status",
+                    "recorded",
+                ),
+            ),
+            "validation_profile": self._ref(
+                evidence_dir / f"{prefix}-validation-profile.json",
+                json.loads((evidence_dir / f"{prefix}-validation-profile.json").read_text(encoding="utf-8")).get(
+                    "status",
+                    "incomplete",
+                ),
+            ),
             "direct_c2rust_replay": {
                 "status": "passed",
                 "semantic_pass": False,

@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "C2Rust Verified Unsafe Baseline",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "target_id",
+    "slice_id",
+    "status",
+    "semantic_pass",
+    "semantic_claim_source",
+    "generated_draft_semantic_pass",
+    "c2rust_baseline",
+    "c2rust_output",
+    "compile_artifact",
+    "direct_c2rust_replay",
+    "blocked_reasons",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "minimum": 1},
+    "target_id": {"type": "string", "minLength": 1},
+    "slice_id": {"type": "string", "minLength": 1},
+    "status": {"enum": ["passed", "blocked", "failed", "incomplete"]},
+    "semantic_pass": {"type": "boolean"},
+    "semantic_claim_source": {"type": "string", "minLength": 1},
+    "generated_draft_semantic_pass": {"const": false},
+    "source_commit": {"type": "string", "minLength": 7},
+    "entry_function": {"type": "string", "minLength": 1},
+    "fixture": {"$ref": "#/definitions/fixtureRef"},
+    "validation_profile": {"$ref": "#/definitions/artifactRef"},
+    "route_decision": {"$ref": "#/definitions/artifactRef"},
+    "c2rust_baseline": {"$ref": "#/definitions/hashArtifactRef"},
+    "c2rust_output": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "#/definitions/hashArtifactRef"}
+      ]
+    },
+    "compile_artifact": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "#/definitions/hashArtifactRef"}
+      ]
+    },
+    "direct_c2rust_replay": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "#/definitions/directReplayRef"}
+      ]
+    },
+    "gate_refs": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/artifactRef"}
+    },
+    "same_output_gate_refs": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "#/definitions/sameOutputGateRefs"}
+      ]
+    },
+    "accepted_evidence_binding": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status", "generated_draft_semantic_pass"],
+          "properties": {
+            "status": {"type": "string", "minLength": 1},
+            "generated_draft_semantic_pass": {"const": false}
+          }
+        }
+      ]
+    },
+    "blocked_reasons": {"type": "array", "items": {"type": "string"}},
+    "claim_boundary": {"$ref": "#/definitions/claimBoundary"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {"properties": {"status": {"const": "passed"}}},
+          {"properties": {"semantic_pass": {"const": true}}}
+        ]
+      },
+      "then": {
+        "required": [
+          "source_commit",
+          "entry_function",
+          "fixture",
+          "validation_profile",
+          "route_decision",
+          "same_output_gate_refs"
+        ],
+        "properties": {
+          "status": {"const": "passed"},
+          "semantic_pass": {"const": true},
+          "semantic_claim_source": {"const": "verified_unsafe_baseline_gates"},
+          "generated_draft_semantic_pass": {"const": false},
+          "c2rust_output": {"$ref": "#/definitions/hashArtifactRef"},
+          "compile_artifact": {"$ref": "#/definitions/hashArtifactRef"},
+          "direct_c2rust_replay": {"$ref": "#/definitions/directReplayRef"},
+          "blocked_reasons": {"type": "array", "maxItems": 0},
+          "claim_boundary": {
+            "allOf": [
+              {"$ref": "#/definitions/claimBoundary"},
+              {
+                "type": "object",
+                "properties": {
+                  "semantic_pass": {"const": true},
+                  "generated_draft_semantic_pass": {"const": false},
+                  "compile_only_is_semantic_pass": {"const": false}
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "status"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "hashArtifactRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "status", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "minLength": 1}
+      }
+    },
+    "fixtureRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "hash"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "hash": {"type": "string", "minLength": 1}
+      }
+    },
+    "claimBoundary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "semantic_pass",
+        "generated_draft_semantic_pass",
+        "compile_only_is_semantic_pass"
+      ],
+      "properties": {
+        "semantic_pass": {"type": "boolean"},
+        "generated_draft_semantic_pass": {"const": false},
+        "compile_only_is_semantic_pass": {"const": false}
+      }
+    },
+    "directReplayRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "semantic_pass",
+        "observable_replay_pass",
+        "artifact",
+        "c2rust_output",
+        "compile_artifact"
+      ],
+      "properties": {
+        "status": {"type": "string", "minLength": 1},
+        "semantic_pass": {"type": "boolean"},
+        "observable_replay_pass": {"type": "boolean"},
+        "artifact": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/definitions/hashArtifactRef"}
+          ]
+        },
+        "c2rust_output": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/definitions/hashArtifactRef"}
+          ]
+        },
+        "compile_artifact": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/definitions/hashArtifactRef"}
+          ]
+        }
+      }
+    },
+    "sameOutputGateRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "path",
+        "status",
+        "binding",
+        "c2rust_output",
+        "compile_artifact"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "minLength": 1},
+        "replay_kind": {"type": "string", "minLength": 1},
+        "correctness_role": {"type": "string", "minLength": 1},
+        "binding": {"const": "same_c2rust_output"},
+        "c2rust_output": {"$ref": "#/definitions/hashArtifactRef"},
+        "compile_artifact": {"$ref": "#/definitions/hashArtifactRef"}
+      }
+    },
+    "directReplayGateRef": {
+      "allOf": [
+        {"$ref": "#/definitions/sameOutputGateRef"},
+        {
+          "type": "object",
+          "required": ["replay_kind", "correctness_role"],
+          "properties": {
+            "replay_kind": {"const": "direct_c2rust_output_replay"},
+            "correctness_role": {"const": "direct_replay_evidence"}
+          }
+        }
+      ]
+    },
+    "sameOutputGateRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "c_oracle",
+        "rust_replay",
+        "schema_diff",
+        "negative_diff",
+        "unsafe_scan",
+        "unsafe_ledger",
+        "final_verification"
+      ],
+      "properties": {
+        "c_oracle": {"$ref": "#/definitions/sameOutputGateRef"},
+        "rust_replay": {"$ref": "#/definitions/directReplayGateRef"},
+        "schema_diff": {"$ref": "#/definitions/sameOutputGateRef"},
+        "negative_diff": {"$ref": "#/definitions/sameOutputGateRef"},
+        "unsafe_scan": {"$ref": "#/definitions/sameOutputGateRef"},
+        "unsafe_ledger": {"$ref": "#/definitions/sameOutputGateRef"},
+        "final_verification": {"$ref": "#/definitions/sameOutputGateRef"}
+      }
+    }
+  }
+}

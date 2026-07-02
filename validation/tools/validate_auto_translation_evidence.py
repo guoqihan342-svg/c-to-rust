@@ -84,6 +84,14 @@ def main() -> int:
         validate_json(REPO_ROOT / schema_path, data_path)
         validated.append(rel(data_path))
 
+    verified_baseline_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+    if verified_baseline_path.exists():
+        validate_json(
+            REPO_ROOT / "validation/auto-translation-template/c2rust-verified-unsafe-baseline.schema.json",
+            verified_baseline_path,
+        )
+        validated.append(rel(verified_baseline_path))
+
     validate_alias_gate(evidence_dir, prefix)
     validate_route_baseline_profile_refs(evidence_dir, prefix, slice_spec)
     validate_oracle_harness_contract(evidence_dir, prefix, slice_spec)
