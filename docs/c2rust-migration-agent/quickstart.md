@@ -195,6 +195,7 @@ python3 -B validation/tools/run_competition.py \
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -203,6 +204,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
@@ -260,12 +262,13 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --mode deterministic
 ```
 
-`run-worker --mode deterministic` 会调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 `competition-run-summary.json` 存在时自动执行原来的 `record-worker-summary` 入库动作。连接本机 OpenCode / DeepSeek V4 Pro 时，可用 agent 包装层执行同一个 request：
+`run-worker --mode deterministic` 会调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 `competition-run-summary.json` 存在时自动执行原来的 `record-worker-summary` 入库动作。连接本机 OpenCode / GLM 5.1 时，可用 agent 包装层执行同一个 request：
 
 ```bash
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -274,6 +277,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```

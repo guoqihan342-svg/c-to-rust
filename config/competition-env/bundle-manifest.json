@@ -94,12 +94,12 @@
     {
       "path": "config/competition-env/opencode-single-interaction.md",
       "role": "opencode-runbook",
-      "sha256": "d83adf8e47040f3f4908f9895b95fc7c2da19b62e799ed40a7f338cc09374bbb"
+      "sha256": "ac8e055942d69dd969aa97bb1af064215f586c85f83f246293f465bf8bc2ba48"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.en.md",
       "role": "opencode-runbook",
-      "sha256": "e8574de39a0c27e1a0b3db42e7cef37c316b8e0152dd87f55218a52391010a0c"
+      "sha256": "ddd1b189a21857515adc36e31f0a46a46a1ef05ab241720c862ff59b0f4eb8aa"
     }
   ],
   "report_kind": "competition-env-bundle",

@@ -133,7 +133,7 @@ These files are indexes and context only. They are not semantic acceptance. Acce
 
 `run-batch-profile`, the current before/after demo and profile-regression entrypoint, writes the same `context-pack.json` / `agent-index.json` artifacts with `harness/batch-profile-report.json` as the primary report. `evaluate --profile` reuses the full batch-profile pipeline and then writes `harness/evaluate-report.json` as the judge-discoverable one-command wrapper; that wrapper only indexes batch artifacts, summary validation, and context entrypoints, and is not a new semantic gate. This gives the judge demo path and the development evaluation path the same context index for continuation and audits.
 
-When local OpenCode / DeepSeek V4 Pro is connected, OpenCode can wrap the same assignment request:
+When local OpenCode / GLM 5.1 is connected, OpenCode can wrap the same assignment request:
 
 ```bash
 python -m validation.tools.opencode_agent_harness run-worker \
@@ -141,6 +141,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --run-id run-demo \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max
 ```
 

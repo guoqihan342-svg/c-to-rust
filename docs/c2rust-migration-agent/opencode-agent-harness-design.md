@@ -135,7 +135,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
 
 `run-batch-profile` 作为当前 before/after demo 和 profile 回归入口，也写入同样的 `context-pack.json` / `agent-index.json`，其中 primary report 为 `harness/batch-profile-report.json`。`evaluate --profile` 会复用完整 batch-profile pipeline，再额外落 `harness/evaluate-report.json` 作为评委可发现的一键入口 wrapper；该 wrapper 只索引 batch artifacts、summary validator 和上下文入口，不是新的 semantic gate。因此评委 demo 入口和开发评测入口都能用同一种上下文索引续跑或审计。
 
-连接本机 OpenCode / DeepSeek V4 Pro 时，可以让 OpenCode 包装同一份 assignment request：
+连接本机 OpenCode / GLM 5.1 时，可以让 OpenCode 包装同一份 assignment request：
 
 ```bash
 python -m validation.tools.opencode_agent_harness run-worker \
@@ -143,6 +143,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --run-id run-demo \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max
 ```
 

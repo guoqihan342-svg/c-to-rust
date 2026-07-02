@@ -127,10 +127,11 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --worker-id worker-a \
   --mode deterministic
 
-# When local OpenCode / DeepSeek V4 Pro is connected, verify exact-command preflight first:
+# When local OpenCode / GLM 5.1 is connected, verify exact-command preflight first:
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id <run-id> \
   --out-root target/opencode-preflight \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -140,6 +141,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --run-id <run-id> \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-skip-permissions \
   --opencode-preflight-report target/opencode-preflight/harness/opencode-preflight-report.json
@@ -191,7 +193,7 @@ Run the environment check first, then process real C slices. Independent slices 
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 
-9. For multi-agent parallelism, prefer recording reusable inputs under `config/competition-env/planned-batches/*.json`, then use `run-batch-profile` to create the ledger, generate ordered assignments, execute planned workers with `max_workers`, run bounded `auto_retry=true`, and run the final worker-summary aggregation in one audited command. For debugging, expand it into `init-run`, `plan-source-file`, and `run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`. When the profile sets `emit_route_governance_metrics_report=true`, the batch also writes and binds `summary/route-governance-metrics-report.json`. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the lower-level expanded form. Run `opencode-preflight` first with the same `run_id` to prove OpenCode follows the exact-command contract; use `run-worker --mode opencode --opencode-variant max --opencode-preflight-report <report>` or `run-plan --mode opencode --opencode-preflight-report <report>` only after preflight passes and only when OpenCode wraps assigned requests. Preflight reports from older runs cannot be reused. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries after up to 5 repair retries skip final merge fail-closed, while OpenCode startup database-lock retries are separately recorded as `opencode_process_retries`.
+9. For multi-agent parallelism, prefer recording reusable inputs under `config/competition-env/planned-batches/*.json`, then use `run-batch-profile` to create the ledger, generate ordered assignments, execute planned workers with `max_workers`, run bounded `auto_retry=true`, and run the final worker-summary aggregation in one audited command. For debugging, expand it into `init-run`, `plan-source-file`, and `run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`. When the profile sets `emit_route_governance_metrics_report=true`, the batch also writes and binds `summary/route-governance-metrics-report.json`. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the lower-level expanded form. Run `opencode-preflight` first with the same `run_id` to prove OpenCode follows the exact-command contract; use `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-variant max --opencode-preflight-report <report>` or `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-preflight-report <report>` only after preflight passes and only when OpenCode wraps assigned requests. Preflight reports from older runs cannot be reused. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries after up to 5 repair retries skip final merge fail-closed, while OpenCode startup database-lock retries are separately recorded as `opencode_process_retries`.
 
 If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.

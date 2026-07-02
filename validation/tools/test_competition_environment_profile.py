@@ -225,6 +225,30 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         opencode_config = load_json(REPO_ROOT / "opencode.json")
         self.assertEqual(opencode_config.get("plugin"), [])
 
+    def test_flashdb_bootstrap_avoids_noisy_missing_branch_fetch_fallback(self) -> None:
+        bootstrap = (REPO_ROOT / "scripts" / "bootstrap_flashdb_sources.sh").read_text(encoding="utf-8")
+
+        self.assertIn('git ls-remote --exit-code --heads origin "${FLASHDB_BRANCH}"', bootstrap)
+        self.assertNotIn('git fetch --tags origin "${FLASHDB_BRANCH}" || git fetch --tags origin', bootstrap)
+
+    def test_competition_opencode_docs_pin_glm_model(self) -> None:
+        docs = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.en.md",
+            REPO_ROOT / "config" / "competition-env" / "opencode-single-interaction.md",
+            REPO_ROOT / "config" / "competition-env" / "opencode-single-interaction.en.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "opencode-agent-harness-design.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "opencode-agent-harness-design.en.md",
+        ]
+
+        for doc in docs:
+            with self.subTest(doc=doc.relative_to(REPO_ROOT).as_posix()):
+                text = doc.read_text(encoding="utf-8")
+                self.assertNotIn("DeepSeek", text)
+                for block in re.findall(r"```bash\n(.*?)```", text, flags=re.DOTALL):
+                    if "opencode-preflight" in block or "--mode opencode" in block:
+                        self.assertIn("--opencode-model GLM-5.1", block)
+
     def test_competition_profile_records_flashdb_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]

@@ -34,7 +34,11 @@ if [ ! -d "${target_path}/.git" ]; then
 fi
 
 cd "${target_path}"
-git fetch --tags origin "${FLASHDB_BRANCH}" || git fetch --tags origin
+if git ls-remote --exit-code --heads origin "${FLASHDB_BRANCH}" >/dev/null 2>&1; then
+  git fetch --tags origin "${FLASHDB_BRANCH}"
+else
+  git fetch --tags origin
+fi
 git checkout -B "${FLASHDB_BRANCH}" "${FLASHDB_COMMIT}"
 
 actual_commit="$(git rev-parse HEAD)"

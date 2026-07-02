@@ -195,6 +195,7 @@ To execute the same single request through the OpenCode worker wrapper, run the 
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -203,6 +204,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
@@ -260,12 +262,13 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --mode deterministic
 ```
 
-`run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and automatically performs the former `record-worker-summary` step when `competition-run-summary.json` exists. When local OpenCode / DeepSeek V4 Pro is connected, use the agent wrapper for the same request:
+`run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and automatically performs the former `record-worker-summary` step when `competition-run-summary.json` exists. When local OpenCode / GLM 5.1 is connected, use the agent wrapper for the same request:
 
 ```bash
 python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -274,6 +277,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --run-id run-demo-001 \
   --worker-id worker-a \
   --mode opencode \
+  --opencode-model GLM-5.1 \
   --opencode-variant max \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
