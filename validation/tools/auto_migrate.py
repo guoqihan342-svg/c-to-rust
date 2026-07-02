@@ -6288,6 +6288,81 @@ def verified_unsafe_baseline_ref(spec: dict[str, Any], evidence_dir: Path) -> di
     return evidence_ref(path, status)
 
 
+def evidence_json_status(path: Path, fallback: str) -> str:
+    if not path.exists() or not path.is_file() or path.suffix.lower() != ".json":
+        return fallback
+    try:
+        status = read_json(path).get("status")
+    except (OSError, json.JSONDecodeError):
+        return fallback
+    return status if isinstance(status, str) and status else fallback
+
+
+def bind_same_c2rust_output(
+    ref: dict[str, Any],
+    output_ref: dict[str, Any],
+    compile_artifact_ref: dict[str, Any],
+) -> dict[str, Any]:
+    bound = dict(ref)
+    bound["binding"] = "same_c2rust_output"
+    bound["c2rust_output"] = dict(output_ref)
+    bound["compile_artifact"] = dict(compile_artifact_ref)
+    return bound
+
+
+def c2rust_same_output_gate_refs(
+    evidence_dir: Path,
+    prefix: str,
+    direct_replay_ref: dict[str, Any],
+    output_ref: dict[str, Any] | None,
+    compile_artifact_ref: dict[str, Any] | None,
+    semantic_pass: bool,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    if not semantic_pass:
+        return None, ["c2rust_bound_gate_refs_not_implemented"]
+    if output_ref is None:
+        return None, ["c2rust_output_missing"]
+    if compile_artifact_ref is None:
+        return None, ["c2rust_compile_artifact_missing"]
+
+    missing: list[str] = []
+    refs: dict[str, Any] = {}
+    gate_specs: list[tuple[str, Path | None, str]] = [
+        ("c_oracle", evidence_dir / f"{prefix}-c-oracle-status.json", "C_ORACLE_GENERATED"),
+        ("rust_replay", None, "passed"),
+        ("schema_diff", evidence_dir / f"{prefix}-diff.json", "passed"),
+        ("negative_diff", evidence_dir / f"{prefix}-negative-diff.json", "passed"),
+        ("unsafe_scan", evidence_dir / f"{prefix}-unsafe-scan.json", "passed"),
+        ("unsafe_ledger", evidence_dir / f"{prefix}-unsafe-ledger.json", "passed"),
+        ("final_verification", evidence_dir / f"{prefix}-final-verification.json", "passed"),
+    ]
+    for gate, path, fallback_status in gate_specs:
+        if gate == "rust_replay":
+            ref = dict(direct_replay_ref)
+            ref["replay_kind"] = "direct_c2rust_output_replay"
+            ref["correctness_role"] = "direct_replay_evidence"
+        else:
+            assert path is not None
+            if gate == "final_verification":
+                ref = {
+                    "path": rel(path),
+                    "status": evidence_json_status(path, fallback_status),
+                    "hash_binding": "omitted_to_avoid_final_verification_verified_baseline_hash_cycle",
+                }
+            else:
+                ref = evidence_ref(path, evidence_json_status(path, fallback_status))
+        if gate == "final_verification":
+            if not path or not path.exists() or not path.is_file():
+                missing.append(f"{gate}_gate_ref_missing")
+        elif not ref.get("sha256"):
+            missing.append(f"{gate}_gate_ref_missing")
+        refs[gate] = bind_same_c2rust_output(ref, output_ref, compile_artifact_ref)
+
+    if missing:
+        return None, ["c2rust_bound_gate_refs_not_implemented", *missing]
+    return refs, []
+
+
 def emit_c2rust_verified_unsafe_baseline(
     spec: dict[str, Any],
     evidence_dir: Path,
@@ -6330,8 +6405,18 @@ def emit_c2rust_verified_unsafe_baseline(
             output_ref,
             compile_artifact_ref,
         )
+    direct_replay_ref = evidence_ref(evidence_dir / f"{prefix}-c2rust-direct-replay.json", str(direct_replay.get("status")))
+    same_output_gate_refs: dict[str, Any] | None = None
     if direct_replay.get("status") == "passed":
-        blocked_reasons.append("c2rust_bound_gate_refs_not_implemented")
+        same_output_gate_refs, same_output_gate_ref_reasons = c2rust_same_output_gate_refs(
+            evidence_dir,
+            prefix,
+            direct_replay_ref,
+            output_ref,
+            compile_artifact_ref,
+            semantic_pass,
+        )
+        blocked_reasons.extend(same_output_gate_ref_reasons)
     else:
         blocked_reasons.append(str(direct_replay.get("reason") or "direct_c2rust_replay_not_implemented"))
     status = "blocked" if blocked_reasons else "passed"
@@ -6341,7 +6426,6 @@ def emit_c2rust_verified_unsafe_baseline(
         semantic_claim_source = "blocked_missing_c2rust_bound_gates"
     else:
         semantic_claim_source = "blocked_missing_direct_c2rust_replay"
-    direct_replay_ref = evidence_ref(evidence_dir / f"{prefix}-c2rust-direct-replay.json", str(direct_replay.get("status")))
     payload = {
         "schema_version": 1,
         "target_id": spec.get("target_id"),
@@ -6367,6 +6451,7 @@ def emit_c2rust_verified_unsafe_baseline(
             "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "passed" if semantic_pass else "incomplete"),
             "final_verification": {"path": rel(evidence_dir / f"{prefix}-final-verification.json"), "status": "passed" if semantic_pass else "incomplete"},
         },
+        "same_output_gate_refs": same_output_gate_refs,
         "blocked_reasons": blocked_reasons,
         "direct_c2rust_replay": {
             "status": direct_replay.get("status"),

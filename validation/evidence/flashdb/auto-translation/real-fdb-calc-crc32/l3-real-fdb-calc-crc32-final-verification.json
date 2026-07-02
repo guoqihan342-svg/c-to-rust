@@ -10,8 +10,8 @@
       "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
       "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
       "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-      "unsafe_ledger": "c445366150828d55a2c172cffaafd1fac8c935026c7bf9be6806e77f14962bf5",
-      "unsafe_scan": "820a556acd676df48c7bf985986fbe2f7f71ac786284e7dad1f02f43b57e0d02"
+      "unsafe_ledger": "29082bd72a84611c9895856813883c61483354160dada733ec713363d2bda1f3",
+      "unsafe_scan": "23b91f39469d56adef0f5c5c5973f0a515b559d601753e9ad35607c80b687e0f"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -37,7 +37,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "071805147e00393fd2611a0adfaa6bbfa78f99fd77b6014c7a761dd6ab0414f2",
+    "sha256": "5bef68c8fe3d8b3c1642745988c7cf647af93c3624c924c537cf6762009e293b",
     "status": "generated"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
@@ -128,7 +128,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "bf7c90284b61d4d17a97ed9247ca8309ab26257ae7a3a6c0c5089c2a119183e6",
+    "sha256": "23c51503e9c854aa696460945f1a47191ce4597fc2c5719a1ec326e588177eee",
     "status": "refused"
   },
   "rust_check_status": "passed",
@@ -146,14 +146,14 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "f7990c817dfaefc533756909d4843c7091393eadc93a1aeaed6a764e2479d73b",
+    "sha256": "4868cc0c5384fe0982f7622546ee5ed5f23b47f6e1434df9607483ceef7eddaf",
     "status": "passed"
   },
   "validation_profile_status": "passed",
   "verified_unsafe_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
-    "sha256": "83f661a8fe04fae45430be9d7e957c2b27059598db24deb7305b9e635624ed55",
-    "status": "blocked"
+    "sha256": "615628ab6655d5cc798edfb064c580235b4aae17d5cf8623f3743241bc5623ed",
+    "status": "passed"
   },
   "version_config_status": "recorded"
 }

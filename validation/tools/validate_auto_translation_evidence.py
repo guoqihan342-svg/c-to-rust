@@ -37,6 +37,15 @@ FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES = {
     "c2rust_compile_only",
     "rustc_compile_only",
 }
+C2RUST_VERIFIED_BASELINE_SAME_OUTPUT_GATES = {
+    "c_oracle": "c-oracle-status",
+    "rust_replay": "c2rust-direct-replay",
+    "schema_diff": "diff",
+    "negative_diff": "negative-diff",
+    "unsafe_scan": "unsafe-scan",
+    "unsafe_ledger": "unsafe-ledger",
+    "final_verification": "final-verification",
+}
 
 
 def main() -> int:
@@ -2140,6 +2149,55 @@ def validate_verified_unsafe_baseline_artifact(
         raise SystemExit(f"direct_c2rust_replay cannot use compile-only semantic source: {payload_source}")
     if direct_payload.get("semantic_pass") is True and direct_payload.get("observable_replay_pass") is not True:
         raise SystemExit("direct_c2rust_replay semantic_pass requires observable_replay_pass")
+    if verified_passed:
+        if semantic_source != "verified_unsafe_baseline_gates":
+            raise SystemExit(
+                "verified_unsafe_baseline passed status requires semantic_claim_source=verified_unsafe_baseline_gates"
+            )
+        if verified.get("blocked_reasons") not in (None, []):
+            raise SystemExit("verified_unsafe_baseline passed status requires empty blocked_reasons")
+        validate_verified_unsafe_baseline_same_output_gate_refs(
+            evidence_dir,
+            prefix,
+            verified,
+            expected_output,
+            expected_compile_artifact,
+            direct_artifact_ref,
+        )
+
+
+def validate_verified_unsafe_baseline_same_output_gate_refs(
+    evidence_dir: Path,
+    prefix: str,
+    verified: dict[str, Any],
+    expected_output: dict[str, Any] | None,
+    expected_compile_artifact: dict[str, Any] | None,
+    direct_artifact_ref: Any,
+) -> None:
+    if expected_output is None:
+        raise SystemExit("verified_unsafe_baseline same_output_gate_refs require generated c2rust_output")
+    if not isinstance(direct_artifact_ref, dict):
+        raise SystemExit("verified_unsafe_baseline same_output_gate_refs require direct_c2rust_replay artifact")
+    gate_refs = verified.get("same_output_gate_refs")
+    if not isinstance(gate_refs, dict):
+        raise SystemExit("verified_unsafe_baseline same_output_gate_refs missing")
+    missing = sorted(set(C2RUST_VERIFIED_BASELINE_SAME_OUTPUT_GATES) - set(gate_refs))
+    if missing:
+        raise SystemExit(f"verified_unsafe_baseline same_output_gate_refs missing gates: {', '.join(missing)}")
+
+    for gate, suffix in C2RUST_VERIFIED_BASELINE_SAME_OUTPUT_GATES.items():
+        label = f"verified_unsafe_baseline.same_output_gate_refs.{gate}"
+        gate_ref = gate_refs.get(gate)
+        if not isinstance(gate_ref, dict):
+            raise SystemExit(f"{label} must be an object")
+        if gate_ref.get("c2rust_output") != expected_output:
+            raise SystemExit(f"{label} c2rust_output drift")
+        if expected_compile_artifact is not None and gate_ref.get("compile_artifact") != expected_compile_artifact:
+            raise SystemExit(f"{label} compile_artifact drift")
+        if gate_ref.get("binding") != "same_c2rust_output":
+            raise SystemExit(f"{label} binding must be same_c2rust_output")
+        expected_path = evidence_dir / f"{prefix}-{suffix}.json"
+        require_ref(gate_ref, expected_path, label, require_sha=gate != "final_verification")
 
 
 def c2rust_baseline_expected_output_ref(baseline: dict[str, Any]) -> dict[str, Any] | None:
