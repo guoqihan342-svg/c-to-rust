@@ -2436,6 +2436,38 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_judge_evidence_index_rejects_preflight_model_probe_stdout_without_glm(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-model-stdout-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        stdout_text = "openai/gpt-5.1\nopencode/not-GLM-5.1\n"
+        stdout_path = REPO_ROOT / preflight_payload["opencode_model_availability"]["logs"]["stdout"]
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        preflight_payload["opencode_model_availability"]["stdout_sha256"] = validator.sha256_text(stdout_text)
+        write_json(preflight_path, preflight_payload)
+        new_sha = validator.sha256_file(preflight_path)
+        payload["evidence_artifact_refs"]["opencode_preflight_report"]["sha256"] = new_sha
+        payload["opencode_agent_runtime"]["opencode_preflight_report"]["sha256"] = new_sha
+        payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]["sha256"] = new_sha
+
+        with self.assertRaisesRegex(ValueError, "opencode_model_availability.logs.stdout must list GLM-5.1"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
     def test_judge_evidence_index_requires_matching_worker_opencode_launch_policy(self) -> None:
         payload = valid_opencode_judge_index_payload()
         worker_preflight = payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]

@@ -5666,6 +5666,26 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_validate_opencode_preflight_report_rejects_model_probe_stdout_without_glm(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            stdout_text = "openai/gpt-5.1\nopencode/not-GLM-5.1\n"
+            stdout_path = REPO_ROOT / payload["opencode_model_availability"]["logs"]["stdout"]
+            stdout_path.write_text(stdout_text, encoding="utf-8")
+            payload["opencode_model_availability"]["stdout_sha256"] = harness.sha256_text(stdout_text)
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight model availability stdout missing GLM-5.1"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_opencode_preflight_defaults_to_glm_51_model(self) -> None:
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",

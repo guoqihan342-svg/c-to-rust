@@ -1903,6 +1903,24 @@ def opencode_models_argv_matches(value: Any, *, expected_command: str) -> bool:
     return opencode_command_argv_matches(value[0], expected_command) and value[1] == "models"
 
 
+def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
+    candidate = model_id.strip().strip("`'\"*,")
+    required = required_model.casefold()
+    if candidate.casefold() == required:
+        return True
+    if "/" in candidate:
+        return candidate.rsplit("/", 1)[1].casefold() == required
+    return False
+
+
+def opencode_models_output_mentions_required_model(stdout: str, required_model: str) -> bool:
+    for line in stdout.splitlines():
+        for token in re.split(r"\s+", line.strip()):
+            if token and opencode_model_id_matches_required(token, required_model):
+                return True
+    return False
+
+
 def validate_opencode_model_probe_log_hashes(
     availability: dict[str, Any],
     label: str,
@@ -1919,9 +1937,17 @@ def validate_opencode_model_probe_log_hashes(
         log_path = repo_path(log_path_text, repo_root=repo_root)
         if not log_path.is_file():
             raise ValueError(f"{label}.opencode_model_availability.logs.{stream} must exist")
-        actual_sha256 = sha256_text(log_path.read_text(encoding="utf-8"))
+        log_text = log_path.read_text(encoding="utf-8")
+        actual_sha256 = sha256_text(log_text)
         if actual_sha256 != expected_sha256:
             raise ValueError(f"{label}.opencode_model_availability.logs.{stream} sha256 mismatch")
+        if stream == "stdout" and not opencode_models_output_mentions_required_model(
+            log_text,
+            COMPETITION_OPENCODE_MODEL,
+        ):
+            raise ValueError(
+                f"{label}.opencode_model_availability.logs.stdout must list {COMPETITION_OPENCODE_MODEL}"
+            )
 
 
 def validate_opencode_preflight_binding(

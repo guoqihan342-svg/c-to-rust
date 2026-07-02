@@ -7050,12 +7050,20 @@ def validate_opencode_model_probe_log_hashes(
                 f"{repo_relative(report_path, repo_root=repo_root)}"
             )
         expected_sha256 = model_availability.get(f"{stream}_sha256")
-        actual_sha256 = sha256_text(log_path.read_text(encoding="utf-8"))
+        log_text = log_path.read_text(encoding="utf-8")
+        actual_sha256 = sha256_text(log_text)
         if expected_sha256 != actual_sha256:
             raise SystemExit(
                 f"opencode preflight model availability {stream} hash mismatch: "
                 f"{repo_relative(report_path, repo_root=repo_root)}"
             )
+        if stream == "stdout":
+            required_model = str(model_availability.get("required_model", ""))
+            if not opencode_models_output_mentions_required_model(log_text, required_model):
+                raise SystemExit(
+                    f"opencode preflight model availability stdout missing {required_model}: "
+                    f"{repo_relative(report_path, repo_root=repo_root)}"
+                )
 
 
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
