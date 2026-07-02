@@ -264,6 +264,30 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 for stale_phrase in stale_status_phrases:
                     self.assertNotIn(stale_phrase, text)
 
+    def test_public_worker_docs_are_self_contained_and_python3_b_only(self) -> None:
+        docs = [
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "README.en.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.en.md",
+            PROFILE_DIR / "README.md",
+            PROFILE_DIR / "README.en.md",
+            PROFILE_DIR / "opencode-single-interaction.md",
+            PROFILE_DIR / "opencode-single-interaction.en.md",
+        ]
+        combined = []
+        for doc in docs:
+            text = doc.read_text(encoding="utf-8")
+            combined.append(text)
+            with self.subTest(doc=doc.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotRegex(text, re.compile(r"(?m)^python(?!3)\b"))
+
+        public_text = "\n".join(combined)
+        self.assertIn("GLM-5.1", public_text)
+        self.assertIn("opencode models", public_text)
+        self.assertIn("opencode_model_unavailable", public_text)
+        self.assertIn(".codex/skills/c2rust-migration/SKILL.md", public_text)
+
     def test_competition_profile_records_flashdb_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]
@@ -717,21 +741,117 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 "opencode_skip_permissions": True,
             }
             launch_policy_sha = judge_validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
+            marker_path = repo_root / "target" / "harness" / "opencode-preflight-marker.json"
+            handoff_path = repo_root / "target" / "harness" / "opencode-preflight-contract.json"
+            session_path = repo_root / "target" / "logs" / "opencode-preflight-session-evidence.json"
+            session_path.parent.mkdir(parents=True, exist_ok=True)
+            worker_command = [
+                "python3",
+                "-B",
+                "validation/tools/opencode_agent_harness.py",
+                "write-preflight-marker",
+                "--marker",
+                "target/harness/opencode-preflight-marker.json",
+                "--run-id",
+                "preflight-run",
+            ]
+            worker_command_line = judge_validator.shell_command_line(worker_command)
+            marker_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "report_kind": "opencode-preflight-marker",
+                        "run_id": "preflight-run",
+                        "status": "written",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            handoff_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "preflight-run",
+                        "runner_kind": "opencode-preflight",
+                        "expected_marker_path": "target/harness/opencode-preflight-marker.json",
+                        "worker_command": worker_command,
+                        "worker_command_line": worker_command_line,
+                        "worker_command_sha256": judge_validator.sha256_text(worker_command_line),
+                        "launch_policy": launch_policy,
+                        "launch_policy_sha256": launch_policy_sha,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            session_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "process_returncode": 0,
+                        "parsed": True,
+                        "format": "jsonl",
+                        "session_events": [
+                            {
+                                "part": {
+                                    "tool": "bash",
+                                    "state": {
+                                        "input": {
+                                            "command": worker_command_line,
+                                            "workdir": str(repo_root),
+                                        }
+                                    },
+                                }
+                            }
+                        ],
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             preflight_path.write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
                         "run_id": "preflight-run",
                         "status": "passed",
+                        "exit_code": 0,
+                        "process_returncode": 0,
+                        "opencode_run_launched": True,
+                        "marker_path": "target/harness/opencode-preflight-marker.json",
                         "marker_exists": True,
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": launch_policy_sha,
+                        "handoff_contract": {
+                            "path": "target/harness/opencode-preflight-contract.json",
+                            "sha256": sha256_file(handoff_path),
+                        },
+                        "opencode_session_evidence": {
+                            "path": "target/logs/opencode-preflight-session-evidence.json",
+                            "sha256": sha256_file(session_path),
+                        },
                         "contract_verification": {
                             "status": "executed",
+                            "expected_worker_command_line": worker_command_line,
+                            "expected_summary_path": "target/harness/opencode-preflight-marker.json",
+                            "expected_worker_command_sha256": judge_validator.sha256_text(worker_command_line),
+                            "executed_shell_command_count": 1,
+                            "executed_shell_commands": [worker_command_line],
+                            "first_tool_name": "bash",
+                            "first_shell_command": worker_command_line,
+                            "first_shell_tool_name": "bash",
+                            "first_shell_workdir_status": "repo_root",
+                            "expected_workdir_status": "repo_root",
                             "first_shell_command_matches_worker_command": True,
+                            "first_shell_workdir_matches_repo_root": True,
                             "worker_command_seen": True,
                             "summary_exists": True,
                             "tools_before_first_shell": [],
+                            "contract_failure_reason": "",
                         },
                     },
                     sort_keys=True,

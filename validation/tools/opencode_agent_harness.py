@@ -5992,6 +5992,14 @@ def validate_opencode_preflight_report(
     report_run_id = str(report.get("run_id", ""))
     if expected_run_id is not None and report_run_id != expected_run_id:
         raise SystemExit(f"opencode preflight run_id mismatch: {report_run_id} != {expected_run_id}")
+    validate_opencode_preflight_session_contract(
+        report,
+        contract_verification=contract_verification,
+        launch_policy=actual_launch_policy,
+        run_id=report_run_id,
+        report_path=report_path,
+        repo_root=repo_root,
+    )
     return {
         "path": repo_relative(report_path, repo_root=repo_root),
         "sha256": sha256_file(report_path),
@@ -6009,6 +6017,168 @@ def validate_opencode_preflight_report(
             )
         ),
     }
+
+
+def validate_opencode_preflight_session_contract(
+    report: dict[str, Any],
+    *,
+    contract_verification: dict[str, Any],
+    launch_policy: dict[str, Any],
+    run_id: str,
+    report_path: Path,
+    repo_root: Path,
+) -> None:
+    if report.get("opencode_run_launched") is not True:
+        raise SystemExit(
+            "opencode preflight opencode_run_launched must be true: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    try:
+        process_returncode = int(report.get("process_returncode"))
+    except (TypeError, ValueError):
+        process_returncode = -1
+    if process_returncode != 0:
+        raise SystemExit(
+            "opencode preflight process_returncode must be 0: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+
+    marker_value = report.get("marker_path")
+    if not isinstance(marker_value, str) or not marker_value:
+        raise SystemExit(
+            "opencode preflight marker_path is required: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    marker_path = repo_path(Path(marker_value), repo_root=repo_root)
+    if not marker_path.is_file():
+        raise SystemExit(
+            "opencode preflight marker_path does not exist: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+
+    handoff_path = validate_hash_bound_artifact_ref(
+        report.get("handoff_contract"),
+        label="opencode preflight handoff_contract",
+        report_path=report_path,
+        repo_root=repo_root,
+    )
+    handoff = load_json(handoff_path)
+    if handoff.get("runner_kind") != "opencode-preflight":
+        raise SystemExit(
+            "opencode preflight handoff_contract.runner_kind must be opencode-preflight: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if handoff.get("run_id") != run_id:
+        raise SystemExit(
+            "opencode preflight handoff_contract.run_id mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    handoff_policy = normalize_opencode_launch_policy(
+        handoff["launch_policy"] if isinstance(handoff.get("launch_policy"), dict) else {}
+    )
+    if handoff_policy != launch_policy:
+        raise SystemExit(
+            "opencode preflight handoff_contract launch policy mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if handoff.get("launch_policy_sha256") != opencode_launch_policy_sha256(handoff_policy):
+        raise SystemExit(
+            "opencode preflight handoff_contract launch policy sha256 mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    expected_marker = handoff.get("expected_marker_path")
+    if expected_marker != marker_value:
+        raise SystemExit(
+            "opencode preflight marker_path must match handoff_contract.expected_marker_path: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    worker_command = handoff.get("worker_command")
+    if (
+        not isinstance(worker_command, list)
+        or not worker_command
+        or not all(isinstance(item, str) and item for item in worker_command)
+    ):
+        raise SystemExit(
+            "opencode preflight handoff_contract.worker_command must be a non-empty string list: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    worker_command_line = handoff.get("worker_command_line")
+    if worker_command_line != shell_command_line(worker_command):
+        raise SystemExit(
+            "opencode preflight handoff_contract.worker_command_line mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if handoff.get("worker_command_sha256") != sha256_text(str(worker_command_line)):
+        raise SystemExit(
+            "opencode preflight handoff_contract.worker_command_sha256 mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+
+    session_path = validate_hash_bound_artifact_ref(
+        report.get("opencode_session_evidence"),
+        label="opencode preflight opencode_session_evidence",
+        report_path=report_path,
+        repo_root=repo_root,
+    )
+    recomputed = verify_opencode_contract_execution(
+        session_evidence=load_json(session_path),
+        worker_command=worker_command,
+        summary_path=marker_path,
+        repo_root=repo_root,
+    )
+    if recomputed.get("status") != "executed":
+        raise SystemExit(
+            "opencode preflight session contract was not executed: "
+            f"{recomputed.get('contract_failure_reason', 'unknown')}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    for key in (
+        "expected_worker_command_line",
+        "expected_summary_path",
+        "expected_worker_command_sha256",
+        "executed_shell_command_count",
+        "executed_shell_commands",
+        "first_shell_command",
+        "first_shell_tool_name",
+        "first_shell_workdir_status",
+        "first_shell_command_matches_worker_command",
+        "first_shell_workdir_matches_repo_root",
+        "tools_before_first_shell",
+        "worker_command_seen",
+        "summary_exists",
+        "status",
+    ):
+        if contract_verification.get(key) != recomputed.get(key):
+            raise SystemExit(
+                "opencode preflight session contract mismatch: "
+                f"{key}: {repo_relative(report_path, repo_root=repo_root)}"
+            )
+
+
+def validate_hash_bound_artifact_ref(
+    value: Any,
+    *,
+    label: str,
+    report_path: Path,
+    repo_root: Path,
+) -> Path:
+    if not isinstance(value, dict):
+        raise SystemExit(f"{label} is required: {repo_relative(report_path, repo_root=repo_root)}")
+    path_value = value.get("path")
+    sha_value = value.get("sha256")
+    if not isinstance(path_value, str) or not isinstance(sha_value, str):
+        raise SystemExit(
+            f"{label}.path and {label}.sha256 are required: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    artifact_path = repo_path(Path(path_value), repo_root=repo_root)
+    if not artifact_path.is_file():
+        raise SystemExit(f"{label}.path does not exist: {path_value}")
+    if sha256_file(artifact_path) != sha_value:
+        raise SystemExit(
+            f"{label}.sha256 mismatch: {repo_relative(report_path, repo_root=repo_root)}"
+        )
+    return artifact_path
 
 
 def write_opencode_preflight_marker(

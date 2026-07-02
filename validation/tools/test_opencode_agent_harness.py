@@ -5755,6 +5755,29 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_validate_opencode_preflight_report_recomputes_marker_contract_from_session_evidence(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            session_path = REPO_ROOT / payload["opencode_session_evidence"]["path"]
+            session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+            session_payload["session_events"][0]["part"]["state"]["input"]["command"] = (
+                "python3 -B validation/tools/opencode_agent_harness.py list-workers --db target/fake.sqlite3"
+            )
+            session_path.write_text(json.dumps(session_payload, sort_keys=True) + "\n", encoding="utf-8")
+            payload["opencode_session_evidence"]["sha256"] = harness.sha256_file(session_path)
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight session contract"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_opencode_preflight_defaults_to_glm_51_model(self) -> None:
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",
@@ -6668,70 +6691,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 out_root=out_root / "workers" / "worker-a",
                 repo_root=REPO_ROOT,
             )
-            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
-            preflight_report.parent.mkdir(parents=True, exist_ok=True)
-            runtime_env = harness.opencode_runtime_env_contract(
-                base_root=out_root,
-                scope="preflight",
-                repo_root=REPO_ROOT,
-            )
-            logs_dir = out_root / "logs"
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            model_stdout = "GLM-5.1\n"
-            model_stderr = ""
-            model_stdout_path = logs_dir / "opencode-models.stdout.log"
-            model_stderr_path = logs_dir / "opencode-models.stderr.log"
-            model_stdout_path.write_text(model_stdout, encoding="utf-8")
-            model_stderr_path.write_text(model_stderr, encoding="utf-8")
-            preflight_report.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "run_id": "run-test",
-                        "status": "passed",
-                        "exit_code": 0,
-                        "marker_exists": True,
-                        "contract_verification": {"status": "executed"},
-                        "launch_policy": {
-                            "opencode_command": "opencode",
-                            "opencode_model": "GLM-5.1",
-                            "opencode_agent": None,
-                            "opencode_variant": "max",
-                            "opencode_skip_permissions": False,
-                        },
-                        "launch_policy_sha256": harness.sha256_text(
-                            json.dumps(
-                                {
-                                    "opencode_agent": None,
-                                    "opencode_command": "opencode",
-                                    "opencode_model": "GLM-5.1",
-                                    "opencode_skip_permissions": False,
-                                    "opencode_variant": "max",
-                                },
-                                sort_keys=True,
-                            )
-                        ),
-                        "opencode_runtime_env": runtime_env,
-                        "opencode_model_availability": {
-                            "status": "available",
-                            "opencode_command": "opencode",
-                            "required_model": "GLM-5.1",
-                            "argv": ["opencode", "models"],
-                            "process_returncode": 0,
-                            "model_listed": True,
-                            "stdout_sha256": harness.sha256_text(model_stdout),
-                            "stderr_sha256": harness.sha256_text(model_stderr),
-                            "logs": {
-                                "stdout": repo_rel(model_stdout_path),
-                                "stderr": repo_rel(model_stderr_path),
-                            },
-                        },
-                        "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
-                    },
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
             )
 
             def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -6876,58 +6838,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 worker_prefix="worker",
                 repo_root=REPO_ROOT,
             )
-            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
-            launch_policy = {
-                "opencode_command": "opencode",
-                "opencode_model": "GLM-5.1",
-                "opencode_agent": None,
-                "opencode_variant": "max",
-                "opencode_skip_permissions": False,
-            }
-            runtime_env = harness.opencode_runtime_env_contract(
-                base_root=out_root,
-                scope="preflight",
-                repo_root=REPO_ROOT,
-            )
-            logs_dir = out_root / "logs"
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            model_stdout = "GLM-5.1\n"
-            model_stderr = ""
-            model_stdout_path = logs_dir / "opencode-models.stdout.log"
-            model_stderr_path = logs_dir / "opencode-models.stderr.log"
-            model_stdout_path.write_text(model_stdout, encoding="utf-8")
-            model_stderr_path.write_text(model_stderr, encoding="utf-8")
-            preflight_report.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "run_id": "run-test",
-                        "status": "passed",
-                        "exit_code": 0,
-                        "marker_exists": True,
-                        "contract_verification": {"status": "executed"},
-                        "launch_policy": launch_policy,
-                        "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
-                        "opencode_runtime_env": runtime_env,
-                        "opencode_model_availability": {
-                            "status": "available",
-                            "opencode_command": "opencode",
-                            "required_model": "GLM-5.1",
-                            "argv": ["opencode", "models"],
-                            "process_returncode": 0,
-                            "model_listed": True,
-                            "stdout_sha256": harness.sha256_text(model_stdout),
-                            "stderr_sha256": harness.sha256_text(model_stderr),
-                            "logs": {
-                                "stdout": repo_rel(model_stdout_path),
-                                "stderr": repo_rel(model_stderr_path),
-                            },
-                        },
-                    },
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
             )
             handoff_contract = {"path": "target/opencode/handoff-contract.json", "sha256": "a" * 64}
             session_evidence = {"path": "target/opencode/session-evidence.json", "sha256": "b" * 64}
@@ -7774,11 +7687,41 @@ def write_slice_spec(path: Path, target_id: str, slice_id: str, function_name: s
     return path
 
 
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "preflight-run") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     base_root = path.parent.parent if path.parent.name == "harness" else path.parent
+    harness_dir = base_root / "harness"
     logs_dir = base_root / "logs"
+    harness_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = harness_dir / "opencode-preflight-marker.json"
+    contract_path = harness_dir / "opencode-preflight-contract.json"
+    session_path = logs_dir / "opencode-preflight-session-evidence.json"
+    marker_command = [
+        "python3",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_rel(marker_path),
+        "--run-id",
+        run_id,
+    ]
+    marker_command_line = harness.shell_command_line(marker_command)
+    write_json(
+        marker_path,
+        {
+            "schema_version": 1,
+            "report_kind": "opencode-preflight-marker",
+            "run_id": run_id,
+            "status": "written",
+        },
+    )
     model_stdout = "GLM-5.1\n"
     model_stderr = ""
     model_stdout_path = logs_dir / "opencode-models.stdout.log"
@@ -7797,6 +7740,42 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         "opencode_variant": "max",
         "opencode_skip_permissions": False,
     }
+    write_json(
+        contract_path,
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "runner_kind": "opencode-preflight",
+            "expected_marker_path": repo_rel(marker_path),
+            "worker_command": marker_command,
+            "worker_command_line": marker_command_line,
+            "worker_command_sha256": harness.sha256_text(marker_command_line),
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": harness.opencode_launch_policy_sha256(launch_policy),
+        },
+    )
+    write_json(
+        session_path,
+        {
+            "schema_version": 1,
+            "process_returncode": 0,
+            "parsed": True,
+            "format": "jsonl",
+            "session_events": [
+                {
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": marker_command_line,
+                                "workdir": str(REPO_ROOT),
+                            }
+                        },
+                    }
+                }
+            ],
+        },
+    )
     path.write_text(
         json.dumps(
             {
@@ -7804,8 +7783,37 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
                 "run_id": run_id,
                 "status": "passed",
                 "exit_code": 0,
+                "process_returncode": 0,
+                "opencode_run_launched": True,
+                "marker_path": repo_rel(marker_path),
                 "marker_exists": True,
-                "contract_verification": {"status": "executed"},
+                "handoff_contract": {
+                    "path": repo_rel(contract_path),
+                    "sha256": harness.sha256_file(contract_path),
+                },
+                "opencode_session_evidence": {
+                    "path": repo_rel(session_path),
+                    "sha256": harness.sha256_file(session_path),
+                },
+                "contract_verification": {
+                    "status": "executed",
+                    "expected_worker_command_line": marker_command_line,
+                    "expected_summary_path": repo_rel(marker_path),
+                    "expected_worker_command_sha256": harness.sha256_text(marker_command_line),
+                    "executed_shell_command_count": 1,
+                    "executed_shell_commands": [marker_command_line],
+                    "first_tool_name": "bash",
+                    "first_shell_command": marker_command_line,
+                    "first_shell_tool_name": "bash",
+                    "first_shell_workdir_status": "repo_root",
+                    "expected_workdir_status": "repo_root",
+                    "first_shell_command_matches_worker_command": True,
+                    "first_shell_workdir_matches_repo_root": True,
+                    "worker_command_seen": True,
+                    "summary_exists": True,
+                    "tools_before_first_shell": [],
+                    "contract_failure_reason": "",
+                },
                 "launch_policy": launch_policy,
                 "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
                 "opencode_runtime_env": runtime_env,
