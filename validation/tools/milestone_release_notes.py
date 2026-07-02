@@ -21,6 +21,9 @@ BASELINE_LABELS = {
     "handwritten_reference": "Handwritten reference",
 }
 
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -71,6 +74,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         f"- Generated draft semantic pass: `{false_text(object_or_empty(bundle.get('claim_boundary')).get('generated_draft_semantic_pass'))}`",
         f"- Translation coverage numerator: `{int_text(object_or_empty(bundle.get('claim_boundary')).get('translation_coverage_numerator'))}`",
         "- This release note is a human-readable index over existing evidence; it is not a new semantic gate.",
+        "",
+        "## OpenCode GLM Preflight",
+        "",
+        *opencode_preflight_lines(object_or_empty(object_or_empty(bundle.get("opencode_runtime")).get("preflight_proof_summary"))),
         "",
         "## Harness Architecture",
         "",
@@ -191,6 +198,57 @@ def require_opencode_runtime_contract(bundle: dict[str, Any]) -> None:
     require(isinstance(runtime, dict), "opencode_runtime must be an object")
     require_true_value(runtime.get("chat_output_is_evidence_false"), "opencode_runtime.chat_output_is_evidence_false")
     require_true_value(runtime.get("semantic_gate_false"), "opencode_runtime.semantic_gate_false")
+    enabled_entrypoint_count = runtime.get("enabled_entrypoint_count")
+    require(
+        isinstance(enabled_entrypoint_count, int) and enabled_entrypoint_count >= 0,
+        "opencode_runtime.enabled_entrypoint_count must be a non-negative integer",
+    )
+    if enabled_entrypoint_count > 0:
+        require_opencode_preflight_proof_summary_contract(
+            runtime.get("preflight_proof_summary"),
+            "opencode_runtime.preflight_proof_summary",
+        )
+
+
+def require_opencode_preflight_proof_summary_contract(summary: Any, label: str) -> None:
+    require(isinstance(summary, dict), f"{label} must be an object")
+    require(summary.get("status") == "passed", f"{label}.status must be passed")
+    require_true_value(
+        summary.get("required_when_opencode_runtime_enabled"),
+        f"{label}.required_when_opencode_runtime_enabled",
+    )
+    require_false_value(summary.get("chat_output_is_evidence"), f"{label}.chat_output_is_evidence")
+    require_false_value(summary.get("semantic_gate"), f"{label}.semantic_gate")
+    require_zero_value(summary.get("translation_coverage_numerator"), f"{label}.translation_coverage_numerator")
+    require(
+        summary.get("opencode_command") == COMPETITION_OPENCODE_COMMAND,
+        f"{label}.opencode_command must be {COMPETITION_OPENCODE_COMMAND}",
+    )
+    require(
+        summary.get("opencode_model") == COMPETITION_OPENCODE_MODEL,
+        f"{label}.opencode_model must be {COMPETITION_OPENCODE_MODEL}",
+    )
+    require(
+        summary.get("required_model") == COMPETITION_OPENCODE_MODEL,
+        f"{label}.required_model must be {COMPETITION_OPENCODE_MODEL}",
+    )
+    require(summary.get("model_availability_status") == "available", f"{label}.model_availability_status must be available")
+    require_true_value(summary.get("model_listed"), f"{label}.model_listed")
+    require(summary.get("model_probe_argv") == ["opencode", "models"], f"{label}.model_probe_argv must be opencode models")
+    require(summary.get("process_returncode") == 0, f"{label}.process_returncode must be 0")
+    require(summary.get("contract_status") == "executed", f"{label}.contract_status must be executed")
+    require_true_value(summary.get("marker_exists"), f"{label}.marker_exists")
+    require_true_value(summary.get("opencode_run_launched"), f"{label}.opencode_run_launched")
+    require(
+        summary.get("proof_class") != "competition-exact",
+        f"{label}.proof_class must not claim competition-exact without host attestation",
+    )
+    require(isinstance(summary.get("preflight_report"), dict), f"{label}.preflight_report must be an object")
+    logs = summary.get("model_probe_logs")
+    require(isinstance(logs, dict), f"{label}.model_probe_logs must be an object")
+    require(isinstance(logs.get("stdout"), dict), f"{label}.model_probe_logs.stdout must be an object")
+    require(isinstance(logs.get("stderr"), dict), f"{label}.model_probe_logs.stderr must be an object")
+    require(isinstance(summary.get("boundary"), str) and bool(summary.get("boundary")), f"{label}.boundary must be present")
 
 
 def require_opencode_evidence_policy_contract(bundle: dict[str, Any]) -> None:
@@ -267,6 +325,28 @@ def architecture_lines(architecture: dict[str, Any], workflow: dict[str, Any]) -
         f"- Repair round cap: `{int_text(rollup.get('repair_round_cap'))}`",
         f"- Roles: `{', '.join(string_list(rollup.get('roles'))) or 'unknown'}`",
         f"- Repair histories: `{int_text(repair.get('repair_history_unit_count'))}`; auto-recovered units: `{int_text(repair.get('auto_recovered_unit_count'))}`",
+    ]
+
+
+def opencode_preflight_lines(summary: dict[str, Any]) -> list[str]:
+    return [
+        "| Check | Value |",
+        "| --- | --- |",
+        f"| Status | {text(summary.get('status'), 'unknown')} |",
+        f"| OpenCode command | {text(summary.get('opencode_command'), 'unknown')} |",
+        f"| Required model | {text(summary.get('required_model'), 'unknown')} |",
+        f"| Runtime model | {text(summary.get('opencode_model'), 'unknown')} |",
+        f"| Model availability | {text(summary.get('model_availability_status'), 'unknown')} |",
+        f"| Model listed by `opencode models` | {bool_text(summary.get('model_listed'))} |",
+        f"| Model probe argv | `{command_text(summary.get('model_probe_argv'))}` |",
+        f"| Model probe return code | {int_text(summary.get('process_returncode'))} |",
+        f"| Preflight contract | {text(summary.get('contract_status'), 'unknown')} |",
+        f"| Marker exists | {bool_text(summary.get('marker_exists'))} |",
+        f"| OpenCode run launched | {bool_text(summary.get('opencode_run_launched'))} |",
+        f"| Proof class | {text(summary.get('proof_class'), 'unknown')} |",
+        f"| Chat output is evidence | {bool_text(summary.get('chat_output_is_evidence'))} |",
+        f"| Semantic gate | {bool_text(summary.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(summary.get('translation_coverage_numerator'))} |",
     ]
 
 
@@ -435,6 +515,18 @@ def nested_int(payload: dict[str, Any], section: str, key: str) -> str:
 
 def false_text(value: Any) -> str:
     return "false" if value is False else text(value, "unknown")
+
+
+def bool_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return text(value, "unknown")
+
+
+def command_text(value: Any) -> str:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return " ".join(value)
+    return text(value, "unknown")
 
 
 def int_text(value: Any) -> str:

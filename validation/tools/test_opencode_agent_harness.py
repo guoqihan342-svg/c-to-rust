@@ -3177,7 +3177,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
-            self.assertNotIn("--opencode-model", replay["argv"])
+            self.assertEqual(replay["argv"][replay["argv"].index("--opencode-model") + 1], "GLM-5.1")
             self.assertEqual(replay["replay_safety"]["status"], "blocked")
             self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
             self.assertIn(
@@ -5546,6 +5546,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
     def test_opencode_preflight_fails_closed_when_glm_model_is_not_listed(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "opencode-preflight"
+            resolved_opencode = Path(tmp) / "bin" / "opencode.CMD"
             calls: list[list[str]] = []
 
             def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -5559,19 +5560,23 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     )
                 raise AssertionError("opencode run must not start when GLM-5.1 is unavailable")
 
-            result = harness.run_opencode_preflight(
-                out_root=out_root,
-                run_id="preflight-run",
-                opencode_model="GLM-5.1",
-                command_runner=fake_runner,
-                repo_root=REPO_ROOT,
-            )
+            with patch.object(harness, "resolve_subprocess_command", return_value=str(resolved_opencode)):
+                result = harness.run_opencode_preflight(
+                    out_root=out_root,
+                    run_id="preflight-run",
+                    opencode_model="GLM-5.1",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
 
             self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][0], str(resolved_opencode))
             self.assertEqual(calls[0][1], "models")
             self.assertEqual(result["status"], "failed")
             self.assertEqual(result["exit_code"], 1)
             self.assertEqual(result["root_cause_key"], "opencode_model_unavailable")
+            self.assertEqual(result["argv"][0], "opencode")
+            self.assertEqual(result["argv"][result["argv"].index("--dir") + 1], ".")
             self.assertFalse(result["marker_exists"])
             self.assertFalse(result["opencode_run_launched"])
             self.assertEqual(result["contract_verification"]["status"], "not-observed")
@@ -5581,8 +5586,17 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(availability["required_model"], "GLM-5.1")
             self.assertFalse(availability["model_listed"])
             self.assertEqual(availability["failure_reason"], "required_model_not_listed")
+            self.assertEqual(availability["argv"], ["opencode", "models"])
             report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
             self.assertEqual(report["root_cause_key"], "opencode_model_unavailable")
+            contract = json.loads((REPO_ROOT / report["handoff_contract"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(contract["opencode_argv"], result["argv"])
+            serialized_report = json.dumps(report, sort_keys=True)
+            serialized_contract = json.dumps(contract, sort_keys=True)
+            self.assertNotIn(str(resolved_opencode), serialized_report)
+            self.assertNotIn(str(resolved_opencode), serialized_contract)
+            self.assertNotIn(str(REPO_ROOT), serialized_report)
+            self.assertNotIn(str(REPO_ROOT), serialized_contract)
             stdout = (REPO_ROOT / report["opencode_model_availability"]["logs"]["stdout"]).read_text(encoding="utf-8")
             self.assertIn("openai/gpt-5.1", stdout)
 

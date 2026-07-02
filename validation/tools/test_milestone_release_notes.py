@@ -18,6 +18,13 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("Proof class rollup: `local-simulation`", notes)
         self.assertIn("Translation coverage numerator: `0`", notes)
         self.assertIn("Semantic gate: `false`", notes)
+        self.assertIn("## OpenCode GLM Preflight", notes)
+        self.assertIn("| Required model | GLM-5.1 |", notes)
+        self.assertIn("| OpenCode command | opencode |", notes)
+        self.assertIn("| Model listed by `opencode models` | true |", notes)
+        self.assertIn("| Preflight contract | executed |", notes)
+        self.assertIn("| OpenCode run launched | true |", notes)
+        self.assertIn("| Translation coverage numerator | 0 |", notes)
         self.assertIn("## Judge Packet Index", notes)
         self.assertIn(
             "| Judge config | config/competition-env/judge-entrypoints/flashdb-harness.json | 000000000000 | present |",
@@ -108,6 +115,38 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 lambda payload: payload["opencode_runtime"].__setitem__("chat_output_is_evidence_false", False),
             ),
             (
+                "opencode_runtime.preflight_proof_summary.status",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__("status", "absent"),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.opencode_command",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
+                    "opencode_command",
+                    "codex",
+                ),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.opencode_model",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
+                    "opencode_model",
+                    "gpt-5.1",
+                ),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.model_listed",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
+                    "model_listed",
+                    False,
+                ),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.semantic_gate",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
+                    "semantic_gate",
+                    True,
+                ),
+            ),
+            (
                 "opencode_evidence_policy.chat_output_is_evidence_false",
                 lambda payload: payload["opencode_evidence_policy"].__setitem__("chat_output_is_evidence_false", False),
             ),
@@ -155,7 +194,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         workflow = Path(".github/workflows/core-translator-validation-ci.yml")
         text = workflow.read_text(encoding="utf-8")
 
-        self.assertIn("python -m unittest validation.tools.test_milestone_release_notes", text)
+        self.assertIn("python3 -B -m unittest validation.tools.test_milestone_release_notes", text)
 
     def _bundle(self) -> dict:
         return {
@@ -386,10 +425,49 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 },
             },
             "opencode_runtime": {
+                "report_kind": "opencode-runtime-rollup",
                 "enabled_entrypoint_count": 1,
+                "worker_count": 2,
                 "all_contracts_executed": True,
                 "chat_output_is_evidence_false": True,
                 "semantic_gate_false": True,
+                "preflight_proof_summary": {
+                    "status": "passed",
+                    "required_when_opencode_runtime_enabled": True,
+                    "preflight_report": {
+                        "path": "target/competition-out/opencode/harness/opencode-preflight-report.json",
+                        "sha256": "4" * 64,
+                        "status": "present",
+                    },
+                    "run_id": "flashdb-opencode-explicit-workers",
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "required_model": "GLM-5.1",
+                    "model_availability_status": "available",
+                    "model_listed": True,
+                    "model_probe_argv": ["opencode", "models"],
+                    "process_returncode": 0,
+                    "model_probe_logs": {
+                        "stdout": {
+                            "path": "target/competition-out/opencode/logs/opencode-models.stdout.log",
+                            "sha256": "5" * 64,
+                            "status": "present",
+                        },
+                        "stderr": {
+                            "path": "target/competition-out/opencode/logs/opencode-models.stderr.log",
+                            "sha256": "6" * 64,
+                            "status": "present",
+                        },
+                    },
+                    "contract_status": "executed",
+                    "marker_exists": True,
+                    "opencode_run_launched": True,
+                    "proof_class": "local-simulation",
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "translation_coverage_numerator": 0,
+                    "boundary": "OpenCode preflight is runtime proof only.",
+                },
             },
             "opencode_evidence_policy": {
                 "enabled": True,

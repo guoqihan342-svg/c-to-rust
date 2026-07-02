@@ -2560,12 +2560,9 @@ def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> Non
     if not isinstance(preflight, dict):
         return
     policy = preflight.get("launch_policy") if isinstance(preflight.get("launch_policy"), dict) else {}
-    opencode_command = policy.get("opencode_command")
-    if isinstance(opencode_command, str) and opencode_command:
-        argv.extend(["--opencode-command", opencode_command])
-    opencode_model = policy.get("opencode_model")
-    if isinstance(opencode_model, str) and opencode_model:
-        argv.extend(["--opencode-model", opencode_model])
+    opencode_command = policy.get("opencode_command") if isinstance(policy.get("opencode_command"), str) else None
+    argv.extend(["--opencode-command", opencode_command or COMPETITION_OPENCODE_COMMAND])
+    argv.extend(["--opencode-model", COMPETITION_OPENCODE_MODEL])
     opencode_agent = policy.get("opencode_agent")
     if isinstance(opencode_agent, str) and opencode_agent:
         argv.extend(["--opencode-agent", opencode_agent])
@@ -5054,6 +5051,7 @@ def run_worker(
         )
     if stale_summary_cleanup_error is not None:
         argv = worker_command
+        report_argv = argv
         runner_kind = "stale-summary-cleanup"
         handoff_contract = None
         opencode_process_retries = None
@@ -5068,6 +5066,7 @@ def run_worker(
         )
     elif mode == "deterministic":
         argv = worker_command
+        report_argv = argv
         runner_kind = "repo-local-c2rust-migrator"
         handoff_contract = None
         opencode_process_retries = None
@@ -5092,6 +5091,10 @@ def run_worker(
             handoff_contract_path=handoff_contract_path,
             repo_root=repo_root,
         )
+        report_argv = portable_opencode_evidence_argv(
+            argv,
+            opencode_command=opencode_command,
+        )
         runner_kind = "opencode-run"
         handoff_contract = write_opencode_handoff_contract(
             run_id=run_id,
@@ -5102,7 +5105,7 @@ def run_worker(
             summary_path=summary_path,
             contract_path=handoff_contract_path,
             worker_command=worker_command,
-            opencode_argv=argv,
+            opencode_argv=report_argv,
             launch_policy=opencode_launch_policy(
                 opencode_command=opencode_command,
                 opencode_model=opencode_model,
@@ -5313,7 +5316,7 @@ def run_worker(
         "recorded": recorded is not None,
         "exit_code": effective_exit_code,
         "process_returncode": int(completed.returncode),
-        "argv": argv,
+        "argv": report_argv,
         "logs": {
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
@@ -5647,12 +5650,16 @@ def run_opencode_preflight(
         contract_path=contract_path,
         repo_root=repo_root,
     )
+    report_argv = portable_opencode_evidence_argv(
+        argv,
+        opencode_command=launch_policy["opencode_command"],
+    )
     contract_binding = write_opencode_preflight_contract(
         run_id=run_id,
         contract_path=contract_path,
         marker_path=marker_path,
         marker_command=marker_command,
-        opencode_argv=argv,
+        opencode_argv=report_argv,
         launch_policy=launch_policy,
         opencode_runtime_env=opencode_runtime_env,
         repo_root=repo_root,
@@ -5695,7 +5702,7 @@ def run_opencode_preflight(
             "exit_code": 1,
             "process_returncode": None,
             "elapsed_seconds": int(time.monotonic() - started),
-            "argv": argv,
+            "argv": report_argv,
             "marker_path": repo_relative(marker_path, repo_root=repo_root),
             "marker_exists": False,
             "opencode_run_launched": False,
@@ -5790,7 +5797,7 @@ def run_opencode_preflight(
         "exit_code": 0 if preflight_passed else 1,
         "process_returncode": int(completed.returncode),
         "elapsed_seconds": int(time.monotonic() - started),
-        "argv": argv,
+        "argv": report_argv,
         "marker_path": repo_relative(marker_path, repo_root=repo_root),
         "marker_exists": marker_exists,
         "opencode_run_launched": True,
@@ -7007,6 +7014,20 @@ def build_opencode_models_argv(*, opencode_command: str) -> list[str]:
     return [resolve_subprocess_command(opencode_command), "models"]
 
 
+def portable_opencode_evidence_argv(argv: list[str], *, opencode_command: str) -> list[str]:
+    if not argv:
+        raise SystemExit("opencode argv must not be empty")
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    evidence_argv = [str(item) for item in argv]
+    evidence_argv[0] = opencode_command
+    for index, item in enumerate(evidence_argv[:-1]):
+        if item == "--dir":
+            evidence_argv[index + 1] = "."
+            break
+    return evidence_argv
+
+
 def opencode_command_argv_matches(command_arg: Any, expected_command: str) -> bool:
     if not isinstance(command_arg, str) or not command_arg:
         return False
@@ -7111,6 +7132,10 @@ def run_opencode_model_availability_probe(
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     argv = build_opencode_models_argv(opencode_command=opencode_command)
+    report_argv = portable_opencode_evidence_argv(
+        argv,
+        opencode_command=opencode_command,
+    )
     started = time.monotonic()
     try:
         if command_runner is subprocess.run:
@@ -7167,7 +7192,7 @@ def run_opencode_model_availability_probe(
         "failure_reason": failure_reason,
         "opencode_command": opencode_command,
         "required_model": opencode_model,
-        "argv": argv,
+        "argv": report_argv,
         "process_returncode": returncode,
         "elapsed_seconds": int(time.monotonic() - started),
         "model_listed": model_listed,
