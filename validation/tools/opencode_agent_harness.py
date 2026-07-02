@@ -45,6 +45,8 @@ DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 600
 PORTABLE_PYTHON_COMMAND = "python3"
 PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
 HARNESS_MODULE = "validation.tools.opencode_agent_harness"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_COMMAND = "opencode"
 _RESOLVED_PYTHON_COMMAND: list[str] | None = None
 LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
     r"(?<![A-Za-z0-9_])(?:"
@@ -6739,6 +6741,12 @@ def opencode_launch_policy(
     opencode_variant: str,
     opencode_skip_permissions: bool,
 ) -> dict[str, Any]:
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    if opencode_model is None:
+        opencode_model = COMPETITION_OPENCODE_MODEL
+    if opencode_model != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     return {
         "opencode_command": opencode_command,
         "opencode_model": opencode_model,
@@ -6830,8 +6838,12 @@ def build_opencode_run_argv(
     repo_root: Path,
     handoff_contract_path: Path | None = None,
 ) -> list[str]:
-    if not opencode_command:
-        raise SystemExit("opencode command must not be empty")
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    if opencode_model is None:
+        opencode_model = COMPETITION_OPENCODE_MODEL
+    if opencode_model != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     command_line = shell_command_line(worker_command)
     prompt_lines = [
         "Execute this assigned C-to-Rust worker exactly once.",
@@ -6891,8 +6903,12 @@ def build_opencode_preflight_argv(
     contract_path: Path,
     repo_root: Path,
 ) -> list[str]:
-    if not opencode_command:
-        raise SystemExit("opencode command must not be empty")
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    if opencode_model is None:
+        opencode_model = COMPETITION_OPENCODE_MODEL
+    if opencode_model != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     command_line = shell_command_line(marker_command)
     prompt = build_opencode_prompt(
         [

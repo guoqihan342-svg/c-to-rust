@@ -640,11 +640,14 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             PROFILE_DIR / "planned-batches" / "flashdb-fdb-utils-opencode-explicit-workers.json"
         )
         self.assertEqual(opencode_profile["mode"], "opencode")
+        self.assertEqual(opencode_profile["opencode_command"], "opencode")
         self.assertEqual(opencode_profile["opencode_model"], "GLM-5.1")
         self.assertEqual(opencode_profile["opencode_variant"], "max")
         self.assertTrue(opencode_profile["opencode_skip_permissions"])
         self.assertTrue(opencode_profile["auto_retry"])
         self.assertEqual(opencode_profile["max_workers"], 2)
+        opencode_config = load_json(REPO_ROOT / "opencode.json")
+        self.assertEqual(opencode_config.get("plugin"), [])
 
         for entry in config["entrypoints"]:
             self.assertEqual(entry["proof_class"], "local-simulation")

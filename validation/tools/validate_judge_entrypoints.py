@@ -73,6 +73,8 @@ VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES = (
     "final_verification",
 )
 PORTABLE_PYTHON_COMMAND = "python3"
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 
 
 def main() -> int:
@@ -1201,10 +1203,14 @@ def validate_entrypoint_profile_contract(
 
 def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id: str) -> dict[str, Any]:
     command = require_string(profile.get("opencode_command"), f"{entry_id} opencode profile opencode_command")
+    if command != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"{entry_id} opencode profile opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
     variant = require_string(profile.get("opencode_variant"), f"{entry_id} opencode profile opencode_variant")
     model = profile.get("opencode_model")
     if not isinstance(model, str) or not model:
         raise ValueError(f"{entry_id} opencode profile opencode_model must be a non-empty string")
+    if model != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{entry_id} opencode profile opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     agent = profile.get("opencode_agent")
     if agent is not None and not isinstance(agent, str):
         raise ValueError(f"{entry_id} opencode profile opencode_agent must be a string or null")
@@ -1835,10 +1841,14 @@ def jsonschema_error_path(error: jsonschema.ValidationError) -> str:
 def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: str) -> dict[str, Any]:
     policy = require_object(value, f"{label}.launch_policy")
     command = require_string(policy.get("opencode_command"), f"{label}.launch_policy.opencode_command")
+    if command != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"{label}.launch_policy.opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
     variant = require_string(policy.get("opencode_variant"), f"{label}.launch_policy.opencode_variant")
     model = policy.get("opencode_model")
-    if model is not None and not isinstance(model, str):
-        raise ValueError(f"{label}.launch_policy.opencode_model must be a string or null")
+    if not isinstance(model, str) or not model:
+        raise ValueError(f"{label}.launch_policy.opencode_model must be a non-empty string")
+    if model != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{label}.launch_policy.opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     agent = policy.get("opencode_agent")
     if agent is not None and not isinstance(agent, str):
         raise ValueError(f"{label}.launch_policy.opencode_agent must be a string or null")

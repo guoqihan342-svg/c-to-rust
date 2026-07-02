@@ -1840,7 +1840,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "contract_status": "executed",
                 "launch_policy": {
                     "opencode_command": "opencode",
-                    "opencode_model": None,
+                    "opencode_model": "GLM-5.1",
                     "opencode_agent": None,
                     "opencode_variant": "max",
                     "opencode_skip_permissions": False,
@@ -1850,7 +1850,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         {
                             "opencode_agent": None,
                             "opencode_command": "opencode",
-                            "opencode_model": None,
+                            "opencode_model": "GLM-5.1",
                             "opencode_skip_permissions": False,
                             "opencode_variant": "max",
                         },
@@ -2833,7 +2833,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "--opencode-command",
             "opencode",
             "--opencode-model",
-            "gpt-5",
+            "GLM-5.1",
             "--opencode-agent",
             "build",
             "--opencode-variant",
@@ -2880,7 +2880,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(kwargs["proof_class"], "local-simulation")
         self.assertEqual(kwargs["mode"], "opencode")
         self.assertEqual(kwargs["opencode_command"], "opencode")
-        self.assertEqual(kwargs["opencode_model"], "gpt-5")
+        self.assertEqual(kwargs["opencode_model"], "GLM-5.1")
         self.assertEqual(kwargs["opencode_agent"], "build")
         self.assertEqual(kwargs["opencode_variant"], "max")
         self.assertTrue(kwargs["opencode_skip_permissions"])
@@ -3711,7 +3711,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "--opencode-command",
             "opencode",
             "--opencode-model",
-            "gpt-5.4",
+            "GLM-5.1",
             "--opencode-agent",
             "c2rust-worker",
             "--opencode-variant",
@@ -3743,7 +3743,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         )
         self.assertEqual(runner.call_args.kwargs["proof_class"], "local-simulation")
         self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
-        self.assertEqual(runner.call_args.kwargs["opencode_model"], "gpt-5.4")
+        self.assertEqual(runner.call_args.kwargs["opencode_model"], "GLM-5.1")
         self.assertEqual(runner.call_args.kwargs["opencode_agent"], "c2rust-worker")
         self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
         self.assertTrue(runner.call_args.kwargs["execute_merge"])
@@ -5307,6 +5307,27 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             self.assertEqual(Path(argv[0]).resolve(), shim_path.resolve())
 
+    def test_opencode_worker_argv_rejects_non_opencode_command(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_command must be opencode"):
+            harness.build_opencode_run_argv(
+                opencode_command="codex",
+                opencode_model="GLM-5.1",
+                opencode_agent=None,
+                opencode_variant="max",
+                opencode_skip_permissions=False,
+                worker_command=[
+                    sys.executable,
+                    "scripts/c2rust-migrator.py",
+                    "--phase",
+                    "migrate",
+                    "--input",
+                    "target/out/harness/assignments/worker-a-request.json",
+                ],
+                request_path=REPO_ROOT / "target/out/harness/assignments/worker-a-request.json",
+                summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+                repo_root=REPO_ROOT,
+            )
+
     def test_opencode_preflight_requires_exact_first_shell_command_and_marker(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "opencode-preflight"
@@ -5337,7 +5358,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             result = harness.run_opencode_preflight(
                 out_root=out_root,
                 run_id="preflight-run",
-                opencode_model="gpt-5.4",
+                opencode_model="GLM-5.1",
                 opencode_agent="c2rust-worker",
                 opencode_skip_permissions=True,
                 command_runner=fake_runner,
@@ -5354,7 +5375,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["contract_verification"]["status"], "executed")
             expected_policy = {
                 "opencode_command": "opencode",
-                "opencode_model": "gpt-5.4",
+                "opencode_model": "GLM-5.1",
                 "opencode_agent": "c2rust-worker",
                 "opencode_variant": "max",
                 "opencode_skip_permissions": True,
@@ -5363,6 +5384,50 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertRegex(report["launch_policy_sha256"], r"^[0-9a-f]{64}$")
             contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
             self.assertEqual(contract["launch_policy"], expected_policy)
+
+    def test_opencode_preflight_defaults_to_glm_51_model(self) -> None:
+        argv = harness.build_opencode_preflight_argv(
+            opencode_command="opencode",
+            opencode_model=None,
+            opencode_agent=None,
+            opencode_variant="max",
+            opencode_skip_permissions=False,
+            marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
+            marker_path=Path("target/opencode-preflight/harness/opencode-preflight-marker.json"),
+            contract_path=Path("target/opencode-preflight/harness/opencode-preflight-contract.json"),
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertIn("--model", argv)
+        self.assertEqual(argv[argv.index("--model") + 1], "GLM-5.1")
+
+    def test_opencode_preflight_rejects_non_glm_model(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_model must be GLM-5.1"):
+            harness.build_opencode_preflight_argv(
+                opencode_command="opencode",
+                opencode_model="gpt-5.4",
+                opencode_agent=None,
+                opencode_variant="max",
+                opencode_skip_permissions=False,
+                marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
+                marker_path=Path("target/opencode-preflight/harness/opencode-preflight-marker.json"),
+                contract_path=Path("target/opencode-preflight/harness/opencode-preflight-contract.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_opencode_preflight_rejects_non_opencode_command(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_command must be opencode"):
+            harness.build_opencode_preflight_argv(
+                opencode_command="codex",
+                opencode_model="GLM-5.1",
+                opencode_agent=None,
+                opencode_variant="max",
+                opencode_skip_permissions=False,
+                marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
+                marker_path=Path("target/opencode-preflight/harness/opencode-preflight-marker.json"),
+                contract_path=Path("target/opencode-preflight/harness/opencode-preflight-contract.json"),
+                repo_root=REPO_ROOT,
+            )
 
     def test_opencode_preflight_rejects_marker_when_first_shell_command_differs(self) -> None:
         with temp_repo_dir() as tmp:
@@ -5941,7 +6006,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             launch_policy = {
                 "opencode_command": "opencode",
-                "opencode_model": None,
+                "opencode_model": "GLM-5.1",
                 "opencode_agent": None,
                 "opencode_variant": "max",
                 "opencode_skip_permissions": False,
@@ -6115,7 +6180,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         proof_class="local-simulation",
                         mode="opencode",
                         opencode_preflight_report=preflight_report,
-                        opencode_model="gpt-5.4",
+                        opencode_model="GLM-5.1",
+                        opencode_variant="lite",
                         command_runner=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="", stderr=""),
                         repo_root=REPO_ROOT,
                     )
@@ -6230,7 +6296,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                                 {
                                     "opencode_agent": None,
                                     "opencode_command": "opencode",
-                                    "opencode_model": None,
+                                    "opencode_model": "GLM-5.1",
                                     "opencode_skip_permissions": False,
                                     "opencode_variant": "max",
                                 },
@@ -6391,7 +6457,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             preflight_report = out_root / "harness" / "opencode-preflight-report.json"
             launch_policy = {
                 "opencode_command": "opencode",
-                "opencode_model": None,
+                "opencode_model": "GLM-5.1",
                 "opencode_agent": None,
                 "opencode_variant": "max",
                 "opencode_skip_permissions": False,
@@ -7274,7 +7340,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
     )
     launch_policy = {
         "opencode_command": "opencode",
-        "opencode_model": None,
+        "opencode_model": "GLM-5.1",
         "opencode_agent": None,
         "opencode_variant": "max",
         "opencode_skip_permissions": False,

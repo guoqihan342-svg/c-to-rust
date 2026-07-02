@@ -53,7 +53,7 @@ python3 -B -m validation.tools.run_judge_entrypoints --dry-run --out target/comp
 ```
 
 - Run `--require-local-artifacts` only after the entrypoints have generated their expected artifacts in that checkout. A fresh clone does not contain `target/` artifacts by default.
-- Keep OpenCode profile claims exact: model `GLM-5.1`, bounded `auto_retry=true`, 5 repair rounds, repo-local runtime dirs, and a passed `opencode-preflight` before worker launch.
+- Keep OpenCode profile claims exact: command `opencode`, model `GLM-5.1`, bounded `auto_retry=true`, 5 repair rounds, repo-local runtime dirs, and a passed `opencode-preflight` before worker launch. Treat any non-OpenCode command, non-GLM 5.1 model, missing/failed preflight, or missing marker as a launch blocker.
 - Treat `git ls-files --eol` and `.gitattributes` drift as competition-entry blockers when text artifacts carry hash bindings.
 
 ## Repair Loop

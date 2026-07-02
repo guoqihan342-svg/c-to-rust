@@ -1276,6 +1276,32 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_opencode_profile_requires_glm_51_model(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_model"] = "gpt-5.4"
+
+        with self.assertRaisesRegex(ValueError, "opencode profile opencode_model must be GLM-5.1"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
+    def test_opencode_profile_requires_opencode_command(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_command"] = "codex"
+
+        with self.assertRaisesRegex(ValueError, "opencode profile opencode_command must be opencode"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
+    def test_opencode_launch_policy_binding_requires_glm_51(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_model"] = "gpt-5.4"
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_model must be GLM-5.1"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
     def test_cli_writes_judge_entrypoints_readiness_report(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
