@@ -4509,6 +4509,85 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(event_payload["opencode_runtime_env"], runtime_env)
 
+    def test_opencode_run_worker_binds_session_evidence_into_successful_before_after_metrics(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            worker_out_root = out_root / "workers" / "worker-a"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="store-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="store_add_one",
+                source_commit="abc123",
+                out_root=worker_out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                contract = json.loads(
+                    (worker_out_root / "harness" / "opencode-handoff-contract.json").read_text(encoding="utf-8")
+                )
+                summary_path = REPO_ROOT / contract["expected_summary_path"]
+                write_worker_summary(
+                    summary_path,
+                    "run-test",
+                    status="passed",
+                    failed=0,
+                    semantic_pass=1,
+                    workflow_metrics=before_after_worker_metrics(worker_out_root, "run-test"),
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                mode="opencode",
+                opencode_preflight_report=preflight_report,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["summary_status"], "passed")
+            metrics = json.loads((worker_out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            unit = metrics["per_unit_statuses"][0]
+            self.assertIn("handoff_contract", unit)
+            self.assertIn("opencode_session_evidence", unit)
+            self.assertEqual(unit["opencode_contract_verification"]["status"], "executed")
+            exhibit_unit = harness.before_after_exhibit_units(metrics)[0]
+            self.assertTrue(exhibit_unit["patch_origin"]["opencode_session_bound"])
+            self.assertEqual(exhibit_unit["safety_loop_provenance"]["status"], "opencode_session_bound")
+            artifact_rows = fetch_rows(
+                db_path,
+                "select sha256 from artifacts where kind='competition-run-summary' and repo_rel_path=?",
+                (repo_rel(worker_out_root / "summary" / "competition-run-summary.json"),),
+            )
+            self.assertEqual(artifact_rows, [(harness.sha256_file(worker_out_root / "summary" / "competition-run-summary.json"),)])
+
     def test_opencode_run_worker_classifies_wrong_shell_command_as_contract_not_executed(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

@@ -4995,6 +4995,22 @@ def run_worker(
     summary_status = "stale-summary-cleanup-failed" if stale_summary_cleanup_error is not None else "missing-summary"
     summary_payload: dict[str, Any] | None = None
     if summary_path.exists() and stale_summary_cleanup_error is None:
+        summary_payload = load_json(summary_path)
+        summary_status = str(summary_payload.get("final_gate", {}).get("status", "failed"))
+        if (
+            mode == "opencode"
+            and summary_status == "passed"
+            and opencode_contract_verification is not None
+            and opencode_contract_verification.get("status") == "executed"
+        ):
+            annotate_opencode_worker_metrics(
+                summary_path=summary_path,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+            summary_payload = load_json(summary_path)
         recorded = record_worker_summary(
             db_path=db_path,
             run_id=run_id,
@@ -5002,8 +5018,6 @@ def run_worker(
             summary_path=summary_path,
             repo_root=repo_root,
         )
-        summary_payload = load_json(summary_path)
-        summary_status = str(summary_payload.get("final_gate", {}).get("status", "failed"))
 
     effective_exit_code = int(completed.returncode)
     if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
@@ -6126,6 +6140,59 @@ def annotate_retry_worker_metrics(
         payload={"hint_id": hint_id, **annotation},
     )
     return annotation
+
+
+def annotate_opencode_worker_metrics(
+    *,
+    summary_path: Path,
+    handoff_contract: dict[str, Any] | None,
+    opencode_session_evidence: dict[str, Any] | None,
+    opencode_contract_verification: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    if handoff_contract is None or opencode_session_evidence is None:
+        return None
+    summary = load_json(summary_path)
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return None
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        raise SystemExit("opencode worker summary workflow_metrics.path and workflow_metrics.sha256 are required")
+    metrics_path = resolve_summary_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None:
+        raise SystemExit(f"opencode worker summary workflow_metrics.path does not exist: {metrics_ref}")
+    if sha256_file(metrics_path) != expected_sha:
+        raise SystemExit("opencode worker summary workflow_metrics.sha256 does not match artifact before annotation")
+    metrics = load_json(metrics_path)
+    units = metrics.get("per_unit_statuses")
+    if not isinstance(units, list):
+        return None
+
+    updated_units = 0
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        unit["handoff_contract"] = json.loads(json.dumps(handoff_contract))
+        unit["opencode_session_evidence"] = json.loads(json.dumps(opencode_session_evidence))
+        unit["opencode_contract_verification"] = json.loads(json.dumps(opencode_contract_verification))
+        updated_units += 1
+    if updated_units == 0:
+        return None
+
+    atomic_write_json(metrics_path, metrics)
+    summary["workflow_metrics"]["sha256"] = sha256_file(metrics_path)
+    atomic_write_json(summary_path, summary)
+    return {
+        "metrics_path": repo_relative(metrics_path, repo_root=repo_root),
+        "metrics_sha256": sha256_file(metrics_path),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_sha256": sha256_file(summary_path),
+        "updated_unit_count": updated_units,
+        "semantic_gate": False,
+        "evidence_boundary": "OpenCode session fields are audit provenance only; summary validators still own acceptance.",
+    }
 
 
 def retry_repair_history_events(hint_payload: dict[str, Any], result: dict[str, Any]) -> list[dict[str, Any]]:
