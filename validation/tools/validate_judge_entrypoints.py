@@ -63,6 +63,15 @@ REQUIRED_COMPETITION_SMOKE_STEPS = (
 EXPECTED_ARTIFACT_REF_ALIASES = {
     "competition_summary": "competition_run_summary",
 }
+VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES = (
+    "c_oracle",
+    "rust_replay",
+    "schema_diff",
+    "negative_diff",
+    "unsafe_scan",
+    "unsafe_ledger",
+    "final_verification",
+)
 
 
 def main() -> int:
@@ -1593,7 +1602,116 @@ def validate_verified_unsafe_baseline_ref(
             raise ValueError(f"{label}.semantic_claim_source must be verified_unsafe_baseline_gates")
         if artifact_payload.get("generated_draft_semantic_pass") is not False:
             raise ValueError(f"{label}.generated_draft_semantic_pass must be false")
+        validate_verified_unsafe_baseline_deep_contract(artifact_payload, label)
     return result
+
+
+def validate_verified_unsafe_baseline_deep_contract(payload: dict[str, Any], label: str) -> None:
+    c2rust_output = validate_verified_baseline_nested_artifact_ref(
+        payload.get("c2rust_output"),
+        f"{label}.c2rust_output",
+        required_status="generated",
+    )
+    compile_artifact = validate_verified_baseline_nested_artifact_ref(
+        payload.get("compile_artifact"),
+        f"{label}.compile_artifact",
+        required_status="compiled",
+    )
+    direct = require_object(payload.get("direct_c2rust_replay"), f"{label}.direct_c2rust_replay")
+    if direct.get("status") != "passed":
+        raise ValueError(f"{label}.direct_c2rust_replay.status must be passed")
+    if direct.get("semantic_pass") is not False:
+        raise ValueError(f"{label}.direct_c2rust_replay.semantic_pass must be false")
+    if direct.get("observable_replay_pass") is not True:
+        raise ValueError(f"{label}.direct_c2rust_replay.observable_replay_pass must be true")
+    if direct.get("c2rust_output") != c2rust_output:
+        raise ValueError(f"{label}.direct_c2rust_replay.c2rust_output must match c2rust_output")
+    if direct.get("compile_artifact") != compile_artifact:
+        raise ValueError(f"{label}.direct_c2rust_replay.compile_artifact must match compile_artifact")
+    direct_artifact = require_object(direct.get("artifact"), f"{label}.direct_c2rust_replay.artifact")
+    validate_direct_c2rust_replay_artifact_ref(direct_artifact, f"{label}.direct_c2rust_replay.artifact")
+
+    gate_refs = payload.get("same_output_gate_refs")
+    if not isinstance(gate_refs, dict):
+        raise ValueError(f"{label}.same_output_gate_refs missing")
+    missing = sorted(set(VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES) - set(gate_refs))
+    if missing:
+        raise ValueError(f"{label}.same_output_gate_refs missing gates: {', '.join(missing)}")
+    for gate in VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES:
+        gate_label = f"{label}.same_output_gate_refs.{gate}"
+        gate_ref = require_object(gate_refs.get(gate), gate_label)
+        validate_verified_baseline_gate_ref(
+            gate_ref,
+            gate_label,
+            expected_output=c2rust_output,
+            expected_compile_artifact=compile_artifact,
+            require_sha=gate != "final_verification",
+        )
+        if gate == "rust_replay":
+            validate_direct_c2rust_replay_gate_ref(gate_ref, gate_label)
+
+
+def validate_verified_baseline_nested_artifact_ref(
+    value: Any,
+    label: str,
+    *,
+    required_status: str,
+) -> dict[str, Any]:
+    payload = require_object(value, label)
+    path_text = require_string(payload.get("path"), f"{label}.path")
+    assert_repo_relative_posix(path_text)
+    validate_sha256_hex(payload.get("sha256"), f"{label}.sha256")
+    if payload.get("status") != required_status:
+        raise ValueError(f"{label}.status must be {required_status}")
+    return {
+        "path": path_text,
+        "sha256": payload["sha256"],
+        "status": required_status,
+    }
+
+
+def validate_verified_baseline_gate_ref(
+    value: dict[str, Any],
+    label: str,
+    *,
+    expected_output: dict[str, Any],
+    expected_compile_artifact: dict[str, Any],
+    require_sha: bool,
+) -> None:
+    path_text = require_string(value.get("path"), f"{label}.path")
+    assert_repo_relative_posix(path_text)
+    if require_sha:
+        validate_sha256_hex(value.get("sha256"), f"{label}.sha256")
+    elif value.get("sha256") is not None:
+        validate_sha256_hex(value.get("sha256"), f"{label}.sha256")
+    if not isinstance(value.get("status"), str) or not value.get("status"):
+        raise ValueError(f"{label}.status must be a non-empty string")
+    if value.get("binding") != "same_c2rust_output":
+        raise ValueError(f"{label}.binding must be same_c2rust_output")
+    if value.get("c2rust_output") != expected_output:
+        raise ValueError(f"{label}.c2rust_output must match verified baseline output")
+    if value.get("compile_artifact") != expected_compile_artifact:
+        raise ValueError(f"{label}.compile_artifact must match verified baseline compile artifact")
+
+
+def validate_direct_c2rust_replay_gate_ref(value: dict[str, Any], label: str) -> None:
+    path_text = str(value.get("path", ""))
+    if not path_text.endswith("-c2rust-direct-replay.json"):
+        raise ValueError(f"{label}.path must point to direct C2Rust replay evidence")
+    if value.get("replay_kind") != "direct_c2rust_output_replay":
+        raise ValueError(f"{label}.replay_kind must be direct_c2rust_output_replay")
+    if value.get("correctness_role") != "direct_replay_evidence":
+        raise ValueError(f"{label}.correctness_role must be direct_replay_evidence")
+
+
+def validate_direct_c2rust_replay_artifact_ref(value: dict[str, Any], label: str) -> None:
+    path_text = require_string(value.get("path"), f"{label}.path")
+    assert_repo_relative_posix(path_text)
+    if not path_text.endswith("-c2rust-direct-replay.json"):
+        raise ValueError(f"{label}.path must point to direct C2Rust replay evidence")
+    validate_sha256_hex(value.get("sha256"), f"{label}.sha256")
+    if value.get("status") != "passed":
+        raise ValueError(f"{label}.status must be passed")
 
 
 def verified_unsafe_baseline_ref_from_container(value: Any) -> Any | None:

@@ -126,6 +126,8 @@ def verified_unsafe_baseline_payload(*, status: str = "passed") -> dict:
 
 
 def write_verified_unsafe_baseline_ref(path: Path, *, status: str = "passed") -> dict:
+    if status == "passed":
+        return write_deep_verified_unsafe_baseline_ref(path)
     payload = verified_unsafe_baseline_payload(status=status)
     write_json(path, payload)
     return {
@@ -133,6 +135,93 @@ def write_verified_unsafe_baseline_ref(path: Path, *, status: str = "passed") ->
         "sha256": validator.sha256_file(path),
         "status": status,
         "semantic_pass": status == "passed",
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
+def write_deep_verified_unsafe_baseline_ref(path: Path) -> dict:
+    output_ref = {"path": "validation/evidence/demo/c2rust-output.rs", "sha256": "1" * 64, "status": "generated"}
+    compile_ref = {"path": "validation/evidence/demo/c2rust-output.rlib", "sha256": "2" * 64, "status": "compiled"}
+    direct_ref = {
+        "path": "validation/evidence/demo/l3-demo-c2rust-direct-replay.json",
+        "sha256": "3" * 64,
+        "status": "passed",
+        "binding": "same_c2rust_output",
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_ref,
+        "replay_kind": "direct_c2rust_output_replay",
+        "correctness_role": "direct_replay_evidence",
+    }
+    payload = {
+        **verified_unsafe_baseline_payload(status="passed"),
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_ref,
+        "direct_c2rust_replay": {
+            "status": "passed",
+            "semantic_pass": False,
+            "observable_replay_pass": True,
+            "artifact": direct_ref,
+            "c2rust_output": output_ref,
+            "compile_artifact": compile_ref,
+        },
+        "same_output_gate_refs": {
+            "c_oracle": {
+                "path": "validation/evidence/demo/c-oracle-status.json",
+                "sha256": "4" * 64,
+                "status": "C_ORACLE_GENERATED",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "rust_replay": direct_ref,
+            "schema_diff": {
+                "path": "validation/evidence/demo/diff.json",
+                "sha256": "5" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "negative_diff": {
+                "path": "validation/evidence/demo/negative-diff.json",
+                "sha256": "6" * 64,
+                "status": "expected_failed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "unsafe_scan": {
+                "path": "validation/evidence/demo/unsafe-scan.json",
+                "sha256": "7" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "unsafe_ledger": {
+                "path": "validation/evidence/demo/unsafe-ledger.json",
+                "sha256": "8" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "final_verification": {
+                "path": "validation/evidence/demo/final-verification.json",
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+        },
+    }
+    write_json(path, payload)
+    return {
+        "path": repo_relative(path),
+        "sha256": validator.sha256_file(path),
+        "status": "passed",
+        "semantic_pass": True,
         "semantic_claim_source": "verified_unsafe_baseline_gates",
         "generated_draft_semantic_pass": False,
     }
@@ -1555,6 +1644,62 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(root / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_verified_unsafe_baseline_ref_requires_same_output_gate_refs(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-verified-baseline-deep-", dir=target_dir))
+        verified_path = temp_dir / "verified-baseline.json"
+        verified_ref = write_deep_verified_unsafe_baseline_ref(verified_path)
+        payload = json.loads(verified_path.read_text(encoding="utf-8"))
+        payload.pop("same_output_gate_refs", None)
+        write_json(verified_path, payload)
+        verified_ref["sha256"] = validator.sha256_file(verified_path)
+
+        with self.assertRaisesRegex(ValueError, "same_output_gate_refs missing"):
+            validator.validate_verified_unsafe_baseline_ref(
+                verified_ref,
+                "verified_unsafe_baseline",
+                repo_root=REPO_ROOT,
+            )
+
+    def test_verified_unsafe_baseline_ref_rejects_same_output_gate_compile_artifact_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-verified-baseline-gate-drift-", dir=target_dir))
+        verified_path = temp_dir / "verified-baseline.json"
+        verified_ref = write_deep_verified_unsafe_baseline_ref(verified_path)
+        payload = json.loads(verified_path.read_text(encoding="utf-8"))
+        payload["same_output_gate_refs"]["unsafe_ledger"]["compile_artifact"]["sha256"] = "9" * 64
+        write_json(verified_path, payload)
+        verified_ref["sha256"] = validator.sha256_file(verified_path)
+
+        with self.assertRaisesRegex(ValueError, "same_output_gate_refs.unsafe_ledger.compile_artifact"):
+            validator.validate_verified_unsafe_baseline_ref(
+                verified_ref,
+                "verified_unsafe_baseline",
+                repo_root=REPO_ROOT,
+            )
+
+    def test_verified_unsafe_baseline_ref_rejects_accepted_rust_report_as_replay_gate(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-verified-baseline-rust-report-", dir=target_dir))
+        verified_path = temp_dir / "verified-baseline.json"
+        verified_ref = write_deep_verified_unsafe_baseline_ref(verified_path)
+        payload = json.loads(verified_path.read_text(encoding="utf-8"))
+        payload["same_output_gate_refs"]["rust_replay"]["path"] = "validation/evidence/demo/l3-demo-rust-report.json"
+        payload["same_output_gate_refs"]["rust_replay"].pop("replay_kind", None)
+        payload["same_output_gate_refs"]["rust_replay"].pop("correctness_role", None)
+        write_json(verified_path, payload)
+        verified_ref["sha256"] = validator.sha256_file(verified_path)
+
+        with self.assertRaisesRegex(ValueError, "rust_replay.path must point to direct C2Rust replay evidence"):
+            validator.validate_verified_unsafe_baseline_ref(
+                verified_ref,
+                "verified_unsafe_baseline",
                 repo_root=REPO_ROOT,
             )
 

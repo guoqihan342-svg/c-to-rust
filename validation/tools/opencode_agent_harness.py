@@ -2421,6 +2421,7 @@ def resume_worker_replay_command(
     payload = {
         "argv": argv,
         "command": shell_command_line(argv),
+        "replay_safety": resume_worker_replay_safety(worker, mode=mode),
         "assignment_path": worker.get("assignment_path"),
         "request_path": worker.get("request_path"),
         "summary_path": worker.get("summary_path"),
@@ -2428,6 +2429,48 @@ def resume_worker_replay_command(
         "out_root": worker.get("isolated_out_root") or worker.get("out_root"),
     }
     return {key: value for key, value in payload.items() if value is not None}
+
+
+def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[str, Any]:
+    if mode != "opencode":
+        return {
+            "status": "ready",
+            "reason": "deterministic_replay_command",
+        }
+    missing: list[str] = []
+    preflight = worker.get("opencode_preflight_report")
+    if not isinstance(preflight, dict):
+        missing.append("opencode_preflight_report")
+        preflight = {}
+    preflight_path = preflight.get("path")
+    if not isinstance(preflight_path, str) or not preflight_path:
+        missing.append("opencode_preflight_report.path")
+    policy = preflight.get("launch_policy")
+    if not isinstance(policy, dict):
+        missing.append("opencode_preflight_report.launch_policy")
+        policy = {}
+    opencode_command = policy.get("opencode_command")
+    if not isinstance(opencode_command, str) or not opencode_command:
+        missing.append("opencode_preflight_report.launch_policy.opencode_command")
+    if not isinstance(policy.get("opencode_skip_permissions"), bool):
+        missing.append("opencode_preflight_report.launch_policy.opencode_skip_permissions")
+    if missing:
+        return {
+            "status": "blocked",
+            "reason": "opencode_preflight_required_for_replay",
+            "missing_constraints": missing,
+            "boundary": (
+                "OpenCode replay commands require the preflight launch contract; "
+                "otherwise the command is only an index entry, not a safe replay recipe."
+            ),
+        }
+    return {
+        "status": "ready",
+        "reason": "opencode_preflight_contract_bound",
+        "preflight_report": preflight_path,
+        "launch_policy_sha256": preflight.get("launch_policy_sha256")
+        or opencode_launch_policy_sha256(normalize_opencode_launch_policy(policy)),
+    }
 
 
 def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> None:
