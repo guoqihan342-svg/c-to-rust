@@ -270,6 +270,12 @@ def require_opencode_preflight_proof_summary_contract(
     )
     if contract.get("status") != proof.get("contract_status"):
         raise ValueError(f"{label}.contract_status must match preflight_report.contract_verification.status")
+    require_opencode_preflight_session_contract(
+        preflight_payload,
+        contract,
+        f"{label}.preflight_report",
+        repo_root=repo_root,
+    )
 
     availability = require_object(
         preflight_payload.get("opencode_model_availability"),
@@ -295,6 +301,72 @@ def require_opencode_preflight_proof_summary_contract(
         if expected_hash != checked_logs[stream]["sha256"]:
             raise ValueError(f"{label}.model_probe_logs.{stream}.sha256 must match preflight_report log sha256")
     judge_validator.validate_opencode_model_probe_log_hashes(availability, label, repo_root=repo_root)
+
+
+def require_opencode_preflight_session_contract(
+    preflight_payload: dict[str, Any],
+    contract: dict[str, Any],
+    label: str,
+    *,
+    repo_root: Path,
+) -> None:
+    if preflight_payload.get("process_returncode") != 0:
+        raise ValueError(f"{label} file process_returncode must be 0")
+    handoff_ref = judge_validator.validate_hash_bound_artifact_binding(
+        preflight_payload.get("handoff_contract"),
+        f"{label}.handoff_contract",
+        repo_root=repo_root,
+    )
+    handoff_payload = require_object(
+        judge_validator.load_json(judge_validator.repo_path(handoff_ref["path"], repo_root=repo_root)),
+        f"{label}.handoff_contract file",
+    )
+    if handoff_payload.get("runner_kind") != "opencode-preflight":
+        raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-preflight")
+    if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
+        raise ValueError(f"{label}.handoff_contract.run_id must match preflight_report.run_id")
+    worker_command = handoff_payload.get("worker_command")
+    if not isinstance(worker_command, list) or not worker_command or not all(
+        isinstance(item, str) and item for item in worker_command
+    ):
+        raise ValueError(f"{label}.handoff_contract.worker_command must be a non-empty string list")
+    worker_command_line = judge_validator.require_string(
+        handoff_payload.get("worker_command_line"),
+        f"{label}.handoff_contract.worker_command_line",
+    )
+    if worker_command_line != judge_validator.shell_command_line(worker_command):
+        raise ValueError(f"{label}.handoff_contract.worker_command_line must match worker_command")
+    worker_command_sha256 = handoff_payload.get("worker_command_sha256")
+    if worker_command_sha256 != judge_validator.sha256_text(worker_command_line):
+        raise ValueError(f"{label}.handoff_contract.worker_command_sha256 must match worker_command_line")
+    marker_path_text = judge_validator.require_string(preflight_payload.get("marker_path"), f"{label}.marker_path")
+    expected_marker_path = judge_validator.require_string(
+        handoff_payload.get("expected_marker_path"),
+        f"{label}.handoff_contract.expected_marker_path",
+    )
+    if marker_path_text != expected_marker_path:
+        raise ValueError(f"{label}.marker_path must match handoff_contract.expected_marker_path")
+    marker_path = judge_validator.repo_path(marker_path_text, repo_root=repo_root)
+    if not marker_path.is_file():
+        raise ValueError(f"{label}.marker_path must exist")
+
+    session_ref = judge_validator.validate_hash_bound_artifact_binding(
+        preflight_payload.get("opencode_session_evidence"),
+        f"{label}.opencode_session_evidence",
+        repo_root=repo_root,
+    )
+    session_evidence = require_object(
+        judge_validator.load_json(judge_validator.repo_path(session_ref["path"], repo_root=repo_root)),
+        f"{label}.opencode_session_evidence file",
+    )
+    judge_validator.validate_opencode_contract_recomputed_from_session(
+        embedded_verification=contract,
+        session_evidence=session_evidence,
+        worker_command=worker_command,
+        summary_path=marker_path,
+        label=label,
+        repo_root=repo_root,
+    )
 
 
 def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> None:

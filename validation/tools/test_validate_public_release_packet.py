@@ -1,4 +1,5 @@
 import json
+import shlex
 import tempfile
 import unittest
 from pathlib import Path
@@ -36,20 +37,108 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
     stdout_path.write_bytes(b"zhipu/GLM-5.1\n")
     stderr_path.write_bytes(b"")
+    marker_path = root / "harness" / "opencode-preflight-marker.json"
+    handoff_path = root / "harness" / "opencode-preflight-contract.json"
+    session_path = root / "logs" / "opencode-preflight-session-evidence.json"
+    marker_command = [
+        "python3",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_relative(marker_path),
+        "--run-id",
+        run_id,
+    ]
+    marker_command_line = shlex.join(marker_command)
+    launch_policy = {
+        "opencode_command": "opencode",
+        "opencode_model": "GLM-5.1",
+        "opencode_variant": "max",
+        "opencode_skip_permissions": False,
+    }
+    write_json(
+        marker_path,
+        {
+            "schema_version": 1,
+            "report_kind": "opencode-preflight-marker",
+            "run_id": run_id,
+            "status": "written",
+        },
+    )
+    write_json(
+        handoff_path,
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "runner_kind": "opencode-preflight",
+            "expected_marker_path": repo_relative(marker_path),
+            "worker_command": marker_command,
+            "worker_command_line": marker_command_line,
+            "worker_command_sha256": judge_validator.sha256_text(marker_command_line),
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": judge_validator.sha256_text(json.dumps(launch_policy, sort_keys=True)),
+        },
+    )
+    write_json(
+        session_path,
+        {
+            "schema_version": 1,
+            "process_returncode": 0,
+            "parsed": True,
+            "format": "jsonl",
+            "session_events": [
+                {
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": marker_command_line,
+                                "workdir": str(REPO_ROOT),
+                            }
+                        },
+                    }
+                }
+            ],
+        },
+    )
     preflight_path = root / "harness" / "opencode-preflight-report.json"
     preflight_payload = {
         "schema_version": 1,
         "run_id": run_id,
         "status": "passed",
+        "process_returncode": 0,
         "marker_exists": True,
+        "marker_path": repo_relative(marker_path),
         "opencode_run_launched": True,
-        "launch_policy": {
-            "opencode_command": "opencode",
-            "opencode_model": "GLM-5.1",
-            "opencode_variant": "max",
-            "opencode_skip_permissions": False,
+        "launch_policy": launch_policy,
+        "handoff_contract": {
+            "path": repo_relative(handoff_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(handoff_path),
         },
-        "contract_verification": {"status": "executed"},
+        "opencode_session_evidence": {
+            "path": repo_relative(session_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(session_path),
+        },
+        "contract_verification": {
+            "status": "executed",
+            "expected_worker_command_line": marker_command_line,
+            "expected_summary_path": repo_relative(marker_path),
+            "expected_worker_command_sha256": judge_validator.sha256_text(marker_command_line),
+            "executed_shell_command_count": 1,
+            "executed_shell_commands": [marker_command_line],
+            "first_shell_command": marker_command_line,
+            "first_shell_tool_name": "bash",
+            "first_shell_workdir_status": "repo_root",
+            "first_shell_command_matches_worker_command": True,
+            "first_shell_workdir_matches_repo_root": True,
+            "tools_before_first_shell": [],
+            "contract_failure_reason": "",
+            "worker_command_seen": True,
+            "summary_exists": True,
+        },
         "opencode_model_availability": {
             "status": "available",
             "opencode_command": "opencode",
@@ -106,6 +195,45 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
             "it is not semantic acceptance or translator coverage."
         ),
     }
+
+
+def packet_preflight_path(packet: dict) -> Path:
+    proof = packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]
+    return REPO_ROOT / proof["preflight_report"]["path"]
+
+
+def packet_preflight_marker_command_line(packet: dict) -> str:
+    preflight_payload = json.loads(packet_preflight_path(packet).read_text(encoding="utf-8"))
+    handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+    handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+    return handoff_payload["worker_command_line"]
+
+
+def rewrite_packet_preflight_session(packet: dict, session_payload: dict) -> None:
+    preflight_path = packet_preflight_path(packet)
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    session_ref = preflight_payload["opencode_session_evidence"]
+    session_path = REPO_ROOT / session_ref["path"]
+    write_json(session_path, session_payload)
+    session_ref["sha256"] = judge_validator.sha256_file(session_path)
+    write_json(preflight_path, preflight_payload)
+    packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["preflight_report"]["sha256"] = (
+        judge_validator.sha256_file(preflight_path)
+    )
+
+
+def sync_packet_bound_bundle(packet: dict) -> None:
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["opencode_runtime"]["preflight_proof_summary"] = json.loads(
+        json.dumps(packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"])
+    )
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+    notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+    notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+    packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
 
 
 def valid_packet(root: Path) -> dict:
@@ -492,6 +620,111 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("required_model must be GLM-5.1" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_rejects_preflight_session_without_shell_call(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-no-shell-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        rewrite_packet_preflight_session(
+            packet,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [],
+            },
+        )
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "contract_verification.status recomputed from opencode_session_evidence must be executed" in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_preflight_first_shell_mismatch_even_if_marker_runs_later(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-late-marker-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        marker_command_line = packet_preflight_marker_command_line(packet)
+        rewrite_packet_preflight_session(
+            packet,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": "python3 -B -c 'print(1)'", "workdir": str(REPO_ROOT)}},
+                        }
+                    },
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": marker_command_line, "workdir": str(REPO_ROOT)}},
+                        }
+                    },
+                ],
+            },
+        )
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("first_shell_command_mismatch_worker_command_seen_later" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_preflight_session_evidence_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-session-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        preflight_payload = json.loads(packet_preflight_path(packet).read_text(encoding="utf-8"))
+        session_path = REPO_ROOT / preflight_payload["opencode_session_evidence"]["path"]
+        session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+        session_payload["session_events"] = []
+        write_json(session_path, session_payload)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("opencode_session_evidence sha256 mismatch" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_preflight_handoff_contract_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-handoff-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        preflight_payload = json.loads(packet_preflight_path(packet).read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["worker_command_line"] = "python3 -B -c 'print(1)'"
+        write_json(handoff_path, handoff_payload)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("handoff_contract sha256 mismatch" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_validate_packet_rejects_artifact_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-drift-", dir=REPO_ROOT / "target"))
