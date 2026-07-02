@@ -32,6 +32,16 @@ REQUIRED_REVIEW_CHECKLIST_ITEMS = [
     "public_claim_boundary",
     "known_refusals",
 ]
+LF_STABLE_TEXT_SUFFIXES = {
+    ".json",
+    ".jsonl",
+    ".md",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -986,7 +996,10 @@ def nonnegative_count(value: Any) -> int | None:
 
 
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def rel(repo_root: Path, path: Path) -> str:

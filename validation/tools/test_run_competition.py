@@ -13,6 +13,23 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "validation" / "tools" / "run_competition.py"
 SUMMARY_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
+LF_STABLE_TEXT_SUFFIXES = {
+    ".json",
+    ".jsonl",
+    ".md",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
+
+def lf_stable_sha256(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def load_runner_module():
@@ -160,7 +177,7 @@ def write_worker_summary(
         metrics_path.write_text(json.dumps(workflow_metrics, sort_keys=True), encoding="utf-8")
         summary["workflow_metrics"] = {
             "path": "workflow-metrics.json",
-            "sha256": hashlib.sha256(metrics_path.read_bytes()).hexdigest(),
+            "sha256": lf_stable_sha256(metrics_path),
         }
     path.write_text(json.dumps(summary), encoding="utf-8")
     return path
@@ -238,7 +255,7 @@ def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> di
         **{
             name: {
                 "path": f"evidence/{path.name}",
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "sha256": lf_stable_sha256(path),
             }
             for name, path in artifacts.items()
         },
@@ -295,7 +312,7 @@ def write_direct_before_after_manifest(out_root: Path, target_id: str, slice_id:
         **{
             name: {
                 "path": f"evidence/{target_id}/auto-translation/{slice_id}/{path.name}",
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "sha256": lf_stable_sha256(path),
             }
             for name, path in artifacts.items()
         },
@@ -1554,7 +1571,7 @@ class RunCompetitionTests(unittest.TestCase):
                             "llm_calls": 2,
                             "repair_history": {
                                 "patch_events_path": "workers/worker-a/logs/repair-history.jsonl",
-                                "patch_events_sha256": hashlib.sha256(repair_history_path.read_bytes()).hexdigest(),
+                                "patch_events_sha256": lf_stable_sha256(repair_history_path),
                                 "statuses": ["failed", "verified"],
                                 "rollback_ids": ["rollback-1"],
                                 "verified": True,
@@ -1633,7 +1650,7 @@ class RunCompetitionTests(unittest.TestCase):
                             "auto_recovered": True,
                             "repair_history": {
                                 "patch_events_path": repair_history_path.name,
-                                "patch_events_sha256": hashlib.sha256(repair_history_path.read_bytes()).hexdigest(),
+                                "patch_events_sha256": lf_stable_sha256(repair_history_path),
                                 "statuses": ["failed", "verified"],
                                 "rollback_ids": [],
                                 "verified": True,

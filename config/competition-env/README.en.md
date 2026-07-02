@@ -81,7 +81,7 @@ Workflow:
 Run the standalone verifier when machine-readable evidence is needed:
 
 ```bash
-python validation/tools/verify_vendored_clang.py \
+python3 -B validation/tools/verify_vendored_clang.py \
   --proof-class wsl-local-simulation \
   --out target/competition-smoke/summary/vendored-clang-verification.json
 ```
@@ -120,7 +120,7 @@ Lightweight Linux/WSL/CI smoke entrypoint:
 bash config/competition-env/smoke.sh ci-approximation target/competition-smoke
 
 # Equivalent Python entrypoint with an explicit run id.
-python validation/tools/run_competition_smoke.py \
+python3 -B validation/tools/run_competition_smoke.py \
   --proof-class ci-approximation \
   --run-id core-ci-smoke \
   --timeout-seconds 600 \
@@ -153,7 +153,7 @@ The runner performs entrypoint preflight without requiring local artifacts befor
 Reusable planned batch profile entrypoint:
 
 ```bash
-python -m validation.tools.opencode_agent_harness run-batch-profile \
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile \
   --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
   --run-id flashdb-fdb-utils-local \
   --out-root target/competition-out
@@ -182,11 +182,11 @@ The clang typed-IR competition lane is explicit opt-in:
 ```bash
 # Option 1: explicit CLANG_PATH through PATH, without storing a host absolute path
 export CLANG_PATH="clang"
-python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
+python3 -B validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 
 # Option 2: project-local clang detected by env.sh
 source config/competition-env/env.sh
-python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
+python3 -B validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 ```
 
 For committed or judge-facing evidence, do not set `CLANG_PATH="$(command -v clang)"`: the structured verifier rejects path-like `CLANG_PATH` values that resolve outside the repository and normalizes repo-local clang paths in command logs.

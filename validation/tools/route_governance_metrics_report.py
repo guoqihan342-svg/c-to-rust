@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-import hashlib
 import json
 from pathlib import Path
 import sys
@@ -285,7 +284,7 @@ def output_ref(output: dict[str, Any] | None) -> dict[str, Any] | None:
 def artifact_ref(repo_root: Path, path: Path) -> dict[str, Any]:
     return {
         "path": rel(repo_root, path),
-        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "sha256": milestone_release_report.sha256_file(path),
         "status": "present",
     }
 

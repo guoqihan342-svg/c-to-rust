@@ -7,11 +7,11 @@
   "case_count": 8,
   "fixture": {
     "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
-    "sha256": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928"
+    "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf"
   },
   "generated_draft": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-rust-draft.rs",
-    "sha256": "656df714ed044103bf7c218f80ccd38755cf7dc890163b9f3247080e0054ee78",
+    "sha256": "c311aed53bf7f469543a59ba48ea355d78c23d490f6a0cb3265486f7e85bd3cf",
     "status": "candidate"
   },
   "generated_draft_semantic_pass": false,

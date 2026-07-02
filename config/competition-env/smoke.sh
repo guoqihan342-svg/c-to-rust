@@ -22,6 +22,6 @@ out_root="${2:-target/competition-smoke}"
 
 source "${script_dir}/env.sh"
 cd "${repo_root}"
-python validation/tools/run_competition_smoke.py \
+python3 -B validation/tools/run_competition_smoke.py \
   --proof-class "${proof_class}" \
   --out-root "${out_root}"

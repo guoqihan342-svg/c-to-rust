@@ -494,15 +494,15 @@ def write_judge_demo_evidence_index(
     )
     reproduction_commands = {
         "judge_demo": (
-            "python -B -m validation.tools.judge_demo "
+            "python3 -B -m validation.tools.judge_demo "
             f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}{review_args}"
         ),
         "run_batch_profile": (
-            "python -B -m validation.tools.opencode_agent_harness run-batch-profile "
+            "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
             f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
         ),
         "milestone_release_report": (
-            "python -B validation/tools/milestone_release_report.py "
+            "python3 -B validation/tools/milestone_release_report.py "
             f"--competition-summary {summary_path_text} "
             f"--batch-profile-report {batch_profile_report_rel} "
             f"{milestone_review_args.strip() + ' ' if milestone_review_args else ''}"
@@ -511,7 +511,7 @@ def write_judge_demo_evidence_index(
     }
     if summary_path_text:
         reproduction_commands["summary_validation"] = (
-            "python -B validation/tools/validate_competition_run_summary.py "
+            "python3 -B validation/tools/validate_competition_run_summary.py "
             f"--summary {summary_path_text}"
         )
 
@@ -612,7 +612,10 @@ def portable_argv(argv: list[str]) -> list[str]:
         return []
     executable = Path(argv[0]).name.lower()
     if executable.startswith("python"):
-        return ["python", *argv[1:]]
+        rest = list(argv[1:])
+        if not rest or rest[0] != "-B":
+            rest.insert(0, "-B")
+        return ["python3", *rest]
     return list(argv)
 
 

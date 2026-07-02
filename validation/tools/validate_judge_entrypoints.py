@@ -176,8 +176,39 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".h",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".conf",
+    ".rs",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+LF_STABLE_TEXT_NAMES = {
+    ".npmrc",
+    "sources.list",
+}
+
+
+def should_normalize_lf_for_hash(path: Path) -> bool:
+    return path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES or path.name in LF_STABLE_TEXT_NAMES
+
+
+def lf_stable_file_bytes(path: Path) -> bytes:
+    data = path.read_bytes()
+    if not should_normalize_lf_for_hash(path):
+        return data
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(lf_stable_file_bytes(path)).hexdigest()
 
 
 def sha256_text(value: str) -> str:
@@ -1172,8 +1203,8 @@ def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id
     command = require_string(profile.get("opencode_command"), f"{entry_id} opencode profile opencode_command")
     variant = require_string(profile.get("opencode_variant"), f"{entry_id} opencode profile opencode_variant")
     model = profile.get("opencode_model")
-    if model is not None and not isinstance(model, str):
-        raise ValueError(f"{entry_id} opencode profile opencode_model must be a string or null")
+    if not isinstance(model, str) or not model:
+        raise ValueError(f"{entry_id} opencode profile opencode_model must be a non-empty string")
     agent = profile.get("opencode_agent")
     if agent is not None and not isinstance(agent, str):
         raise ValueError(f"{entry_id} opencode profile opencode_agent must be a string or null")

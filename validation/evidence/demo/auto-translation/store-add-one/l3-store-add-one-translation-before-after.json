@@ -1,11 +1,27 @@
 {
-  "schema_version": 1,
-  "status": "bound",
-  "target_id": "demo",
-  "slice_id": "store-add-one",
+  "accepted_patch": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
+    "sha256": "414f5b94303dc5be7cbe0e4fe58e5ae09a0a5b38f54804112235bdd03d08d334"
+  },
   "baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-baseline-unsafe.rs",
     "sha256": "34b6214df0783c6adde909f0eb18423f63f7e04d95e87b45d9fd6d3ac5d006bd"
+  },
+  "claim_boundary": {
+    "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+    "function": "store_add_one",
+    "non_goals": [
+      "NULL out pointers",
+      "INT_MAX signed overflow",
+      "aliasing",
+      "pointer arithmetic",
+      "whole-program translation"
+    ],
+    "observable_fields": [
+      "return_code",
+      "status",
+      "out0"
+    ]
   },
   "final": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-safe.rs",
@@ -13,51 +29,35 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-final-verification.json",
-    "sha256": "39aba0abfcd860acdbd33c66a185a00f3b6c3cdf56bfca7984fbfe3daa406f48"
-  },
-  "accepted_patch": {
-    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
-    "sha256": "414f5b94303dc5be7cbe0e4fe58e5ae09a0a5b38f54804112235bdd03d08d334"
+    "sha256": "dcf1cfe311b07db6f4d9f9f37646f42cd98944c3e67cd435c00531a8a8834945"
   },
   "patch_log": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-safety-step-log.jsonl",
-    "sha256": "acc4dd5feac45fdb7572e56ab0521d26a5a024e924f006a65f1ab61ce6b293a6"
+    "sha256": "fe9df7c549ce180675a6f31fd0a7bcf4f0bd058f5d35808c38a4bd9f36d50154"
   },
+  "schema_version": 1,
+  "semantic_evidence": {
+    "final_source_snapshot": {
+      "path": "validation/l2_slices/src/store_add_one.rs",
+      "sha256": "b12284e94a7e5ba1e10091ff6046847fc6e5e0755c82143d1d28ed06dcad7902"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
+      "sha256": "d561c4a99b2361b14d4cd288419c53929a97bd27335c89e43aac10b673303565"
+    }
+  },
+  "slice_id": "store-add-one",
+  "status": "bound",
+  "target_id": "demo",
   "unsafe_reduction": {
-    "status": "measured",
     "baseline_total_unsafe": 3,
     "current_total_unsafe": 0,
+    "ratio": 0.0,
     "reduced_by": 3,
-    "ratio": 0.0
+    "status": "measured"
   },
   "unsafe_scan_evidence": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-before-after-unsafe-scan.json",
     "sha256": "7dd34594ddca5c619370dcf61b64df181bbb92db14edbc45df320fad8cc81f77"
-  },
-  "semantic_evidence": {
-    "schema_diff": {
-      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-diff.json",
-      "sha256": "db85df697c504d409f6f125a7383d2ab51fbd82221ffacc6d6637881a049f1c8"
-    },
-    "final_source_snapshot": {
-      "path": "validation/l2_slices/src/store_add_one.rs",
-      "sha256": "b12284e94a7e5ba1e10091ff6046847fc6e5e0755c82143d1d28ed06dcad7902"
-    }
-  },
-  "claim_boundary": {
-    "function": "store_add_one",
-    "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
-    "observable_fields": [
-      "return_code",
-      "status",
-      "out0"
-    ],
-    "non_goals": [
-      "NULL out pointers",
-      "INT_MAX signed overflow",
-      "aliasing",
-      "pointer arithmetic",
-      "whole-program translation"
-    ]
   }
 }

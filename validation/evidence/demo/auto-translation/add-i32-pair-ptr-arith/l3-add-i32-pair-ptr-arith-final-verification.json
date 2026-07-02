@@ -59,20 +59,20 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+    "sha256": "f217ab0aaae68e69cff4673d6485c398719fea7324789d9d9aac57da6af5a24a",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/add-i32-pair-ptr-arith-c-oracle.json",
-    "sha256": "1f84e40cedfc3b708c0ad8a62e4891ea7896a55f5c8f2438fb7e40e96304f928"
+    "sha256": "566655a32299d5b600d92b3c3f6e41ecad274c355771919c2840b8119f40bbaf"
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
   "route_decision": {
     "level": "L2",
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-route-decision.json",
-    "sha256": "41a3fad2d8e24549ed4639913bdca2a9dacd4c9c7583bb7212bd5d598a2f6014",
+    "sha256": "7284dcbdd7696aeac0ee76fb2e0c2ace6162254d4061c6079a85f4fd58e440f1",
     "status": "recorded"
   },
   "rust_check_status": "passed",
@@ -90,7 +90,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-validation-profile.json",
     "profile": "L2-dev",
-    "sha256": "e178e8b431c09b7ba446e468cea0e6332dbba714613e8dc1f81622240b66e579",
+    "sha256": "2c798072f34e98166808161a9a3b118b17dc58e6875e0be42f36c0cedf24e633",
     "status": "passed"
   },
   "validation_profile_status": "passed",

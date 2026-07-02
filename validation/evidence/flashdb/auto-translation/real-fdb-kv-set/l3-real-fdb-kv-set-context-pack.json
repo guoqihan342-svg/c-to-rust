@@ -500,7 +500,7 @@
   "slice_id": "real-fdb-kv-set",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd"
+    "sha256": "bf49e63a9695730fb43e47dae0f3fb2439da286d023a54f427f5c94edcfda5da"
   },
   "source_boundary": {
     "direct_call_edges": [],

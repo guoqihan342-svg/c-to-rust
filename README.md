@@ -134,7 +134,7 @@
 
 ## 待办来源
 
-全局 roadmap/backlog 只维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md`。其它清单只允许是局部用途：OpenSpec `tasks.md` 是单个 change 的交付步骤，`validation/**/checklist.md` 是证据模板验收清单，`docs/superpowers/plans/**` 是历史实施计划，`validation/evidence/**/*.md` 是历史证据记录。
+全局 roadmap/backlog 只维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md` 与 `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`。其它清单只允许是局部用途：OpenSpec `tasks.md` 是单个 change 的交付步骤，`validation/**/checklist.md` 是证据模板验收清单，`docs/superpowers/plans/**` 是历史实施计划，`validation/evidence/**/*.md` 是历史证据记录。
 
 ## OpenCode 比赛单次交互
 
@@ -155,14 +155,14 @@ cargo test --manifest-path crates/c2r-translator/Cargo.toml
 cargo test --manifest-path crates/c2r-translator/Cargo.toml --features clang-lowering-report
 
 # 运行 auto migration（以 FlashDB crc32 为例）
-python validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root target/tmp --emit-clang-lowering-report
+python3 -B validation/tools/auto_migrate.py --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --out-root target/tmp --emit-clang-lowering-report
 
 # 验证自动翻译证据
-python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
+python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json
 
 # 语义通过验证
-python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
-python validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
+python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-calc-crc32 --slice-spec validation/slice-specs/flashdb-real-fdb-calc-crc32.json --require-semantic-pass
+python3 -B validation/tools/validate_auto_translation_evidence.py --target-id flashdb --slice-id real-fdb-blob-make --slice-spec validation/slice-specs/flashdb-real-fdb-blob-make.json --require-semantic-pass
 
 # Harness worker accepted-evidence 复用 smoke
 python3 -B -m validation.tools.opencode_agent_harness run-worker --db target/competition-out/state/opencode-agent-harness.sqlite3 --run-id run-demo-001 --worker-id worker-a --mode deterministic
@@ -177,7 +177,7 @@ python3 -B -m validation.tools.judge_demo --profile config/competition-env/plann
 python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 # 公开审阅 Markdown: target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
 # 公开 release packet JSON: target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
-python -B -m validation.tools.validate_public_release_packet --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
+python3 -B -m validation.tools.validate_public_release_packet --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 # evaluate 入口续跑索引: target/competition-out-flashdb-*-evaluate-profile-20260701/harness/resume-manifest.json
 # 聚焦 before/after 展品时可只跑单入口；competition smoke 只证明环境和轻量 evidence gate，semantic_gate=false
 python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
@@ -186,8 +186,8 @@ python3 -B -m validation.tools.run_judge_entrypoints --config config/competition
 
 # 全量回归
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
-python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
-python validation/tools/unsafe_budget.py --max-ratio 0.10
+python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
 openspec validate --all --strict
 ```
 
@@ -206,7 +206,7 @@ openspec validate --all --strict
 - 会话接手短交接：`CONTEXT.md`
 - C2Rust 专题文档索引：`docs/c2rust-migration-agent/README.md`
 - 文档分类索引：`docs/c2rust-migration-agent/index/README.md`
-- 唯一全局待办：`docs/c2rust-migration-agent/future-vision-and-mvp.md`
+- 唯一全局待办：`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
 - 验证框架：`validation/README.md`
 - 验证门禁：`validation/gates.md`
 - 核心翻译架构：`docs/c2rust-migration-agent/core-translation-architecture.md`

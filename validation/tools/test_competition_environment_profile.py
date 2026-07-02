@@ -1,9 +1,12 @@
 import hashlib
 import json
 import re
+import tempfile
 import tomllib
 import unittest
 from pathlib import Path, PurePosixPath
+
+from validation.tools import validate_judge_entrypoints as judge_validator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -27,7 +30,7 @@ def load_json(path: Path) -> dict:
 
 
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return judge_validator.sha256_file(path)
 
 
 def assert_repo_relative_posix(testcase: unittest.TestCase, path_text: str) -> None:
@@ -135,6 +138,92 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("-Xclang -ast-dump=json", validation["minimum_tu_command"])
         self.assertIn("resource_dir", validation["required_evidence"])
         self.assertIn("minimum_tu_ast_dump", validation["required_evidence"])
+
+    def test_judge_artifact_hash_is_lf_stable_for_text_files_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            json_artifact = tmp_path / "artifact.json"
+            json_artifact.write_bytes(b'{"status":"passed"}\r\n')
+            expected_text_sha = hashlib.sha256(b'{"status":"passed"}\n').hexdigest()
+
+            self.assertEqual(judge_validator.sha256_file(json_artifact), expected_text_sha)
+
+            rust_artifact = tmp_path / "candidate.rs"
+            rust_artifact.write_bytes(b"fn main() {}\r\n")
+            expected_rust_sha = hashlib.sha256(b"fn main() {}\n").hexdigest()
+
+            self.assertEqual(judge_validator.sha256_file(rust_artifact), expected_rust_sha)
+
+            c_artifact = tmp_path / "source.c"
+            c_artifact.write_bytes(b"int main(void) { return 0; }\r\n")
+            expected_c_sha = hashlib.sha256(b"int main(void) { return 0; }\n").hexdigest()
+
+            self.assertEqual(judge_validator.sha256_file(c_artifact), expected_c_sha)
+
+            binary_artifact = tmp_path / "artifact.rlib"
+            binary_artifact.write_bytes(b"\x00\r\n\xff")
+            expected_binary_sha = hashlib.sha256(b"\x00\r\n\xff").hexdigest()
+
+            self.assertEqual(judge_validator.sha256_file(binary_artifact), expected_binary_sha)
+
+    def test_competition_config_hash_is_lf_stable_for_extensionless_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for relative in [
+                "config/competition-env/apt/sources.list",
+                "config/competition-env/npm/.npmrc",
+                "config/competition-env/pip/pip.conf",
+            ]:
+                config_path = tmp_path / relative
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_bytes(b"line1\r\nline2\r\n")
+                self.assertEqual(
+                    judge_validator.sha256_file(config_path),
+                    hashlib.sha256(b"line1\nline2\n").hexdigest(),
+                    relative,
+                )
+
+    def test_repo_attributes_keep_judge_text_paths_lf_stable(self) -> None:
+        attributes = (REPO_ROOT / ".gitattributes").read_text(encoding="utf-8")
+
+        for required in [
+            "*.json text eol=lf",
+            "*.jsonl text eol=lf",
+            "*.md text eol=lf",
+            "*.py text eol=lf",
+            "*.rs text eol=lf",
+            "*.c text eol=lf",
+            "*.h text eol=lf",
+            "*.toml text eol=lf",
+            "*.conf text eol=lf",
+            "*.yml text eol=lf",
+            "*.yaml text eol=lf",
+            "*.sh text eol=lf",
+            "config/competition-env/apt/sources.list text eol=lf",
+            "config/competition-env/npm/.npmrc text eol=lf",
+            "validation/evidence/**/*.rlib binary -eol",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, attributes)
+
+    def test_competition_bootstrap_files_are_judge_replayable(self) -> None:
+        requirements = REPO_ROOT / "requirements.txt"
+        bootstrap = REPO_ROOT / "scripts" / "bootstrap_flashdb_sources.sh"
+        smoke = PROFILE_DIR / "smoke.sh"
+
+        self.assertTrue(requirements.exists())
+        self.assertIn("jsonschema", requirements.read_text(encoding="utf-8"))
+        self.assertTrue(bootstrap.exists())
+        bootstrap_text = bootstrap.read_text(encoding="utf-8")
+        self.assertIn("https://gitcode.com/xwxf/FlashDB.git", bootstrap_text)
+        self.assertIn("f9d0421315c564fb890a1b14eee77b290e0d7bbe", bootstrap_text)
+
+        smoke_text = smoke.read_text(encoding="utf-8")
+        self.assertIn("python3 -B validation/tools/run_competition_smoke.py", smoke_text)
+        self.assertNotIn("\npython validation/tools/run_competition_smoke.py", smoke_text)
+
+        opencode_config = load_json(REPO_ROOT / "opencode.json")
+        self.assertEqual(opencode_config.get("plugin"), [])
 
     def test_competition_profile_records_flashdb_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
@@ -547,6 +636,15 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         )
         self.assertIn("opencode preflight", " ".join(opencode_multi_worker["judge_focus"]))
         self.assertIn("runtime contract", " ".join(opencode_multi_worker["judge_focus"]))
+        opencode_profile = load_json(
+            PROFILE_DIR / "planned-batches" / "flashdb-fdb-utils-opencode-explicit-workers.json"
+        )
+        self.assertEqual(opencode_profile["mode"], "opencode")
+        self.assertEqual(opencode_profile["opencode_model"], "GLM-5.1")
+        self.assertEqual(opencode_profile["opencode_variant"], "max")
+        self.assertTrue(opencode_profile["opencode_skip_permissions"])
+        self.assertTrue(opencode_profile["auto_retry"])
+        self.assertEqual(opencode_profile["max_workers"], 2)
 
         for entry in config["entrypoints"]:
             self.assertEqual(entry["proof_class"], "local-simulation")
@@ -638,9 +736,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "source config/competition-env/env.sh",
             "bash config/competition-env/toolchain-check.sh",
             "validation/tools/run_competition.py",
-            "python validation/tools/run_competition_smoke.py --proof-class ci-approximation",
-            "python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation",
-            "python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact",
+            "python3 -B validation/tools/run_competition_smoke.py --proof-class ci-approximation",
+            "python3 -B validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation",
+            "python3 -B validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact",
             "competition-run-summary.json",
             "target/competition-smoke/summary/competition-smoke-summary.json",
             "target/competition-out/summary/competition-run-summary.json",
@@ -650,7 +748,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "l3-real-fdb-calc-crc32-negative-diff.json",
             "l3-real-fdb-calc-crc32-final-verification.json",
             "target/competition-out/logs/commands.jsonl",
-            "python -m validation.tools.opencode_agent_harness run-worker",
+            "python3 -B -m validation.tools.opencode_agent_harness run-worker",
             "--mode opencode",
             "--opencode-variant max",
             "opencode_runtime_env",
@@ -795,8 +893,35 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         )
 
         self.assertIn("validation.tools.test_competition_environment_profile", workflow)
+        self.assertIn("validation.tools.test_resync_sha_bindings", workflow)
+        self.assertIn("validation.tools.test_opencode_agent_harness", workflow)
+        self.assertIn("bash scripts/bootstrap_flashdb_sources.sh", workflow)
+        self.assertIn("git ls-files --eol", workflow)
+        self.assertIn("[iw]/(crlf|mixed)", workflow)
+        self.assertIn("validation.tools.resync_sha_bindings --scan-root config/competition-env --dry-run --check", workflow)
+        self.assertIn("validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check", workflow)
         self.assertIn("config/competition-env/**", workflow)
+        self.assertIn("validation/evidence/**", workflow)
+        self.assertIn("validation/slice-specs/**", workflow)
+        self.assertIn("requirements.txt", workflow)
+        self.assertIn(".gitattributes", workflow)
+        self.assertIn("scripts/bootstrap_flashdb_sources.sh", workflow)
+        self.assertIn("opencode.json", workflow)
         self.assertNotIn("validation/environment-profiles/**", workflow)
+
+    def test_repo_owned_c2rust_skill_tracks_competition_harness_gates(self) -> None:
+        skill_path = REPO_ROOT / ".codex" / "skills" / "c2rust-migration" / "SKILL.md"
+        self.assertTrue(skill_path.is_file())
+        skill = skill_path.read_text(encoding="utf-8")
+
+        self.assertIn("python3 -B", skill)
+        self.assertNotIn("python -B", skill)
+        self.assertIn("git clone -c core.autocrlf=false --no-local", skill)
+        self.assertIn("validation.tools.resync_sha_bindings --scan-root config/competition-env --dry-run --check", skill)
+        self.assertIn("validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check", skill)
+        self.assertIn("validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json", skill)
+        self.assertIn("validation.tools.run_judge_entrypoints --dry-run", skill)
+        self.assertIn("GLM-5.1", skill)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())

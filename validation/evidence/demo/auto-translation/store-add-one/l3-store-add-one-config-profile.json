@@ -54,7 +54,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099"
+    "sha256": "7465c7e7c4eb83ed3ba1a8aa087323ae69ca6ad0d8571b1d3da9ba4f180e9dec"
   },
   "feature_matrix": {
     "auto_translation_candidate": true

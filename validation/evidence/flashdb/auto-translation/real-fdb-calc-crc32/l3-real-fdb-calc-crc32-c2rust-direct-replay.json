@@ -2,7 +2,7 @@
   "bound_inputs": {
     "baseline_manifest": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "5bef68c8fe3d8b3c1642745988c7cf647af93c3624c924c537cf6762009e293b",
+      "sha256": "ec9f51cabd9d3f9311da4fdb9b4ec89663ba4399a9290311e2ffbf6bc9fed761",
       "status": "generated"
     },
     "c2rust_output": {
@@ -23,11 +23,11 @@
     "fixture": {
       "case_count": 2,
       "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-      "sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf"
+      "sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7"
     },
     "rust_toolchain": {
       "path": "config/competition-env/rust/rust-toolchain.toml",
-      "sha256": "2c108b6a37757f2801a33342354d1d89eeff673fa878e1afafbe756afb03d5fa",
+      "sha256": "d67b5f377585e306f12d469ef2b207744740149454a2b5a91969e8b6ca792f84",
       "status": "present"
     },
     "source_files": [
@@ -132,7 +132,7 @@
   "fixture": {
     "case_count": 2,
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf"
+    "sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7"
   },
   "generated_draft_semantic_pass": false,
   "observable_replay_pass": true,

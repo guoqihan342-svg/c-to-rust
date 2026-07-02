@@ -50,7 +50,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "2f2d79c62a01a0aacb07b8ba823b68f7ee60a3940f147a68f5e7a7a2b0155cc7"
+    "sha256": "d88993b7dff4f8f48dc1c370f1fc6d25b130e0aa1aaf95226d139603bbe3510a"
   },
   "feature_matrix": {
     "auto_translation_candidate": true

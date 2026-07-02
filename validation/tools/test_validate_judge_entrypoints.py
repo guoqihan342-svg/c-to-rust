@@ -669,7 +669,7 @@ def write_competition_run_summary_with_workflow_metrics(summary_path: Path, summ
 def opencode_launch_policy() -> dict:
     return {
         "opencode_command": "opencode",
-        "opencode_model": None,
+        "opencode_model": "GLM-5.1",
         "opencode_agent": None,
         "opencode_variant": "max",
         "opencode_skip_permissions": False,
@@ -1053,7 +1053,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             opencode_entry["profile_contract"]["opencode_launch_policy"],
             {
                 "opencode_command": "opencode",
-                "opencode_model": None,
+                "opencode_model": "GLM-5.1",
                 "opencode_agent": None,
                 "opencode_variant": "max",
                 "opencode_skip_permissions": True,
@@ -1248,6 +1248,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(opencode_entry["status"], "failed")
         self.assertIn(
             "opencode_multi_worker_evaluate_profile opencode profile opencode_skip_permissions must be a boolean",
+            result["errors"],
+        )
+
+    def test_opencode_profile_requires_explicit_model(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["opencode_model"] = None
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-null-model.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile opencode_model must be a non-empty string",
             result["errors"],
         )
 

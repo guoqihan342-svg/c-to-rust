@@ -83,13 +83,13 @@ Run the minimal environment smoke to quickly verify the baseline is ready:
 
 ```bash
 # Linux/CI (do not label as competition-exact)
-python validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
 
 # WSL / local Ubuntu
-python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
 
 # Only enable this on the actual competition host
-python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
 ```
 
 The smoke executes:
@@ -106,7 +106,7 @@ Output goes to `target/competition-smoke/summary/competition-smoke-summary.json`
 Use the unified runner `run_competition.py` for end-to-end slice translation:
 
 ```bash
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -135,7 +135,7 @@ The runner automatically performs:
 
 ```bash
 # Step 1: Extract the slice
-python validation/tools/extract_source_slice.py \
+python3 -B validation/tools/extract_source_slice.py \
   --repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -149,13 +149,13 @@ python validation/tools/extract_source_slice.py \
   --out target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json
 
 # Step 2: Run the translation pipeline
-python validation/tools/auto_migrate.py \
+python3 -B validation/tools/auto_migrate.py \
   --slice-spec target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json \
   --out-root target/competition-out/evidence \
   --competition-clang-lane
 
 # Step 3: Validate evidence
-python validation/tools/validate_auto_translation_evidence.py \
+python3 -B validation/tools/validate_auto_translation_evidence.py \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
   --slice-spec target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json \
@@ -173,7 +173,7 @@ Minimal run (sequential single slice):
 source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -192,13 +192,13 @@ python validation/tools/run_competition.py \
 To execute the same single request through the OpenCode worker wrapper, run the assigned worker exactly once and require its summary output:
 
 ```bash
-python -m validation.tools.opencode_agent_harness opencode-preflight \
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
   --opencode-variant max \
   --opencode-skip-permissions
 
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -218,7 +218,7 @@ When multiple independent real C slices need to be processed, use the OpenCode a
 ### 7.1 Initialize the SQLite Ledger
 
 ```bash
-python -m validation.tools.opencode_agent_harness init-run \
+python3 -B -m validation.tools.opencode_agent_harness init-run \
   --run-id run-demo-001 \
   --proof-class local-simulation \
   --out-root target/competition-out
@@ -227,7 +227,7 @@ python -m validation.tools.opencode_agent_harness init-run \
 ### 7.2 Assign a Slice to a Worker
 
 ```bash
-python -m validation.tools.opencode_agent_harness assign-slice \
+python3 -B -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -253,7 +253,7 @@ Repeat for worker-b, worker-c with other independent slices such as `fdb_kv_set`
 ### 7.3 Run a Worker
 
 ```bash
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -263,13 +263,13 @@ python -m validation.tools.opencode_agent_harness run-worker \
 `run-worker --mode deterministic` invokes the repo-local `scripts/c2rust-migrator.py --phase migrate --input ...` path and automatically performs the former `record-worker-summary` step when `competition-run-summary.json` exists. When local OpenCode / DeepSeek V4 Pro is connected, use the agent wrapper for the same request:
 
 ```bash
-python -m validation.tools.opencode_agent_harness opencode-preflight \
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
   --opencode-variant max \
   --opencode-skip-permissions
 
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -283,14 +283,14 @@ OpenCode workers create isolated config/data/cache/tmp under `target/competition
 ### 7.4 Generate and Execute the Merge Plan
 
 ```bash
-python -m validation.tools.opencode_agent_harness write-merge-plan \
+python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --proof-class local-simulation \
   --out-root target/competition-out
 
 # Then execute the command from the merge plan (example)
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --worker-summary target/competition-out/workers/worker-a/summary/competition-run-summary.json \
   --worker-summary target/competition-out/workers/worker-b/summary/competition-run-summary.json \
   --out-root target/competition-out \
@@ -486,10 +486,10 @@ source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
 # Environment smoke
-python validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
 
 # Translate a single slice
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -503,7 +503,7 @@ python validation/tools/run_competition.py \
   --proof-class local-simulation
 
 # Validate existing evidence only
-python validation/tools/validate_auto_translation_evidence.py \
+python3 -B validation/tools/validate_auto_translation_evidence.py \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
   --evidence-root target/competition-out/evidence \
   --require-semantic-pass
@@ -519,14 +519,14 @@ python3 -B -m validation.tools.run_judge_entrypoints \
 # The milestone bundle includes harness_architecture_summary.contract_matrix:
 # plan/translate/verify/repair/report -> roles, artifacts, validators, and non-semantic boundaries.
 
-python -B -m validation.tools.milestone_release_notes \
+python3 -B -m validation.tools.milestone_release_notes \
   --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
 
 # Generated by run_judge_entrypoints after the bundle and release notes are written
 # target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 # Validates schema, hashes, claim boundary, local-path hygiene, packet-to-bundle consistency, and release notes rendering
-python -B -m validation.tools.validate_public_release_packet \
+python3 -B -m validation.tools.validate_public_release_packet \
   --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 
 # evaluate profile resume indexes are generated by the entrypoints and deep-validated by the validator
@@ -534,7 +534,7 @@ python -B -m validation.tools.validate_public_release_packet \
 # target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
 
 # Check unsafe
-python validation/tools/unsafe_budget.py --max-ratio 0.10
+python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
 
 # Check OpenSpec
 openspec validate --all --strict
@@ -543,10 +543,10 @@ openspec validate --all --strict
 cargo test --manifest-path crates/c2r-translator/Cargo.toml
 
 # Run core validation unit tests
-python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 
 # Run documentation mirror contract tests
-python -B -m unittest validation.tools.test_doc_mirror_contract
+python3 -B -m unittest validation.tools.test_doc_mirror_contract
 ```
 
 ## 12. Core Boundary Statements

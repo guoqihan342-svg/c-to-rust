@@ -73,6 +73,16 @@ OPENCODE_RUNTIME_ENV_KEYS = (
     "TEMP",
     "TMP",
 )
+LF_STABLE_TEXT_SUFFIXES = {
+    ".json",
+    ".jsonl",
+    ".md",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
 
 
 def main() -> int:
@@ -7784,7 +7794,10 @@ def repo_relative(path: Path, *, repo_root: Path = REPO_ROOT) -> str:
 
 
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:

@@ -64,19 +64,19 @@ P0 默认使用 `target/competition-out/state/opencode-agent-harness.sqlite3` �
 
 ```bash
 # 优先的可复用 profile 路径：
-python -m validation.tools.opencode_agent_harness run-batch-profile \
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile \
   --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
   --run-id <run-id> \
   --out-root target/competition-out
 
 # 展开调试路径：
-python -m validation.tools.opencode_agent_harness init-run \
+python3 -B -m validation.tools.opencode_agent_harness init-run \
   --run-id <run-id> \
   --proof-class <proof-class> \
   --out-root target/competition-out
 
 # 优先的文件级批量路径：
-python -m validation.tools.opencode_agent_harness plan-source-file \
+python3 -B -m validation.tools.opencode_agent_harness plan-source-file \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --target-id <target> \
@@ -91,7 +91,7 @@ python -m validation.tools.opencode_agent_harness plan-source-file \
   --worker-prefix worker \
   --out-root target/competition-out
 
-python -m validation.tools.opencode_agent_harness run-plan \
+python3 -B -m validation.tools.opencode_agent_harness run-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --plan target/competition-out/harness/plans/<target>-<source-stem>-workers.json \
@@ -103,7 +103,7 @@ python -m validation.tools.opencode_agent_harness run-plan \
   --out-root target/competition-out
 
 # 手工展开的单 worker 路径：
-python -m validation.tools.opencode_agent_harness assign-slice \
+python3 -B -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
@@ -123,21 +123,21 @@ python -m validation.tools.opencode_agent_harness assign-slice \
 #   --reuse-accepted-evidence
 #   --accepted-evidence-root validation/evidence
 
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
   --mode deterministic
 
 # 本机连接 OpenCode / DeepSeek V4 Pro 时，先验证 exact-command preflight：
-python -m validation.tools.opencode_agent_harness opencode-preflight \
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id <run-id> \
   --out-root target/opencode-preflight \
   --opencode-variant max \
   --opencode-skip-permissions
 
 # preflight 通过后才改用 agent 包装层：
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
@@ -152,7 +152,7 @@ OpenCode preflight launcher 和 worker launcher 会使用 repo-local runtime env
 
 `run-plan --auto-retry` 是有界自愈路径：失败 worker 会写入 repair hint，harness 重新执行同一个 worker，并在 worker 重新验证通过或达到 `REPAIR_ROUND_CAP=5` 上限时停止。`--max-workers` 控制并行 worker fan-out；报告用 `run_plan.graph.parallel_map.result_order=planner_order` 固定 planner 顺序 fan-in。retry 成功只说明 worker summary 重新验证通过；语义接受仍只看最终 summary validator、oracle/diff/unsafe gates。
 
-python -m validation.tools.opencode_agent_harness write-merge-plan \
+python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --proof-class <proof-class> \
@@ -174,18 +174,18 @@ python -m validation.tools.opencode_agent_harness write-merge-plan \
 2. 单个真实 C 源函数优先使用 runner 直接参数；批量或可复用输入可准备 `target/competition-out/extract-specs/<id>-<slice>.json`，至少包含 `repo_root`、`source_file`、`function`、`target_id`、`slice_id`，可选包含 `source_repository`、`source_branch`、`source_commit`、`require_source_commit`、`compiler_command_source`、`include_paths`、`defines`；`source_file` 必须是相对 `repo_root` 的路径。FlashDB 比赛打分源必须绑定 `https://gitcode.com/xwxf/FlashDB.git`、`competition` 分支和 `f9d0421315c564fb890a1b14eee77b290e0d7bbe`。
    — 直接参数和 JSON extract spec 都是 runner 调用 `extract_source_slice.py` 的参数化输入；不要手写 `c_source`。
 
-3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+3. python3 -B validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
    — 使用统一 runner 执行 slice 抽取、环境检查、typed-IR 迁移、证据验证、unsafe、OpenSpec 和 `competition-run-summary.json` 生成；runner 会把生成的 slice spec 写入 `target/competition-out/slice-specs/`。
    — 批量或可复用输入用 `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` 替代直接 source 参数。
    — 若多个独立 worker 已分别产出 summary，可用 `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json` 重复传入汇总；汇总 runner 不会重新处理这些 slice，会合并计数并在任一 worker failed/blocked 时让最终 gate 失败。
 
-4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
+4. python3 -B validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — 手动展开版的真实 C 源函数切片抽取。使用 runner 的 `--extract-spec` 时该步骤由 runner 调用。
 
-5. python validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
+5. python3 -B validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
    — 手动展开版的完整自动翻译管线：clang AST → typed IR → Rust draft → C oracle → Rust replay → diff → route/profile。使用 runner 时该步骤由 runner 调用。
 
-6. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
+6. python3 -B validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
    — 手动展开版的全量证据验证。使用 runner 时该步骤由 runner 调用。
 
 7. openspec validate --all --strict

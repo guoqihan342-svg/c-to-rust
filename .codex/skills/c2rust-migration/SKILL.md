@@ -33,6 +33,29 @@ Use this order for judge-facing work:
 
 Do not spend a development round on docs, schemas, refactors, or route metadata unless the change removes a before/after harness blocker, improves repair/retry convergence, improves unsafe monotonicity evidence, advances a real slice state, adds a fail-closed classification, or removes a competition reproduction blocker.
 
+## Competition Reproduction Gates
+
+- Use `python3 -B` for judge-facing Linux/CI commands. Do not publish legacy bare Python commands in quickstarts, replay commands, profiles, or CI gates.
+- Before treating a competition config or judge-chain change as release-ready, run both LF-stable hash gates:
+
+```bash
+python3 -B -m validation.tools.resync_sha_bindings --scan-root config/competition-env --dry-run --check
+python3 -B -m validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check
+```
+
+- For P0-H8 hash portability work, validate a fresh LF checkout before claiming the judge entrypoint is portable:
+
+```bash
+git clone -c core.autocrlf=false --no-local . target/repro-clone-lf-<stamp>
+cd target/repro-clone-lf-<stamp>
+python3 -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json
+python3 -B -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+```
+
+- Run `--require-local-artifacts` only after the entrypoints have generated their expected artifacts in that checkout. A fresh clone does not contain `target/` artifacts by default.
+- Keep OpenCode profile claims exact: model `GLM-5.1`, bounded `auto_retry=true`, 5 repair rounds, repo-local runtime dirs, and a passed `opencode-preflight` before worker launch.
+- Treat `git ls-files --eol` and `.gitattributes` drift as competition-entry blockers when text artifacts carry hash bindings.
+
 ## Repair Loop
 
 - Default repair cap is 5 rounds.
@@ -106,31 +129,31 @@ Before handing work back or starting another slice, leave these facts current:
 Run focused doc mirror validation after roadmap edits:
 
 ```bash
-python -B -m unittest validation.tools.test_doc_mirror_contract
+python3 -B -m unittest validation.tools.test_doc_mirror_contract
 ```
 
 Run the MCP scaffold contract tests after editing the thin verifier MCP:
 
 ```bash
-python -B -m unittest validation.tools.test_c2rust_verifier_mcp
+python3 -B -m unittest validation.tools.test_c2rust_verifier_mcp
 ```
 
 Run the translator coverage matrix after changing typed-IR or route evidence:
 
 ```bash
-python -B validation/tools/translator_coverage_matrix.py --matrix validation/translator-coverage-matrix.json
+python3 -B validation/tools/translator_coverage_matrix.py --matrix validation/translator-coverage-matrix.json
 ```
 
 Run focused competition runner contract tests after editing `run_competition.py`, its summary schema, validator, or workflow metrics:
 
 ```bash
-python -B -m unittest validation.tools.test_run_competition validation.tools.test_validate_competition_run_summary
+python3 -B -m unittest validation.tools.test_run_competition validation.tools.test_validate_competition_run_summary
 ```
 
 Run focused OpenCode harness contract tests after editing `opencode_agent_harness.py` or its worker assignment/run/summary ledger behavior:
 
 ```bash
-python -B -m unittest validation.tools.test_opencode_agent_harness
+python3 -B -m unittest validation.tools.test_opencode_agent_harness
 ```
 
 ## Thin MCP / Stdio Server
@@ -146,7 +169,7 @@ It registers:
 It also exposes a minimal MCP-style stdio JSON-RPC server:
 
 ```bash
-python -B validation/tools/c2rust_verifier_mcp.py --stdio
+python3 -B validation/tools/c2rust_verifier_mcp.py --stdio
 ```
 
 The server supports `initialize`, `tools/list`, `tools/call`, and `notifications/initialized`. Tool calls still only plan existing commands or read evidence; they do not execute semantic verification or turn any candidate into accepted evidence.
@@ -154,5 +177,5 @@ The server supports `initialize`, `tools/list`, `tools/call`, and `notifications
 Run the focused contract tests with:
 
 ```bash
-python -B -m unittest validation.tools.test_c2rust_verifier_mcp
+python3 -B -m unittest validation.tools.test_c2rust_verifier_mcp
 ```

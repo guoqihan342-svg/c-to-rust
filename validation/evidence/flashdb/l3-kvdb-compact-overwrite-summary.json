@@ -1,202 +1,202 @@
 {
-    "schema_version":  1,
-    "level":  "L3",
-    "target_id":  "flashdb",
-    "slice_id":  "kvdb-compact-overwrite",
-    "change_id":  "run-flashdb-kvdb-compact-overwrite-l3-loop",
-    "status":  "passed",
-    "repo_commit":  "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
-    "source_commit":  "93d175549da579b8abac07bd175ce4c3f9dde829",
-    "fixture":  {
-                    "path":  "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
-                    "name":  "l3-kvdb-compact-overwrite",
-                    "sha256":  "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938",
-                    "hash_short":  "78e5ef24",
-                    "operation_count":  14,
-                    "backend_matrix":  [
-                                           "rust-file",
-                                           "flashdb-c"
-                                       ]
-                },
-    "semantic_equivalence_claim":  {
-                                       "claimed":  true,
-                                       "scope":  "Only the named kvdb-compact-overwrite slice and visible behavior fields exercised by l3-kvdb-compact-overwrite.json.",
-                                       "boundary":  "This does not claim full FlashDB migration, native GC, sector movement, tombstone layout, byte-for-byte flash image layout, power-loss recovery, capacity-pressure compaction, or TSDB equivalence.",
-                                       "basis":  [
-                                                     "C oracle report has toolchain_status C_ORACLE_GENERATED",
-                                                     "Rust and C reports use fixture_hash 78e5ef24",
-                                                     "Schema-aware diff status is passed with first_mismatch null",
-                                                     "Negative diff artifact rejects post-reopen KVDB value mismatch",
-                                                     "Rust tests cover fixture replay, compact/reopen entries, and negative diff regression",
-                                                     "Final verification evidence records cargo fmt, targeted tests, cargo check, cargo test, CLI replay/diff, unsafe scan, performance smoke, OpenSpec validation, and git diff check as passed"
-                                                 ]
-                                   },
-    "evidence":  {
-                     "context_pack":  {
-                                          "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-context-pack.json",
-                                          "sha256":  "569cf45a27870a14a02ce4ad820335b05825fcd1fdf19beed6f345a31de711e9"
-                                      },
-                     "slice_contract":  {
-                                            "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-slice-contract.json",
-                                            "sha256":  "9ae162f9c9865e126f775e3dc160617a8bcb1280bd72499ab6a3e048fd82e5e1"
-                                        },
-                     "impact_set":  {
-                                        "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-impact-set.json",
-                                        "sha256":  "8519f4eb6f6d227051bdcccc584260d5dbb4b21e0e06403b7d9c37c02d2705aa"
-                                    },
-                     "agent_roles":  {
-                                         "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-agent-roles.json",
-                                         "sha256":  "4476b3e44bf58827cf0a497b7327119ee6c1646d5f26df1734d915746810f643"
-                                     },
-                     "cache_metadata":  {
-                                            "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
-                                            "sha256":  "5524e840e6c4c360924652d358bda057f1cd891f890d639497b3ba3ec4bb1c18"
-                                        },
-                     "config_profile":  {
-                                            "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-config-profile.json",
-                                            "status":  "recorded"
-                                        },
-                     "pointer_dependency_graph":  {
-                                                      "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-pointer-graph.json",
-                                                      "status":  "not_applicable"
-                                                  },
-                     "test_translation":  {
-                                             "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-test-translation.json",
-                                             "status":  "recorded"
-                                         },
-                     "version_or_config_binding":  {
-                                                       "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-version-config-binding.json",
-                                                       "status":  "passed"
-                                                   },
-                     "local_toolchain_evidence":  {
-                                                      "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-local-toolchain-evidence.json",
-                                                      "sha256":  "0027ded4a32be8c7404a695dde702fd050fe5a1ebb9fd0971a3782639dc303dd"
-                                                  },
-                     "rust_report":  {
-                                         "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
-                                         "sha256":  "7eee34e03bbb6bf7672efc95d42e22750fe6a254bba4329d6e28876a0f7c1682"
-                                     },
-                     "c_oracle":  {
-                                      "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
-                                      "sha256":  "6003d05f935938f737445396fa5ae104cfccd08fd14a1a692dfb3a82f5e792f3"
-                                  },
-                     "c_oracle_producer_evidence":  {
-                                                        "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle-producer-evidence.json",
-                                                        "sha256":  "e13ff3f57a0e15cf7fba85afd90d70fed7ab6d8e7395454113bd91fed7515e4d"
-                                                    },
-                     "diff":  {
-                                  "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
-                                  "sha256":  "a18fea09f3239b0f20eddd242ddd6467cff9c94693844ce4bde333247bcaa748"
-                              },
-                     "negative_diff":  {
-                                           "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
-                                           "sha256":  "48dae1cb930f55ac709683461ca70ef7731178464d8c85ee30a51e92606bb156"
-                                       },
-                     "mutated_value_or_entries_oracle":  {
-                                                             "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-mutated-value-or-entries-oracle.json",
-                                                             "sha256":  "32da18cc4d077b701838c00cd286bf71f76ec1a5e50c8411e9aba9562c7b10d8"
-                                                         },
-                     "rust_check":  {
-                                        "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-check.json",
-                                        "sha256":  "b8a96dbc790acc851211c893e3d82a0c37496bb11bb132abb65df2eff28a3a59"
-                                    },
-                     "unsafe_scan":  {
-                                         "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-scan.json",
-                                         "sha256":  "4c367c7717d8f4a5adf9d374b1a22344b0b3e83cd2d9bee101159cf2ab6dd436"
-                                     },
-                     "unsafe_ledger":  {
-                                           "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-ledger.json",
-                                           "sha256":  "f6649c8f39cdbcd0e8817e6c8a3559df7daaa8630f801bdaeaa49027b22f31c7"
-                                       },
-                     "performance_smoke":  {
-                                               "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-smoke.json",
-                                               "sha256":  "e3e4895ac55891100051152dc399805c0f14da8fc148edeaae7681db10fe4f40"
-                                           },
-                     "performance_replay":  {
-                                                "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-replay.json",
-                                                "sha256":  "7eee34e03bbb6bf7672efc95d42e22750fe6a254bba4329d6e28876a0f7c1682"
-                                            },
-                     "final_verification":  {
-                                                "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-verification.json",
-                                                "sha256":  "fca0b28a4c390d9ac1832beab9653bae47e3cb9ef7fc396330fd3c8c0368f22f"
-                                            },
-                     "summary_md":  {
-                                        "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.md",
-                                        "sha256":  "c1d5c25bee78986df5a50294e0a4b0435e8bd0344aeba2e6d22366b3f4a43f9c"
-                                    }
-                 },
-    "c_oracle":  {
-                     "status":  "passed",
-                     "toolchain_status":  "C_ORACLE_GENERATED",
-                     "fixture_hash":  "78e5ef24"
-                 },
-    "diff":  {
-                 "status":  "passed",
-                 "first_mismatch":  null,
-                 "note":  "Diff tool local toolchain_status may be SKIPPED_LOCAL_NO_C_TOOLCHAIN because it probes Windows while comparing WSL-generated C oracle."
-             },
-    "negative_diff":  {
-                          "status":  "failed",
-                          "expected_failure":  true,
-                          "first_mismatch":  "steps.kv-co-010.value"
-                      },
-    "rust_check":  {
-                       "status":  "passed",
-                       "error_count":  0,
-                       "warning_count":  0,
-                       "automatic_patch_attempt_count":  0
-                   },
-    "unsafe":  {
-                   "status":  "passed",
-                   "first_party_non_test_unsafe_count":  0,
-                   "unsafe_ratio":  0
-               },
-    "performance_smoke":  {
-                              "status":  "recorded",
-                              "elapsed_ms":  569,
-                              "operation_count":  14,
-                              "secondary_only":  true
-                          },
-    "accepted_differences":  {
-                                 "allowed_metadata_fields":  [
-                                                                 "image_hash",
-                                                                 "backend",
-                                                                 "toolchain_status",
-                                                                 "source",
-                                                                 "fixture",
-                                                                 "fixture_hash",
-                                                                 "report_path"
-                                                             ],
-                                 "forbidden_behavior_fields":  [
-                                                                   "value",
-                                                                   "entries",
-                                                                   "key",
-                                                                   "status",
-                                                                   "code",
-                                                                   "count",
-                                                                   "operation success",
-                                                                   "error semantics",
-                                                                   "steps.len",
-                                                                   "step id",
-                                                                   "op"
-                                                               ],
-                                 "behavior_fields_checked":  true
-                             },
-    "compact_boundary":  "kv.compact is validated by visible behavior before/after compact and reopen. The current C oracle does not invoke a native public FlashDB compact/GC API; image_hash is accepted metadata.",
-    "windows_skip":  {
-                         "marker":  "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-                         "counts_as_l3_pass":  false,
-                         "replacement_evidence":  "WSL generated validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json with C_ORACLE_GENERATED."
-                     },
-    "known_gaps":  [
-                       "No native GC/sector-layout proof.",
-                       "No byte-for-byte flash image equivalence.",
-                       "No capacity-pressure compaction, power-loss recovery, wear, binary/blob encoding, or invalid-key matrix in this slice."
-                   ],
-    "next_slice_recommendation":  "A dedicated kvdb-gc-sector-layout design only if native FlashDB GC/sector movement parity becomes required; otherwise continue with another small public-behavior slice.",
-    "final_verification":  {
-                               "status":  "passed",
-                               "path":  "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-verification.json",
-                               "check_count":  12
-                           }
+  "accepted_differences": {
+    "allowed_metadata_fields": [
+      "image_hash",
+      "backend",
+      "toolchain_status",
+      "source",
+      "fixture",
+      "fixture_hash",
+      "report_path"
+    ],
+    "behavior_fields_checked": true,
+    "forbidden_behavior_fields": [
+      "value",
+      "entries",
+      "key",
+      "status",
+      "code",
+      "count",
+      "operation success",
+      "error semantics",
+      "steps.len",
+      "step id",
+      "op"
+    ]
+  },
+  "c_oracle": {
+    "fixture_hash": "78e5ef24",
+    "status": "passed",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "change_id": "run-flashdb-kvdb-compact-overwrite-l3-loop",
+  "compact_boundary": "kv.compact is validated by visible behavior before/after compact and reopen. The current C oracle does not invoke a native public FlashDB compact/GC API; image_hash is accepted metadata.",
+  "diff": {
+    "first_mismatch": null,
+    "note": "Diff tool local toolchain_status may be SKIPPED_LOCAL_NO_C_TOOLCHAIN because it probes Windows while comparing WSL-generated C oracle.",
+    "status": "passed"
+  },
+  "evidence": {
+    "agent_roles": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-agent-roles.json",
+      "sha256": "094911fbc0516d3c0cca8a95cb9aeed3d15625085d9e2f1c34c8e6d97474e2d8"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json",
+      "sha256": "2b7f57daca9a5bd905235c52f9fad96bd6e7abf67fda1bf4b94eaf261717e5ea"
+    },
+    "c_oracle_producer_evidence": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle-producer-evidence.json",
+      "sha256": "3441e09f2148f8f0ef7ccdddda25cb9270f6f79abcb54092cf8041966cc81b6f"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-cache-metadata.json",
+      "sha256": "579f3bef40afc54cd2ca2bfeb2f76babc4f04cd9565969bd7dfd3c83bcf90efa"
+    },
+    "config_profile": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-config-profile.json",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-context-pack.json",
+      "sha256": "76fdf493e63e08e6af5f6ebc50209d2480489a19af6a480ce36401ddab9f31c5"
+    },
+    "diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-diff.json",
+      "sha256": "a18fea09f3239b0f20eddd242ddd6467cff9c94693844ce4bde333247bcaa748"
+    },
+    "final_verification": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-verification.json",
+      "sha256": "5a0855a0871b9bf25618045adfe27c14aa6b5f22edef69e4c73565e2ec266ce8"
+    },
+    "impact_set": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-impact-set.json",
+      "sha256": "4ecffa4e64ea4d5f289cc9a62a7b1e1b87f1720e7fed81b1d24b5cea6947467d"
+    },
+    "local_toolchain_evidence": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-local-toolchain-evidence.json",
+      "sha256": "16aece4b2037307035886670e19133f39872a4e3a7d98f252233d649721f4d94"
+    },
+    "mutated_value_or_entries_oracle": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-mutated-value-or-entries-oracle.json",
+      "sha256": "4fe27b2be49974992f0cd96f4433ccac9cfaf0313f4999147db723c5c9b27121"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-negative-diff.json",
+      "sha256": "48dae1cb930f55ac709683461ca70ef7731178464d8c85ee30a51e92606bb156"
+    },
+    "performance_replay": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-replay.json",
+      "sha256": "7eee34e03bbb6bf7672efc95d42e22750fe6a254bba4329d6e28876a0f7c1682"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-performance-smoke.json",
+      "sha256": "48d5105a506ccc706c8f676c51de1e88e339967189afbd4db729ad4963502266"
+    },
+    "pointer_dependency_graph": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-check.json",
+      "sha256": "2813e8c9d39da080ccf7c46cb874172afcf3ec88f47d9a4dbb995b36e7ce9868"
+    },
+    "rust_report": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-rust-report.json",
+      "sha256": "7eee34e03bbb6bf7672efc95d42e22750fe6a254bba4329d6e28876a0f7c1682"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-slice-contract.json",
+      "sha256": "3e18935f25350b0ff56eab526c01e95e38241180a4210b5a13ad1c70559631cd"
+    },
+    "summary_md": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-summary.md",
+      "sha256": "af1c1caea9996bac7ab9ccd3860b1520880c01b579488b665dd185488f941753"
+    },
+    "test_translation": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-test-translation.json",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-ledger.json",
+      "sha256": "7ad000e2482d7cbddda11c96253d6388672aea8ea46ae42ea7a0206a7c50aeb5"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-unsafe-scan.json",
+      "sha256": "ec1cf584d3423826e63c061a7e9dccb7a390b10defb2d958209b0b98f5e7b321"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-version-config-binding.json",
+      "status": "passed"
+    }
+  },
+  "final_verification": {
+    "check_count": 12,
+    "path": "validation/evidence/flashdb/l3-kvdb-compact-overwrite-final-verification.json",
+    "status": "passed"
+  },
+  "fixture": {
+    "backend_matrix": [
+      "rust-file",
+      "flashdb-c"
+    ],
+    "hash_short": "78e5ef24",
+    "name": "l3-kvdb-compact-overwrite",
+    "operation_count": 14,
+    "path": "flashDB_rust/fixtures/l3-kvdb-compact-overwrite.json",
+    "sha256": "4964a33c6d49cda74f703cc1169da0306464eca3fde27cc83344e402a7ccb938"
+  },
+  "known_gaps": [
+    "No native GC/sector-layout proof.",
+    "No byte-for-byte flash image equivalence.",
+    "No capacity-pressure compaction, power-loss recovery, wear, binary/blob encoding, or invalid-key matrix in this slice."
+  ],
+  "level": "L3",
+  "negative_diff": {
+    "expected_failure": true,
+    "first_mismatch": "steps.kv-co-010.value",
+    "status": "failed"
+  },
+  "next_slice_recommendation": "A dedicated kvdb-gc-sector-layout design only if native FlashDB GC/sector movement parity becomes required; otherwise continue with another small public-behavior slice.",
+  "performance_smoke": {
+    "elapsed_ms": 569,
+    "operation_count": 14,
+    "secondary_only": true,
+    "status": "recorded"
+  },
+  "repo_commit": "7c2fdff2311ecdf0d7d3643ca188723a724145c3",
+  "rust_check": {
+    "automatic_patch_attempt_count": 0,
+    "error_count": 0,
+    "status": "passed",
+    "warning_count": 0
+  },
+  "schema_version": 1,
+  "semantic_equivalence_claim": {
+    "basis": [
+      "C oracle report has toolchain_status C_ORACLE_GENERATED",
+      "Rust and C reports use fixture_hash 78e5ef24",
+      "Schema-aware diff status is passed with first_mismatch null",
+      "Negative diff artifact rejects post-reopen KVDB value mismatch",
+      "Rust tests cover fixture replay, compact/reopen entries, and negative diff regression",
+      "Final verification evidence records cargo fmt, targeted tests, cargo check, cargo test, CLI replay/diff, unsafe scan, performance smoke, OpenSpec validation, and git diff check as passed"
+    ],
+    "boundary": "This does not claim full FlashDB migration, native GC, sector movement, tombstone layout, byte-for-byte flash image layout, power-loss recovery, capacity-pressure compaction, or TSDB equivalence.",
+    "claimed": true,
+    "scope": "Only the named kvdb-compact-overwrite slice and visible behavior fields exercised by l3-kvdb-compact-overwrite.json."
+  },
+  "slice_id": "kvdb-compact-overwrite",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "passed",
+  "target_id": "flashdb",
+  "unsafe": {
+    "first_party_non_test_unsafe_count": 0,
+    "status": "passed",
+    "unsafe_ratio": 0
+  },
+  "windows_skip": {
+    "counts_as_l3_pass": false,
+    "marker": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "replacement_evidence": "WSL generated validation/evidence/flashdb/l3-kvdb-compact-overwrite-c-oracle.json with C_ORACLE_GENERATED."
+  }
 }

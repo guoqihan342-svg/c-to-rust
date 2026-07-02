@@ -8,6 +8,23 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
+LF_STABLE_TEXT_SUFFIXES = {
+    ".json",
+    ".jsonl",
+    ".md",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
+
+def lf_stable_sha256(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def load_validator_module():
@@ -167,7 +184,7 @@ def write_summary_with_workflow_metrics(summary_path: Path, summary: dict) -> No
     metrics_path.write_text(json.dumps(workflow_metrics_for(summary), sort_keys=True), encoding="utf-8")
     summary["workflow_metrics"] = {
         "path": "workflow-metrics.json",
-        "sha256": hashlib.sha256(metrics_path.read_bytes()).hexdigest(),
+        "sha256": lf_stable_sha256(metrics_path),
     }
     summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
@@ -347,7 +364,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 },
             ]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             with self.assertRaises(SystemExit) as raised:
@@ -391,7 +408,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 **{
                     name: {
                         "path": f"evidence/{path.name}",
-                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "sha256": lf_stable_sha256(path),
                     }
                     for name, path in artifacts.items()
                 },
@@ -419,7 +436,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
             metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
             metrics["unsafe_reduction"] = before_after["unsafe_reduction"]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             result = module.validate_summary(summary_path, repo_root=REPO_ROOT)
@@ -468,7 +485,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 **{
                     name: {
                         "path": f"evidence/{path.name}",
-                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "sha256": lf_stable_sha256(path),
                     }
                     for name, path in artifacts.items()
                 },
@@ -496,7 +513,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 "ratio": 0.5,
             }
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             with self.assertRaises(SystemExit) as raised:
@@ -536,7 +553,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 **{
                     name: {
                         "path": f"evidence/{path.name}",
-                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "sha256": lf_stable_sha256(path),
                     }
                     for name, path in artifact_paths.items()
                 },
@@ -563,7 +580,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
             }
             metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             with self.assertRaises(SystemExit) as raised:
@@ -603,7 +620,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 **{
                     name: {
                         "path": f"evidence/{path.name}",
-                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                        "sha256": lf_stable_sha256(path),
                     }
                     for name, path in artifact_paths.items()
                 },
@@ -633,7 +650,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
             metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
             metrics["unsafe_reduction"] = before_after["unsafe_reduction"]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             with self.assertRaises(SystemExit) as raised:
@@ -674,7 +691,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 },
             ]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             with self.assertRaises(SystemExit) as raised:
@@ -703,7 +720,7 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
                 }
             ]
             metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
-            summary["workflow_metrics"]["sha256"] = hashlib.sha256(metrics_path.read_bytes()).hexdigest()
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
             summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
             with self.assertRaises(SystemExit) as raised:

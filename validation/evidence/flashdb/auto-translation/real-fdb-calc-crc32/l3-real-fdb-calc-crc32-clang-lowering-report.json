@@ -13,7 +13,7 @@
     "competition_environment": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
+      "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
     },
     "frontend": "clang_ast_dump_json",
     "hash_algorithm": "sha256",

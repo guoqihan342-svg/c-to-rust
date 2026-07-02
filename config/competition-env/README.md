@@ -83,7 +83,7 @@
 需要机器可读证据时，运行独立 verifier：
 
 ```bash
-python validation/tools/verify_vendored_clang.py \
+python3 -B validation/tools/verify_vendored_clang.py \
   --proof-class wsl-local-simulation \
   --out target/competition-smoke/summary/vendored-clang-verification.json
 ```
@@ -122,7 +122,7 @@ bash config/competition-env/toolchain-check.sh
 bash config/competition-env/smoke.sh ci-approximation target/competition-smoke
 
 # 等价 Python 入口，可显式设置 run id。
-python validation/tools/run_competition_smoke.py \
+python3 -B validation/tools/run_competition_smoke.py \
   --proof-class ci-approximation \
   --run-id core-ci-smoke \
   --timeout-seconds 600 \
@@ -155,7 +155,7 @@ runner 会先做不要求本地 artifacts 的 entrypoint preflight，通过后�
 可复用 planned batch profile 入口：
 
 ```bash
-python -m validation.tools.opencode_agent_harness run-batch-profile \
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile \
   --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
   --run-id flashdb-fdb-utils-local \
   --out-root target/competition-out
@@ -184,11 +184,11 @@ clang typed-IR 比赛路线是显式 opt-in：
 ```bash
 # 方式一：通过 PATH 显式设置 CLANG_PATH，不把本机绝对路径写进证据
 export CLANG_PATH="clang"
-python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
+python3 -B validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 
 # 方式二：使用项目内置 clang（env.sh 已自动探测 tools/llvm/bin/clang）
 source config/competition-env/env.sh
-python validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
+python3 -B validation/tools/auto_migrate.py --slice-spec <slice.json> --out-root <out> --competition-clang-lane
 ```
 
 评委证据或已提交 evidence 不应使用 `CLANG_PATH="$(command -v clang)"`：结构化 verifier 会拒绝解析到 repo 外的 path-like `CLANG_PATH`，并把 repo-local clang 路径在命令日志中归一为相对路径。

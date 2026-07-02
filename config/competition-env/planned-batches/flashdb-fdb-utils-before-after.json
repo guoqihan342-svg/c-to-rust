@@ -1,62 +1,62 @@
 {
-  "schema_version": 1,
-  "profile_id": "flashdb-fdb-utils-before-after",
-  "proof_class": "local-simulation",
-  "target_id": "flashdb",
-  "source_repo_root": "sources/FlashDB",
-  "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
-  "source_branch": "competition",
-  "source_file": "src/fdb_utils.c",
-  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "functions": [
-    "fdb_calc_crc32"
-  ],
-  "slice_specs": [
-    "validation/slice-specs/flashdb-real-fdb-calc-crc32.json"
-  ],
-  "reuse_accepted_evidence": true,
+  "acceptance_boundary": {
+    "claim": "real FlashDB fdb_calc_crc32 before/after exhibit; baseline is reviewed unsafe Rust derived from the real C slice signature; C2Rust baseline has generated + compile-only + direct replay observable-passed evidence but remains candidate_context_only / semantic_pass=false",
+    "generated_draft_semantic_pass": false,
+    "semantic_claim_source": "accepted_evidence_binding",
+    "translation_before_after": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json"
+  },
   "accepted_evidence_root": "validation/evidence",
-  "slice_id_prefix": "flashdb-fdb-utils",
-  "worker_prefix": "flashdb-worker",
-  "mode": "deterministic",
-  "execute_merge": true,
-  "auto_retry": true,
-  "max_workers": 4,
-  "emit_route_governance_metrics_report": true,
-  "emit_before_after_exhibit_report": true,
-  "require_repair_trace": true,
   "attempt_evidence_policy": {
-    "mode": "baseline_repair_gate",
-    "translation_before_after": {
-      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "80ce2ad28f4703e6c9ab847eae68f85474b1bd8df4684c3ec9a4bf3d37becfaa"
+    "accepted_attempt": {
+      "accepted_evidence_root": "validation/evidence",
+      "min_attempt_number": 2,
+      "require_hint_id": true,
+      "reuse_accepted_evidence": true,
+      "source": "accepted_safe_evidence"
     },
     "baseline_attempt": {
       "attempt_number": 1,
       "expected_final_gate": "failed",
       "root_cause_key": "unsafe_baseline_requires_repair",
       "verified_unsafe_baseline": {
+        "generated_draft_semantic_pass": false,
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
-        "sha256": "615628ab6655d5cc798edfb064c580235b4aae17d5cf8623f3743241bc5623ed",
-        "status": "passed",
-        "semantic_pass": true,
         "semantic_claim_source": "verified_unsafe_baseline_gates",
-        "generated_draft_semantic_pass": false
+        "semantic_pass": true,
+        "sha256": "5b4de5cc5c4e10a00ab744843d4c496c0bb97f778cf06149a463ce2e2cd46f77",
+        "status": "passed"
       }
     },
-    "accepted_attempt": {
-      "min_attempt_number": 2,
-      "source": "accepted_safe_evidence",
-      "reuse_accepted_evidence": true,
-      "accepted_evidence_root": "validation/evidence",
-      "require_hint_id": true
+    "mode": "baseline_repair_gate",
+    "translation_before_after": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
+      "sha256": "eb4c4e991df2a976b4fca1fd8b52af42b9fc12f41944a242f540ccac045be13f"
     }
   },
-  "acceptance_boundary": {
-    "semantic_claim_source": "accepted_evidence_binding",
-    "translation_before_after": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-    "generated_draft_semantic_pass": false,
-    "claim": "real FlashDB fdb_calc_crc32 before/after exhibit; baseline is reviewed unsafe Rust derived from the real C slice signature; C2Rust baseline has generated + compile-only + direct replay observable-passed evidence but remains candidate_context_only / semantic_pass=false"
-  }
+  "auto_retry": true,
+  "emit_before_after_exhibit_report": true,
+  "emit_route_governance_metrics_report": true,
+  "execute_merge": true,
+  "functions": [
+    "fdb_calc_crc32"
+  ],
+  "max_workers": 4,
+  "mode": "deterministic",
+  "profile_id": "flashdb-fdb-utils-before-after",
+  "proof_class": "local-simulation",
+  "require_repair_trace": true,
+  "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "reuse_accepted_evidence": true,
+  "schema_version": 1,
+  "slice_id_prefix": "flashdb-fdb-utils",
+  "slice_specs": [
+    "validation/slice-specs/flashdb-real-fdb-calc-crc32.json"
+  ],
+  "source_branch": "competition",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "src/fdb_utils.c",
+  "source_repo_root": "sources/FlashDB",
+  "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+  "target_id": "flashdb",
+  "worker_prefix": "flashdb-worker"
 }

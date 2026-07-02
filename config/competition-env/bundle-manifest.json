@@ -1,17 +1,20 @@
 {
-  "schema_version": 1,
-  "report_kind": "competition-env-bundle",
   "bundle_root": "config/competition-env",
   "canonical_environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
+    "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
+  },
+  "claim_boundary": {
+    "archive_is_semantic_gate": false,
+    "boundary": "This manifest binds repo-local competition configuration files for reproduction and drift checks only. It does not claim semantic acceptance or translation coverage.",
+    "semantic_gate": false
   },
   "files": [
     {
       "path": "config/competition-env/environment.json",
       "role": "environment-profile",
-      "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
+      "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
     },
     {
       "path": "config/competition-env/env.sh",
@@ -26,82 +29,79 @@
     {
       "path": "config/competition-env/smoke.sh",
       "role": "competition-smoke-entrypoint",
-      "sha256": "91758a7c6b59a3c0394ceb1053c1e397fa60c72ece2a760407e741d04e5550f0"
+      "sha256": "af786ead31c810919da4ccf1541ba941a2a47341e9a346d7acb92f08175ba9dd"
     },
     {
       "path": "config/competition-env/apt/sources.list",
       "role": "apt-mirror",
-      "sha256": "184f6117e0daa9c64a73ae62b4d710efd98b226a1a56e7793c0e6701b7ac8dea"
+      "sha256": "053ee5746bbbbc80d20e862b3c6fbf960d20e335cef40390604774d667a88e0f"
     },
     {
       "path": "config/competition-env/pip/pip.conf",
       "role": "pip-mirror",
-      "sha256": "4d0d31c429f38f98ae0327e4f3c29d8ac4874c3b0189bbb4bf8d8f0d65809d23"
+      "sha256": "54218bf2b29fcec987cb8a6e68b8557bdba4efc3e00974b63c612f2b4ff20e72"
     },
     {
       "path": "config/competition-env/npm/.npmrc",
       "role": "npm-mirror",
-      "sha256": "3fd7b976a150c3b3df616131a469dd52de907bf2235c2adc0cdae09d96ab05b1"
+      "sha256": "aed51daf7c32a3e6c40b277ea756b47cf77b11d3b7ef8fdfb0b278e3676b2a7a"
     },
     {
       "path": "config/competition-env/cargo/config.toml",
       "role": "cargo-mirror",
-      "sha256": "55cf7c550c31d14a5416e90a6766b4bb5db093176cb9159a3223e77855441d73"
+      "sha256": "dcd324f99b4ca41407f5ca862bdbb4ee26e1c1ae49e906d5d55d812446057684"
     },
     {
       "path": "config/competition-env/rust/rust-toolchain.toml",
       "role": "rust-toolchain",
-      "sha256": "2c108b6a37757f2801a33342354d1d89eeff673fa878e1afafbe756afb03d5fa"
+      "sha256": "d67b5f377585e306f12d469ef2b207744740149454a2b5a91969e8b6ca792f84"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json",
       "role": "planned-batch-profile",
-      "sha256": "8e941781f089976de75445dd755f4ff3c374bb15c42fccab0c6f37a6c8c1e0aa"
+      "sha256": "367b32c2a84feb08d0f751cf935ce3756c2b5038154e08ecd5745b50e26d6a7e"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "321275f8ae9f7a48a92ce886fcf700a452f90f30a27de710380d062cfa2c8cca"
+      "sha256": "ad00248c5df76fe439f8153f4cd9e088b20480ed4e1fd0a23ae13a6279ae9d78"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
       "role": "planned-batch-profile",
-      "sha256": "639e805ebdaf046a1fe0ca8f2bc3cc980363fb5d2bed8381887d4ed5aacec0e1"
+      "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
       "role": "planned-batch-profile",
-      "sha256": "913efff95564209a858ba7bea555ec7bbdf74235fce26436a87e2848d09cdd1e"
+      "sha256": "b3a2c4fb0e20f3079374ad887b1ea3363f4d91ad65e306f89c923a06977cda4b"
     },
     {
       "path": "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "eca91c90292e2bf4efd1c565e8433b10cdc64cf1c328ea3a668144e84593108c"
+      "sha256": "6b919251805b513a2784d0035cdd83c849d18dc9f7bdb358d2b8276170837948"
     },
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "304d441d2a1bda4a5ff025cd67e536bedcd9d7de7ff2c021d03d0bc4b8df8a23"
+      "sha256": "3cff668ddf5c2ccc86f0a6595bdf28ac4d2802fbaa4c51902f2cb8e0193b9cee"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
       "role": "review-gate",
-      "sha256": "08f578b417053433d1942cf07d6464ac54053413d42f24ea14b11e63373e968a"
+      "sha256": "6d01d08d81c7edf333ee6a85cbc9d6d5c8b84ee4c59c52f726d8b11d5a585f7d"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.md",
       "role": "opencode-runbook",
-      "sha256": "39b73f1af2c4596f87621e180a6aef26899a61b3d1bf62195028b1dbd783411b"
+      "sha256": "d83adf8e47040f3f4908f9895b95fc7c2da19b62e799ed40a7f338cc09374bbb"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.en.md",
       "role": "opencode-runbook",
-      "sha256": "9f34ea3b2e2b84802db2c5ed30740695a12779c478842ea81bdd91a2e16e74bd"
+      "sha256": "e8574de39a0c27e1a0b3db42e7cef37c316b8e0152dd87f55218a52391010a0c"
     }
   ],
-  "claim_boundary": {
-    "semantic_gate": false,
-    "archive_is_semantic_gate": false,
-    "boundary": "This manifest binds repo-local competition configuration files for reproduction and drift checks only. It does not claim semantic acceptance or translation coverage."
-  }
+  "report_kind": "competition-env-bundle",
+  "schema_version": 1
 }

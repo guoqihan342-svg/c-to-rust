@@ -83,13 +83,13 @@ $env:CLANG_PATH = "C:/Program Files/LLVM/bin/clang.exe"
 
 ```bash
 # Linux/CI（不标 competition-exact）
-python validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class ci-approximation --timeout-seconds 600
 
 # WSL/本机 Ubuntu
-python validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation --timeout-seconds 600
 
 # 仅当在真实比赛机上运行时打开此选项
-python validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact --timeout-seconds 600
 ```
 
 smoke 会执行：
@@ -106,7 +106,7 @@ smoke 会执行：
 使用统一 runner `run_competition.py` 完成端到端 slice 翻译：
 
 ```bash
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -135,7 +135,7 @@ runner 自动完成：
 
 ```bash
 # Step 1: 抽取切片
-python validation/tools/extract_source_slice.py \
+python3 -B validation/tools/extract_source_slice.py \
   --repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -149,13 +149,13 @@ python validation/tools/extract_source_slice.py \
   --out target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json
 
 # Step 2: 运行翻译管线
-python validation/tools/auto_migrate.py \
+python3 -B validation/tools/auto_migrate.py \
   --slice-spec target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json \
   --out-root target/competition-out/evidence \
   --competition-clang-lane
 
 # Step 3: 验证 evidence
-python validation/tools/validate_auto_translation_evidence.py \
+python3 -B validation/tools/validate_auto_translation_evidence.py \
   --target-id flashdb \
   --slice-id real-fdb-calc-crc32 \
   --slice-spec target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json \
@@ -173,7 +173,7 @@ python validation/tools/validate_auto_translation_evidence.py \
 source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -192,13 +192,13 @@ python validation/tools/run_competition.py \
 如果要通过 OpenCode worker 包装层执行同一条单次请求，只运行已分配的 worker 一次，并要求它产出 summary：
 
 ```bash
-python -m validation.tools.opencode_agent_harness opencode-preflight \
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
   --opencode-variant max \
   --opencode-skip-permissions
 
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -218,7 +218,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
 ### 7.1 初始化 SQLite 账本
 
 ```bash
-python -m validation.tools.opencode_agent_harness init-run \
+python3 -B -m validation.tools.opencode_agent_harness init-run \
   --run-id run-demo-001 \
   --proof-class local-simulation \
   --out-root target/competition-out
@@ -227,7 +227,7 @@ python -m validation.tools.opencode_agent_harness init-run \
 ### 7.2 分配 slice 给 worker
 
 ```bash
-python -m validation.tools.opencode_agent_harness assign-slice \
+python3 -B -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -253,7 +253,7 @@ quickstart 主路径必须在 `target/competition-out` 下生成或验证新输�
 ### 7.3 运行 worker
 
 ```bash
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -263,13 +263,13 @@ python -m validation.tools.opencode_agent_harness run-worker \
 `run-worker --mode deterministic` 会调用 repo-local `scripts/c2rust-migrator.py --phase migrate --input ...`，并在 `competition-run-summary.json` 存在时自动执行原来的 `record-worker-summary` 入库动作。连接本机 OpenCode / DeepSeek V4 Pro 时，可用 agent 包装层执行同一个 request：
 
 ```bash
-python -m validation.tools.opencode_agent_harness opencode-preflight \
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
   --opencode-variant max \
   --opencode-skip-permissions
 
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --worker-id worker-a \
@@ -283,14 +283,14 @@ OpenCode worker 会在 `target/competition-out/workers/<worker-id>/opencode-runt
 ### 7.4 生成合并计划并执行
 
 ```bash
-python -m validation.tools.opencode_agent_harness write-merge-plan \
+python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id run-demo-001 \
   --proof-class local-simulation \
   --out-root target/competition-out
 
 # 然后执行合并计划中的命令（示例）
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --worker-summary target/competition-out/workers/worker-a/summary/competition-run-summary.json \
   --worker-summary target/competition-out/workers/worker-b/summary/competition-run-summary.json \
   --out-root target/competition-out \
@@ -486,10 +486,10 @@ source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
 
 # 环境 smoke
-python validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
+python3 -B validation/tools/run_competition_smoke.py --proof-class local-simulation --timeout-seconds 600
 
 # 翻译单 slice
-python validation/tools/run_competition.py \
+python3 -B validation/tools/run_competition.py \
   --source-repo-root sources/FlashDB \
   --source-repository https://gitcode.com/xwxf/FlashDB.git \
   --source-branch competition \
@@ -503,7 +503,7 @@ python validation/tools/run_competition.py \
   --proof-class local-simulation
 
 # 只验证已有 evidence
-python validation/tools/validate_auto_translation_evidence.py \
+python3 -B validation/tools/validate_auto_translation_evidence.py \
   --target-id flashdb --slice-id real-fdb-calc-crc32 \
   --evidence-root target/competition-out/evidence \
   --require-semantic-pass
@@ -519,14 +519,14 @@ python3 -B -m validation.tools.run_judge_entrypoints \
 # milestone bundle 会包含 harness_architecture_summary.contract_matrix：
 # plan/translate/verify/repair/report -> roles、artifacts、validators 和非语义边界。
 
-python -B -m validation.tools.milestone_release_notes \
+python3 -B -m validation.tools.milestone_release_notes \
   --bundle target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/milestone-release-notes.md
 
 # run_judge_entrypoints 在 bundle 和 release notes 后自动生成
 # target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 # 校验 schema、hash、claim boundary、本机路径泄漏、packet-to-bundle 内容一致性和 release notes 渲染一致性
-python -B -m validation.tools.validate_public_release_packet \
+python3 -B -m validation.tools.validate_public_release_packet \
   --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 
 # evaluate profile 续跑索引由入口自动生成并由 validator 深校验
@@ -534,7 +534,7 @@ python -B -m validation.tools.validate_public_release_packet \
 # target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/resume-manifest.json
 
 # 检查 unsafe
-python validation/tools/unsafe_budget.py --max-ratio 0.10
+python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
 
 # 检查 OpenSpec
 openspec validate --all --strict
@@ -543,10 +543,10 @@ openspec validate --all --strict
 cargo test --manifest-path crates/c2r-translator/Cargo.toml
 
 # 运行核心 validation 单元测试
-python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 
 # 运行文档镜像合同测试
-python -B -m unittest validation.tools.test_doc_mirror_contract
+python3 -B -m unittest validation.tools.test_doc_mirror_contract
 ```
 
 ## 12. 核心边界声明

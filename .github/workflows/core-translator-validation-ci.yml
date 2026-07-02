@@ -4,8 +4,14 @@ on:
   push:
     paths:
       - ".github/workflows/core-translator-validation-ci.yml"
+      - ".gitattributes"
+      - "requirements.txt"
+      - "opencode.json"
+      - "scripts/bootstrap_flashdb_sources.sh"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
+      - "validation/evidence/**"
+      - "validation/slice-specs/**"
       - "validation/competition-run-summary.schema.json"
       - "validation/public-release-packet.schema.json"
       - "validation/route-governance-metrics.schema.json"
@@ -25,8 +31,14 @@ on:
   pull_request:
     paths:
       - ".github/workflows/core-translator-validation-ci.yml"
+      - ".gitattributes"
+      - "requirements.txt"
+      - "opencode.json"
+      - "scripts/bootstrap_flashdb_sources.sh"
       - "crates/c2r-translator/**"
       - "validation/tools/**"
+      - "validation/evidence/**"
+      - "validation/slice-specs/**"
       - "validation/competition-run-summary.schema.json"
       - "validation/public-release-packet.schema.json"
       - "validation/route-governance-metrics.schema.json"
@@ -57,11 +69,17 @@ jobs:
 
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
 
       - name: Show Python version
-        run: python --version
+        run: python3 --version
+
+      - name: Install Python dependencies
+        run: python3 -B -m pip install -r requirements.txt
+
+      - name: Bootstrap FlashDB sources
+        run: bash scripts/bootstrap_flashdb_sources.sh
 
       - name: Run translator default tests
         run: cargo test --manifest-path crates/c2r-translator/Cargo.toml --quiet
@@ -78,41 +96,60 @@ jobs:
 
       - name: Run core validation Python tests
         run: |
-          python -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
-          python -m unittest validation.tools.test_competition_environment_profile
-          python -m unittest validation.tools.test_validate_competition_run_summary
-          python -m unittest validation.tools.test_run_competition
-          python -m unittest validation.tools.test_run_competition_smoke
-          python -m unittest validation.tools.test_verify_vendored_clang
-          python -m unittest validation.tools.test_unsafe_budget
-          python -m unittest validation.tools.test_evidence_governance
-          python -m unittest validation.tools.test_translator_coverage_matrix
-          python -m unittest validation.tools.test_milestone_release_report
-          python -m unittest validation.tools.test_milestone_release_notes
-          python -m unittest validation.tools.test_route_governance_metrics_report
-          python -m unittest validation.tools.test_judge_demo_entrypoint
-          python -m unittest validation.tools.test_validate_judge_entrypoints
-          python -m unittest validation.tools.test_run_judge_entrypoints
-          python -m unittest validation.tools.test_validate_public_release_packet
-          python -m unittest validation.tools.test_judge_milestone_bundle
+          python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
+          python3 -B -m unittest validation.tools.test_competition_environment_profile
+          python3 -B -m unittest validation.tools.test_validate_competition_run_summary
+          python3 -B -m unittest validation.tools.test_run_competition
+          python3 -B -m unittest validation.tools.test_opencode_agent_harness
+          python3 -B -m unittest validation.tools.test_resync_sha_bindings
+          python3 -B -m unittest validation.tools.test_run_competition_smoke
+          python3 -B -m unittest validation.tools.test_verify_vendored_clang
+          python3 -B -m unittest validation.tools.test_unsafe_budget
+          python3 -B -m unittest validation.tools.test_evidence_governance
+          python3 -B -m unittest validation.tools.test_translator_coverage_matrix
+          python3 -B -m unittest validation.tools.test_milestone_release_report
+          python3 -B -m unittest validation.tools.test_milestone_release_notes
+          python3 -B -m unittest validation.tools.test_route_governance_metrics_report
+          python3 -B -m unittest validation.tools.test_judge_demo_entrypoint
+          python3 -B -m unittest validation.tools.test_validate_judge_entrypoints
+          python3 -B -m unittest validation.tools.test_run_judge_entrypoints
+          python3 -B -m unittest validation.tools.test_validate_public_release_packet
+          python3 -B -m unittest validation.tools.test_judge_milestone_bundle
+
+      - name: Check LF checkout and competition hash bindings
+        run: |
+          git ls-files --eol
+          ! git ls-files --eol | grep -E '(^| )[iw]/(crlf|mixed)'
+          python3 -B -m validation.tools.resync_sha_bindings --scan-root config/competition-env --dry-run --check
+          python3 -B -m validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check
 
       - name: Check judge entrypoint runner plan
-        run: python -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+        run: python3 -B -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+
+      - name: Check fresh LF clone judge entrypoint preflight
+        run: |
+          rm -rf target/repro-clone-lf-ci
+          git clone -c core.autocrlf=false --no-local . target/repro-clone-lf-ci
+          cd target/repro-clone-lf-ci
+          bash scripts/bootstrap_flashdb_sources.sh
+          python3 -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json
+          python3 -B -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+          python3 -B -m unittest validation.tools.test_opencode_agent_harness
 
       - name: Run competition CI smoke gate
-        run: python validation/tools/run_competition_smoke.py --proof-class ci-approximation --run-id core-ci-smoke --out-root target/competition-smoke
+        run: python3 -B validation/tools/run_competition_smoke.py --proof-class ci-approximation --run-id core-ci-smoke --out-root target/competition-smoke
 
       - name: Run repository unsafe budget gate
-        run: python validation/tools/unsafe_budget.py --max-ratio 0.10
+        run: python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
 
       - name: Run translator coverage matrix gate
-        run: python validation/tools/translator_coverage_matrix.py
+        run: python3 -B validation/tools/translator_coverage_matrix.py
 
       - name: Run milestone release report gate
-        run: python validation/tools/milestone_release_report.py --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+        run: python3 -B validation/tools/milestone_release_report.py --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
 
       - name: Run route governance metrics report gate
-        run: python validation/tools/route_governance_metrics_report.py
+        run: python3 -B validation/tools/route_governance_metrics_report.py
 
       - name: Check diff whitespace
         run: git diff --check

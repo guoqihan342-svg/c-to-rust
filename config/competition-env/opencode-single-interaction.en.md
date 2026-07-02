@@ -62,19 +62,19 @@ Typical flow:
 
 ```bash
 # Preferred reusable profile path:
-python -m validation.tools.opencode_agent_harness run-batch-profile \
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile \
   --profile config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json \
   --run-id <run-id> \
   --out-root target/competition-out
 
 # Expanded debugging path:
-python -m validation.tools.opencode_agent_harness init-run \
+python3 -B -m validation.tools.opencode_agent_harness init-run \
   --run-id <run-id> \
   --proof-class <proof-class> \
   --out-root target/competition-out
 
 # Preferred file-level batch path:
-python -m validation.tools.opencode_agent_harness plan-source-file \
+python3 -B -m validation.tools.opencode_agent_harness plan-source-file \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --target-id <target> \
@@ -89,7 +89,7 @@ python -m validation.tools.opencode_agent_harness plan-source-file \
   --worker-prefix worker \
   --out-root target/competition-out
 
-python -m validation.tools.opencode_agent_harness run-plan \
+python3 -B -m validation.tools.opencode_agent_harness run-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --plan target/competition-out/harness/plans/<target>-<source-stem>-workers.json \
@@ -101,7 +101,7 @@ python -m validation.tools.opencode_agent_harness run-plan \
   --out-root target/competition-out
 
 # Manual expanded single-worker path:
-python -m validation.tools.opencode_agent_harness assign-slice \
+python3 -B -m validation.tools.opencode_agent_harness assign-slice \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
@@ -121,21 +121,21 @@ python -m validation.tools.opencode_agent_harness assign-slice \
 #   --reuse-accepted-evidence
 #   --accepted-evidence-root validation/evidence
 
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
   --mode deterministic
 
 # When local OpenCode / DeepSeek V4 Pro is connected, verify exact-command preflight first:
-python -m validation.tools.opencode_agent_harness opencode-preflight \
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id <run-id> \
   --out-root target/opencode-preflight \
   --opencode-variant max \
   --opencode-skip-permissions
 
 # Use the agent wrapper only after preflight passes:
-python -m validation.tools.opencode_agent_harness run-worker \
+python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --worker-id worker-a \
@@ -150,7 +150,7 @@ The OpenCode preflight launcher and worker launcher use a repo-local runtime env
 
 `run-plan --auto-retry` is the bounded self-healing path: a failed worker writes a repair hint, the harness retries that same worker, and the loop stops when the worker revalidates or reaches the `REPAIR_ROUND_CAP=5` limit. `--max-workers` controls parallel worker fan-out; the report preserves planner-order fan-in through `run_plan.graph.parallel_map.result_order=planner_order`. Retry success still only means the worker summary revalidated; semantic acceptance remains the final summary validator plus oracle/diff/unsafe gates.
 
-python -m validation.tools.opencode_agent_harness write-merge-plan \
+python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
   --db target/competition-out/state/opencode-agent-harness.sqlite3 \
   --run-id <run-id> \
   --proof-class <proof-class> \
@@ -172,18 +172,18 @@ Run the environment check first, then process real C slices. Independent slices 
 2. Use direct runner arguments for a single real C source function, or prepare `target/competition-out/extract-specs/<id>-<slice>.json` with at least `repo_root`, `source_file`, `function`, `target_id`, and `slice_id`; optionally include `source_repository`, `source_branch`, `source_commit`, `require_source_commit`, `compiler_command_source`, `include_paths`, and `defines`. `source_file` must be relative to `repo_root`. FlashDB competition-scoring input must bind `https://gitcode.com/xwxf/FlashDB.git`, the `competition` branch, and `f9d0421315c564fb890a1b14eee77b290e0d7bbe`.
    — Direct arguments and JSON extract specs are both parameterized inputs used by the runner to invoke `extract_source_slice.py`; do not hand-write `c_source`.
 
-3. python validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
+3. python3 -B validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
    — Use the unified runner for slice extraction, environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation; the runner writes generated slice specs under `target/competition-out/slice-specs/`.
    — For batch or reusable inputs, use `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` instead of the direct source arguments.
    — If independent workers have already produced summaries, pass each one with repeated `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json`; the aggregate runner does not reprocess those slices, merges their counts, and fails the final gate when any worker is failed or blocked.
 
-4. python validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
+4. python3 -B validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — Manual expanded real C source function slice extraction. When using runner `--extract-spec`, the runner invokes this step.
 
-5. python validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
+5. python3 -B validation/tools/auto_migrate.py --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --out-root target/competition-out/evidence --competition-clang-lane
    — Manual expanded full auto-translation pipeline: clang AST → typed IR → Rust draft → C oracle → Rust replay → diff → route/profile. When using the runner, this step is called by the runner.
 
-6. python validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
+6. python3 -B validation/tools/validate_auto_translation_evidence.py --target-id <id> --slice-id <slice> --slice-spec target/competition-out/slice-specs/<id>-<slice>.json --evidence-root target/competition-out/evidence --require-semantic-pass
    — Manual expanded full evidence validation. When using the runner, this step is called by the runner.
 
 7. openspec validate --all --strict

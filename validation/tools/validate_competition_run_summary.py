@@ -19,6 +19,16 @@ REQUIRED_ARTIFACT_ROOTS = {
     "target/competition-out/summary",
     "target/competition-out/logs",
 }
+LF_STABLE_TEXT_SUFFIXES = {
+    ".json",
+    ".jsonl",
+    ".md",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
 
 
 def main() -> int:
@@ -505,12 +515,19 @@ def resolve_summary_artifact(value: str, *, summary_path: Path, repo_root: Path)
     return None
 
 
+def should_normalize_lf_for_hash(path: Path) -> bool:
+    return path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES
+
+
+def lf_stable_file_bytes(path: Path) -> bytes:
+    data = path.read_bytes()
+    if not should_normalize_lf_for_hash(path):
+        return data
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return hashlib.sha256(lf_stable_file_bytes(path)).hexdigest()
 
 
 def is_sha256(value: str) -> bool:

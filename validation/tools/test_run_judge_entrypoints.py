@@ -994,6 +994,12 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         workflow = (REPO_ROOT / ".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
         self.assertIn("validation.tools.test_run_judge_entrypoints", workflow)
         self.assertIn("validation.tools.run_judge_entrypoints --dry-run", workflow)
+        self.assertIn("git clone -c core.autocrlf=false --no-local", workflow)
+        self.assertIn("target/repro-clone-lf-ci", workflow)
+        self.assertIn(
+            "validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json",
+            workflow,
+        )
 
 
 if __name__ == "__main__":

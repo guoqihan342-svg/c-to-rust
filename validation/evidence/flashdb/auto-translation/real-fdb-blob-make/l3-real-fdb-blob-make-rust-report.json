@@ -7,7 +7,7 @@
   "case_count": 3,
   "fixture": {
     "path": "validation/l2_slices/fixtures/real-fdb-blob-make.json",
-    "sha256": "5f861e3de9d651b65ca062b7e53ecc25f15a0d9b885f1a36e3690dcfa42bf54f"
+    "sha256": "e945f799a0a0c50e28318d34ed0e5f9a217c64401360769fc5185e15ee27a85b"
   },
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-rust-draft.rs",
@@ -43,7 +43,7 @@
     "evidence_links": {
       "c_oracle": {
         "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
-        "sha256": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
+        "sha256": "d2d84fc1f7ce28877e59f5d99c632ff1c64ea4e4b2b348bc45d9f877d65564d8",
         "status": "passed"
       },
       "negative_diff": {
@@ -109,7 +109,7 @@
       "oracle_reports": [
         {
           "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
-          "sha256": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
+          "sha256": "d2d84fc1f7ce28877e59f5d99c632ff1c64ea4e4b2b348bc45d9f877d65564d8",
           "status": "passed"
         },
         {
@@ -134,7 +134,7 @@
         "evidence": [
           {
             "path": "validation/evidence/flashdb/l3-real-fdb-blob-make-c-oracle.json",
-            "sha256": "69bf4da81ebc003eb8ae38e69a41ce4a320e964d766ff8a99081536bc3adbbf6",
+            "sha256": "d2d84fc1f7ce28877e59f5d99c632ff1c64ea4e4b2b348bc45d9f877d65564d8",
             "status": "passed"
           },
           {

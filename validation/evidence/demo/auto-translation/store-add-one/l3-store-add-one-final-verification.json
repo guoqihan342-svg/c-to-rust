@@ -42,21 +42,83 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-    "sha256": "c899ca28bfadf2d6d677986d712cec41076d681e7af30194abaf17f620f6637e",
+    "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
   "fixture": {
     "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-    "sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2"
+    "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592"
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 6,
+      "case_source": "fixture_contract",
+      "declared_case_count": 6,
+      "fixture_hash": "store-add-one-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+      "limitations": [
+        "NULL out pointers are outside the accepted fixture domain",
+        "INT_MAX signed overflow is outside the accepted fixture domain",
+        "Pointer arithmetic beyond out[0] is outside the accepted fixture domain"
+      ],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "out0"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": false,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "demo slice uses explicit C source and no external headers"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-    "sha256": "42cada3abe262b69dbae634fd7cf82eb3a010d0700345f998d118d6ca425c28e",
-    "status": "recorded",
-    "level": "L1"
+    "sha256": "0ce195cc3f8815329a9377bff4510370c5ca4b30a64952b7a0d95d5d8ddc98b5",
+    "status": "recorded"
   },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
@@ -72,72 +134,10 @@
   "unsafe_status": "passed",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
-    "sha256": "0960a93f0037a677cb8f05d8db0aa627f66eae8178c092542fa693bd117ae11b",
-    "status": "passed",
-    "profile": "L1-dev"
+    "profile": "L1-dev",
+    "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
+    "status": "passed"
   },
   "validation_profile_status": "passed",
-  "version_config_status": "recorded",
-  "oracle_boundary_contract": {
-    "schema_version": 1,
-    "status": "sufficient_for_semantic_pass",
-    "observable_outputs": [
-      "return_code",
-      "status",
-      "out0"
-    ],
-    "fixture_representativeness": {
-      "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-      "fixture_hash": "store-add-one-fixture",
-      "declared_case_count": 6,
-      "accepted_oracle_case_count": 6,
-      "case_source": "fixture_contract",
-      "representativeness": "bounded_fixture_contract",
-      "limitations": [
-        "NULL out pointers are outside the accepted fixture domain",
-        "INT_MAX signed overflow is outside the accepted fixture domain",
-        "Pointer arithmetic beyond out[0] is outside the accepted fixture domain"
-      ]
-    },
-    "compiler": {
-      "command_source": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
-      "include_paths": [],
-      "defines": [],
-      "flags": [],
-      "tool_versions": {
-        "gcc": "captured_by_wsl_oracle",
-        "rustc": "captured_at_validation"
-      }
-    },
-    "target": {
-      "triple_or_abi": "x86_64-unknown-linux-gnu",
-      "endianness": "little",
-      "int_width": 32,
-      "long_width": 64,
-      "pointer_width": 64,
-      "word_size_bits": 64
-    },
-    "sanitizer_diagnostics": {
-      "sanitizer_status": "not_run",
-      "diagnostic_status": "recorded",
-      "diagnostics": [
-        "demo slice uses explicit C source and no external headers"
-      ],
-      "clang_type_extraction_available": false
-    },
-    "ub_and_implementation_defined": {
-      "known_ub": [],
-      "implementation_defined_behavior": [],
-      "scalar_arithmetic_contract": {}
-    },
-    "platform_model": {
-      "hardware_dependencies": [],
-      "hardware_dependency_status": "not_applicable",
-      "rtos_dependencies": [],
-      "rtos_dependency_status": "not_applicable",
-      "volatile_dependencies": [],
-      "volatile_dependency_status": "not_applicable"
-    },
-    "insufficient_reasons": []
-  }
+  "version_config_status": "recorded"
 }

@@ -39,9 +39,9 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         required_fragments = [
             "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
             "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-            "python -B -m validation.tools.judge_demo",
+            "python3 -B -m validation.tools.judge_demo",
             "--review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
-            "python -B -m validation.tools.opencode_agent_harness run-batch-profile",
+            "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile",
             "target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/before-after-exhibit.json",
@@ -54,12 +54,12 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-safe.rs",
             "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-accepted-safety.patch",
             "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-accepted-safety.patch",
-            "python -B validation/tools/milestone_release_report.py",
+            "python3 -B validation/tools/milestone_release_report.py",
             "--review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json",
             "real-fdb-calc-crc32",
-            "C2Rust baseline output remains skipped",
+            "candidate_context_only",
             "translation_coverage_numerator",
             "generated_draft_semantic_pass=false",
         ]
@@ -68,9 +68,9 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             self.assertIn(fragment, english)
 
         public_index_fragments = [
-            "python -B -m validation.tools.judge_demo",
+            "python3 -B -m validation.tools.judge_demo",
             "--review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
-            "python -B -m validation.tools.opencode_agent_harness run-batch-profile",
+            "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile",
             "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
             "target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json",
             "target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json",
@@ -78,7 +78,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "target/competition-out-flashdb-before-after-exhibit/summary/judge-demo-report.json",
             "target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "repair_summary",
-            "python -B validation/tools/milestone_release_report.py",
+            "python3 -B validation/tools/milestone_release_report.py",
             "--review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json",
             "translation_coverage_numerator",
         ]
@@ -229,7 +229,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             "validate_summary",
             "milestone_release_report",
         ])
-        self.assertEqual(persisted["commands"][0]["argv"][0], "python")
+        self.assertEqual(persisted["commands"][0]["argv"][:2], ["python3", "-B"])
         self.assertIn("translator-generated semantic pass", persisted["claim_boundary"]["must_not_claim"][1])
         self.assertEqual(judge_index["report_kind"], "judge-evidence-index")
         self.assertEqual(judge_index["entrypoint"], "judge_demo")
@@ -252,7 +252,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(refs["workflow_metrics"]["path"], "target/judge-demo-unit/summary/workflow-metrics.json")
         self.assertEqual(
             judge_index["reproduction_commands"]["judge_demo"],
-            "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id judge-demo-unit --out-root target/judge-demo-unit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+            "python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id judge-demo-unit --out-root target/judge-demo-unit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json",
         )
         self.assertIn(
             "--review-checklist target/judge-demo-unit/summary/milestone-review-checklist.json",

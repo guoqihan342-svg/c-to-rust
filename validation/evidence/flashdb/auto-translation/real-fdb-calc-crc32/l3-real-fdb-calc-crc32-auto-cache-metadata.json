@@ -51,24 +51,24 @@
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
+    "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
   },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "5bef68c8fe3d8b3c1642745988c7cf647af93c3624c924c537cf6762009e293b",
+      "sha256": "ec9f51cabd9d3f9311da4fdb9b4ec89663ba4399a9290311e2ffbf6bc9fed761",
       "status": "generated"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-      "sha256": "23c51503e9c854aa696460945f1a47191ce4597fc2c5719a1ec326e588177eee",
+      "sha256": "7b24668bdd8ea39eff8e8c71ea3e09d8da3e10900748b5a0d32f12a6a2626715",
       "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "4868cc0c5384fe0982f7622546ee5ed5f23b47f6e1434df9607483ceef7eddaf",
+      "sha256": "dfb2cea2cbb533add339827dc326451483a4da5a2a1567380ffce69e32f20928",
       "status": "passed"
     }
   },

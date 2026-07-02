@@ -18,17 +18,17 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "db7c3b4004a09c0ceb62357cf6e56c1d7b0e46705adc6cbee2226246f9afbe47",
+      "sha256": "f217ab0aaae68e69cff4673d6485c398719fea7324789d9d9aac57da6af5a24a",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-cfg.json",
-      "sha256": "38c354cae8be30e9b96ed95bc48236551a1e057fd4cf716ee4063c9efae7f135",
+      "sha256": "f267e12f5b0e971c32fa0def521a89e6f85bea5dba2728053e6f3fec64262bc3",
       "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-pointer-graph.json",
-      "sha256": "fbd06c879bd0bed769455d937226980f45616d1bca35dea3ac71e974aaa6dfcb",
+      "sha256": "f2101790215395089d952347c16b8da79364f90be7d0a997e6b984d4bb9858a9",
       "status": "recorded"
     },
     "translation_plan": {
@@ -37,7 +37,7 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/add-i32-pair-ptr-arith/l3-add-i32-pair-ptr-arith-type-map.json",
-      "sha256": "abcc91bfe095f76e6512bb58821288a748e0068f8a114aadf8a4a51e6e376460",
+      "sha256": "afe5d223091631525d984594baf91f6e3c07479900bead69c71bf59911649d31",
       "status": "recorded"
     }
   },

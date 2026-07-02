@@ -1,7 +1,7 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "5bef68c8fe3d8b3c1642745988c7cf647af93c3624c924c537cf6762009e293b",
+    "sha256": "ec9f51cabd9d3f9311da4fdb9b4ec89663ba4399a9290311e2ffbf6bc9fed761",
     "status": "generated"
   },
   "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir /tmp/c2r-rust-check-sx2_6_s7 validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
@@ -19,7 +19,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "23c51503e9c854aa696460945f1a47191ce4597fc2c5719a1ec326e588177eee",
+    "sha256": "7b24668bdd8ea39eff8e8c71ea3e09d8da3e10900748b5a0d32f12a6a2626715",
     "status": "refused"
   },
   "rust_check_harness_only_bindings": {
@@ -38,7 +38,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "4868cc0c5384fe0982f7622546ee5ed5f23b47f6e1434df9607483ceef7eddaf",
+    "sha256": "dfb2cea2cbb533add339827dc326451483a4da5a2a1567380ffce69e32f20928",
     "status": "passed"
   }
 }

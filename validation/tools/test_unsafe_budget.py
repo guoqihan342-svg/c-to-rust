@@ -12,9 +12,9 @@ class UnsafeBudgetTests(unittest.TestCase):
         text = workflow.read_text(encoding="utf-8")
 
         self.assertIn("cargo test --manifest-path crates/c2r-translator/Cargo.toml --all-features --quiet", text)
-        self.assertIn("python -m unittest validation.tools.test_auto_migrate", text)
-        self.assertIn("python -m unittest validation.tools.test_unsafe_budget", text)
-        self.assertIn("python validation/tools/unsafe_budget.py --max-ratio 0.10", text)
+        self.assertIn("python3 -B -m unittest validation.tools.test_auto_migrate", text)
+        self.assertIn("python3 -B -m unittest validation.tools.test_unsafe_budget", text)
+        self.assertIn("python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10", text)
         self.assertIn('"validation/unsafe-budget-ledger.json"', text)
         self.assertIn("git diff --check", text)
 

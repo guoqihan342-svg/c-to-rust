@@ -1,188 +1,188 @@
 {
-  "schema_version": 1,
-  "manifest_kind": "flashdb-explicit-workers-harness-run",
-  "status": "passed",
-  "run_id": "harness-flashdb-explicit-workers-20260701",
-  "target_id": "flashdb",
-  "proof_class": "local-simulation",
-  "tracked_artifact_root": "validation/evidence/flashdb/harness",
-  "target_run_root": {
-    "path": "target/competition-out-flashdb-explicit-workers-20260701",
-    "status": "recorded_not_tracked",
-    "reason": "target outputs are reproducible run artifacts and are ignored by git"
-  },
-  "profile": {
-    "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
-    "sha256": "639e805ebdaf046a1fe0ca8f2bc3cc980363fb5d2bed8381887d4ed5aacec0e1"
-  },
-  "environment_profile": {
-    "path": "config/competition-env/environment.json",
-    "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "f4c0e249c19a701f3126e2d7a5d0e98c1bb56b003947fbfdf0c6e8dee2b24867"
-  },
-  "source": {
-    "path": "sources/FlashDB/src/fdb_utils.c",
-    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
-  },
-  "workers": [
-    {
-      "worker_id": "flashdb-worker-001-fdb-calc-crc32",
-      "slice_id": "real-fdb-calc-crc32",
-      "function": "fdb_calc_crc32",
-      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-        "sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147"
-      },
-      "summary_status": "passed",
-      "semantic_pass": 1
-    },
-    {
-      "worker_id": "flashdb-worker-002-fdb-blob-make",
-      "slice_id": "real-fdb-blob-make",
-      "function": "fdb_blob_make",
-      "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-      "require_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-      "slice_spec": {
-        "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-        "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
-      },
-      "summary_status": "passed",
-      "semantic_pass": 1
-    }
-  ],
   "claim_boundary": {
-    "semantic_claim_source": "accepted_evidence_binding",
-    "generated_draft_semantic_pass": false,
-    "translation_coverage_numerator": 0,
     "boundary": "This manifest records the explicit multi-worker harness fanout, source pinning, context index, and merge evidence over two FlashDB accepted-evidence slices. It does not claim translator-generated semantic pass or whole-project FlashDB migration.",
+    "generated_draft_semantic_pass": false,
     "non_goals": [
       "translator-generated semantic pass",
       "whole-project FlashDB migration",
       "complete OpenCode autonomous runtime proof",
       "general C coverage"
-    ]
+    ],
+    "semantic_claim_source": "accepted_evidence_binding",
+    "translation_coverage_numerator": 0
   },
-  "reproduction": {
-    "run_batch_profile_command": "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-20260701 --out-root target/competition-out-flashdb-explicit-workers-20260701",
-    "summary_validation_command": "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-20260701/summary/competition-run-summary.json",
-    "evaluate_profile_command": "python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
-    "evaluate_profile_summary_validation_command": "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
-  },
-  "summary": {
-    "final_gate": "passed",
-    "worker_count": 2,
-    "semantic_pass": 2,
-    "compiled": 2,
-    "failed": 0,
-    "parallelism": {
-      "max_workers": 2,
-      "effective_workers": 2,
-      "result_order": "planner_order"
-    },
-    "planning_mode": "explicit_workers"
-  },
-  "target_run_artifacts": {
-    "status": "recorded_not_tracked",
-    "artifacts": {
-      "competition_summary": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/summary/competition-run-summary.json",
-        "sha256": "c04c782b256d6ecafe5b095165bd5ed94bb70c022dbfe7c05da0b8908677e223"
-      },
-      "workflow_metrics": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/summary/workflow-metrics.json",
-        "sha256": "b9ef457d5abefc8ca7371f4b0a8d5018b26ab42714340b7d27190014f5d338f2"
-      },
-      "route_governance_metrics_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/summary/route-governance-metrics-report.json",
-        "sha256": "b27576b0f46282f0ff106de5af7fb9052bea7b627eb14297c08f9e2d74cc917e"
-      },
-      "context_pack": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/context-pack.json",
-        "sha256": "5aaf4c683e1b9a344b25bdb8bbdd7f4995f6161e62a99ec9e283ab60837a8b3d"
-      },
-      "agent_index": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/agent-index.json",
-        "sha256": "a363dd765e3ec90768483ef566a72abc41919c4f3a00272f2105ba4d391f3933"
-      },
-      "batch_profile_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/batch-profile-report.json",
-        "sha256": "f7b98a6b922b96c1851e9027fd9632a3120c5c0179810a5286efd568bc8a5268"
-      },
-      "run_plan_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/run-plan-report.json",
-        "sha256": "24baaa60f905f0e823a2fab3949d914721a4664edb100525db032d142e22ecf3"
-      },
-      "merge_plan": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/merge-plan.json",
-        "sha256": "b8819fb3c6602f70f43a97b3cd6355aaf941f95bc5580fa99fa7ae96bfeff436"
-      },
-      "worker_plan": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/plans/flashdb-flashdb-fdb-utils-explicit-workers-workers.json",
-        "sha256": "b4c85dee98399cce4570f5407025ce52cbef62ce30f92c2925da4cada9846a80"
-      },
-      "worker_001_summary": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-001-fdb-calc-crc32/summary/competition-run-summary.json",
-        "sha256": "0773ad883f36ef49e8a6884bee9b0a806c002bd48766333bd3cab61645d2bbda"
-      },
-      "worker_001_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-001-fdb-calc-crc32/harness/run-worker-report.json",
-        "sha256": "d7ffa3d699fafd5f677a85ac1a8d82423433df3aeeeb71eaab83af0fc9d242fc"
-      },
-      "worker_002_summary": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-002-fdb-blob-make/summary/competition-run-summary.json",
-        "sha256": "4fec6687a310d64ff021666625f03d0b74d6d24e1d3d0963f02487a25897c960"
-      },
-      "worker_002_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-002-fdb-blob-make/harness/run-worker-report.json",
-        "sha256": "acf9859c4b515ce48388e35335418aa09ce86ee32733ed0a6a7083c22c850d06"
-      }
-    }
+  "environment_profile": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
   },
   "evaluate_profile_artifacts": {
-    "status": "recorded_not_tracked",
     "artifacts": {
-      "competition_summary": {
-        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
-        "sha256": "9eac2d397e83e8b7eaf3d4132b7d98958d3971e854ea7fc95f4cf63dc273a9e7"
-      },
-      "workflow_metrics": {
-        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/workflow-metrics.json",
-        "sha256": "73db12395a1e8bd5901bf36043b054925648da805d896eb61bea90c0394ec3f5"
-      },
-      "route_governance_metrics_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
-        "sha256": "c22c6bf907949150f129443f32e09b46932439a2a88f2acfe186161101d824d8"
-      },
-      "context_pack": {
-        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
-        "sha256": "4a6139287f9fbfb3cd3fbef04e78b8d98fd8693141b8101d5e09fde807c96f2e"
-      },
       "agent_index": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
-        "sha256": "3aed002615ff50756cffa5131e2cb5a17fa4088e5dfaab425ca5cbafd132917c"
+        "sha256": "1af4a2ce8542e3f234a0e4819c3dd8ea46969967c8f93b87f46c979297f6837c"
       },
       "batch_profile_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/batch-profile-report.json",
-        "sha256": "5321594d4ae46c45b5ec9728a5b9caedbb586b81a7276bcae34d099d90a86abe"
+        "sha256": "8ce60b2d29a821b43bbcf3c2a026a34e9af8d02106d7548ecfdcec0b40f9fc39"
+      },
+      "competition_summary": {
+        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
+        "sha256": "8bb0b6a161d0636325cc7a0d2232aaefdc55da1979863cf4de28506249417a2a"
+      },
+      "context_pack": {
+        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/context-pack.json",
+        "sha256": "1019386be6ff045699ee3b2035793ca14b67a6008cf026922d77c1462bb17522"
       },
       "evaluate_report": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/evaluate-report.json",
-        "sha256": "f5d9d20f2d4b535c8b7d2dec252caa716e11d5f14ddf7f21b527fc406f6c5389"
+        "sha256": "a70262654911c91caa8f43b266e9ea62275220af2e3787b35da01a1d64c5d140"
       },
       "judge_evidence_index": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/judge-evidence-index.json",
-        "sha256": "8c511c093bf542d43515fd8bc52d1e049043c5d84105e59f6bf6af93585194b5"
-      },
-      "run_plan_report": {
-        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
-        "sha256": "c6a5baa1386316fc19338a3d950c0a1ea2e49fc78d9cee2b5263a91e27e8e3b5"
+        "sha256": "4eac2e40a6c95e0aa535a46a5f72673be52fbdd6271f612f1412784a50a29bb5"
       },
       "merge_plan": {
         "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
-        "sha256": "67e75a9a0e7fa5dfe3f94c3d414226463eaa183ea1b9ae6b288a9e0305791598"
+        "sha256": "37171c47c6741ad323b87b48fe56063d7335878d0fd8d2ff3cc5cfc99bbf2675"
+      },
+      "route_governance_metrics_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/route-governance-metrics-report.json",
+        "sha256": "468487022c608550bcba435968acf8df1645d947bd0f861f6afbe7075b953073"
+      },
+      "run_plan_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
+        "sha256": "61f282fb212187878b17db04ec878b965e5f4e9bfd19a1bfb0d6304d30d7d0f6"
+      },
+      "workflow_metrics": {
+        "path": "target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/workflow-metrics.json",
+        "sha256": "6eeb4edd0ca3ec8f5b6c356bb55895043efd5f838bc86fc174e1754ac1a02c26"
       }
+    },
+    "status": "recorded_not_tracked"
+  },
+  "manifest_kind": "flashdb-explicit-workers-harness-run",
+  "profile": {
+    "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
+    "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
+  },
+  "proof_class": "local-simulation",
+  "reproduction": {
+    "evaluate_profile_command": "python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
+    "evaluate_profile_summary_validation_command": "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json",
+    "run_batch_profile_command": "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-20260701 --out-root target/competition-out-flashdb-explicit-workers-20260701",
+    "summary_validation_command": "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-20260701/summary/competition-run-summary.json"
+  },
+  "run_id": "harness-flashdb-explicit-workers-20260701",
+  "schema_version": 1,
+  "source": {
+    "path": "sources/FlashDB/src/fdb_utils.c",
+    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+  },
+  "status": "passed",
+  "summary": {
+    "compiled": 2,
+    "failed": 0,
+    "final_gate": "passed",
+    "parallelism": {
+      "effective_workers": 2,
+      "max_workers": 2,
+      "result_order": "planner_order"
+    },
+    "planning_mode": "explicit_workers",
+    "semantic_pass": 2,
+    "worker_count": 2
+  },
+  "target_id": "flashdb",
+  "target_run_artifacts": {
+    "artifacts": {
+      "agent_index": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/agent-index.json",
+        "sha256": "1cea0ff93e1caf95d0fac7356a581a6e4daf7623c7413e6a0381b58cce69e977"
+      },
+      "batch_profile_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/batch-profile-report.json",
+        "sha256": "f4618636388220932bea83b85fe6484846f08b80c7e503a1453a444adf8eb9ef"
+      },
+      "competition_summary": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/summary/competition-run-summary.json",
+        "sha256": "b060195e3eae09aba7b7104836f42ec2266444f5175cbd9788cbf8dff22b3c6a"
+      },
+      "context_pack": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/context-pack.json",
+        "sha256": "5837b04cbe4c3791fd2eba3b3236089b10f9c9748c7e9648a61c2e088ac822f5"
+      },
+      "merge_plan": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/merge-plan.json",
+        "sha256": "42850831a055d8d7b58efcd3b6191582d9aa04e91561d4013085eebf984ee4c8"
+      },
+      "route_governance_metrics_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/summary/route-governance-metrics-report.json",
+        "sha256": "76b913882d3c0bec3202b620678316fe1cdb4fd95c9c598afd2d66cfc1d94e08"
+      },
+      "run_plan_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/run-plan-report.json",
+        "sha256": "487af3876afd9791f01e36f8c92662f2b681e6d29164f7cb736089920196c2b5"
+      },
+      "worker_001_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-001-fdb-calc-crc32/harness/run-worker-report.json",
+        "sha256": "12162d7586c179e95d46cfa395f1080ac3787808e8c2c39156eb784fd59231a5"
+      },
+      "worker_001_summary": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-001-fdb-calc-crc32/summary/competition-run-summary.json",
+        "sha256": "4b20bb46b0d92ae50c4b4220c6cad3145040582fe2d4571373a6e4344e9f83d1"
+      },
+      "worker_002_report": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-002-fdb-blob-make/harness/run-worker-report.json",
+        "sha256": "7b189383263674ba208d6642e19986df15d6879e52e96de2b68ead9223549670"
+      },
+      "worker_002_summary": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/workers/flashdb-worker-002-fdb-blob-make/summary/competition-run-summary.json",
+        "sha256": "2cccc0deb3837be970334d83888819fef8027bdf6c9974694598f1cbad5a18b5"
+      },
+      "worker_plan": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/harness/plans/flashdb-flashdb-fdb-utils-explicit-workers-workers.json",
+        "sha256": "117fc2991c18cbfe8b527e8d3bcdfff6716e2043d0b8fcfc49d37c323f3f709a"
+      },
+      "workflow_metrics": {
+        "path": "target/competition-out-flashdb-explicit-workers-20260701/summary/workflow-metrics.json",
+        "sha256": "6b28d3b093adfbe9d77b2299ee2610855d40f4f2454156c60ae5eba5b236825a"
+      }
+    },
+    "status": "recorded_not_tracked"
+  },
+  "target_run_root": {
+    "path": "target/competition-out-flashdb-explicit-workers-20260701",
+    "reason": "target outputs are reproducible run artifacts and are ignored by git",
+    "status": "recorded_not_tracked"
+  },
+  "tracked_artifact_root": "validation/evidence/flashdb/harness",
+  "workers": [
+    {
+      "function": "fdb_calc_crc32",
+      "require_source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "semantic_pass": 1,
+      "slice_id": "real-fdb-calc-crc32",
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+        "sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147"
+      },
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "summary_status": "passed",
+      "worker_id": "flashdb-worker-001-fdb-calc-crc32"
+    },
+    {
+      "function": "fdb_blob_make",
+      "require_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "semantic_pass": 1,
+      "slice_id": "real-fdb-blob-make",
+      "slice_spec": {
+        "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
+        "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
+      },
+      "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "summary_status": "passed",
+      "worker_id": "flashdb-worker-002-fdb-blob-make"
     }
-  }
+  ]
 }

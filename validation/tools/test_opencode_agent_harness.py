@@ -7175,7 +7175,7 @@ def before_after_worker_metrics(
         **{
             name: {
                 "path": f"evidence/before-after/{path.name}",
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "sha256": harness.sha256_file(path),
             }
             for name, path in artifacts.items()
         },
@@ -7193,7 +7193,7 @@ def before_after_worker_metrics(
         "semantic_evidence": {
             "schema_diff": {
                 "path": f"evidence/before-after/{schema_diff_path.name}",
-                "sha256": hashlib.sha256(schema_diff_path.read_bytes()).hexdigest(),
+                "sha256": harness.sha256_file(schema_diff_path),
             },
         },
     }

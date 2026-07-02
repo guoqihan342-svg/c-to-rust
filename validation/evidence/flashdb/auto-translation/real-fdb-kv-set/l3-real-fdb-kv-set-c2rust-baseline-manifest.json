@@ -38,7 +38,7 @@
   "slice_id": "real-fdb-kv-set",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-set.json",
-    "sha256": "f6f09fc60995b2284848de11341faa0973634e602ac291812aab83a8734dddbd"
+    "sha256": "bf49e63a9695730fb43e47dae0f3fb2439da286d023a54f427f5c94edcfda5da"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "skipped",
@@ -47,7 +47,7 @@
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb"
+      "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
     },
     "diagnostic_only": true,
     "environment_profile_hash": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb",

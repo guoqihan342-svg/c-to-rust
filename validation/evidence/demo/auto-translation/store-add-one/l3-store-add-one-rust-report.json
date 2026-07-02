@@ -7,11 +7,11 @@
   "case_count": 6,
   "fixture": {
     "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-    "sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2"
+    "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592"
   },
   "generated_draft": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
-    "sha256": "a0af873513c7e95b392e5ce1cdfa639ebfa1e1862efb1af05669a591f8f57d5e",
+    "sha256": "ad6e4fd35cf7abf29186ab262cbc5c728930350ebb695e23e7981bbb675b11a1",
     "status": "candidate"
   },
   "generated_draft_semantic_pass": false,

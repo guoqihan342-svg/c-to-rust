@@ -1,95 +1,4 @@
 {
-  "schema_version": 1,
-  "level": "L3",
-  "target_id": "flashdb",
-  "slice_id": "kvdb-lifecycle",
-  "change_id": "run-flashdb-l3-agent-migration-loop",
-  "status": "legacy_incomplete",
-  "repo_commit": "b9d38991290cf93f80090af4c908add7683196d9",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "fixture": {
-    "path": "flashDB_rust/fixtures/l3-kvdb-lifecycle.json",
-    "name": "l3-kvdb-lifecycle",
-    "sha256": "3cc83c6fa78d3bfdbfe5dc78e49e65fd758ef5a374a044bf329d079020fa280c",
-    "hash_short": "aad32bea",
-    "backend_matrix": [
-      "rust-file",
-      "flashdb-c"
-    ]
-  },
-  "semantic_equivalence_claim": {
-    "claimed": true,
-    "scope": "Only the named kvdb-lifecycle slice and behavior fields exercised by l3-kvdb-lifecycle.json.",
-    "boundary": "This does not claim full FlashDB migration, byte-for-byte flash image layout equivalence, GC/recovery equivalence, or TSDB equivalence.",
-    "basis": [
-      "C oracle report has toolchain_status C_ORACLE_GENERATED",
-      "Rust and C reports use fixture_hash aad32bea",
-      "Schema-aware diff status is passed with first_mismatch null",
-      "Negative regression test rejects value behavior mismatch"
-    ]
-  },
-  "evidence": {
-    "context_pack": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-context-pack.json",
-      "sha256": "7ea8bbdf8f849a6b029a4c792d5e919e463e48dd0c22ec01d8519c7370e26f62",
-      "status": "recorded"
-    },
-    "slice_contract": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-slice-contract.json",
-      "sha256": "4007b434cd729caa3a63f6757426e7305233d3ef4fb4e03f136bd4c383d33e85",
-      "status": "frozen"
-    },
-    "rust_report": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-report.json",
-      "sha256": "5db1146946176e968c6c7532d95ce75ae29f732d6b472d975c309c2f88338a88",
-      "status": "passed",
-      "toolchain_status": "NOT_APPLICABLE_RUST_REPLAY",
-      "fixture_hash": "aad32bea"
-    },
-    "c_oracle": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle.json",
-      "sha256": "dab94df62386eca7263aef03c8de90423dfa2a1ce3193df850cb3f5bf94be6cd",
-      "status": "passed",
-      "toolchain_status": "C_ORACLE_GENERATED",
-      "fixture_hash": "aad32bea"
-    },
-    "diff": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-diff.json",
-      "sha256": "b629d9e64d6d0c3c34bec84563ce8bd009ab8d06a846d93232bdc39b7c3f8dd6",
-      "status": "passed",
-      "first_mismatch": null,
-      "note": "The diff tool's local toolchain_status can be SKIPPED_LOCAL_NO_C_TOOLCHAIN because it probes the Windows host. The C oracle report itself is C_ORACLE_GENERATED."
-    },
-    "rust_check": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-check.json",
-      "sha256": "478252825e6d381d2e74282dc48799e462fe7a6bde6313c4877465d82f7ce628",
-      "status": "passed",
-      "error_count": 0,
-      "automatic_patch_attempt_count": 0
-    },
-    "unsafe": {
-      "scan_path": "validation/evidence/flashdb/l3-kvdb-lifecycle-unsafe-scan.json",
-      "ledger_path": "validation/evidence/flashdb/l3-kvdb-lifecycle-unsafe-ledger.json",
-      "scan_sha256": "9e6f408d776692a6d4421a1b7c1375329d18f691aa4da3753cd33698aa63278f",
-      "ledger_sha256": "b1208d6b9f17a8c8642d9cdb2192159fc23e230d5cc0c605fb58ccb30ad2cd74",
-      "status": "passed",
-      "first_party_non_test_unsafe_count": 0,
-      "unsafe_ratio": 0.0
-    },
-    "performance_smoke": {
-      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-performance-smoke.json",
-      "sha256": "6e56bb3343996e86d505730a8d424324bce7f8ee378344b124a8b3e1dbed9ba5",
-      "status": "recorded",
-      "duration_ms": 870,
-      "loops": 64
-    }
-  },
-  "windows_skip": {
-    "marker": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
-    "status": "skipped",
-    "counts_as_l3_pass": false,
-    "replacement_evidence": "WSL Ubuntu generated validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle.json with C_ORACLE_GENERATED."
-  },
   "accepted_differences": {
     "allowed_metadata_fields": [
       "image_hash",
@@ -101,6 +10,7 @@
       "fixture_hash",
       "report_path"
     ],
+    "behavior_fields_checked": true,
     "forbidden_behavior_fields": [
       "value",
       "entries",
@@ -109,12 +19,102 @@
       "code",
       "operation success",
       "error semantics"
+    ]
+  },
+  "change_id": "run-flashdb-l3-agent-migration-loop",
+  "evidence": {
+    "c_oracle": {
+      "fixture_hash": "aad32bea",
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle.json",
+      "sha256": "dab94df62386eca7263aef03c8de90423dfa2a1ce3193df850cb3f5bf94be6cd",
+      "status": "passed",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "context_pack": {
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-context-pack.json",
+      "sha256": "7ea8bbdf8f849a6b029a4c792d5e919e463e48dd0c22ec01d8519c7370e26f62",
+      "status": "recorded"
+    },
+    "diff": {
+      "first_mismatch": null,
+      "note": "The diff tool's local toolchain_status can be SKIPPED_LOCAL_NO_C_TOOLCHAIN because it probes the Windows host. The C oracle report itself is C_ORACLE_GENERATED.",
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-diff.json",
+      "sha256": "b629d9e64d6d0c3c34bec84563ce8bd009ab8d06a846d93232bdc39b7c3f8dd6",
+      "status": "passed"
+    },
+    "performance_smoke": {
+      "duration_ms": 870,
+      "loops": 64,
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-performance-smoke.json",
+      "sha256": "6e56bb3343996e86d505730a8d424324bce7f8ee378344b124a8b3e1dbed9ba5",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "automatic_patch_attempt_count": 0,
+      "error_count": 0,
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-check.json",
+      "sha256": "9fe2ad635b5a9ce57e8af7c97f110d5227bf9f05ac091e8f11d4c9c59365a6df",
+      "status": "passed"
+    },
+    "rust_report": {
+      "fixture_hash": "aad32bea",
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-rust-report.json",
+      "sha256": "5db1146946176e968c6c7532d95ce75ae29f732d6b472d975c309c2f88338a88",
+      "status": "passed",
+      "toolchain_status": "NOT_APPLICABLE_RUST_REPLAY"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/flashdb/l3-kvdb-lifecycle-slice-contract.json",
+      "sha256": "4007b434cd729caa3a63f6757426e7305233d3ef4fb4e03f136bd4c383d33e85",
+      "status": "frozen"
+    },
+    "unsafe": {
+      "first_party_non_test_unsafe_count": 0,
+      "ledger_path": "validation/evidence/flashdb/l3-kvdb-lifecycle-unsafe-ledger.json",
+      "ledger_sha256": "b1208d6b9f17a8c8642d9cdb2192159fc23e230d5cc0c605fb58ccb30ad2cd74",
+      "scan_path": "validation/evidence/flashdb/l3-kvdb-lifecycle-unsafe-scan.json",
+      "scan_sha256": "9e6f408d776692a6d4421a1b7c1375329d18f691aa4da3753cd33698aa63278f",
+      "status": "passed",
+      "unsafe_ratio": 0.0
+    }
+  },
+  "fixture": {
+    "backend_matrix": [
+      "rust-file",
+      "flashdb-c"
     ],
-    "behavior_fields_checked": true
+    "hash_short": "aad32bea",
+    "name": "l3-kvdb-lifecycle",
+    "path": "flashDB_rust/fixtures/l3-kvdb-lifecycle.json",
+    "sha256": "3cc83c6fa78d3bfdbfe5dc78e49e65fd758ef5a374a044bf329d079020fa280c"
   },
   "known_gaps": [
     "The target fixture omits kv.compact and overwrite update semantics; kvdb-main.json covers those as a later extension source.",
     "The diff tool does not yet strictly enforce top-level source.commit equality; this summary audits both reports for the pinned source commit."
   ],
-  "next_slice_recommendation": "TSDB append/query/status after KVDB lifecycle, or extend KVDB with compact and overwrite update semantics."
+  "level": "L3",
+  "next_slice_recommendation": "TSDB append/query/status after KVDB lifecycle, or extend KVDB with compact and overwrite update semantics.",
+  "repo_commit": "b9d38991290cf93f80090af4c908add7683196d9",
+  "schema_version": 1,
+  "semantic_equivalence_claim": {
+    "basis": [
+      "C oracle report has toolchain_status C_ORACLE_GENERATED",
+      "Rust and C reports use fixture_hash aad32bea",
+      "Schema-aware diff status is passed with first_mismatch null",
+      "Negative regression test rejects value behavior mismatch"
+    ],
+    "boundary": "This does not claim full FlashDB migration, byte-for-byte flash image layout equivalence, GC/recovery equivalence, or TSDB equivalence.",
+    "claimed": true,
+    "scope": "Only the named kvdb-lifecycle slice and behavior fields exercised by l3-kvdb-lifecycle.json."
+  },
+  "slice_id": "kvdb-lifecycle",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "status": "legacy_incomplete",
+  "target_id": "flashdb",
+  "windows_skip": {
+    "counts_as_l3_pass": false,
+    "marker": "SKIPPED_LOCAL_NO_C_TOOLCHAIN",
+    "replacement_evidence": "WSL Ubuntu generated validation/evidence/flashdb/l3-kvdb-lifecycle-c-oracle.json with C_ORACLE_GENERATED.",
+    "status": "skipped"
+  }
 }
