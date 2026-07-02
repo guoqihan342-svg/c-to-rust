@@ -4573,6 +4573,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(result["summary_status"], "passed")
+            self.assertIn("opencode_safety_transform_attempt", result)
+            attempt_binding = result["opencode_safety_transform_attempt"]
+            attempt = json.loads((REPO_ROOT / attempt_binding["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(attempt["report_kind"], "opencode-safety-transform-attempt")
+            self.assertEqual(attempt["status"], "accepted")
+            self.assertEqual(attempt["contract_verification"]["status"], "executed")
+            self.assertFalse(attempt["semantic_gate"])
+            self.assertFalse(attempt["chat_output_is_evidence"])
+            self.assertEqual(attempt["translation_coverage_numerator"], 0)
             metrics = json.loads((worker_out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             unit = metrics["per_unit_statuses"][0]
             self.assertIn("handoff_contract", unit)
@@ -4587,6 +4596,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 (repo_rel(worker_out_root / "summary" / "competition-run-summary.json"),),
             )
             self.assertEqual(artifact_rows, [(harness.sha256_file(worker_out_root / "summary" / "competition-run-summary.json"),)])
+            attempt_rows = fetch_rows(
+                db_path,
+                "select kind, repo_rel_path, semantic_role from artifacts where kind='opencode-safety-transform-attempt'",
+            )
+            self.assertEqual(
+                attempt_rows,
+                [("opencode-safety-transform-attempt", attempt_binding["path"], "agent-safety-transform-attempt")],
+            )
 
     def test_opencode_run_worker_classifies_wrong_shell_command_as_contract_not_executed(self) -> None:
         with temp_repo_dir() as tmp:

@@ -60,6 +60,7 @@ OPENCODE_WORKER_EVIDENCE_FIELDS = (
     "handoff_contract",
     "opencode_session_evidence",
     "opencode_contract_verification",
+    "opencode_safety_transform_attempt",
     "opencode_preflight_report",
     "opencode_runtime_env",
 )
@@ -1865,7 +1866,12 @@ def opencode_agent_runtime_evidence(
                 log_refs[name] = log_ref
         if log_refs:
             runtime_entry["logs"] = log_refs
-        for field in ("handoff_contract", "opencode_session_evidence", "opencode_preflight_report"):
+        for field in (
+            "handoff_contract",
+            "opencode_session_evidence",
+            "opencode_safety_transform_attempt",
+            "opencode_preflight_report",
+        ):
             binding = artifact_binding_from_value(worker.get(field), repo_root=repo_root)
             if binding is not None:
                 runtime_entry[field] = binding
@@ -2296,6 +2302,7 @@ def resume_manifest_workers(
         "exit_code",
         "handoff_contract",
         "opencode_session_evidence",
+        "opencode_safety_transform_attempt",
         "opencode_preflight_report",
         "opencode_runtime_env",
     ]
@@ -4928,6 +4935,7 @@ def run_worker(
             summary_path=summary_path,
             repo_root=repo_root,
         )
+    opencode_safety_transform_attempt = None
 
     synthetic_failure_root_cause = None
     rejected_summary_evidence = None
@@ -5011,6 +5019,19 @@ def run_worker(
                 repo_root=repo_root,
             )
             summary_payload = load_json(summary_path)
+        if mode == "opencode" and opencode_contract_verification is not None:
+            opencode_safety_transform_attempt = write_opencode_safety_transform_attempt(
+                run_id=run_id,
+                worker_id=worker_id,
+                attempt_number=attempt_number,
+                attempt_path=report_dir / "opencode-safety-transform-attempt.json",
+                summary_path=summary_path,
+                summary_payload=summary_payload,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
         recorded = record_worker_summary(
             db_path=db_path,
             run_id=run_id,
@@ -5100,6 +5121,8 @@ def run_worker(
         report["opencode_session_evidence"] = opencode_session_evidence
     if opencode_contract_verification is not None:
         report["opencode_contract_verification"] = opencode_contract_verification
+    if opencode_safety_transform_attempt is not None:
+        report["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
     if retry_of:
         report["retry_of"] = retry_of
     if rollback_evidence is not None:
@@ -5185,6 +5208,19 @@ def run_worker(
             )
         if opencode_contract_verification is not None:
             event_payload["opencode_contract_verification"] = opencode_contract_verification
+        if opencode_safety_transform_attempt is not None:
+            event_payload["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-safety-transform-attempt",
+                path=repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-safety-transform-attempt",
+                payload=load_json(repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
         record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
         if repair_hint is not None:
             record_repair_hint(connection, hint=repair_hint)
@@ -6193,6 +6229,73 @@ def annotate_opencode_worker_metrics(
         "semantic_gate": False,
         "evidence_boundary": "OpenCode session fields are audit provenance only; summary validators still own acceptance.",
     }
+
+
+def write_opencode_safety_transform_attempt(
+    *,
+    run_id: str,
+    worker_id: str,
+    attempt_number: int,
+    attempt_path: Path,
+    summary_path: Path,
+    summary_payload: dict[str, Any],
+    handoff_contract: dict[str, Any] | None,
+    opencode_session_evidence: dict[str, Any] | None,
+    opencode_contract_verification: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, str]:
+    final_gate = summary_payload.get("final_gate") if isinstance(summary_payload.get("final_gate"), dict) else {}
+    final_gate_status = str(final_gate.get("status", "unknown"))
+    contract_status = str(opencode_contract_verification.get("status", "unknown"))
+    status = "accepted" if final_gate_status == "passed" and contract_status == "executed" else "blocked"
+    workflow_metrics_binding = summary_payload.get("workflow_metrics")
+    workflow_metrics_ref: dict[str, Any] | None = None
+    if isinstance(workflow_metrics_binding, dict) and isinstance(workflow_metrics_binding.get("path"), str):
+        workflow_metrics_path = resolve_summary_artifact(
+            str(workflow_metrics_binding["path"]),
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if workflow_metrics_path is not None and workflow_metrics_path.exists():
+            workflow_metrics_ref = {
+                "path": str(workflow_metrics_binding["path"]),
+                "sha256": sha256_file(workflow_metrics_path),
+            }
+
+    attempt = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "opencode-safety-transform-attempt",
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "status": status,
+        "summary": {
+            "path": repo_relative(summary_path, repo_root=repo_root),
+            "sha256": sha256_file(summary_path),
+            "final_gate_status": final_gate_status,
+        },
+        "handoff_contract": json.loads(json.dumps(handoff_contract)) if handoff_contract is not None else None,
+        "opencode_session_evidence": (
+            json.loads(json.dumps(opencode_session_evidence)) if opencode_session_evidence is not None else None
+        ),
+        "contract_verification": json.loads(json.dumps(opencode_contract_verification)),
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "evidence_boundary": (
+            "This artifact records OpenCode command-contract participation in a safety-transform attempt. "
+            "It does not make chat/session output semantic evidence; acceptance remains owned by the summary validators."
+        ),
+    }
+    if workflow_metrics_ref is not None:
+        attempt["workflow_metrics"] = workflow_metrics_ref
+    root_cause = worker_summary_root_cause(summary_payload, summary_path=summary_path, repo_root=repo_root)
+    if root_cause:
+        attempt["root_cause_key"] = root_cause
+    attempt_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(attempt_path, attempt)
+    return {"path": repo_relative(attempt_path, repo_root=repo_root), "sha256": sha256_file(attempt_path)}
 
 
 def retry_repair_history_events(hint_payload: dict[str, Any], result: dict[str, Any]) -> list[dict[str, Any]]:
