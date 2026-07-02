@@ -28,6 +28,7 @@ CORE_ARTIFACT_REFS = (
     "judge_milestone_bundle",
     "milestone_release_notes",
 )
+COMPETITION_BUNDLE_MANIFEST_PATH = "config/competition-env/bundle-manifest.json"
 
 
 def main() -> int:
@@ -87,6 +88,7 @@ def require_packet_contract(packet: dict[str, Any], *, repo_root: Path) -> None:
             raise ValueError(f"{name}.status must be present")
         judge_validator.validate_ref(ref, repo_root=repo_root)
 
+    require_competition_config_archive_contract(packet, repo_root=repo_root)
     require_bundle_consistency(packet, repo_root=repo_root)
 
     if "public_release_packet_is_not_semantic_gate" not in set(packet.get("must_not_claim", [])):
@@ -127,6 +129,43 @@ def require_claim_boundary_contract(packet: dict[str, Any]) -> None:
         require_false(
             archive_boundary.get("archive_is_semantic_gate"),
             "competition_config_archive.claim_boundary.archive_is_semantic_gate",
+        )
+
+
+def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_root: Path) -> None:
+    archive = require_object(packet.get("competition_config_archive"), "competition_config_archive")
+    if archive.get("status") != "present":
+        raise ValueError("competition_config_archive.status must be present")
+    files = require_object(archive.get("files"), "competition_config_archive.files")
+    bundle_file = files.get(COMPETITION_BUNDLE_MANIFEST_PATH)
+    if not isinstance(bundle_file, dict):
+        raise ValueError(f"competition_config_archive.files must include {COMPETITION_BUNDLE_MANIFEST_PATH}")
+    try:
+        checked_bundle_file = judge_validator.validate_ref(bundle_file, repo_root=repo_root)
+    except ValueError as error:
+        raise ValueError(f"competition_config_archive.files.{COMPETITION_BUNDLE_MANIFEST_PATH}: {error}") from error
+
+    publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    publication_archive = require_object(
+        publication.get("competition_config_archive"),
+        "publication_manifest.competition_config_archive",
+    )
+    publication_bundle = require_object(
+        publication_archive.get("bundle_manifest"),
+        "publication_manifest.competition_config_archive.bundle_manifest",
+    )
+    if {
+        "path": publication_bundle.get("path"),
+        "sha256": publication_bundle.get("sha256"),
+        "status": publication_bundle.get("status"),
+    } != {
+        "path": checked_bundle_file["path"],
+        "sha256": checked_bundle_file["sha256"],
+        "status": checked_bundle_file["status"],
+    }:
+        raise ValueError(
+            "publication_manifest.competition_config_archive.bundle_manifest must match "
+            "competition_config_archive.files.config/competition-env/bundle-manifest.json"
         )
 
 

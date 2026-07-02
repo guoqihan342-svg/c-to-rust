@@ -2889,7 +2889,11 @@ def worker_summary_row_is_acceptable(
     return final_gate.get("status") == "failed"
 
 
-def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[str, Any]:
+def validate_repair_self_heal_contract(
+    context_payload: dict[str, Any],
+    *,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
     policy = context_payload.get("attempt_evidence_policy")
     if policy is None:
         return {"status": "skipped", "reason": "attempt_evidence_policy absent"}
@@ -2909,6 +2913,9 @@ def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[
         raise ValueError("baseline_repair_gate accepted min_attempt_number must be >= 2")
     if accepted.get("require_hint_id") is not True:
         raise ValueError("baseline_repair_gate accepted require_hint_id must be true")
+    before_after_contract = (
+        validate_repair_before_after_contract(policy_payload, repo_root=repo_root) if repo_root is not None else None
+    )
 
     workers = context_payload.get("workers")
     if not isinstance(workers, list) or not workers:
@@ -2948,17 +2955,97 @@ def validate_repair_self_heal_contract(context_payload: dict[str, Any]) -> dict[
             raise ValueError("baseline_repair_gate requires a passed accepted retry attempt")
         if accepted_attempt.get("hint_id") != hint_id or accepted_attempt.get("retry_of") != hint_id:
             raise ValueError("baseline_repair_gate accepted retry must bind the opened hint_id")
+        if accepted_attempt.get("hint_status") != "revalidated_passed":
+            raise ValueError("baseline_repair_gate accepted retry hint_status must be revalidated_passed")
         rollback = require_object(accepted_attempt.get("rollback_evidence"), "baseline_repair_gate rollback_evidence")
-        assert_repo_relative_posix(require_string(rollback.get("path"), "baseline_repair_gate rollback_evidence.path"))
-        if not isinstance(rollback.get("sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", rollback["sha256"]):
+        rollback_path_text = require_string(rollback.get("path"), "baseline_repair_gate rollback_evidence.path")
+        assert_repo_relative_posix(rollback_path_text)
+        rollback_sha256 = rollback.get("sha256")
+        if not isinstance(rollback_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", rollback_sha256):
             raise ValueError("baseline_repair_gate rollback_evidence.sha256 must be a sha256 hex string")
+        if repo_root is not None:
+            rollback_path = repo_path(rollback_path_text, repo_root=repo_root)
+            if not rollback_path.is_file():
+                raise ValueError("baseline_repair_gate rollback_evidence.path must exist")
+            actual_rollback_sha256 = sha256_file(rollback_path)
+            if rollback_sha256 != actual_rollback_sha256:
+                raise ValueError("baseline_repair_gate rollback_evidence.sha256 does not match artifact")
         final_decision = require_object(worker_payload.get("final_decision"), "baseline_repair_gate worker final_decision")
         if final_decision.get("status") != "accepted":
             raise ValueError("baseline_repair_gate worker final_decision.status must be accepted")
         checked_workers += 1
     if checked_workers == 0:
         raise ValueError("baseline_repair_gate did not find a worker with repair attempts")
-    return {"status": "passed", "checked_workers": checked_workers, "repair_round_cap": 5}
+    result: dict[str, Any] = {"status": "passed", "checked_workers": checked_workers, "repair_round_cap": 5}
+    if before_after_contract is not None:
+        result["translation_before_after"] = before_after_contract
+    return result
+
+
+def validate_repair_before_after_contract(policy_payload: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    verified_ref = validate_verified_unsafe_baseline_ref(
+        require_object(
+            require_object(policy_payload.get("baseline_attempt"), "attempt_evidence_policy.baseline_attempt").get(
+                "verified_unsafe_baseline"
+            ),
+            "attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline",
+        ),
+        "attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline",
+        repo_root=repo_root,
+    )
+    before_after_ref = validate_artifact_binding_shape(
+        policy_payload.get("translation_before_after"),
+        "attempt_evidence_policy.translation_before_after",
+        repo_root=repo_root,
+    )
+    before_after_payload = load_json(repo_path(before_after_ref["path"], repo_root=repo_root))
+    if before_after_payload.get("status") != "bound":
+        raise ValueError("translation_before_after.status must be bound")
+    baseline_verification = validate_verified_unsafe_baseline_ref(
+        before_after_payload.get("baseline_verification"),
+        "translation_before_after.baseline_verification",
+        repo_root=repo_root,
+    )
+    expected = repair_verified_baseline_key(verified_ref)
+    actual = repair_verified_baseline_key(baseline_verification)
+    if actual != expected:
+        raise ValueError("translation_before_after.baseline_verification must match baseline_repair_gate verified_unsafe_baseline")
+    unsafe_reduction = require_object(before_after_payload.get("unsafe_reduction"), "translation_before_after.unsafe_reduction")
+    if unsafe_reduction.get("status") != "measured":
+        raise ValueError("translation_before_after.unsafe_reduction.status must be measured")
+    reduced_by = unsafe_reduction.get("reduced_by")
+    if not isinstance(reduced_by, int) or reduced_by <= 0:
+        raise ValueError("translation_before_after.unsafe_reduction.reduced_by must be > 0")
+    baseline_total = unsafe_reduction.get("baseline_total_unsafe")
+    current_total = unsafe_reduction.get("current_total_unsafe")
+    if not isinstance(baseline_total, int) or baseline_total < 0:
+        raise ValueError("translation_before_after.unsafe_reduction.baseline_total_unsafe must be a non-negative integer")
+    if not isinstance(current_total, int) or current_total < 0:
+        raise ValueError("translation_before_after.unsafe_reduction.current_total_unsafe must be a non-negative integer")
+    if baseline_total - current_total != reduced_by:
+        raise ValueError("translation_before_after.unsafe_reduction.reduced_by must equal baseline-current unsafe count")
+    return {
+        "status": "passed",
+        "path": before_after_ref["path"],
+        "baseline_verification": actual,
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": baseline_total,
+            "current_total_unsafe": current_total,
+            "reduced_by": reduced_by,
+        },
+    }
+
+
+def repair_verified_baseline_key(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": value.get("path"),
+        "sha256": value.get("sha256"),
+        "status": value.get("status"),
+        "semantic_pass": value.get("semantic_pass"),
+        "semantic_claim_source": value.get("semantic_claim_source"),
+        "generated_draft_semantic_pass": value.get("generated_draft_semantic_pass"),
+    }
 
 
 def validate_expected_json_local_path_policy(
@@ -3050,7 +3137,7 @@ def validate_harness_artifact_contracts(
             repo_root=repo_root,
         )
     if context_payload is not None:
-        repair_contract = validate_repair_self_heal_contract(context_payload)
+        repair_contract = validate_repair_self_heal_contract(context_payload, repo_root=repo_root)
         if repair_contract.get("status") != "skipped":
             result["repair_self_heal"] = repair_contract
     if "judge_evidence_index" in artifacts:

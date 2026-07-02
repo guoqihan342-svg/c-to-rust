@@ -227,6 +227,88 @@ def write_deep_verified_unsafe_baseline_ref(path: Path) -> dict:
     }
 
 
+def write_repair_before_after_ref(
+    path: Path,
+    verified_ref: dict,
+    *,
+    unsafe_status: str = "measured",
+    reduced_by: int | None = 2,
+    baseline_verification: dict | None = None,
+) -> dict:
+    unsafe_reduction = {
+        "status": unsafe_status,
+        "baseline_total_unsafe": 2,
+        "current_total_unsafe": 0 if reduced_by else 2,
+        "reduced_by": reduced_by,
+        "ratio": 0.0 if reduced_by else 1.0,
+    }
+    payload = {
+        "schema_version": 1,
+        "status": "bound",
+        "baseline_verification": baseline_verification or verified_ref,
+        "accepted_patch": {"path": "validation/evidence/demo/accepted.patch", "sha256": "a" * 64},
+        "patch_log": {"path": "validation/evidence/demo/patch-log.jsonl", "sha256": "b" * 64},
+        "unsafe_reduction": unsafe_reduction,
+        "claim_boundary": {
+            "semantic_claim_source": "accepted_evidence_binding",
+            "generated_draft_semantic_pass": False,
+        },
+    }
+    write_json(path, payload)
+    return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
+def valid_repair_self_heal_context_payload(*, verified_ref: dict, before_after_ref: dict) -> dict:
+    hint_id = "repair:test:worker-001:unsafe_baseline_requires_repair"
+    return {
+        "attempt_evidence_policy": {
+            "accepted_attempt": {
+                "min_attempt_number": 2,
+                "require_hint_id": True,
+            },
+            "baseline_attempt": {
+                "attempt_number": 1,
+                "expected_final_gate": "failed",
+                "root_cause_key": "unsafe_baseline_requires_repair",
+                "verified_unsafe_baseline": verified_ref,
+            },
+            "mode": "baseline_repair_gate",
+            "translation_before_after": before_after_ref,
+        },
+        "workers": [
+            {
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "exit_code": 1,
+                        "hint_id": hint_id,
+                        "hint_status": "opened",
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                        "summary_status": "failed",
+                    },
+                    {
+                        "attempt": 2,
+                        "exit_code": 0,
+                        "hint_id": hint_id,
+                        "hint_status": "revalidated_passed",
+                        "retry_of": hint_id,
+                        "rollback_evidence": {
+                            "path": "target/out/harness/rollback.json",
+                            "sha256": "e" * 64,
+                        },
+                        "summary_status": "passed",
+                    },
+                ],
+                "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+            }
+        ],
+    }
+
+
+def retry_attempt_from_repair_context(context_payload: dict) -> dict:
+    return context_payload["workers"][0]["attempts"][1]
+
+
 def competition_smoke_expected_artifacts() -> dict:
     return {
         "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
@@ -2612,6 +2694,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         resume_manifest = out_root / "harness" / "resume-manifest.json"
         competition_summary = out_root / "summary" / "competition-run-summary.json"
         workflow_metrics = out_root / "summary" / "workflow-metrics.json"
+        verified_baseline = out_root / "evidence" / "verified-baseline.json"
+        before_after = out_root / "evidence" / "translation-before-after.json"
         ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
         worker_root = out_root / "workers" / "worker-001"
         assignment = out_root / "harness" / "assignments" / "worker-001.json"
@@ -2627,6 +2711,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         for artifact in [assignment, request, summary, report]:
             artifact.parent.mkdir(parents=True, exist_ok=True)
             artifact.write_text("{}\n", encoding="utf-8")
+        verified_ref = write_verified_unsafe_baseline_ref(verified_baseline)
+        before_after_ref = write_repair_before_after_ref(before_after, verified_ref)
 
         config["entrypoints"][0]["expected_artifacts"] = {
             "competition_summary": repo_relative(competition_summary),
@@ -2655,8 +2741,10 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "attempt_number": 1,
                         "expected_final_gate": "failed",
                         "root_cause_key": "unsafe_baseline_requires_repair",
+                        "verified_unsafe_baseline": verified_ref,
                     },
                     "mode": "baseline_repair_gate",
+                    "translation_before_after": before_after_ref,
                 },
                 "context_management_contract": {
                     "agent_index": repo_relative(agent_index),
@@ -2710,7 +2798,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                                 "retry_of": "repair:test:worker-001:unsafe_baseline_requires_repair",
                                 "rollback_evidence": {
                                     "path": repo_relative(report),
-                                    "sha256": "e" * 64,
+                                    "sha256": validator.sha256_file(report),
                                 },
                                 "summary_status": "passed",
                             },
@@ -2870,6 +2958,97 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(contracts["context_agent_consistency"]["worker_count"], 1)
         self.assertEqual(contracts["ledger_context_index"]["status"], "passed")
         self.assertEqual(contracts["repair_self_heal"]["checked_workers"], 1)
+
+    def test_repair_self_heal_contract_requires_bound_baseline_verification(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        other_verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "other-verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(
+            temp_dir / "translation-before-after.json",
+            verified_ref,
+            baseline_verification=other_verified_ref,
+        )
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+
+        with self.assertRaisesRegex(ValueError, "baseline_verification must match.*verified_unsafe_baseline"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_requires_measured_unsafe_reduction(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(
+            temp_dir / "translation-before-after.json",
+            verified_ref,
+            unsafe_status="not_measured",
+            reduced_by=None,
+        )
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+
+        with self.assertRaisesRegex(ValueError, "translation_before_after.unsafe_reduction.status must be measured"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_requires_positive_unsafe_reduction(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(
+            temp_dir / "translation-before-after.json",
+            verified_ref,
+            reduced_by=0,
+        )
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+
+        with self.assertRaisesRegex(ValueError, "translation_before_after.unsafe_reduction.reduced_by must be > 0"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_requires_revalidated_retry_hint_status(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(temp_dir / "translation-before-after.json", verified_ref)
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+        retry_attempt_from_repair_context(context_payload)["hint_status"] = "opened"
+
+        with self.assertRaisesRegex(ValueError, "accepted retry hint_status must be revalidated_passed"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_rejects_rollback_evidence_sha_mismatch(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(temp_dir / "translation-before-after.json", verified_ref)
+        rollback = temp_dir / "rollback.json"
+        write_json(rollback, {"rollback": "before retry"})
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+        retry_attempt_from_repair_context(context_payload)["rollback_evidence"] = {
+            "path": repo_relative(rollback),
+            "sha256": "0" * 64,
+        }
+
+        with self.assertRaisesRegex(ValueError, "rollback_evidence.sha256 does not match artifact"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
 
     def test_resume_manifest_claim_boundary_fails_closed(self) -> None:
         target_dir = REPO_ROOT / "target"

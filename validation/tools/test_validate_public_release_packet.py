@@ -34,6 +34,28 @@ def valid_packet(root: Path) -> dict:
     run_report = write_text_artifact(root / "summary" / "judge-entrypoints-run-report.json", "{}\n")
     readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
     bundle_path = root / "summary" / "judge-milestone-bundle.json"
+    config_bundle_manifest = REPO_ROOT / "config" / "competition-env" / "bundle-manifest.json"
+    config_bundle_ref = {
+        "path": repo_relative(config_bundle_manifest),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(config_bundle_manifest),
+    }
+    competition_config_archive = {
+        "report_kind": "competition-config-archive",
+        "status": "present",
+        "root": "config/competition-env",
+        "file_count": 1,
+        "files": {
+            "config/competition-env/bundle-manifest.json": {
+                **config_bundle_ref,
+                "bytes": config_bundle_manifest.stat().st_size,
+            }
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "archive_is_semantic_gate": False,
+        },
+    }
     bundle_self_ref = {
         "path": repo_relative(bundle_path),
         "status": "self",
@@ -43,6 +65,13 @@ def valid_packet(root: Path) -> dict:
         "judge_entrypoints_run_report": run_report,
         "readiness_report": readiness,
         "judge_milestone_bundle": bundle_self_ref,
+        "competition_config_archive": {
+            "report_kind": "competition-config-archive",
+            "status": "present",
+            "root": "config/competition-env",
+            "file_count": 1,
+            "bundle_manifest": config_bundle_ref,
+        },
         "supported_subset": {
             "claims": ["public packet validator fixture"],
         },
@@ -228,13 +257,7 @@ def valid_packet(root: Path) -> dict:
         "readiness_report": readiness,
         "judge_milestone_bundle": bundle,
         "milestone_release_notes": notes,
-        "competition_config_archive": {
-            "status": "present",
-            "claim_boundary": {
-                "semantic_gate": False,
-                "archive_is_semantic_gate": False,
-            },
-        },
+        "competition_config_archive": competition_config_archive,
         "publication_manifest": publication_manifest,
         "quantitative_evaluation": bundle_payload["quantitative_evaluation"],
         "progress_delta_ledger": bundle_payload["progress_delta_ledger"],
@@ -272,6 +295,36 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("sha256 mismatch" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_requires_archive_bundle_manifest_file_ref(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        del packet["competition_config_archive"]["files"]["config/competition-env/bundle-manifest.json"]
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("competition_config_archive.files must include config/competition-env/bundle-manifest.json" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_archive_bundle_manifest_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["competition_config_archive"]["files"]["config/competition-env/bundle-manifest.json"]["sha256"] = "0" * 64
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("competition_config_archive.files.config/competition-env/bundle-manifest.json" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_validate_packet_rejects_publication_manifest_drift_from_bundle(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-bundle-drift-", dir=REPO_ROOT / "target"))
