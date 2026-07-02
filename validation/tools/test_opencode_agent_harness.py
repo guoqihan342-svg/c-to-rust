@@ -1785,6 +1785,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 preflight_kwargs.update(kwargs)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 contract_path = out_root / "harness" / "opencode-preflight-contract.json"
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
@@ -1885,6 +1887,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 captured_env.update(kwargs["env"])  # type: ignore[arg-type]
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
                 marker_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5333,6 +5337,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             out_root = Path(tmp) / "opencode-preflight"
 
             def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 contract_path = out_root / "harness" / "opencode-preflight-contract.json"
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
@@ -5385,6 +5391,49 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
             self.assertEqual(contract["launch_policy"], expected_policy)
 
+    def test_opencode_preflight_fails_closed_when_glm_model_is_not_listed(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(
+                        argv,
+                        0,
+                        stdout="openai/gpt-5.1\nopencode/deepseek-v4-flash-free\n",
+                        stderr="",
+                    )
+                raise AssertionError("opencode run must not start when GLM-5.1 is unavailable")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                opencode_model="GLM-5.1",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][1], "models")
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["root_cause_key"], "opencode_model_unavailable")
+            self.assertFalse(result["marker_exists"])
+            self.assertFalse(result["opencode_run_launched"])
+            self.assertEqual(result["contract_verification"]["status"], "not-observed")
+            self.assertEqual(result["contract_verification"]["contract_failure_reason"], "opencode_model_unavailable")
+            availability = result["opencode_model_availability"]
+            self.assertEqual(availability["status"], "unavailable")
+            self.assertEqual(availability["required_model"], "GLM-5.1")
+            self.assertFalse(availability["model_listed"])
+            self.assertEqual(availability["failure_reason"], "required_model_not_listed")
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["root_cause_key"], "opencode_model_unavailable")
+            stdout = (REPO_ROOT / report["opencode_model_availability"]["logs"]["stdout"]).read_text(encoding="utf-8")
+            self.assertIn("openai/gpt-5.1", stdout)
+
     def test_opencode_preflight_defaults_to_glm_51_model(self) -> None:
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",
@@ -5434,6 +5483,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             out_root = Path(tmp) / "opencode-preflight"
 
             def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 contract_path = out_root / "harness" / "opencode-preflight-contract.json"
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
@@ -5477,6 +5528,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             out_root = Path(tmp) / "opencode-preflight"
 
             def crash_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 return subprocess.CompletedProcess(argv, 1, stdout="", stderr="opencode: not found\n")
 
             result = harness.run_opencode_preflight(
@@ -5629,6 +5682,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             def timeout_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 seen_kwargs.update(kwargs)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"), output="", stderr="agent hung")
 
             result = harness.run_opencode_preflight(
@@ -5658,6 +5713,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             def captured_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 seen_kwargs.update(kwargs)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 return subprocess.CompletedProcess(
                     argv,
                     124,
@@ -5673,7 +5730,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
-            runner.assert_called_once()
+            self.assertEqual(runner.call_count, 2)
             self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
             self.assertEqual(seen_kwargs["timeout_seconds"], 5)
             self.assertIn("XDG_CONFIG_HOME", seen_kwargs["env"])

@@ -5541,6 +5541,65 @@ def run_opencode_preflight(
         repo_root=repo_root,
     )
     started = time.monotonic()
+    model_availability = run_opencode_model_availability_probe(
+        opencode_command=launch_policy["opencode_command"],
+        opencode_model=launch_policy["opencode_model"],
+        logs_dir=logs_dir,
+        opencode_process_env=opencode_process_env,
+        timeout_seconds=timeout_seconds,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    if model_availability.get("status") != "available":
+        stdout_path = logs_dir / "opencode-preflight.stdout.log"
+        stderr_path = logs_dir / "opencode-preflight.stderr.log"
+        atomic_write_text(stdout_path, "")
+        atomic_write_text(stderr_path, "")
+        root_cause_key = "opencode_model_unavailable"
+        session_binding = write_opencode_not_launched_session_evidence(
+            evidence_path=logs_dir / "opencode-preflight-session-evidence.json",
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            root_cause_key=root_cause_key,
+            opencode_runtime_env=opencode_runtime_env,
+            repo_root=repo_root,
+        )
+        contract_verification = opencode_contract_not_observed(
+            worker_command=marker_command,
+            summary_path=marker_path,
+            reason=root_cause_key,
+            repo_root=repo_root,
+        )
+        report_path = harness_dir / "opencode-preflight-report.json"
+        report: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "run_id": run_id,
+            "status": "failed",
+            "exit_code": 1,
+            "process_returncode": None,
+            "elapsed_seconds": int(time.monotonic() - started),
+            "argv": argv,
+            "marker_path": repo_relative(marker_path, repo_root=repo_root),
+            "marker_exists": False,
+            "opencode_run_launched": False,
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+            "opencode_runtime_env": opencode_runtime_env,
+            "handoff_contract": contract_binding,
+            "opencode_session_evidence": session_binding,
+            "opencode_model_availability": model_availability,
+            "contract_verification": contract_verification,
+            "logs": {
+                "stdout": repo_relative(stdout_path, repo_root=repo_root),
+                "stderr": repo_relative(stderr_path, repo_root=repo_root),
+            },
+            "report_path": repo_relative(report_path, repo_root=repo_root),
+            "root_cause_key": root_cause_key,
+            "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
+        }
+        atomic_write_json(report_path, report)
+        return report
+
     try:
         if command_runner is subprocess.run:
             completed = run_captured_process_with_timeout(
@@ -5617,11 +5676,13 @@ def run_opencode_preflight(
         "argv": argv,
         "marker_path": repo_relative(marker_path, repo_root=repo_root),
         "marker_exists": marker_exists,
+        "opencode_run_launched": True,
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
         "opencode_runtime_env": opencode_runtime_env,
         "handoff_contract": contract_binding,
         "opencode_session_evidence": session_binding,
+        "opencode_model_availability": model_availability,
         "contract_verification": contract_verification,
         "logs": {
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
@@ -6778,6 +6839,170 @@ def normalize_opencode_launch_policy(policy: dict[str, Any]) -> dict[str, Any]:
 
 def opencode_launch_policy_sha256(policy: dict[str, Any]) -> str:
     return sha256_text(json.dumps(policy, sort_keys=True))
+
+
+def build_opencode_models_argv(*, opencode_command: str) -> list[str]:
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    return [resolve_subprocess_command(opencode_command), "models"]
+
+
+def opencode_models_output_mentions_required_model(stdout: str, required_model: str) -> bool:
+    return required_model.casefold() in stdout.casefold()
+
+
+def opencode_models_output_sample(stdout: str, *, limit: int = 40) -> list[str]:
+    sample: list[str] = []
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        sample.append(stripped[:240])
+        if len(sample) >= limit:
+            break
+    return sample
+
+
+def run_opencode_model_availability_probe(
+    *,
+    opencode_command: str,
+    opencode_model: str | None,
+    logs_dir: Path,
+    opencode_process_env: dict[str, str],
+    timeout_seconds: int,
+    command_runner: Any,
+    repo_root: Path,
+) -> dict[str, Any]:
+    if opencode_model is None:
+        opencode_model = COMPETITION_OPENCODE_MODEL
+    if opencode_model != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
+    argv = build_opencode_models_argv(opencode_command=opencode_command)
+    started = time.monotonic()
+    try:
+        if command_runner is subprocess.run:
+            completed = run_captured_process_with_timeout(
+                argv,
+                cwd=repo_root,
+                timeout_seconds=timeout_seconds,
+                env=opencode_process_env,
+            )
+        else:
+            completed = command_runner(
+                argv,
+                cwd=repo_root,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout_seconds,
+                env=opencode_process_env,
+            )
+    except subprocess.TimeoutExpired as exc:
+        completed = completed_process_from_timeout(argv, exc, timeout_seconds)
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+    stdout = completed.stdout or ""
+    stderr = completed.stderr or ""
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    atomic_write_text(stdout_path, stdout)
+    atomic_write_text(stderr_path, stderr)
+    returncode = int(completed.returncode)
+    timed_out = completed_process_timed_out(completed)
+    model_listed = returncode == 0 and opencode_models_output_mentions_required_model(stdout, opencode_model)
+    if model_listed:
+        status = "available"
+        failure_reason = ""
+    elif returncode == 0:
+        status = "unavailable"
+        failure_reason = "required_model_not_listed"
+    elif timed_out:
+        status = "probe_failed"
+        failure_reason = "models_command_timeout"
+    else:
+        status = "probe_failed"
+        failure_reason = "models_command_failed"
+    result: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "status": status,
+        "failure_reason": failure_reason,
+        "opencode_command": opencode_command,
+        "required_model": opencode_model,
+        "argv": argv,
+        "process_returncode": returncode,
+        "elapsed_seconds": int(time.monotonic() - started),
+        "model_listed": model_listed,
+        "listed_model_sample": opencode_models_output_sample(stdout),
+        "stdout_sha256": sha256_text(stdout),
+        "stderr_sha256": sha256_text(stderr),
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "evidence_boundary": "model availability probe is a launch gate only; it is not semantic acceptance",
+    }
+    if timed_out:
+        result["timed_out"] = True
+        result["timeout_seconds"] = timeout_seconds
+    return result
+
+
+def opencode_contract_not_observed(
+    *,
+    worker_command: list[str],
+    summary_path: Path,
+    reason: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    expected_worker_command_line = shell_command_line(worker_command)
+    return {
+        "expected_worker_command_line": expected_worker_command_line,
+        "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
+        "executed_shell_command_count": 0,
+        "executed_shell_commands": [],
+        "first_tool_name": "",
+        "first_shell_command": "",
+        "first_shell_tool_name": "",
+        "first_shell_workdir_status": "not_observed",
+        "expected_workdir_status": "repo_root",
+        "first_shell_command_matches_worker_command": False,
+        "first_shell_workdir_matches_repo_root": False,
+        "tools_before_first_shell": [],
+        "contract_failure_reason": reason,
+        "worker_command_seen": False,
+        "summary_exists": summary_path.exists(),
+        "status": "not-observed",
+    }
+
+
+def write_opencode_not_launched_session_evidence(
+    *,
+    evidence_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    root_cause_key: str,
+    opencode_runtime_env: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, str]:
+    evidence = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "not-launched",
+        "root_cause_key": root_cause_key,
+        "process_returncode": None,
+        "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
+        "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
+        "opencode_runtime_env": opencode_runtime_env,
+        "evidence_boundary": "OpenCode run was not launched because a preflight launch gate failed",
+    }
+    atomic_write_json(evidence_path, evidence)
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
 
 
 def portable_python_script_argv(script: str, *args: str) -> list[str]:

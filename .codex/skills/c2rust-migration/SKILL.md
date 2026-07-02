@@ -49,11 +49,12 @@ python3 -B -m validation.tools.resync_sha_bindings --scope judge-chain --dry-run
 git clone -c core.autocrlf=false --no-local . target/repro-clone-lf-<stamp>
 cd target/repro-clone-lf-<stamp>
 python3 -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json
-python3 -B -m validation.tools.run_judge_entrypoints --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --dry-run --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 ```
 
 - Run `--require-local-artifacts` only after the entrypoints have generated their expected artifacts in that checkout. A fresh clone does not contain `target/` artifacts by default.
 - Keep OpenCode profile claims exact: command `opencode`, model `GLM-5.1`, bounded `auto_retry=true`, 5 repair rounds, repo-local runtime dirs, and a passed `opencode-preflight` before worker launch. Treat any non-OpenCode command, non-GLM 5.1 model, missing/failed preflight, or missing marker as a launch blocker.
+- `opencode-preflight` must prove model availability before launch with the same repo-local runtime env. If `opencode models` does not expose `GLM-5.1`, the report must fail closed with `root_cause_key=opencode_model_unavailable`, `opencode_model_availability.status=unavailable` or `probe_failed`, `opencode_run_launched=false`, and no marker. A local-simulation OpenCode pass does not close P0-H9 unless it is rerun on the competition GLM/OpenCode host or an equivalent provider configuration.
 - Treat `git ls-files --eol` and `.gitattributes` drift as competition-entry blockers when text artifacts carry hash bindings.
 
 ## Repair Loop

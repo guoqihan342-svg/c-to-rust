@@ -947,8 +947,14 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("validation.tools.resync_sha_bindings --scan-root config/competition-env --dry-run --check", skill)
         self.assertIn("validation.tools.resync_sha_bindings --scope judge-chain --dry-run --check", skill)
         self.assertIn("validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json", skill)
-        self.assertIn("validation.tools.run_judge_entrypoints --dry-run", skill)
+        self.assertIn("validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --dry-run", skill)
+        self.assertIn("--require-local-artifacts", skill)
+        self.assertIn("opencode-preflight", skill)
+        self.assertIn("marker_exists=true", skill)
         self.assertIn("GLM-5.1", skill)
+        self.assertIn("opencode_model_availability", skill)
+        self.assertIn("opencode_model_unavailable", skill)
+        self.assertIn("local-simulation OpenCode pass does not close P0-H9", skill)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())
