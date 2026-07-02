@@ -258,6 +258,112 @@ def write_repair_before_after_ref(
     return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
 
 
+def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds: int = 5) -> dict:
+    artifact_dir = path.parent / "attempt-evidence"
+    refs = {}
+    for name in (
+        "summary",
+        "workflow-metrics",
+        "baseline-unsafe.rs",
+        "final-safe.rs",
+        "accepted.patch",
+        "patch-log.jsonl",
+        "oracle.json",
+        "schema-diff.json",
+        "unsafe-scan.json",
+        "rollback.json",
+    ):
+        artifact = artifact_dir / name
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text(f"{name}\n", encoding="utf-8")
+        refs[name] = {"path": repo_relative(artifact), "sha256": validator.sha256_file(artifact)}
+    payload = {
+        "schema_version": 1,
+        "report_kind": "opencode-safety-transform-attempt",
+        "run_id": "run-test",
+        "worker_id": "worker-a",
+        "attempt": 2,
+        "status": "accepted",
+        "summary": {
+            **refs["summary"],
+            "final_gate_status": "passed",
+        },
+        "workflow_metrics": refs["workflow-metrics"],
+        "contract_verification": {"status": "executed"},
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "attempt_contract": {
+            "single_patch_per_round": True,
+            "max_repair_rounds": max_repair_rounds,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+        "safety_transform_unit_count": 1,
+        "safety_transform_units": [
+            {
+                "unit_id": "demo/store-add-one",
+                "status": "converged",
+                "attempt": 2,
+                "round_contract": {
+                    "single_patch_per_round": True,
+                    "max_repair_rounds": max_repair_rounds,
+                },
+                "patch_evidence": {
+                    "baseline": refs["baseline-unsafe.rs"],
+                    "final": refs["final-safe.rs"],
+                    "accepted_patch": refs["accepted.patch"],
+                    "patch_log": refs["patch-log.jsonl"],
+                },
+                "verification_delta": {
+                    "compiled": True,
+                    "oracle_evidence": refs["oracle.json"],
+                    "semantic_evidence": {"schema_diff": refs["schema-diff.json"]},
+                    "unsafe_scan_evidence": refs["unsafe-scan.json"],
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 3,
+                        "current_total_unsafe": 1,
+                        "reduced_by": 2,
+                        "ratio": 1 / 3,
+                    },
+                },
+                "rounds": [
+                    {
+                        "round": 2,
+                        "single_patch_per_round": True,
+                        "patch": refs["accepted.patch"],
+                        "patch_log": refs["patch-log.jsonl"],
+                        "oracle_evidence": refs["oracle.json"],
+                        "schema_diff": refs["schema-diff.json"],
+                        "unsafe_scan_evidence": refs["unsafe-scan.json"],
+                        "unsafe_delta": {
+                            "status": "measured",
+                            "baseline_total_unsafe": 3,
+                            "current_total_unsafe": 1,
+                            "reduced_by": 2,
+                            "ratio": 1 / 3,
+                        },
+                    }
+                ],
+                "accepted_retry_hint": {
+                    "status": "revalidated_passed",
+                    "repair_rounds": 1,
+                    "auto_recovered": True,
+                    "rollback_ids": [refs["rollback.json"]["path"]],
+                    "rollback_evidence": [refs["rollback.json"]],
+                },
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+            }
+        ],
+        "evidence_boundary": "OpenCode chat/session output is audit provenance only.",
+    }
+    write_json(path, payload)
+    return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
 def valid_repair_self_heal_context_payload(*, verified_ref: dict, before_after_ref: dict) -> dict:
     hint_id = "repair:test:worker-001:unsafe_baseline_requires_repair"
     return {
@@ -3049,6 +3155,68 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "rollback_evidence.sha256 does not match artifact"):
             validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_accepts_per_round_patch_delta_and_rollback(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+
+        result = validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["unit_count"], 1)
+        self.assertEqual(result["round_count"], 1)
+        self.assertEqual(result["repair_round_cap"], 5)
+        self.assertFalse(result["semantic_gate"])
+        self.assertEqual(result["translation_coverage_numerator"], 0)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_non_five_round_cap(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json",
+            max_repair_rounds=6,
+        )
+
+        with self.assertRaisesRegex(ValueError, "attempt_contract.max_repair_rounds must be 5"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_requires_before_after_refs(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        del payload["safety_transform_units"][0]["patch_evidence"]["baseline"]
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "patch_evidence.baseline"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_harness_artifact_contracts_deep_validates_opencode_safety_transform_attempt(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+
+        result = validator.validate_harness_artifact_contracts(
+            {"opencode_safety_transform_attempt": attempt_ref["path"]},
+            require_local_artifacts=True,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(result["opencode_safety_transform_attempt"]["status"], "passed")
+        self.assertEqual(result["opencode_safety_transform_attempt"]["round_count"], 1)
 
     def test_resume_manifest_claim_boundary_fails_closed(self) -> None:
         target_dir = REPO_ROOT / "target"

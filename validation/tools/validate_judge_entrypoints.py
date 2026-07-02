@@ -2004,6 +2004,204 @@ def artifact_ref_key_for_expected_artifact(name: str) -> str:
     return EXPECTED_ARTIFACT_REF_ALIASES.get(name, name)
 
 
+def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    binding = validate_artifact_binding_shape(ref, "opencode_safety_transform_attempt", repo_root=repo_root)
+    payload = load_json(repo_path(binding["path"], repo_root=repo_root))
+    if payload.get("report_kind") != "opencode-safety-transform-attempt":
+        raise ValueError("opencode_safety_transform_attempt.report_kind must be opencode-safety-transform-attempt")
+    if payload.get("chat_output_is_evidence") is not False:
+        raise ValueError("opencode_safety_transform_attempt.chat_output_is_evidence must be false")
+    if payload.get("semantic_gate") is not False:
+        raise ValueError("opencode_safety_transform_attempt.semantic_gate must be false")
+    if payload.get("generated_draft_semantic_pass") is not False:
+        raise ValueError("opencode_safety_transform_attempt.generated_draft_semantic_pass must be false")
+    if payload.get("translation_coverage_numerator") != 0:
+        raise ValueError("opencode_safety_transform_attempt.translation_coverage_numerator must be 0")
+    if payload.get("status") != "accepted":
+        raise ValueError("opencode_safety_transform_attempt.status must be accepted")
+
+    summary_payload = require_object(payload.get("summary"), "opencode_safety_transform_attempt.summary")
+    summary = validate_artifact_binding_shape(
+        summary_payload,
+        "opencode_safety_transform_attempt.summary",
+        repo_root=repo_root,
+    )
+    if summary_payload.get("final_gate_status") != "passed":
+        raise ValueError("opencode_safety_transform_attempt.summary.final_gate_status must be passed")
+    workflow_metrics = None
+    if isinstance(payload.get("workflow_metrics"), dict):
+        workflow_metrics = validate_artifact_binding_shape(
+            payload.get("workflow_metrics"),
+            "opencode_safety_transform_attempt.workflow_metrics",
+            repo_root=repo_root,
+        )
+
+    contract = require_object(payload.get("attempt_contract"), "opencode_safety_transform_attempt.attempt_contract")
+    if contract.get("single_patch_per_round") is not True:
+        raise ValueError("opencode_safety_transform_attempt.attempt_contract.single_patch_per_round must be true")
+    if contract.get("max_repair_rounds") != 5:
+        raise ValueError("opencode_safety_transform_attempt.attempt_contract.max_repair_rounds must be 5")
+    if contract.get("semantic_gate") is not False:
+        raise ValueError("opencode_safety_transform_attempt.attempt_contract.semantic_gate must be false")
+    if contract.get("translation_coverage_numerator") != 0:
+        raise ValueError("opencode_safety_transform_attempt.attempt_contract.translation_coverage_numerator must be 0")
+
+    units = payload.get("safety_transform_units")
+    if not isinstance(units, list) or not units:
+        raise ValueError("opencode_safety_transform_attempt.safety_transform_units must be a non-empty list")
+    if payload.get("safety_transform_unit_count") != len(units):
+        raise ValueError("opencode_safety_transform_attempt.safety_transform_unit_count must match units length")
+
+    round_count = 0
+    rollback_ref_count = 0
+    for index, unit_value in enumerate(units):
+        unit = require_object(unit_value, f"opencode_safety_transform_attempt.safety_transform_units[{index}]")
+        round_count += validate_opencode_safety_transform_unit_contract(unit, index=index, repo_root=repo_root)
+        retry_hint = require_object(
+            unit.get("accepted_retry_hint"),
+            f"opencode_safety_transform_attempt.safety_transform_units[{index}].accepted_retry_hint",
+        )
+        rollback_ref_count += validate_opencode_accepted_retry_hint_contract(
+            retry_hint,
+            index=index,
+            repo_root=repo_root,
+        )
+
+    result: dict[str, Any] = {
+        "status": "passed",
+        "path": binding["path"],
+        "summary": summary,
+        "unit_count": len(units),
+        "round_count": round_count,
+        "repair_round_cap": 5,
+        "rollback_ref_count": rollback_ref_count,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+    }
+    if workflow_metrics is not None:
+        result["workflow_metrics"] = workflow_metrics
+    return result
+
+
+def validate_opencode_safety_transform_unit_contract(
+    unit: dict[str, Any],
+    *,
+    index: int,
+    repo_root: Path,
+) -> int:
+    prefix = f"opencode_safety_transform_attempt.safety_transform_units[{index}]"
+    if unit.get("semantic_gate") is not False:
+        raise ValueError(f"{prefix}.semantic_gate must be false")
+    if unit.get("translation_coverage_numerator") != 0:
+        raise ValueError(f"{prefix}.translation_coverage_numerator must be 0")
+    round_contract = require_object(unit.get("round_contract"), f"{prefix}.round_contract")
+    if round_contract.get("single_patch_per_round") is not True:
+        raise ValueError(f"{prefix}.round_contract.single_patch_per_round must be true")
+    if round_contract.get("max_repair_rounds") != 5:
+        raise ValueError(f"{prefix}.round_contract.max_repair_rounds must be 5")
+
+    patch_evidence = require_object(unit.get("patch_evidence"), f"{prefix}.patch_evidence")
+    validate_artifact_binding_shape(patch_evidence.get("baseline"), f"{prefix}.patch_evidence.baseline", repo_root=repo_root)
+    validate_artifact_binding_shape(patch_evidence.get("final"), f"{prefix}.patch_evidence.final", repo_root=repo_root)
+    validate_artifact_binding_shape(patch_evidence.get("accepted_patch"), f"{prefix}.patch_evidence.accepted_patch", repo_root=repo_root)
+    validate_artifact_binding_shape(patch_evidence.get("patch_log"), f"{prefix}.patch_evidence.patch_log", repo_root=repo_root)
+
+    delta = require_object(unit.get("verification_delta"), f"{prefix}.verification_delta")
+    if delta.get("compiled") is not True:
+        raise ValueError(f"{prefix}.verification_delta.compiled must be true")
+    validate_artifact_binding_shape(delta.get("oracle_evidence"), f"{prefix}.verification_delta.oracle_evidence", repo_root=repo_root)
+    validate_artifact_binding_shape(
+        delta.get("unsafe_scan_evidence"),
+        f"{prefix}.verification_delta.unsafe_scan_evidence",
+        repo_root=repo_root,
+    )
+    semantic_evidence = require_object(delta.get("semantic_evidence"), f"{prefix}.verification_delta.semantic_evidence")
+    validate_artifact_binding_shape(
+        semantic_evidence.get("schema_diff"),
+        f"{prefix}.verification_delta.semantic_evidence.schema_diff",
+        repo_root=repo_root,
+    )
+    validate_opencode_measured_unsafe_delta(
+        require_object(delta.get("unsafe_reduction"), f"{prefix}.verification_delta.unsafe_reduction"),
+        f"{prefix}.verification_delta.unsafe_reduction",
+    )
+
+    rounds = unit.get("rounds")
+    if not isinstance(rounds, list) or not rounds:
+        raise ValueError(f"{prefix}.rounds must be a non-empty list")
+    if len(rounds) > 5:
+        raise ValueError(f"{prefix}.rounds must not exceed 5")
+    for round_index, round_value in enumerate(rounds):
+        round_payload = require_object(round_value, f"{prefix}.rounds[{round_index}]")
+        if round_payload.get("single_patch_per_round") is not True:
+            raise ValueError(f"{prefix}.rounds[{round_index}].single_patch_per_round must be true")
+        validate_artifact_binding_shape(round_payload.get("patch"), f"{prefix}.rounds[{round_index}].patch", repo_root=repo_root)
+        validate_artifact_binding_shape(round_payload.get("patch_log"), f"{prefix}.rounds[{round_index}].patch_log", repo_root=repo_root)
+        validate_artifact_binding_shape(
+            round_payload.get("oracle_evidence"),
+            f"{prefix}.rounds[{round_index}].oracle_evidence",
+            repo_root=repo_root,
+        )
+        validate_artifact_binding_shape(
+            round_payload.get("schema_diff"),
+            f"{prefix}.rounds[{round_index}].schema_diff",
+            repo_root=repo_root,
+        )
+        validate_artifact_binding_shape(
+            round_payload.get("unsafe_scan_evidence"),
+            f"{prefix}.rounds[{round_index}].unsafe_scan_evidence",
+            repo_root=repo_root,
+        )
+        validate_opencode_measured_unsafe_delta(
+            require_object(round_payload.get("unsafe_delta"), f"{prefix}.rounds[{round_index}].unsafe_delta"),
+            f"{prefix}.rounds[{round_index}].unsafe_delta",
+        )
+    return len(rounds)
+
+
+def validate_opencode_accepted_retry_hint_contract(
+    retry_hint: dict[str, Any],
+    *,
+    index: int,
+    repo_root: Path,
+) -> int:
+    prefix = f"opencode_safety_transform_attempt.safety_transform_units[{index}].accepted_retry_hint"
+    status = retry_hint.get("status")
+    if status == "not_exercised":
+        return 0
+    if status != "revalidated_passed":
+        raise ValueError(f"{prefix}.status must be not_exercised or revalidated_passed")
+    if retry_hint.get("auto_recovered") is not True:
+        raise ValueError(f"{prefix}.auto_recovered must be true when status is revalidated_passed")
+    repair_rounds = retry_hint.get("repair_rounds")
+    if not isinstance(repair_rounds, int) or repair_rounds < 1 or repair_rounds > 5:
+        raise ValueError(f"{prefix}.repair_rounds must be between 1 and 5")
+    rollback_refs = retry_hint.get("rollback_evidence")
+    if not isinstance(rollback_refs, list) or not rollback_refs:
+        raise ValueError(f"{prefix}.rollback_evidence must be a non-empty list")
+    for rollback_index, rollback_ref in enumerate(rollback_refs):
+        validate_artifact_binding_shape(
+            rollback_ref,
+            f"{prefix}.rollback_evidence[{rollback_index}]",
+            repo_root=repo_root,
+        )
+    return len(rollback_refs)
+
+
+def validate_opencode_measured_unsafe_delta(delta: dict[str, Any], label: str) -> None:
+    if delta.get("status") != "measured":
+        raise ValueError(f"{label}.status must be measured")
+    reduced_by = delta.get("reduced_by")
+    if not isinstance(reduced_by, int) or reduced_by <= 0:
+        raise ValueError(f"{label}.reduced_by must be > 0")
+    baseline = delta.get("baseline_total_unsafe")
+    current = delta.get("current_total_unsafe")
+    if not isinstance(baseline, int) or not isinstance(current, int):
+        raise ValueError(f"{label}.baseline_total_unsafe and current_total_unsafe must be integers")
+    if reduced_by != baseline - current:
+        raise ValueError(f"{label}.reduced_by must equal baseline_total_unsafe - current_total_unsafe")
+
+
 def compare_artifact_binding(actual: dict[str, Any], expected: dict[str, Any], label: str) -> None:
     if actual.get("path") != expected.get("path") or actual.get("sha256") != expected.get("sha256"):
         raise ValueError(f"{label} must match path and sha256")
@@ -3140,6 +3338,16 @@ def validate_harness_artifact_contracts(
         repair_contract = validate_repair_self_heal_contract(context_payload, repo_root=repo_root)
         if repair_contract.get("status") != "skipped":
             result["repair_self_heal"] = repair_contract
+    if "opencode_safety_transform_attempt" in artifacts:
+        attempt_path_text = require_string(
+            artifacts.get("opencode_safety_transform_attempt"),
+            "expected_artifacts.opencode_safety_transform_attempt",
+        )
+        attempt_path = repo_path(attempt_path_text, repo_root=repo_root)
+        result["opencode_safety_transform_attempt"] = validate_opencode_safety_transform_attempt_contract(
+            {"path": attempt_path_text, "sha256": sha256_file(attempt_path)},
+            repo_root=repo_root,
+        )
     if "judge_evidence_index" in artifacts:
         judge_index_path = repo_path(str(artifacts["judge_evidence_index"]), repo_root=repo_root)
         result["judge_evidence_index"] = validate_judge_evidence_index_contract(

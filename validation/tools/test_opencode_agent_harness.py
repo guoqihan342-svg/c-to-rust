@@ -4575,13 +4575,56 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["summary_status"], "passed")
             self.assertIn("opencode_safety_transform_attempt", result)
             attempt_binding = result["opencode_safety_transform_attempt"]
+            self.assertEqual(Path(attempt_binding["path"]).name, "opencode-safety-transform-attempt-1.json")
+            latest_attempt = worker_out_root / "harness" / "opencode-safety-transform-attempt.json"
+            self.assertTrue(latest_attempt.exists())
             attempt = json.loads((REPO_ROOT / attempt_binding["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(json.loads(latest_attempt.read_text(encoding="utf-8")), attempt)
             self.assertEqual(attempt["report_kind"], "opencode-safety-transform-attempt")
             self.assertEqual(attempt["status"], "accepted")
             self.assertEqual(attempt["contract_verification"]["status"], "executed")
             self.assertFalse(attempt["semantic_gate"])
             self.assertFalse(attempt["chat_output_is_evidence"])
             self.assertEqual(attempt["translation_coverage_numerator"], 0)
+            self.assertEqual(
+                attempt["attempt_contract"],
+                {
+                    "single_patch_per_round": True,
+                    "max_repair_rounds": 5,
+                    "semantic_gate": False,
+                    "translation_coverage_numerator": 0,
+                },
+            )
+            self.assertEqual(attempt["safety_transform_unit_count"], 1)
+            safety_unit = attempt["safety_transform_units"][0]
+            self.assertEqual(safety_unit["unit_id"], "demo/store-add-one")
+            self.assertTrue(safety_unit["round_contract"]["single_patch_per_round"])
+            self.assertEqual(safety_unit["round_contract"]["max_repair_rounds"], 5)
+            self.assertEqual(safety_unit["patch_evidence"]["baseline"]["path"], "evidence/before-after/baseline-unsafe.rs")
+            self.assertEqual(safety_unit["patch_evidence"]["final"]["path"], "evidence/before-after/final-safe.rs")
+            self.assertEqual(safety_unit["patch_evidence"]["accepted_patch"]["path"], "evidence/before-after/accepted.patch")
+            self.assertEqual(safety_unit["patch_evidence"]["patch_log"]["path"], "evidence/before-after/step-log.jsonl")
+            self.assertEqual(safety_unit["verification_delta"]["oracle_evidence"]["path"], "evidence/before-after/oracle-diff.json")
+            self.assertEqual(safety_unit["verification_delta"]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertTrue(safety_unit["verification_delta"]["compiled"])
+            self.assertEqual(
+                safety_unit["verification_delta"]["unsafe_scan_evidence"]["path"],
+                "evidence/before-after/unsafe-scan.json",
+            )
+            self.assertEqual(
+                safety_unit["verification_delta"]["semantic_evidence"]["schema_diff"]["path"],
+                "evidence/before-after/schema-diff.json",
+            )
+            self.assertEqual(len(safety_unit["rounds"]), 1)
+            self.assertEqual(safety_unit["rounds"][0]["round"], 1)
+            self.assertEqual(safety_unit["rounds"][0]["patch"]["path"], "evidence/before-after/accepted.patch")
+            self.assertEqual(safety_unit["rounds"][0]["patch_log"]["path"], "evidence/before-after/step-log.jsonl")
+            self.assertEqual(safety_unit["rounds"][0]["oracle_evidence"]["path"], "evidence/before-after/oracle-diff.json")
+            self.assertEqual(safety_unit["rounds"][0]["unsafe_delta"]["reduced_by"], 3)
+            self.assertEqual(safety_unit["rounds"][0]["schema_diff"]["path"], "evidence/before-after/schema-diff.json")
+            self.assertEqual(safety_unit["accepted_retry_hint"]["status"], "not_exercised")
+            self.assertFalse(safety_unit["semantic_gate"])
+            self.assertEqual(safety_unit["translation_coverage_numerator"], 0)
             metrics = json.loads((worker_out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             unit = metrics["per_unit_statuses"][0]
             self.assertIn("handoff_contract", unit)
@@ -4604,6 +4647,72 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 attempt_rows,
                 [("opencode-safety-transform-attempt", attempt_binding["path"], "agent-safety-transform-attempt")],
             )
+
+    def test_opencode_safety_transform_attempt_binds_retry_repair_history_and_rollback(self) -> None:
+        with temp_repo_dir() as tmp:
+            worker_out_root = Path(tmp) / "competition-out" / "workers" / "worker-a"
+            summary_path = worker_out_root / "summary" / "competition-run-summary.json"
+            metrics = before_after_worker_metrics(worker_out_root, "run-test")
+            rollback_path = worker_out_root / "harness" / "rollback-before-retry-demo.json"
+            rollback_path.parent.mkdir(parents=True, exist_ok=True)
+            rollback_path.write_text(json.dumps({"action": "removed_stale_summary_before_retry"}), encoding="utf-8")
+            history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                json.dumps({"attempt": 1, "status": "failed", "root_cause_key": "rustc_compile_failed"})
+                + "\n"
+                + json.dumps({"attempt": 2, "status": "verified", "summary_status": "passed"})
+                + "\n",
+                encoding="utf-8",
+            )
+            unit = metrics["per_unit_statuses"][0]
+            unit["repair_rounds"] = 1
+            unit["auto_recovered"] = True
+            unit["root_cause_key"] = "rustc_compile_failed"
+            unit["repair_history"] = {
+                "patch_events_path": repo_rel(history_path),
+                "patch_events_sha256": harness.sha256_file(history_path),
+                "statuses": ["failed", "verified"],
+                "rollback_ids": [repo_rel(rollback_path)],
+                "verified": True,
+            }
+            write_worker_summary(
+                summary_path,
+                "run-test",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=metrics,
+            )
+
+            binding = harness.write_opencode_safety_transform_attempt(
+                run_id="run-test",
+                worker_id="worker-a",
+                attempt_number=2,
+                attempt_path=worker_out_root / "harness" / "opencode-safety-transform-attempt.json",
+                summary_path=summary_path,
+                summary_payload=json.loads(summary_path.read_text(encoding="utf-8")),
+                handoff_contract=None,
+                opencode_session_evidence=None,
+                opencode_contract_verification={"status": "executed"},
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(Path(binding["path"]).name, "opencode-safety-transform-attempt-2.json")
+            latest_attempt = worker_out_root / "harness" / "opencode-safety-transform-attempt.json"
+            self.assertTrue(latest_attempt.exists())
+            attempt = json.loads((REPO_ROOT / binding["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(json.loads(latest_attempt.read_text(encoding="utf-8")), attempt)
+            safety_unit = attempt["safety_transform_units"][0]
+            self.assertEqual(safety_unit["accepted_retry_hint"]["status"], "revalidated_passed")
+            self.assertEqual(safety_unit["accepted_retry_hint"]["repair_rounds"], 1)
+            self.assertEqual(safety_unit["accepted_retry_hint"]["rollback_ids"], [repo_rel(rollback_path)])
+            self.assertEqual(
+                safety_unit["accepted_retry_hint"]["rollback_evidence"],
+                [{"path": repo_rel(rollback_path), "sha256": harness.sha256_file(rollback_path)}],
+            )
+            self.assertEqual(safety_unit["repair_history"]["patch_events_sha256"], harness.sha256_file(history_path))
+            self.assertEqual(safety_unit["root_cause_key"], "rustc_compile_failed")
 
     def test_opencode_run_worker_classifies_wrong_shell_command_as_contract_not_executed(self) -> None:
         with temp_repo_dir() as tmp:
@@ -6864,9 +6973,12 @@ def before_after_worker_metrics(
         "oracle_evidence": evidence_dir / "oracle-diff.json",
         "accepted_patch": evidence_dir / "accepted.patch",
         "patch_log": evidence_dir / "step-log.jsonl",
+        "unsafe_scan_evidence": evidence_dir / "unsafe-scan.json",
     }
     for name, path in artifacts.items():
         path.write_text(f"{name}\n", encoding="utf-8")
+    schema_diff_path = evidence_dir / "schema-diff.json"
+    schema_diff_path.write_text("schema_diff\n", encoding="utf-8")
     before_after = {
         "schema_version": 1,
         "status": "bound",
@@ -6887,6 +6999,12 @@ def before_after_worker_metrics(
         "claim_boundary": {
             "function": "store_add_one",
             "non_goals": ["whole-program translation"],
+        },
+        "semantic_evidence": {
+            "schema_diff": {
+                "path": f"evidence/before-after/{schema_diff_path.name}",
+                "sha256": hashlib.sha256(schema_diff_path.read_bytes()).hexdigest(),
+            },
         },
     }
     if baseline_verification is not None:

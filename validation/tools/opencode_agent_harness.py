@@ -6250,6 +6250,7 @@ def write_opencode_safety_transform_attempt(
     status = "accepted" if final_gate_status == "passed" and contract_status == "executed" else "blocked"
     workflow_metrics_binding = summary_payload.get("workflow_metrics")
     workflow_metrics_ref: dict[str, Any] | None = None
+    workflow_metrics_payload: dict[str, Any] | None = None
     if isinstance(workflow_metrics_binding, dict) and isinstance(workflow_metrics_binding.get("path"), str):
         workflow_metrics_path = resolve_summary_artifact(
             str(workflow_metrics_binding["path"]),
@@ -6261,6 +6262,13 @@ def write_opencode_safety_transform_attempt(
                 "path": str(workflow_metrics_binding["path"]),
                 "sha256": sha256_file(workflow_metrics_path),
             }
+            workflow_metrics_payload = load_json(workflow_metrics_path)
+
+    safety_transform_units = opencode_safety_transform_units(
+        workflow_metrics_payload if workflow_metrics_payload is not None else {},
+        attempt_number=attempt_number,
+        repo_root=repo_root,
+    )
 
     attempt = {
         "schema_version": SCHEMA_VERSION,
@@ -6283,6 +6291,14 @@ def write_opencode_safety_transform_attempt(
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
         "translation_coverage_numerator": 0,
+        "attempt_contract": {
+            "single_patch_per_round": True,
+            "max_repair_rounds": REPAIR_ROUND_CAP,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+        "safety_transform_unit_count": len(safety_transform_units),
+        "safety_transform_units": safety_transform_units,
         "evidence_boundary": (
             "This artifact records OpenCode command-contract participation in a safety-transform attempt. "
             "It does not make chat/session output semantic evidence; acceptance remains owned by the summary validators."
@@ -6294,8 +6310,157 @@ def write_opencode_safety_transform_attempt(
     if root_cause:
         attempt["root_cause_key"] = root_cause
     attempt_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write_json(attempt_path, attempt)
-    return {"path": repo_relative(attempt_path, repo_root=repo_root), "sha256": sha256_file(attempt_path)}
+    numbered_attempt_path = opencode_numbered_safety_attempt_path(attempt_path, attempt_number=attempt_number)
+    atomic_write_json(numbered_attempt_path, attempt)
+    if numbered_attempt_path != attempt_path:
+        atomic_write_json(attempt_path, attempt)
+    return {
+        "path": repo_relative(numbered_attempt_path, repo_root=repo_root),
+        "sha256": sha256_file(numbered_attempt_path),
+    }
+
+
+def opencode_numbered_safety_attempt_path(attempt_path: Path, *, attempt_number: int) -> Path:
+    if attempt_path.stem.endswith(f"-{attempt_number}"):
+        return attempt_path
+    return attempt_path.with_name(f"{attempt_path.stem}-{attempt_number}{attempt_path.suffix}")
+
+
+def opencode_safety_transform_units(
+    workflow_metrics: dict[str, Any],
+    *,
+    attempt_number: int,
+    repo_root: Path,
+) -> list[dict[str, Any]]:
+    units = workflow_metrics.get("per_unit_statuses")
+    if not isinstance(units, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        evidence = unit.get("translation_before_after")
+        evidence = evidence if isinstance(evidence, dict) else {}
+        repair_history = unit.get("repair_history")
+        repair_history = repair_history if isinstance(repair_history, dict) else None
+        if not evidence and repair_history is None:
+            continue
+
+        patch_evidence: dict[str, Any] = {}
+        for field in ("baseline", "final", "accepted_patch", "patch_log"):
+            value = evidence.get(field)
+            if isinstance(value, dict):
+                patch_evidence[field] = json.loads(json.dumps(value))
+
+        verification_delta: dict[str, Any] = {}
+        for field in (
+            "baseline_verification",
+            "oracle_evidence",
+            "semantic_evidence",
+            "unsafe_scan_evidence",
+            "unsafe_reduction",
+        ):
+            value = evidence.get(field)
+            if isinstance(value, dict):
+                verification_delta[field] = json.loads(json.dumps(value))
+        for field in ("compiled", "semantic_pass", "refused", "blocked", "failed"):
+            if field in unit:
+                verification_delta[field] = bool(unit.get(field))
+
+        transform_unit: dict[str, Any] = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "status": str(unit.get("status", evidence.get("status", "unknown"))),
+            "attempt": attempt_number,
+            "round_contract": {
+                "single_patch_per_round": True,
+                "max_repair_rounds": REPAIR_ROUND_CAP,
+            },
+            "patch_evidence": patch_evidence,
+            "verification_delta": verification_delta,
+            "rounds": opencode_safety_transform_rounds(evidence, attempt_number=attempt_number),
+            "accepted_retry_hint": opencode_accepted_retry_hint(unit, repair_history=repair_history, repo_root=repo_root),
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        }
+        if repair_history is not None:
+            transform_unit["repair_history"] = json.loads(json.dumps(repair_history))
+        if "repair_rounds" in unit:
+            transform_unit["repair_rounds"] = int(unit.get("repair_rounds", 0) or 0)
+        if "auto_recovered" in unit:
+            transform_unit["auto_recovered"] = bool(unit.get("auto_recovered"))
+        root_cause = unit.get("root_cause_key")
+        if isinstance(root_cause, str) and root_cause:
+            transform_unit["root_cause_key"] = root_cause
+        result.append(transform_unit)
+    return result
+
+
+def opencode_safety_transform_rounds(evidence: dict[str, Any], *, attempt_number: int) -> list[dict[str, Any]]:
+    if not evidence:
+        return []
+    round_payload: dict[str, Any] = {
+        "round": attempt_number,
+        "single_patch_per_round": True,
+    }
+    field_map = {
+        "accepted_patch": "patch",
+        "patch_log": "patch_log",
+        "oracle_evidence": "oracle_evidence",
+        "unsafe_reduction": "unsafe_delta",
+        "unsafe_scan_evidence": "unsafe_scan_evidence",
+        "baseline_verification": "baseline_verification",
+    }
+    for source_field, target_field in field_map.items():
+        value = evidence.get(source_field)
+        if isinstance(value, dict):
+            round_payload[target_field] = json.loads(json.dumps(value))
+    semantic_evidence = evidence.get("semantic_evidence")
+    if isinstance(semantic_evidence, dict) and isinstance(semantic_evidence.get("schema_diff"), dict):
+        round_payload["schema_diff"] = json.loads(json.dumps(semantic_evidence["schema_diff"]))
+    if set(round_payload) == {"round", "single_patch_per_round"}:
+        return []
+    return [round_payload]
+
+
+def opencode_accepted_retry_hint(
+    unit: dict[str, Any],
+    *,
+    repair_history: dict[str, Any] | None,
+    repo_root: Path,
+) -> dict[str, Any]:
+    if repair_history is None:
+        return {"status": "not_exercised"}
+    statuses = repair_history.get("statuses") if isinstance(repair_history.get("statuses"), list) else []
+    rollback_ids = repair_history.get("rollback_ids") if isinstance(repair_history.get("rollback_ids"), list) else []
+    verified = bool(repair_history.get("verified"))
+    auto_recovered = bool(unit.get("auto_recovered", False))
+    status = "revalidated_passed" if verified and auto_recovered else ("verified" if verified else "recorded")
+    hint = {
+        "status": status,
+        "repair_rounds": int(unit.get("repair_rounds", 0) or 0),
+        "auto_recovered": auto_recovered,
+        "statuses": json.loads(json.dumps(statuses)),
+        "rollback_ids": json.loads(json.dumps(rollback_ids)),
+        "rollback_evidence": opencode_rollback_evidence_refs(rollback_ids, repo_root=repo_root),
+    }
+    for field in ("patch_events_path", "patch_events_sha256"):
+        value = repair_history.get(field)
+        if isinstance(value, str) and value:
+            hint[field] = value
+    return hint
+
+
+def opencode_rollback_evidence_refs(rollback_ids: list[Any], *, repo_root: Path) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    for item in rollback_ids:
+        if not isinstance(item, str) or not item:
+            continue
+        rollback_path = repo_path(Path(item), repo_root=repo_root)
+        ref = {"path": repo_relative(rollback_path, repo_root=repo_root)}
+        if rollback_path.exists():
+            ref["sha256"] = sha256_file(rollback_path)
+        refs.append(ref)
+    return refs
 
 
 def retry_repair_history_events(hint_payload: dict[str, Any], result: dict[str, Any]) -> list[dict[str, Any]]:
