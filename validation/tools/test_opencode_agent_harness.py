@@ -1903,6 +1903,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         sort_keys=True,
                     )
                 ),
+                "opencode_model_availability": {
+                    "status": "available",
+                    "opencode_command": "opencode",
+                    "required_model": "GLM-5.1",
+                    "process_returncode": 0,
+                    "model_listed": True,
+                },
                 "opencode_runtime_env": preflight_report_payload["opencode_runtime_env"],
                 "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
             }
@@ -5520,6 +5527,46 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             stdout = (REPO_ROOT / report["opencode_model_availability"]["logs"]["stdout"]).read_text(encoding="utf-8")
             self.assertIn("openai/gpt-5.1", stdout)
 
+    def test_validate_opencode_preflight_report_rejects_missing_model_availability(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            payload.pop("opencode_model_availability")
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight model availability is missing"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_validate_opencode_preflight_report_rejects_unavailable_glm_model(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            payload["opencode_model_availability"].update(
+                {
+                    "status": "unavailable",
+                    "failure_reason": "required_model_not_listed",
+                    "model_listed": False,
+                }
+            )
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight model availability is not passed"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_opencode_preflight_defaults_to_glm_51_model(self) -> None:
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",
@@ -6167,6 +6214,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "contract_verification": {"status": "executed"},
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
+                        "opencode_model_availability": {
+                            "status": "available",
+                            "opencode_command": "opencode",
+                            "required_model": "GLM-5.1",
+                            "process_returncode": 0,
+                            "model_listed": True,
+                        },
                     },
                     sort_keys=True,
                 )
@@ -6447,6 +6501,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                             )
                         ),
                         "opencode_runtime_env": runtime_env,
+                        "opencode_model_availability": {
+                            "status": "available",
+                            "opencode_command": "opencode",
+                            "required_model": "GLM-5.1",
+                            "process_returncode": 0,
+                            "model_listed": True,
+                        },
                         "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
                     },
                     sort_keys=True,
@@ -6622,6 +6683,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
                         "opencode_runtime_env": runtime_env,
+                        "opencode_model_availability": {
+                            "status": "available",
+                            "opencode_command": "opencode",
+                            "required_model": "GLM-5.1",
+                            "process_returncode": 0,
+                            "model_listed": True,
+                        },
                     },
                     sort_keys=True,
                 )
@@ -7500,6 +7568,16 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
                 "launch_policy": launch_policy,
                 "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
                 "opencode_runtime_env": runtime_env,
+                "opencode_model_availability": {
+                    "schema_version": 1,
+                    "status": "available",
+                    "failure_reason": "",
+                    "opencode_command": "opencode",
+                    "required_model": "GLM-5.1",
+                    "argv": ["opencode", "models"],
+                    "process_returncode": 0,
+                    "model_listed": True,
+                },
                 "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
             },
             sort_keys=True,

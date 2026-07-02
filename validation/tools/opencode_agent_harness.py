@@ -5839,6 +5839,34 @@ def validate_opencode_preflight_report(
             "opencode preflight launch policy mismatch: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    model_availability = report.get("opencode_model_availability")
+    if not isinstance(model_availability, dict):
+        raise SystemExit(
+            "opencode preflight model availability is missing: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    try:
+        model_probe_returncode = int(model_availability.get("process_returncode", 1))
+    except (TypeError, ValueError):
+        model_probe_returncode = 1
+    availability_binding = {
+        "status": str(model_availability.get("status", "")),
+        "opencode_command": str(model_availability.get("opencode_command", "")),
+        "required_model": str(model_availability.get("required_model", "")),
+        "process_returncode": model_probe_returncode,
+        "model_listed": model_availability.get("model_listed") is True,
+    }
+    if (
+        availability_binding["status"] != "available"
+        or availability_binding["opencode_command"] != expected_launch_policy["opencode_command"]
+        or availability_binding["required_model"] != expected_launch_policy["opencode_model"]
+        or availability_binding["process_returncode"] != 0
+        or availability_binding["model_listed"] is not True
+    ):
+        raise SystemExit(
+            "opencode preflight model availability is not passed: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
     opencode_runtime_env = validate_opencode_runtime_env_contract(
         report.get("opencode_runtime_env"),
         context="opencode preflight report",
@@ -5855,6 +5883,7 @@ def validate_opencode_preflight_report(
         "contract_status": "executed",
         "launch_policy": actual_launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(actual_launch_policy),
+        "opencode_model_availability": availability_binding,
         "opencode_runtime_env": opencode_runtime_env,
         "evidence_boundary": str(
             report.get(

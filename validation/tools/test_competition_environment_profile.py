@@ -249,6 +249,21 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                     if "opencode-preflight" in block or "--mode opencode" in block:
                         self.assertIn("--opencode-model GLM-5.1", block)
 
+    def test_competition_readme_records_glm_preflight_availability_boundary(self) -> None:
+        stale_status_phrases = [
+            "now passes the runner and `--require-local-artifacts` deep validation under local `local-simulation`",
+            "\u5df2\u5728\u672c\u673a `local-simulation` \u4e0b\u901a\u8fc7 runner \u4e0e `--require-local-artifacts` \u6df1\u6821\u9a8c",
+        ]
+        for readme_path in [PROFILE_DIR / "README.md", PROFILE_DIR / "README.en.md"]:
+            text = readme_path.read_text(encoding="utf-8")
+            with self.subTest(readme=readme_path.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("GLM-5.1", text)
+                self.assertIn("opencode_model_unavailable", text)
+                self.assertIn("required_model_not_listed", text)
+                self.assertIn("local-simulation OpenCode pass does not close P0-H9", text)
+                for stale_phrase in stale_status_phrases:
+                    self.assertNotIn(stale_phrase, text)
+
     def test_competition_profile_records_flashdb_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]
