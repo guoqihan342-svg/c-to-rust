@@ -3455,6 +3455,13 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             handoff_b = out_root / "workers" / "worker-b" / "harness" / "opencode-handoff-contract.json"
             session_a = out_root / "workers" / "worker-a" / "logs" / "opencode-session-evidence.json"
             session_b = out_root / "workers" / "worker-b" / "logs" / "opencode-session-evidence.json"
+            safety_attempt_a = (
+                out_root
+                / "workers"
+                / "worker-a"
+                / "harness"
+                / "opencode-safety-transform-attempt-1.json"
+            )
             summary_a = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
             summary_b = out_root / "workers" / "worker-b" / "summary" / "competition-run-summary.json"
             worker_report_a = out_root / "workers" / "worker-a" / "harness" / "run-worker-report.json"
@@ -3473,6 +3480,16 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 (handoff_b, {"report_kind": "opencode-handoff-contract", "worker_id": "worker-b"}),
                 (session_a, {"report_kind": "opencode-session-evidence", "worker_id": "worker-a"}),
                 (session_b, {"report_kind": "opencode-session-evidence", "worker_id": "worker-b"}),
+                (
+                    safety_attempt_a,
+                    {
+                        "report_kind": "opencode-safety-transform-attempt",
+                        "worker_id": "worker-a",
+                        "attempt": 1,
+                        "semantic_gate": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                ),
                 (summary_a, {"report_kind": "competition-run-summary", "worker_id": "worker-a"}),
                 (summary_b, {"report_kind": "competition-run-summary", "worker_id": "worker-b"}),
                 (worker_report_a, {"report_kind": "run-worker-report", "worker_id": "worker-a"}),
@@ -3496,6 +3513,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             handoff_b_binding = {"path": repo_rel(handoff_b), "sha256": harness.sha256_file(handoff_b)}
             session_a_binding = {"path": repo_rel(session_a), "sha256": harness.sha256_file(session_a)}
             session_b_binding = {"path": repo_rel(session_b), "sha256": harness.sha256_file(session_b)}
+            safety_attempt_a_binding = {
+                "path": repo_rel(safety_attempt_a),
+                "sha256": harness.sha256_file(safety_attempt_a),
+            }
             batch_result = {
                 "status": "completed",
                 "exit_code": 0,
@@ -3515,6 +3536,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                             "logs": {"stdout": repo_rel(stdout_a), "stderr": repo_rel(stderr_a)},
                             "handoff_contract": handoff_a_binding,
                             "opencode_session_evidence": session_a_binding,
+                            "opencode_safety_transform_attempt": safety_attempt_a_binding,
                             "opencode_preflight_report": preflight_binding,
                             "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
                             "opencode_contract_verification": {"status": "executed", "matched_command": "cmd-a"},
@@ -3592,6 +3614,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(runtime["workers"][0]["final_decision"]["status"], "accepted")
             self.assertEqual(payload["evidence_artifact_refs"]["opencode_preflight_report"], preflight_binding)
+            self.assertEqual(
+                runtime["workers"][0]["opencode_safety_transform_attempt"],
+                safety_attempt_a_binding,
+            )
+            self.assertEqual(
+                payload["evidence_artifact_refs"]["opencode_safety_transform_attempt"],
+                safety_attempt_a_binding,
+            )
             self.assertFalse(payload["claim_boundary"]["index_is_semantic_gate"])
 
     def test_plan_source_file_cli_dispatches_planner_flags(self) -> None:

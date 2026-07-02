@@ -1721,6 +1721,13 @@ def write_judge_evidence_index(
     add_binding("opencode_preflight_report", evaluate_report.get("opencode_preflight_report"))
     add_binding("opencode_preflight_report", batch_result.get("opencode_preflight_report"))
     add_binding("opencode_preflight_report", run_plan.get("opencode_preflight_report"))
+    for worker in run_plan.get("workers") if isinstance(run_plan.get("workers"), list) else []:
+        if not isinstance(worker, dict):
+            continue
+        binding = artifact_binding_from_value(worker.get("opencode_safety_transform_attempt"), repo_root=repo_root)
+        if binding is not None:
+            artifact_refs["opencode_safety_transform_attempt"] = binding
+            break
     merge_plan = run_plan.get("merge_plan") if isinstance(run_plan.get("merge_plan"), dict) else {}
     add_path("merge_plan", merge_plan.get("path"))
     add_path("worker_plan", batch_result.get("plan_path"))

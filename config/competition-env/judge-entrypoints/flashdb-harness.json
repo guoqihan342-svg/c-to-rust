@@ -222,7 +222,8 @@
         "agent_index": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/agent-index.json",
         "run_plan_report": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/run-plan-report.json",
         "merge_plan": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/merge-plan.json",
-        "worker_plan": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/plans/flashdb-flashdb-fdb-utils-opencode-explicit-workers-workers.json"
+        "worker_plan": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/harness/plans/flashdb-flashdb-fdb-utils-opencode-explicit-workers-workers.json",
+        "opencode_safety_transform_attempt": "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/opencode-safety-transform-attempt-1.json"
       },
       "judge_focus": [
         "opencode preflight gate and command-contract audit",

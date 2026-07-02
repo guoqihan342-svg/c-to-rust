@@ -536,8 +536,15 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "run_plan_report",
             "merge_plan",
             "worker_plan",
+            "opencode_safety_transform_attempt",
         ]:
             self.assertIn(artifact, opencode_multi_worker["expected_artifacts"])
+        self.assertEqual(
+            opencode_multi_worker["expected_artifacts"]["opencode_safety_transform_attempt"],
+            "target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/"
+            "workers/flashdb-opencode-worker-001-fdb-calc-crc32/harness/"
+            "opencode-safety-transform-attempt-1.json",
+        )
         self.assertIn("opencode preflight", " ".join(opencode_multi_worker["judge_focus"]))
         self.assertIn("runtime contract", " ".join(opencode_multi_worker["judge_focus"]))
 

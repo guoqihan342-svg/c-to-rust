@@ -160,7 +160,13 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                             "run_id": "opencode-run",
                             "command": "python -B -m validation.tools.opencode_agent_harness evaluate",
                             "judge_focus": ["OpenCode multi-agent", "repair cap 5"],
-                            "expected_artifacts": {"judge_evidence_index": "target/out/index.json"},
+                            "expected_artifacts": {
+                                "judge_evidence_index": "target/out/index.json",
+                                "opencode_safety_transform_attempt": (
+                                    "target/out/workers/worker-a/harness/"
+                                    "opencode-safety-transform-attempt-1.json"
+                                ),
+                            },
                         },
                     ],
                 },
@@ -261,6 +267,18 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(public_packet["before_after_repair_exhibit"], milestone_bundle["before_after_repair_exhibit"])
         self.assertFalse(public_packet["before_after_repair_exhibit"]["semantic_gate"])
         self.assertEqual(public_packet["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
+        published_refs = public_packet["publication_manifest"]["published_artifact_refs"]
+        self.assertIn(
+            "opencode_safety_transform_attempt",
+            {ref["artifact_name"] for ref in published_refs},
+        )
+        self.assertIn(
+            "opencode_safety_transform_attempt",
+            {
+                ref["artifact_name"]
+                for ref in milestone_bundle["publication_manifest"]["published_artifact_refs"]
+            },
+        )
         self.assertFalse(public_packet["quantitative_evaluation"]["semantic_gate"])
         self.assertEqual(public_packet["quantitative_evaluation"]["translation_coverage_numerator"], 0)
         self.assertEqual(summary["readiness"]["executed_count"], 2)
@@ -268,7 +286,15 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(summary["readiness"]["validation_status"], "passed")
         self.assertEqual([entry["id"] for entry in summary["entrypoints"]], ["competition_environment_smoke", "opencode_multi_worker_evaluate_profile"])
         self.assertEqual(summary["entrypoints"][0]["judge_focus"], ["environment smoke", "semantic_gate=false"])
-        self.assertEqual(summary["entrypoints"][1]["key_artifacts"], {"judge_evidence_index": "target/out/index.json"})
+        self.assertEqual(
+            summary["entrypoints"][1]["key_artifacts"],
+            {
+                "judge_evidence_index": "target/out/index.json",
+                "opencode_safety_transform_attempt": (
+                    "target/out/workers/worker-a/harness/opencode-safety-transform-attempt-1.json"
+                ),
+            },
+        )
         persisted = json.loads(out_path.read_text(encoding="utf-8"))
         self.assertEqual(persisted["milestone_bundle"], report["milestone_bundle"])
         self.assertEqual(persisted["milestone_release_notes"], report["milestone_release_notes"])
