@@ -513,6 +513,8 @@ python validation/tools/validate_auto_translation_evidence.py \
 python -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+# 如需调整每个 entrypoint 命令的有限超时，追加 --timeout-seconds <秒数>；
+# 超时会记录为 root_cause_key=process_timeout / exit_code=124。
 
 # milestone bundle 会包含 harness_architecture_summary.contract_matrix：
 # plan/translate/verify/repair/report -> roles、artifacts、validators 和非语义边界。

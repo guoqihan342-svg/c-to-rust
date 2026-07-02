@@ -24,6 +24,8 @@ CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 DEFAULT_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
 COMPETITION_CONFIG_ROOT = Path("config/competition-env")
+ENTRYPOINT_TIMEOUT_EXIT_CODE = 124
+DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS = 600 * 60
 
 
 def main() -> int:
@@ -41,6 +43,12 @@ def main() -> int:
         action="store_true",
         help="Write the plan without executing commands or requiring local artifacts.",
     )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS,
+        help="Maximum seconds allowed for each judge entrypoint command.",
+    )
     args = parser.parse_args()
 
     report = run_judge_entrypoints(
@@ -48,6 +56,7 @@ def main() -> int:
         entrypoint_ids=args.entrypoint_id,
         out_path=args.out,
         dry_run=args.dry_run,
+        timeout_seconds=args.timeout_seconds,
         repo_root=REPO_ROOT,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
@@ -60,6 +69,7 @@ def run_judge_entrypoints(
     entrypoint_ids: list[str],
     out_path: Path,
     dry_run: bool = False,
+    timeout_seconds: int = DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS,
     repo_root: Path = REPO_ROOT,
     command_runner: CommandRunner = subprocess.run,
 ) -> dict[str, Any]:
@@ -126,6 +136,7 @@ def run_judge_entrypoints(
                 dry_run=dry_run,
                 log_dir=log_dir,
                 repo_root=repo_root,
+                timeout_seconds=timeout_seconds,
                 command_runner=command_runner,
             )
         )
@@ -507,6 +518,7 @@ def run_entrypoint_command(
     dry_run: bool,
     log_dir: Path,
     repo_root: Path,
+    timeout_seconds: int,
     command_runner: CommandRunner,
 ) -> dict[str, Any]:
     entry_id = str(entry.get("id", "unknown"))
@@ -526,6 +538,12 @@ def run_entrypoint_command(
         "key_artifacts": dict(entry.get("expected_artifacts", {})) if isinstance(entry.get("expected_artifacts"), dict) else {},
         "command": command,
         "argv": argv,
+        "timeout_seconds": timeout_seconds,
+        "timeout_policy": {
+            "scope": "entrypoint_command",
+            "timeout_seconds": timeout_seconds,
+            "timeout_exit_code": ENTRYPOINT_TIMEOUT_EXIT_CODE,
+        },
         "exit_code": None if dry_run else 1,
         "logs": {
             "stdout": artifact_ref(stdout_path, repo_root=repo_root),
@@ -537,7 +555,7 @@ def run_entrypoint_command(
         return result
 
     try:
-        completed = command_runner(argv, cwd=repo_root, text=True, capture_output=True)
+        completed = command_runner(argv, cwd=repo_root, text=True, capture_output=True, timeout=timeout_seconds)
     except Exception as error:
         stdout_text = stream_text(getattr(error, "stdout", ""))
         stderr_text = stream_text(getattr(error, "stderr", ""))
@@ -547,6 +565,8 @@ def run_entrypoint_command(
         result["exit_code"] = command_exception_exit_code(error)
         result["status"] = "failed"
         result["error"] = {"type": type(error).__name__, "message": str(error)}
+        if isinstance(error, subprocess.TimeoutExpired):
+            result["root_cause_key"] = "process_timeout"
         result["logs"] = {
             "stdout": artifact_ref(stdout_path, repo_root=repo_root),
             "stderr": artifact_ref(stderr_path, repo_root=repo_root),
@@ -608,7 +628,7 @@ def stream_text(value: object) -> str:
 
 def command_exception_exit_code(error: Exception) -> int:
     if isinstance(error, subprocess.TimeoutExpired):
-        return 124
+        return ENTRYPOINT_TIMEOUT_EXIT_CODE
     if isinstance(error, OSError):
         return 127
     return 1

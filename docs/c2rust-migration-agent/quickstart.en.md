@@ -513,6 +513,8 @@ python validation/tools/validate_auto_translation_evidence.py \
 python -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+# To override the finite timeout for each entrypoint command, add --timeout-seconds <seconds>;
+# timeouts are recorded as root_cause_key=process_timeout / exit_code=124.
 
 # The milestone bundle includes harness_architecture_summary.contract_matrix:
 # plan/translate/verify/repair/report -> roles, artifacts, validators, and non-semantic boundaries.

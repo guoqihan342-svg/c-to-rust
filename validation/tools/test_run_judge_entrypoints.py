@@ -561,6 +561,127 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["sha256"], runner.validator.sha256_file(stdout_log))
         self.assertEqual(report["entrypoints"][0]["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
 
+    def test_entrypoint_command_receives_timeout_and_records_policy(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-timeout-policy-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        seen_kwargs: dict[str, object] = {}
+
+        def passing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            seen_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        def fake_write_readiness(result: dict, path: Path, *, repo_root: Path) -> dict:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-readiness",
+                "status": result["status"],
+            }
+            path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            return payload
+
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[{"status": "passed"}, {"status": "passed"}],
+        ):
+            with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
+                report = runner.run_judge_entrypoints(
+                    config_path=config_path,
+                    entrypoint_ids=[],
+                    out_path=out_path,
+                    command_runner=passing_runner,
+                    timeout_seconds=17,
+                    repo_root=REPO_ROOT,
+                )
+
+        entrypoint = report["entrypoints"][0]
+        self.assertEqual(seen_kwargs["cwd"], REPO_ROOT.resolve())
+        self.assertIs(seen_kwargs["text"], True)
+        self.assertIs(seen_kwargs["capture_output"], True)
+        self.assertEqual(seen_kwargs["timeout"], 17)
+        self.assertEqual(entrypoint["timeout_seconds"], 17)
+        self.assertEqual(entrypoint["timeout_policy"]["timeout_seconds"], 17)
+        self.assertEqual(entrypoint["timeout_policy"]["timeout_exit_code"], 124)
+        self.assertEqual(entrypoint["timeout_policy"]["scope"], "entrypoint_command")
+
+    def test_entrypoint_timeout_expired_records_124_and_process_timeout(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-timeout-expired-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        seen_kwargs: dict[str, object] = {}
+
+        def timeout_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            seen_kwargs.update(kwargs)
+            raise subprocess.TimeoutExpired(
+                cmd=argv,
+                timeout=kwargs.get("timeout"),
+                output="partial stdout\n",
+                stderr="partial stderr\n",
+            )
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=timeout_runner,
+                timeout_seconds=19,
+                repo_root=REPO_ROOT,
+            )
+
+        stdout_log = out_path.parent / "logs" / "before_after_judge_demo.stdout.log"
+        stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
+        entrypoint = report["entrypoints"][0]
+        self.assertEqual(seen_kwargs["timeout"], 19)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"], {"status": "skipped", "reason": "failed_command"})
+        self.assertEqual(entrypoint["exit_code"], 124)
+        self.assertEqual(entrypoint["status"], "failed")
+        self.assertEqual(entrypoint["root_cause_key"], "process_timeout")
+        self.assertEqual(entrypoint["error"]["type"], "TimeoutExpired")
+        self.assertEqual(entrypoint["timeout_seconds"], 19)
+        self.assertIn("partial stdout", stdout_log.read_text(encoding="utf-8"))
+        self.assertIn("partial stderr", stderr_log.read_text(encoding="utf-8"))
+        self.assertIn("TimeoutExpired", stderr_log.read_text(encoding="utf-8"))
+        self.assertEqual(entrypoint["logs"]["stdout"]["sha256"], runner.validator.sha256_file(stdout_log))
+        self.assertEqual(entrypoint["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
+
     def test_command_launch_exception_writes_failed_report_and_hashed_logs(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 

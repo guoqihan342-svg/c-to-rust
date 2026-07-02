@@ -28,6 +28,8 @@ python -B -m validation.tools.run_judge_entrypoints --config config/competition-
 
 After success, the command writes `judge-milestone-bundle.json`, `milestone-release-notes.md`, and `public-release-packet.json` in the same summary directory. The bundle is the machine-readable external review index, the Markdown notes render the judge packet index for humans, and the JSON public release packet hash-binds the run report, readiness report, bundle, release notes, and config archive before `validate_public_release_packet` checks schema, hashes, claim boundary, local-path hygiene, packet-to-bundle consistency, and release-notes consistency against the bundle rendering; none of these artifacts is a semantic gate or increases `translation_coverage_numerator`.
 
+The runner applies a finite 36000-second default timeout to each entrypoint command, overrideable with `--timeout-seconds`; timeouts are recorded in the run report as `entrypoint.timeout_policy`, `root_cause_key=process_timeout`, and `exit_code=124`, then fail closed.
+
 Focused smoke/triage entrypoint example:
 
 ```bash
