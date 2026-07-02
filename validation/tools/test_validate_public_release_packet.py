@@ -327,6 +327,17 @@ def valid_packet(root: Path) -> dict:
         "competition_config_archive": competition_config_archive,
         "publication_manifest": publication_manifest,
         "before_after_repair_exhibit": before_after_repair_exhibit,
+        "opencode_patch_boundary": {
+            "report_kind": "opencode-patch-boundary",
+            "opencode_runtime_enabled": True,
+            "before_after_patch_sources": ["accepted_safe_evidence"],
+            "before_after_opencode_session_bound_count": 0,
+            "opencode_safety_transform_attempt": {"status": "absent"},
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "OpenCode chat output is not semantic evidence.",
+        },
         "quantitative_evaluation": bundle_payload["quantitative_evaluation"],
         "progress_delta_ledger": bundle_payload["progress_delta_ledger"],
         "known_gaps": known_gaps,
@@ -357,6 +368,18 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(packet["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
+
+    def test_validate_packet_requires_opencode_patch_boundary(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-boundary-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet.pop("opencode_patch_boundary")
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any("opencode_patch_boundary" in error for error in result["errors"]), result["errors"])
 
     def test_validate_packet_rejects_artifact_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-drift-", dir=REPO_ROOT / "target"))

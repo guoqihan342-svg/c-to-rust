@@ -770,7 +770,9 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["proof_classes"]["all"], ["local-simulation"])
         self.assertEqual(report["proof_class_rollup"]["highest_proof_class"], "local-simulation")
         self.assertFalse(report["proof_classes"]["has_competition_exact"])
-        self.assertIn("local_simulation_not_competition_exact", [gap["gap_id"] for gap in report["known_gaps"]])
+        known_gap_ids = [gap["gap_id"] for gap in report["known_gaps"]]
+        self.assertIn("local_simulation_not_competition_exact", known_gap_ids)
+        self.assertNotIn("c2rust_baseline_output_still_not_verified_here", known_gap_ids)
         self.assertIn("accepted_evidence_is_not_translator_generated_coverage", report["must_not_claim"])
         self.assertIn("opencode_chat_output_is_semantic_evidence", report["must_not_claim"])
         self.assertIn("run_judge_entrypoints", report["reproduction_commands"])
@@ -1288,6 +1290,31 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertFalse(scorecard["claim_boundary"]["semantic_gate"])
         self.assertFalse(scorecard["semantic_gate"])
         self.assertEqual(scorecard["translation_coverage_numerator"], 0)
+
+    def test_known_gaps_keep_c2rust_baseline_gap_without_verified_baseline_exhibit(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "baseline_verification": {
+                                    "status": "blocked",
+                                    "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+                                    "generated_draft_semantic_pass": False,
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
 
     def test_bundle_blocks_malformed_run_report_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

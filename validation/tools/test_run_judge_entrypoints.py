@@ -321,6 +321,13 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                 for ref in milestone_bundle["publication_manifest"]["published_artifact_refs"]
             },
         )
+        opencode_boundary = public_packet["opencode_patch_boundary"]
+        self.assertEqual(opencode_boundary["report_kind"], "opencode-patch-boundary")
+        self.assertFalse(opencode_boundary["semantic_gate"])
+        self.assertFalse(opencode_boundary["chat_output_is_evidence"])
+        self.assertEqual(opencode_boundary["translation_coverage_numerator"], 0)
+        self.assertEqual(opencode_boundary["before_after_patch_sources"], [])
+        self.assertIn("status", opencode_boundary["opencode_safety_transform_attempt"])
         self.assertFalse(public_packet["quantitative_evaluation"]["semantic_gate"])
         self.assertEqual(public_packet["quantitative_evaluation"]["translation_coverage_numerator"], 0)
         self.assertEqual(summary["readiness"]["executed_count"], 2)
@@ -341,6 +348,101 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(persisted["milestone_bundle"], report["milestone_bundle"])
         self.assertEqual(persisted["milestone_release_notes"], report["milestone_release_notes"])
         self.assertEqual(persisted["public_release_packet"], report["public_release_packet"])
+
+    def test_public_packet_opencode_patch_boundary_summarizes_attempt_without_semantic_claim(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-patch-boundary-", dir=REPO_ROOT / "target"))
+        attempt_path = temp_dir / "workers" / "worker-a" / "harness" / "opencode-safety-transform-attempt-1.json"
+        attempt_path.parent.mkdir(parents=True, exist_ok=True)
+        attempt_payload = {
+            "status": "accepted",
+            "attempt_contract": {"max_repair_rounds": 5},
+            "accepted_retry_hint": {"status": "not_exercised"},
+            "rollback_ref_count": 0,
+            "round_count": 1,
+        }
+        attempt_path.write_text(json.dumps(attempt_payload, sort_keys=True) + "\n", encoding="utf-8")
+
+        boundary = runner.public_packet_opencode_patch_boundary(
+            {
+                "before_after_repair_exhibit": {
+                    "sources": [
+                        {
+                            "before_after_units": [
+                                {
+                                    "patch_origin": {
+                                        "source": "accepted_safe_evidence",
+                                        "opencode_session_bound": False,
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "publication_manifest": {
+                    "published_artifact_refs": [
+                        {
+                            "artifact_name": "opencode_safety_transform_attempt",
+                            "path": repo_relative(attempt_path),
+                            "sha256": runner.validator.sha256_file(attempt_path),
+                            "status": "present",
+                        }
+                    ]
+                },
+                "opencode_runtime": {"enabled_entrypoint_count": 1},
+            },
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(boundary["report_kind"], "opencode-patch-boundary")
+        self.assertTrue(boundary["opencode_runtime_enabled"])
+        self.assertEqual(boundary["before_after_patch_sources"], ["accepted_safe_evidence"])
+        self.assertEqual(boundary["before_after_opencode_session_bound_count"], 0)
+        self.assertFalse(boundary["chat_output_is_evidence"])
+        self.assertFalse(boundary["semantic_gate"])
+        self.assertEqual(boundary["translation_coverage_numerator"], 0)
+        self.assertEqual(boundary["opencode_safety_transform_attempt"]["status"], "present")
+        self.assertEqual(boundary["opencode_safety_transform_attempt"]["attempt_status"], "accepted")
+        self.assertEqual(boundary["opencode_safety_transform_attempt"]["accepted_retry_hint_status"], "not_exercised")
+        self.assertEqual(boundary["opencode_safety_transform_attempt"]["rollback_ref_count"], 0)
+        self.assertEqual(boundary["opencode_safety_transform_attempt"]["max_repair_rounds"], 5)
+
+    def test_public_packet_opencode_patch_boundary_summarizes_unit_retry_hint(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-unit-boundary-", dir=REPO_ROOT / "target"))
+        attempt_path = temp_dir / "workers" / "worker-a" / "harness" / "opencode-safety-transform-attempt-1.json"
+        attempt_path.parent.mkdir(parents=True, exist_ok=True)
+        attempt_payload = {
+            "status": "accepted",
+            "attempt_contract": {"max_repair_rounds": 5},
+            "safety_transform_units": [
+                {
+                    "status": "converged",
+                    "accepted_retry_hint": {"status": "not_exercised"},
+                    "rounds": [{"round": 1}],
+                }
+            ],
+        }
+        attempt_path.write_text(json.dumps(attempt_payload, sort_keys=True) + "\n", encoding="utf-8")
+
+        summary = runner.public_packet_opencode_attempt_summary(
+            {
+                "path": repo_relative(attempt_path),
+                "sha256": runner.validator.sha256_file(attempt_path),
+                "status": "present",
+            },
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["artifact_read_status"], "passed")
+        self.assertEqual(summary["attempt_status"], "accepted")
+        self.assertEqual(summary["accepted_retry_hint_status"], "not_exercised")
+        self.assertEqual(summary["accepted_retry_hint_statuses"], ["not_exercised"])
+        self.assertEqual(summary["rollback_ref_count"], 0)
+        self.assertEqual(summary["round_count"], 1)
+        self.assertEqual(summary["unit_count"], 1)
 
     def test_release_notes_failure_does_not_mark_notes_present(self) -> None:
         from validation.tools import run_judge_entrypoints as runner

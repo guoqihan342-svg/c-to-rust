@@ -349,6 +349,7 @@ def write_public_release_packet(
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
         "before_after_repair_exhibit": bundle.get("before_after_repair_exhibit", {}),
+        "opencode_patch_boundary": public_packet_opencode_patch_boundary(bundle, repo_root=repo_root),
         "quantitative_evaluation": bundle.get("quantitative_evaluation", {}),
         "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
         "known_gaps": bundle.get("known_gaps", []),
@@ -357,6 +358,132 @@ def write_public_release_packet(
     }
     atomic_write_json(public_packet_path, packet)
     return packet
+
+
+def public_packet_opencode_patch_boundary(bundle: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    before_after = bundle.get("before_after_repair_exhibit") if isinstance(bundle.get("before_after_repair_exhibit"), dict) else {}
+    patch_sources: set[str] = set()
+    opencode_session_bound_count = 0
+    for source in before_after.get("sources", []) if isinstance(before_after.get("sources"), list) else []:
+        if not isinstance(source, dict):
+            continue
+        for unit in source.get("before_after_units", []) if isinstance(source.get("before_after_units"), list) else []:
+            if not isinstance(unit, dict):
+                continue
+            patch_origin = unit.get("patch_origin") if isinstance(unit.get("patch_origin"), dict) else {}
+            if isinstance(patch_origin.get("source"), str):
+                patch_sources.add(patch_origin["source"])
+            if patch_origin.get("opencode_session_bound") is True:
+                opencode_session_bound_count += 1
+
+    publication = bundle.get("publication_manifest") if isinstance(bundle.get("publication_manifest"), dict) else {}
+    attempt_ref = next(
+        (
+            ref
+            for ref in publication.get("published_artifact_refs", [])
+            if isinstance(ref, dict) and ref.get("artifact_name") == "opencode_safety_transform_attempt"
+        ),
+        None,
+    )
+    attempt_summary = public_packet_opencode_attempt_summary(attempt_ref, repo_root=repo_root)
+    runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
+    return {
+        "report_kind": "opencode-patch-boundary",
+        "opencode_runtime_enabled": int(runtime.get("enabled_entrypoint_count", 0) or 0) > 0,
+        "before_after_patch_sources": sorted(patch_sources),
+        "before_after_opencode_session_bound_count": opencode_session_bound_count,
+        "opencode_safety_transform_attempt": attempt_summary,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode runtime and safety-transform attempt artifacts audit command-contract execution and "
+            "candidate patch attempts. They do not make chat output semantic evidence; before/after patch "
+            "origin remains the bound on-disk patch_origin evidence."
+        ),
+    }
+
+
+def public_packet_opencode_attempt_summary(value: object, *, repo_root: Path) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"status": "absent"}
+    result: dict[str, Any] = {
+        "path": value.get("path"),
+        "sha256": value.get("sha256"),
+        "status": value.get("status", "unknown"),
+    }
+    if value.get("status") != "present" or not isinstance(value.get("path"), str):
+        return result
+    try:
+        payload = validator.load_json(resolve_input_path(Path(value["path"]), repo_root=repo_root))
+    except (OSError, ValueError, json.JSONDecodeError):
+        result["artifact_read_status"] = "failed"
+        return result
+    result["artifact_read_status"] = "passed"
+    retry_hints = public_packet_opencode_retry_hints(payload)
+    retry_statuses = [
+        str(hint.get("status", "unknown")) for hint in retry_hints if isinstance(hint.get("status", "unknown"), str)
+    ]
+    if not retry_statuses:
+        retry_status = "unknown"
+    elif len(set(retry_statuses)) == 1:
+        retry_status = retry_statuses[0]
+    else:
+        retry_status = "mixed"
+    attempt_contract = payload.get("attempt_contract") if isinstance(payload.get("attempt_contract"), dict) else {}
+    units = payload.get("safety_transform_units") if isinstance(payload.get("safety_transform_units"), list) else []
+    result.update(
+        {
+            "attempt_status": payload.get("status", "unknown"),
+            "accepted_retry_hint_status": retry_status,
+            "accepted_retry_hint_statuses": retry_statuses,
+            "rollback_ref_count": public_packet_opencode_rollback_ref_count(payload, retry_hints),
+            "round_count": public_packet_opencode_round_count(payload, units),
+            "max_repair_rounds": int(attempt_contract.get("max_repair_rounds", 0) or 0),
+            "unit_count": len([unit for unit in units if isinstance(unit, dict)]),
+        }
+    )
+    return result
+
+
+def public_packet_opencode_retry_hints(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    hints: list[dict[str, Any]] = []
+    top_level = payload.get("accepted_retry_hint")
+    if isinstance(top_level, dict):
+        hints.append(top_level)
+    units = payload.get("safety_transform_units")
+    if isinstance(units, list):
+        for unit in units:
+            if not isinstance(unit, dict):
+                continue
+            retry_hint = unit.get("accepted_retry_hint")
+            if isinstance(retry_hint, dict):
+                hints.append(retry_hint)
+    return hints
+
+
+def public_packet_opencode_rollback_ref_count(payload: dict[str, Any], retry_hints: list[dict[str, Any]]) -> int:
+    if isinstance(payload.get("rollback_ref_count"), int):
+        return int(payload["rollback_ref_count"])
+    count = 0
+    for retry_hint in retry_hints:
+        rollback_evidence = retry_hint.get("rollback_evidence")
+        if isinstance(rollback_evidence, list):
+            count += len(rollback_evidence)
+    return count
+
+
+def public_packet_opencode_round_count(payload: dict[str, Any], units: list[object]) -> int:
+    if isinstance(payload.get("round_count"), int):
+        return int(payload["round_count"])
+    count = 0
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        rounds = unit.get("rounds")
+        if isinstance(rounds, list):
+            count += len(rounds)
+    return count
 
 
 def public_packet_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:

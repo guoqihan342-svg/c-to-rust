@@ -133,7 +133,11 @@ def build_judge_milestone_bundle(
         repo_root=repo_root,
     )
     must_not_claim = build_must_not_claim(opencode_runtime)
-    known_gaps = build_known_gaps(proof_classes=proof_classes, opencode_runtime=opencode_runtime)
+    known_gaps = build_known_gaps(
+        proof_classes=proof_classes,
+        opencode_runtime=opencode_runtime,
+        before_after_repair_exhibit=before_after_repair_exhibit,
+    )
     quantitative_evaluation = build_quantitative_evaluation(
         workflow_metrics=workflow_metrics,
         route_governance_metrics=route_governance_metrics,
@@ -1030,7 +1034,27 @@ def blocked_repairs_source_has_entries(source: dict[str, Any]) -> bool:
     return int_or_zero(blocked.get("blocked_repair_count")) > 0
 
 
-def build_known_gaps(*, proof_classes: dict[str, Any], opencode_runtime: dict[str, Any]) -> list[dict[str, Any]]:
+def before_after_exhibit_has_verified_unsafe_baseline(before_after_repair_exhibit: dict[str, Any]) -> bool:
+    for source in object_list(before_after_repair_exhibit.get("sources")):
+        for unit in object_list(source.get("before_after_units")):
+            baseline = unit.get("baseline_verification")
+            if not isinstance(baseline, dict):
+                continue
+            if (
+                baseline.get("status") == "passed"
+                and baseline.get("semantic_claim_source") == "verified_unsafe_baseline_gates"
+                and baseline.get("generated_draft_semantic_pass") is False
+            ):
+                return True
+    return False
+
+
+def build_known_gaps(
+    *,
+    proof_classes: dict[str, Any],
+    opencode_runtime: dict[str, Any],
+    before_after_repair_exhibit: dict[str, Any],
+) -> list[dict[str, Any]]:
     gaps: list[dict[str, Any]] = [
         {
             "gap_id": "translator_generated_coverage_not_claimed",
@@ -1040,11 +1064,14 @@ def build_known_gaps(*, proof_classes: dict[str, Any], opencode_runtime: dict[st
             "gap_id": "accepted_evidence_not_translator_generated",
             "boundary": "Accepted-evidence semantic pass counts remain report context and do not become generated-draft acceptance.",
         },
-        {
-            "gap_id": "c2rust_baseline_output_still_not_verified_here",
-            "boundary": "This bundle does not prove a new C2Rust compile-passed or verified unsafe baseline.",
-        },
     ]
+    if not before_after_exhibit_has_verified_unsafe_baseline(before_after_repair_exhibit):
+        gaps.append(
+            {
+                "gap_id": "c2rust_baseline_output_still_not_verified_here",
+                "boundary": "This bundle does not prove a new C2Rust compile-passed or verified unsafe baseline.",
+            }
+        )
     if not proof_classes.get("has_competition_exact"):
         gaps.append(
             {

@@ -16,6 +16,7 @@
     "competition_config_archive",
     "publication_manifest",
     "before_after_repair_exhibit",
+    "opencode_patch_boundary",
     "quantitative_evaluation",
     "progress_delta_ledger",
     "known_gaps",
@@ -103,6 +104,24 @@
         "generated_draft_semantic_pass": {"const": false},
         "translation_coverage_numerator": {"const": 0},
         "accepted_evidence_counts_as_translator_coverage": {"const": false},
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "opencode_patch_boundary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "chat_output_is_evidence",
+        "semantic_gate",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "opencode-patch-boundary"},
+        "chat_output_is_evidence": {"const": false},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
         "boundary": {"type": "string", "minLength": 1}
       }
     },
