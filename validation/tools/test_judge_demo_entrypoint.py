@@ -572,9 +572,9 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
 
 
 def judge_demo_sha256(path: Path) -> str:
-    import hashlib
+    from validation.tools import opencode_agent_harness
 
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return opencode_agent_harness.sha256_file(path)
 
 
 if __name__ == "__main__":

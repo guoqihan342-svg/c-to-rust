@@ -33,9 +33,16 @@ REQUIRED_REVIEW_CHECKLIST_ITEMS = [
     "known_refusals",
 ]
 LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
     ".json",
     ".jsonl",
     ".md",
+    ".rs",
     ".sh",
     ".toml",
     ".txt",

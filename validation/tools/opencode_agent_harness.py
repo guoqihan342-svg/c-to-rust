@@ -3604,6 +3604,13 @@ def write_before_after_exhibit_profile_report(
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not summary_path.exists():
+        reproduction = before_after_reproduction_commands(
+            profile_path=profile_path,
+            run_id=run_id,
+            out_root=out_root,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
         payload = {
             "schema_version": SCHEMA_VERSION,
             "report_kind": "before-after-exhibit",
@@ -3660,17 +3667,12 @@ def write_before_after_exhibit_profile_report(
             "safety_loop_provenance": before_after_safety_loop_provenance_rollup([]),
             "units": [],
             "stage_contracts": {},
-            "reproduction": {
-                "run_command": (
-                    "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
-                    f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
-                    f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
-                ),
-                "verify_command": (
-                    "python3 -B validation/tools/validate_competition_run_summary.py "
-                    f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
-                ),
-            },
+            "failure_path": before_after_failure_path(
+                reason="competition_summary_missing",
+                translation_before_after={"status": "not_provided", "unit_count": 0},
+                reproduction=reproduction,
+            ),
+            "reproduction": reproduction,
         }
         atomic_write_json(report_path, payload)
         binding = {
@@ -3722,6 +3724,13 @@ def write_before_after_exhibit_profile_report(
         raise SystemExit(
             "before-after exhibit requires verified repair trace when profile require_repair_trace is true"
         )
+    reproduction = before_after_reproduction_commands(
+        profile_path=profile_path,
+        run_id=run_id,
+        out_root=out_root,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "report_kind": "before-after-exhibit",
@@ -3753,18 +3762,14 @@ def write_before_after_exhibit_profile_report(
         "safety_loop_provenance": before_after_safety_loop_provenance_rollup(units),
         "units": units,
         "stage_contracts": stage_contracts,
-        "reproduction": {
-            "run_command": (
-                "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
-                f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
-                f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
-            ),
-            "verify_command": (
-                "python3 -B validation/tools/validate_competition_run_summary.py "
-                f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
-            ),
-        },
+        "reproduction": reproduction,
     }
+    if status != "passed":
+        payload["failure_path"] = before_after_failure_path(
+            reason="before_after_not_bound",
+            translation_before_after=translation_before_after,
+            reproduction=reproduction,
+        )
     atomic_write_json(report_path, payload)
     binding = {
         "path": repo_relative(report_path, repo_root=repo_root),
@@ -3776,6 +3781,65 @@ def write_before_after_exhibit_profile_report(
         "accepted_patch_unit_count": int(payload["translation_before_after"]["accepted_patch_unit_count"]),
     }
     return {"binding": binding, "payload": payload}
+
+
+def before_after_reproduction_commands(
+    *,
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, str]:
+    return {
+        "run_command": (
+            "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
+            f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
+            f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
+        ),
+        "verify_command": (
+            "python3 -B validation/tools/validate_competition_run_summary.py "
+            f"--summary {repo_relative(summary_path, repo_root=repo_root)}"
+        ),
+    }
+
+
+def before_after_failure_path(
+    *,
+    reason: str,
+    translation_before_after: dict[str, Any],
+    reproduction: dict[str, str],
+) -> dict[str, Any]:
+    return {
+        "status": "harness_exhibit_only",
+        "reason": reason,
+        "baseline_role": "handwritten_or_accepted_evidence_baseline",
+        "public_text": (
+            "The reviewed unsafe baseline remains a harness exhibit unless a passed verified unsafe "
+            "baseline is bound into before/after evidence. Do not describe this path as a C2Rust "
+            "semantic pass or translator-generated coverage."
+        ),
+        "translation_before_after_status": str(translation_before_after.get("status", "not_provided")),
+        "next_repair_hint": {
+            "status": "open",
+            "root_cause_key": reason,
+            "repair_round_cap": REPAIR_ROUND_CAP,
+            "action": "rerun the before/after batch, inspect workflow metrics, and bind a passed verified unsafe baseline before publishing a C2Rust baseline claim",
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+        "observable_diff": {
+            "status": "not_available",
+            "reason": reason,
+            "required_for_c2rust_baseline_claim": True,
+        },
+        "smallest_replay_command": {
+            "command": reproduction["run_command"],
+            "verify_command": reproduction["verify_command"],
+        },
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+    }
 
 
 def before_after_safety_loop_provenance_rollup(units: list[dict[str, Any]]) -> dict[str, Any]:

@@ -1418,6 +1418,61 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["reason"], "competition_summary_missing")
             self.assertEqual(report["core_translation_quality"]["final_gate_status"], "missing")
             self.assertEqual(report["harness_architecture"]["command_status"], "failed")
+            self.assertEqual(report["failure_path"]["baseline_role"], "handwritten_or_accepted_evidence_baseline")
+            self.assertEqual(report["failure_path"]["next_repair_hint"]["root_cause_key"], "competition_summary_missing")
+
+    def test_before_after_exhibit_labels_unbound_baseline_as_harness_exhibit(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after-unbound",
+                "proof_class": "local-simulation",
+                "target_id": "demo",
+                "emit_before_after_exhibit_report": True,
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "translation_before_after": "validation/evidence/demo/auto-translation/store-add-one/missing.json",
+                },
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            workflow_metrics = measured_unsafe_worker_metrics("run-unbound-before-after")
+            write_worker_summary(
+                summary_path,
+                "run-unbound-before-after",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=workflow_metrics,
+            )
+
+            artifact = harness.write_before_after_exhibit_profile_report(
+                profile=profile,
+                profile_path=profile_path,
+                run_id="run-unbound-before-after",
+                proof_class="local-simulation",
+                mode="deterministic",
+                plan={"status": "planned", "units": [{"slice_id": "store-add-one"}]},
+                run_result={"status": "completed", "workers": [{"worker_id": "worker-a", "exit_code": 0}]},
+                route_metrics_artifact=None,
+                out_root=out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertIsNotNone(artifact)
+            self.assertEqual(artifact["binding"]["status"], "not_provided")
+            report = artifact["payload"]
+            self.assertEqual(report["status"], "not_provided")
+            self.assertEqual(report["translation_before_after"]["status"], "not_provided")
+            failure_path = report["failure_path"]
+            self.assertEqual(failure_path["baseline_role"], "handwritten_or_accepted_evidence_baseline")
+            self.assertEqual(failure_path["status"], "harness_exhibit_only")
+            self.assertEqual(failure_path["next_repair_hint"]["root_cause_key"], "before_after_not_bound")
+            self.assertEqual(failure_path["observable_diff"]["status"], "not_available")
+            self.assertIn("run-batch-profile", failure_path["smallest_replay_command"]["command"])
+            self.assertIn("validate_competition_run_summary.py", failure_path["smallest_replay_command"]["verify_command"])
 
     def test_run_batch_profile_supports_explicit_worker_source_pins(self) -> None:
         with temp_repo_dir() as tmp:

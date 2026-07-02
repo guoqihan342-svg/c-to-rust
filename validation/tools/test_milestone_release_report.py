@@ -1,4 +1,3 @@
-import hashlib
 import json
 import tempfile
 import unittest
@@ -525,8 +524,8 @@ class MilestoneReleaseReportTests(unittest.TestCase):
         workflow = Path(".github/workflows/core-translator-validation-ci.yml")
         text = workflow.read_text(encoding="utf-8")
 
-        self.assertIn("python -m unittest validation.tools.test_milestone_release_report", text)
-        self.assertIn("python validation/tools/milestone_release_report.py", text)
+        self.assertIn("python3 -B -m unittest validation.tools.test_milestone_release_report", text)
+        self.assertIn("python3 -B validation/tools/milestone_release_report.py", text)
         self.assertIn("--review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json", text)
 
     def _coverage_report(self) -> dict:
@@ -921,7 +920,7 @@ class MilestoneReleaseReportTests(unittest.TestCase):
 
 
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return milestone_release_report.sha256_file(path)
 
 
 if __name__ == "__main__":
