@@ -689,6 +689,15 @@ def set_artifact_ref(ref: dict, path: Path, payload: dict | None = None) -> None
 
 
 def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, launch_policy: dict) -> None:
+    base_root = path.parent.parent if path.parent.name == "harness" else path.parent
+    logs_dir = base_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    model_stdout = "GLM-5.1\n"
+    model_stderr = ""
+    model_stdout_path = logs_dir / "opencode-models.stdout.log"
+    model_stderr_path = logs_dir / "opencode-models.stderr.log"
+    model_stdout_path.write_text(model_stdout, encoding="utf-8")
+    model_stderr_path.write_text(model_stderr, encoding="utf-8")
     preflight_payload = {
         "report_kind": "opencode-preflight-report",
         "status": "passed",
@@ -700,8 +709,15 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
             "status": "available",
             "opencode_command": "opencode",
             "required_model": "GLM-5.1",
+            "argv": ["opencode", "models"],
             "model_listed": True,
             "process_returncode": 0,
+            "stdout_sha256": validator.sha256_text(model_stdout),
+            "stderr_sha256": validator.sha256_text(model_stderr),
+            "logs": {
+                "stdout": repo_relative(model_stdout_path),
+                "stderr": repo_relative(model_stderr_path),
+            },
         },
         "contract_verification": {
             "status": "executed",
@@ -2360,6 +2376,60 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             ValueError,
             "opencode_agent_runtime.opencode_preflight_report.launch_policy must match profile launch policy",
         ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_model_probe_argv_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-model-argv-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_payload["opencode_model_availability"]["argv"] = ["opencode", "list-models"]
+        write_json(preflight_path, preflight_payload)
+        new_sha = validator.sha256_file(preflight_path)
+        payload["evidence_artifact_refs"]["opencode_preflight_report"]["sha256"] = new_sha
+        payload["opencode_agent_runtime"]["opencode_preflight_report"]["sha256"] = new_sha
+        payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]["sha256"] = new_sha
+
+        with self.assertRaisesRegex(ValueError, "opencode_model_availability.argv must be opencode models"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_model_probe_log_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-model-log-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        stdout_path = REPO_ROOT / preflight_payload["opencode_model_availability"]["logs"]["stdout"]
+        stdout_path.write_text("openai/gpt-5.1\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "opencode_model_availability.logs.stdout sha256 mismatch"):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),

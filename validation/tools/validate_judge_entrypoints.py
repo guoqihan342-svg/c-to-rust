@@ -1886,6 +1886,44 @@ def compare_opencode_launch_policy(
         raise ValueError(f"{label}.launch_policy must match {expected_label}")
 
 
+def opencode_command_argv_matches(command_arg: Any, expected_command: str) -> bool:
+    if not isinstance(command_arg, str) or not command_arg:
+        return False
+    if command_arg == expected_command:
+        return True
+    command_name = command_arg.replace("\\", "/").rsplit("/", 1)[-1]
+    command_stem = command_name.rsplit(".", 1)[0]
+    expected = expected_command.casefold()
+    return command_name.casefold() == expected or command_stem.casefold() == expected
+
+
+def opencode_models_argv_matches(value: Any, *, expected_command: str) -> bool:
+    if not isinstance(value, list) or len(value) != 2:
+        return False
+    return opencode_command_argv_matches(value[0], expected_command) and value[1] == "models"
+
+
+def validate_opencode_model_probe_log_hashes(
+    availability: dict[str, Any],
+    label: str,
+    *,
+    repo_root: Path,
+) -> None:
+    logs = require_object(availability.get("logs"), f"{label}.opencode_model_availability.logs")
+    for stream in ("stdout", "stderr"):
+        log_path_text = require_string(logs.get(stream), f"{label}.opencode_model_availability.logs.{stream}")
+        expected_sha256 = validate_sha256_hex(
+            availability.get(f"{stream}_sha256"),
+            f"{label}.opencode_model_availability.{stream}_sha256",
+        )
+        log_path = repo_path(log_path_text, repo_root=repo_root)
+        if not log_path.is_file():
+            raise ValueError(f"{label}.opencode_model_availability.logs.{stream} must exist")
+        actual_sha256 = sha256_text(log_path.read_text(encoding="utf-8"))
+        if actual_sha256 != expected_sha256:
+            raise ValueError(f"{label}.opencode_model_availability.logs.{stream} sha256 mismatch")
+
+
 def validate_opencode_preflight_binding(
     value: Any,
     label: str,
@@ -1957,6 +1995,12 @@ def validate_opencode_preflight_binding(
             )
         if int(availability.get("process_returncode", -1)) != 0:
             raise ValueError(f"{label}.opencode_model_availability.process_returncode must be 0")
+        if not opencode_models_argv_matches(
+            availability.get("argv"),
+            expected_command=launch_policy["opencode_command"],
+        ):
+            raise ValueError(f"{label}.opencode_model_availability.argv must be opencode models")
+        validate_opencode_model_probe_log_hashes(availability, label, repo_root=repo_root)
     return result
 
 

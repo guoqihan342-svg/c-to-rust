@@ -5885,6 +5885,7 @@ def validate_opencode_preflight_report(
         "status": str(model_availability.get("status", "")),
         "opencode_command": str(model_availability.get("opencode_command", "")),
         "required_model": str(model_availability.get("required_model", "")),
+        "argv": model_availability.get("argv") if isinstance(model_availability.get("argv"), list) else [],
         "process_returncode": model_probe_returncode,
         "model_listed": model_availability.get("model_listed") is True,
     }
@@ -5899,6 +5900,19 @@ def validate_opencode_preflight_report(
             "opencode preflight model availability is not passed: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    if not opencode_models_argv_matches(
+        availability_binding["argv"],
+        expected_command=expected_launch_policy["opencode_command"],
+    ):
+        raise SystemExit(
+            "opencode preflight model availability argv must be opencode models: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    validate_opencode_model_probe_log_hashes(
+        model_availability,
+        repo_root=repo_root,
+        report_path=report_path,
+    )
     opencode_runtime_env = validate_opencode_runtime_env_contract(
         report.get("opencode_runtime_env"),
         context="opencode preflight report",
@@ -6991,6 +7005,57 @@ def build_opencode_models_argv(*, opencode_command: str) -> list[str]:
     if opencode_command != COMPETITION_OPENCODE_COMMAND:
         raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
     return [resolve_subprocess_command(opencode_command), "models"]
+
+
+def opencode_command_argv_matches(command_arg: Any, expected_command: str) -> bool:
+    if not isinstance(command_arg, str) or not command_arg:
+        return False
+    if command_arg == expected_command:
+        return True
+    command_name = command_arg.replace("\\", "/").rsplit("/", 1)[-1]
+    command_stem = command_name.rsplit(".", 1)[0]
+    expected = expected_command.casefold()
+    return command_name.casefold() == expected or command_stem.casefold() == expected
+
+
+def opencode_models_argv_matches(value: Any, *, expected_command: str) -> bool:
+    if not isinstance(value, list) or len(value) != 2:
+        return False
+    return opencode_command_argv_matches(value[0], expected_command) and value[1] == "models"
+
+
+def validate_opencode_model_probe_log_hashes(
+    model_availability: dict[str, Any],
+    *,
+    repo_root: Path,
+    report_path: Path,
+) -> None:
+    logs = model_availability.get("logs")
+    if not isinstance(logs, dict):
+        raise SystemExit(
+            "opencode preflight model availability logs are missing: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    for stream in ("stdout", "stderr"):
+        log_path_text = logs.get(stream)
+        if not isinstance(log_path_text, str) or not log_path_text:
+            raise SystemExit(
+                f"opencode preflight model availability {stream} log is missing: "
+                f"{repo_relative(report_path, repo_root=repo_root)}"
+            )
+        log_path = repo_path(Path(log_path_text), repo_root=repo_root)
+        if not log_path.is_file():
+            raise SystemExit(
+                f"opencode preflight model availability {stream} log does not exist: "
+                f"{repo_relative(report_path, repo_root=repo_root)}"
+            )
+        expected_sha256 = model_availability.get(f"{stream}_sha256")
+        actual_sha256 = sha256_text(log_path.read_text(encoding="utf-8"))
+        if expected_sha256 != actual_sha256:
+            raise SystemExit(
+                f"opencode preflight model availability {stream} hash mismatch: "
+                f"{repo_relative(report_path, repo_root=repo_root)}"
+            )
 
 
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
