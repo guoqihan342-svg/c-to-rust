@@ -224,8 +224,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             text = readme_path.read_text(encoding="utf-8")
             with self.subTest(readme=readme_path.relative_to(REPO_ROOT).as_posix()):
                 self.assertIn("demo-store-add-one-before-after.json", text)
-                self.assertIn("python -B -m validation.tools.opencode_agent_harness run-batch-profile", text)
-                self.assertIn("python -B validation/tools/validate_competition_run_summary.py", text)
+                self.assertIn("python3 -B -m validation.tools.opencode_agent_harness run-batch-profile", text)
+                self.assertIn("python3 -B validation/tools/validate_competition_run_summary.py", text)
                 self.assertIn("target/competition-out-demo-before-after-exhibit/summary/before-after-exhibit.json", text)
                 self.assertIn("generated_draft_semantic_pass=false", text)
                 self.assertIn("auto_retry=true", text)
@@ -402,7 +402,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         contract = config["test_contract"]
         self.assertEqual(set(contract["required_entrypoint_ids"]), set(entrypoints))
         self.assertTrue(contract["paths_must_be_repo_relative_posix"])
-        self.assertTrue(contract["commands_must_use_python_b"])
+        self.assertTrue(contract["commands_must_use_portable_python3_b"])
         self.assertEqual(
             set(contract["required_harness_features"]),
             {
@@ -550,7 +550,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
 
         for entry in config["entrypoints"]:
             self.assertEqual(entry["proof_class"], "local-simulation")
-            self.assertIn("python -B", entry["command"])
+            self.assertTrue(entry["command"].startswith("python3 -B "), entry["id"])
             for ref_name in ["profile", "tracked_manifest"]:
                 if ref_name not in entry:
                     continue

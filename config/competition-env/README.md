@@ -45,7 +45,7 @@
 - `toolchain-check.sh`：比赛机环境自检脚本。
 - `smoke.sh`：Linux/WSL/CI 轻量 smoke wrapper，调用 `run_competition_smoke.py` 输出 proof-class 分级摘要；需要显式 `run-id` 或 timeout 时直接使用 Python 入口。
 - `planned-batches/`：可复用 planned batch profile 输入；`run-batch-profile` 会按 profile 调用 `init-run`、`plan-source-file` 和 `run-plan --execute-merge`，在 `auto_retry=true` 时启用 `run-plan --auto-retry`，并用 `max_workers` fan-out 独立 worker。
-- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 competition environment smoke、FlashDB before/after demo、显式多 worker evaluate profile 和 OpenCode 多 worker evaluate profile。默认不传 `--entrypoint-id` 时会按配置顺序运行全部入口，并写出带 `summary` 的 `judge-entrypoints-run-report.json`；聚焦 before/after 时再加 `--entrypoint-id before_after_judge_demo`。只校验索引时可用 `python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、配置归档 bundle、OpenCode launch policy、claim boundary 和 test contract；本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 smoke summary、vendored-clang verification artifact、context-pack、agent-index、resume-manifest、judge-evidence-index、route-governance metrics schema、OpenCode preflight/worker launch policy 与 worker 索引一致性。`resume-manifest.json` 是两个 `evaluate --profile` 入口的 current-state 续跑索引，绑定 SQLite ledger、context pack、agent index、worker summaries、repair hints 和 resume entrypoints；它不是 executor，也不是 semantic gate。judge-evidence-index 深校验要求 `harness_architecture.context_pack/agent_index` 显式绑定 expected artifacts 和 `evidence_artifact_refs`，防止架构图展示的上下文/agent 索引与评委索引脱节；artifact JSON portability 扫描还会拒绝 Windows、WSL 和 Linux 本机绝对路径，只有诊断 host metadata 与 merge execution trace 的白名单位置可保留。smoke summary 深校验会把 `profile_id/profile_sha256` 绑定到 `environment_profile`，把 `proof_class/run_id` 绑定到 entrypoint，并拒绝 CI/WSL/Windows 本地证据或带 `proof-class-limiting` deviation 的 summary 标成 `competition-exact`；vendored-clang verification 深校验会把 `status/reason/final_gate/clang_lane_verified` 与 smoke summary 绑定，防止 `missing_clang_path` 被误读成 clang lane verified。全量 runner 成功时还会写出 `target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json` 和同目录 `milestone-release-notes.md`；bundle 把 run report、readiness report、post-run expected artifacts、workflow metrics、route-governance metrics、OpenCode runtime、`core_translation_quality`、`harness_architecture_summary`、`claim_scope`、`proof_classes`、`publishability`、`quantitative_evaluation`、`publication_manifest`、`known_gaps`、`must_not_claim` 和 `reproduction_commands` 绑定成外部评估索引，Markdown release notes 只是该索引的人类可读 public packet。`quantitative_evaluation` 提供 workflow/route/blocked repair/unsafe 和 baseline comparison 的机器可读 scorecard，`publication_manifest` 还会集中绑定 repo commit、FlashDB source pin、judge config、competition config archive、run-report/bundle、supported subset、known gaps/non-goals 和 claim boundary。它们不是 semantic gate，也不增加 translation coverage numerator；release notes 和 resume manifest 是运行输出，不加入 `bundle-manifest.json`。
+- `judge-entrypoints/`：评委一键入口目录；`flashdb-harness.json` 绑定 competition environment smoke、FlashDB before/after demo、显式多 worker evaluate profile 和 OpenCode 多 worker evaluate profile。默认不传 `--entrypoint-id` 时会按配置顺序运行全部入口，并写出带 `summary` 的 `judge-entrypoints-run-report.json`；聚焦 before/after 时再加 `--entrypoint-id before_after_judge_demo`。只校验索引时可用 `python3 -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json` 校验入口索引、hash、proof class、source pin/profile 一致性、配置归档 bundle、OpenCode launch policy、claim boundary 和 test contract；公开 entrypoint 与 tracked reproduction command 固定使用 portable `python3 -B`，本地 runner 执行层会解析到可运行的非绝对 Python launcher。 本地 target artifacts 已生成时可加 `--require-local-artifacts` 深校验 smoke summary、vendored-clang verification artifact、context-pack、agent-index、resume-manifest、judge-evidence-index、route-governance metrics schema、OpenCode preflight/worker launch policy 与 worker 索引一致性。`resume-manifest.json` 是两个 `evaluate --profile` 入口的 current-state 续跑索引，绑定 SQLite ledger、context pack、agent index、worker summaries、repair hints 和 resume entrypoints；它不是 executor，也不是 semantic gate。judge-evidence-index 深校验要求 `harness_architecture.context_pack/agent_index` 显式绑定 expected artifacts 和 `evidence_artifact_refs`，防止架构图展示的上下文/agent 索引与评委索引脱节；artifact JSON portability 扫描还会拒绝 Windows、WSL 和 Linux 本机绝对路径，只有诊断 host metadata 与 merge execution trace 的白名单位置可保留。smoke summary 深校验会把 `profile_id/profile_sha256` 绑定到 `environment_profile`，把 `proof_class/run_id` 绑定到 entrypoint，并拒绝 CI/WSL/Windows 本地证据或带 `proof-class-limiting` deviation 的 summary 标成 `competition-exact`；vendored-clang verification 深校验会把 `status/reason/final_gate/clang_lane_verified` 与 smoke summary 绑定，防止 `missing_clang_path` 被误读成 clang lane verified。全量 runner 成功时还会写出 `target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json` 和同目录 `milestone-release-notes.md`；bundle 把 run report、readiness report、post-run expected artifacts、workflow metrics、route-governance metrics、OpenCode runtime、`core_translation_quality`、`harness_architecture_summary`、`claim_scope`、`proof_classes`、`publishability`、`quantitative_evaluation`、`publication_manifest`、`known_gaps`、`must_not_claim` 和 `reproduction_commands` 绑定成外部评估索引，Markdown release notes 只是该索引的人类可读 public packet。`quantitative_evaluation` 提供 workflow/route/blocked repair/unsafe 和 baseline comparison 的机器可读 scorecard，`publication_manifest` 还会集中绑定 repo commit、FlashDB source pin、judge config、competition config archive、run-report/bundle、supported subset、known gaps/non-goals 和 claim boundary。它们不是 semantic gate，也不增加 translation coverage numerator；release notes 和 resume manifest 是运行输出，不加入 `bundle-manifest.json`。
 - focused `--entrypoint-id` 运行是 smoke/triage 工具，不是全量发布包。runner 在执行成功后会在 run report 同目录生成 `selected-entrypoints-validation-config.json`，post-run `--require-local-artifacts` 深校验只覆盖本次选中的 entrypoint，并同步收窄 `test_contract.required_entrypoint_ids`；不传 `--entrypoint-id` 时仍使用完整 `flashdb-harness.json` 校验全部入口。
 - 非 smoke summary 深校验：启用 `--require-local-artifacts` 时，`validate_judge_entrypoints` 会在 entrypoint identity 检查后，把每个非 smoke `competition_summary` 交给 `validate_competition_run_summary.py`，防止 hash 正确但 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则或 slice counts 漂移的 summary 通过。
 - C2Rust baseline 计分边界：route-governance metrics 会从 `*-c2rust-baseline-manifest.json` 汇总 generated/skipped/output/compile 状态，milestone bundle 会按 evidence root 去重后放入 `quantitative_evaluation.baseline_comparison.raw_c2rust.c2rust_baseline_rollup`，release notes 会展示 manifest/source/compile-pass 数；这些字段不是 semantic gate，也不把 C2Rust baseline 编译成功升级为 semantic pass。
@@ -136,16 +136,16 @@ smoke 会执行环境检查、vendored clang 结构化 verifier、核心已提�
 评委一键 harness runner：
 
 ```bash
-python -B -m validation.tools.run_judge_entrypoints \
+python3 -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 
-python -B -m validation.tools.run_judge_entrypoints \
+python3 -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --entrypoint-id before_after_judge_demo \
   --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 
-python -B -m validation.tools.run_judge_entrypoints \
+python3 -B -m validation.tools.run_judge_entrypoints \
   --config config/competition-env/judge-entrypoints/flashdb-harness.json \
   --dry-run
 ```
@@ -168,12 +168,12 @@ python -m validation.tools.opencode_agent_harness run-batch-profile \
 评委 before/after demo profile：
 
 ```bash
-python -B -m validation.tools.opencode_agent_harness run-batch-profile \
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile \
   --profile config/competition-env/planned-batches/demo-store-add-one-before-after.json \
   --run-id competition-demo-before-after-exhibit \
   --out-root target/competition-out-demo-before-after-exhibit
 
-python -B validation/tools/validate_competition_run_summary.py \
+python3 -B validation/tools/validate_competition_run_summary.py \
   --summary target/competition-out-demo-before-after-exhibit/summary/competition-run-summary.json
 ```
 

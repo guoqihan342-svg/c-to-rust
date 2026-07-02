@@ -15,7 +15,7 @@
 全量评委 public packet 入口：
 
 ```bash
-python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
+python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
 ```
 
 该命令成功后会在同目录生成 `judge-milestone-bundle.json`、`milestone-release-notes.md` 和 `public-release-packet.json`。bundle 是机器可读外部评估索引，Markdown notes 是从 bundle 渲染的人类可读 release notes，JSON public release packet hash 绑定 run report、readiness report、bundle、notes 和 competition config archive，并由 `validate_public_release_packet` 校验 schema、hash、claim boundary、本机路径泄漏、packet-to-bundle 内容一致性，以及 notes 是否等于 bundle 渲染结果；这些产物都不是 semantic gate，也不增加 `translation_coverage_numerator`。
@@ -25,7 +25,7 @@ runner 对每个 entrypoint 命令默认施加 36000 秒有限超时，可用 `-
 focused smoke/triage 入口示例：
 
 ```bash
-python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json
+python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id competition_environment_smoke --out target/h7-judge-smoke/summary/judge-entrypoints-run-report.json
 ```
 
 聚焦运行成功后，runner 会在 report 同目录写出 `selected-entrypoints-validation-config.json`，post-run local-artifact 深校验只检查本次选中的 entrypoint，并同步收窄 `test_contract.required_entrypoint_ids`。这用于 smoke/triage，不是全量 public packet；外部发布仍应使用不带 `--entrypoint-id` 的全量入口。
@@ -37,14 +37,14 @@ python -B -m validation.tools.run_judge_entrypoints --config config/competition-
 首选真实 FlashDB 运行路径：
 
 ```bash
-python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
+python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit --review-checklist config/competition-env/review-checklists/flashdb-harness-internal-review.json
 ```
 
 审计展开版：
 
 ```bash
-python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
-python -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
+python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json --run-id competition-flashdb-before-after-exhibit --out-root target/competition-out-flashdb-before-after-exhibit
+python3 -B validation/tools/milestone_release_report.py --competition-summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json --batch-profile-report target/competition-out-flashdb-before-after-exhibit/harness/batch-profile-report.json --review-checklist target/competition-out-flashdb-before-after-exhibit/summary/milestone-review-checklist.json --output target/competition-out-flashdb-before-after-exhibit/summary/milestone-release-report.json
 ```
 
 关键 artifacts：
@@ -61,7 +61,7 @@ python -B validation/tools/milestone_release_report.py --competition-summary tar
 当前 harness-first 开发入口：
 
 ```bash
-python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evaluate --target-id flashdb --source-repo-root <repo-relative-source-root> --source-file <source.c> --source-commit <commit> --out-root target/competition-out-evaluate --proof-class local-simulation --max-workers 4
+python3 -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evaluate --target-id flashdb --source-repo-root <repo-relative-source-root> --source-file <source.c> --source-commit <commit> --out-root target/competition-out-evaluate --proof-class local-simulation --max-workers 4
 ```
 
 该入口会产出 `harness/evaluate-report.json`、`harness/context-pack.json`、`harness/agent-index.json`、`harness/resume-manifest.json` 和 SQLite `context_packs` 索引，用于评委审计和下一轮 OpenCode 多 agent 续跑；其中 `context_management_contract` / `agent_coordination_contract` 会把 plan -> worker fan-out -> verify/merge -> repair loop -> report 的角色边界、resume protocol 和 `chat_output_is_evidence=false` 明确落成机器可读字段。`resume-manifest.json` 是 current-state 续跑索引，绑定 context/agent sha、SQLite ledger、worker summaries 和 repair hints，但不是 semantic gate，也不增加 `translation_coverage_numerator`。
@@ -69,7 +69,7 @@ python -B -m validation.tools.opencode_agent_harness evaluate --run-id run-evalu
 Profile 形式的一键入口：
 
 ```bash
-python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701
+python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701
 ```
 
 该路径会复用完整 batch-profile pipeline，并额外产出 `harness/evaluate-report.json` wrapper 和 `harness/judge-evidence-index.json`；二者只索引已验证的 batch artifacts、summary validator 和 context/index，不是新的语义接受门禁。
@@ -77,7 +77,7 @@ python -B -m validation.tools.opencode_agent_harness evaluate --profile config/c
 OpenCode 显式多 worker 评委入口：
 
 ```bash
-python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701
+python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json --run-id harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701
 ```
 
 该路径额外绑定 OpenCode preflight、`opencode_agent_runtime`、worker handoff/session/log、`worker_plan`、`context-pack.json`、`agent-index.json` 和 `judge-evidence-index.json`；`validate_judge_entrypoints --require-local-artifacts` 会校验 runtime contract 与 sha256。边界：OpenCode chat/session 不是语义证据，也不是新的 semantic gate。

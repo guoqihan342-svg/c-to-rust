@@ -14,6 +14,14 @@ def repo_relative(path: Path) -> str:
 
 
 class RunJudgeEntrypointsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.portable_python_patch = patch(
+            "validation.tools.run_judge_entrypoints.portable_python_command_argv",
+            return_value=["python"],
+        )
+        self.portable_python_patch.start()
+        self.addCleanup(self.portable_python_patch.stop)
+
     def test_runner_executes_selected_entrypoint_and_writes_readiness(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 
@@ -29,12 +37,12 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                         {
                             "id": "before_after_judge_demo",
                             "purpose": "core-translation-before-after-exhibit",
-                            "command": "python -B -m validation.tools.judge_demo --run-id selected",
+                            "command": "python3 -B -m validation.tools.judge_demo --run-id selected",
                         },
                         {
                             "id": "multi_worker_evaluate_profile",
                             "purpose": "harness-architecture-multi-worker-evaluate",
-                            "command": "python -B -m validation.tools.opencode_agent_harness evaluate",
+                            "command": "python3 -B -m validation.tools.opencode_agent_harness evaluate",
                         },
                     ],
                 },
@@ -132,6 +140,40 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(persisted["summary"], report["summary"])
         self.assertEqual(persisted["milestone_bundle"], report["milestone_bundle"])
 
+    def test_runner_resolves_portable_python3_entrypoint_for_local_execution(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-portable-python-", dir=REPO_ROOT / "target"))
+        log_dir = temp_dir / "logs"
+        calls: list[list[str]] = []
+        entry = {
+            "id": "before_after_judge_demo",
+            "purpose": "core-translation-before-after-exhibit",
+            "command": "python3 -B -m validation.tools.judge_demo --run-id portable",
+        }
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        with patch.object(runner, "portable_python_command_argv", return_value=["python"], create=True):
+            result = runner.run_entrypoint_command(
+                entry,
+                dry_run=False,
+                log_dir=log_dir,
+                repo_root=REPO_ROOT,
+                timeout_seconds=30,
+                command_runner=fake_runner,
+            )
+
+        self.assertEqual(calls, [["python", "-B", "-m", "validation.tools.judge_demo", "--run-id", "portable"]])
+        self.assertEqual(result["argv"], ["python3", "-B", "-m", "validation.tools.judge_demo", "--run-id", "portable"])
+        self.assertEqual(
+            result["effective_argv"],
+            ["python", "-B", "-m", "validation.tools.judge_demo", "--run-id", "portable"],
+        )
+        self.assertEqual(result["status"], "passed")
+
     def test_all_entrypoints_report_has_judge_facing_summary(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 
@@ -148,7 +190,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                             "purpose": "competition-environment-smoke",
                             "proof_class": "local-simulation",
                             "run_id": "smoke-run",
-                            "command": "python -B validation/tools/run_competition_smoke.py",
+                            "command": "python3 -B validation/tools/run_competition_smoke.py",
                             "judge_focus": ["environment smoke", "semantic_gate=false"],
                             "expected_artifacts": {"competition_smoke_summary": "target/out/smoke.json"},
                         },
@@ -158,7 +200,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                             "purpose": "harness-architecture-opencode-multi-worker-evaluate",
                             "proof_class": "local-simulation",
                             "run_id": "opencode-run",
-                            "command": "python -B -m validation.tools.opencode_agent_harness evaluate",
+                            "command": "python3 -B -m validation.tools.opencode_agent_harness evaluate",
                             "judge_focus": ["OpenCode multi-agent", "repair cap 5"],
                             "expected_artifacts": {
                                 "judge_evidence_index": "target/out/index.json",
@@ -312,7 +354,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "competition_environment_smoke",
-                            "command": "python -B validation/tools/run_competition_smoke.py",
+                            "command": "python3 -B validation/tools/run_competition_smoke.py",
                         }
                     ],
                 },
@@ -373,7 +415,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "competition_environment_smoke",
-                            "command": "python -B validation/tools/run_competition_smoke.py",
+                            "command": "python3 -B validation/tools/run_competition_smoke.py",
                         }
                     ],
                 },
@@ -426,7 +468,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },
@@ -498,7 +540,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         with patch.object(
             runner.validator,
             "validate_config",
-            return_value={"status": "failed", "errors": ["entrypoint command must use python -B"]},
+            return_value={"status": "failed", "errors": ["entrypoint command must use portable python3 -B"]},
         ):
             report = runner.run_judge_entrypoints(
                 config_path=config_path,
@@ -526,7 +568,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },
@@ -573,7 +615,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },
@@ -635,7 +677,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },
@@ -721,7 +763,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },
@@ -762,7 +804,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },
@@ -796,7 +838,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(SystemExit, "unknown judge entrypoint id"):
             runner.select_entrypoints(
-                {"entrypoints": [{"id": "known", "command": "python -B -m known"}]},
+                {"entrypoints": [{"id": "known", "command": "python3 -B -m known"}]},
                 ["missing"],
             )
 
@@ -812,7 +854,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
                     "entrypoints": [
                         {
                             "id": "known",
-                            "command": "python -B -m validation.tools.judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
                         }
                     ],
                 },

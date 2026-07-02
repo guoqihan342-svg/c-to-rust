@@ -72,6 +72,7 @@ VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES = (
     "unsafe_ledger",
     "final_verification",
 )
+PORTABLE_PYTHON_COMMAND = "python3"
 
 
 def main() -> int:
@@ -209,6 +210,18 @@ def assert_no_local_absolute_path(text: str) -> None:
         raise ValueError("command/text must be a string")
     if LOCAL_ABSOLUTE_PATH.search(text):
         raise ValueError(f"text contains local absolute path: {text}")
+
+
+def validate_entrypoint_command_contract(command: Any, entrypoint_id: Any) -> list[str]:
+    if not isinstance(command, str) or not command:
+        raise ValueError(f"entrypoint command must use portable python3 -B: {entrypoint_id}")
+    try:
+        argv = shlex.split(command, posix=True)
+    except ValueError as error:
+        raise ValueError(f"entrypoint command must be POSIX-shlex parseable: {entrypoint_id}: {error}") from error
+    if len(argv) < 3 or argv[0] != PORTABLE_PYTHON_COMMAND or argv[1] != "-B":
+        raise ValueError(f"entrypoint command must use portable python3 -B: {entrypoint_id}")
+    return argv
 
 
 def json_path(parts: tuple[str, ...]) -> str:
@@ -1365,6 +1378,8 @@ def validate_test_contract(
         raise ValueError("test_contract.generated_draft_semantic_pass must match claim_boundary")
     if contract.get("translation_coverage_numerator") != claim_boundary.get("translation_coverage_numerator"):
         raise ValueError("test_contract.translation_coverage_numerator must match claim_boundary")
+    if contract.get("commands_must_use_portable_python3_b") is not True:
+        raise ValueError("test_contract.commands_must_use_portable_python3_b must be true")
 
     repair_round_cap = contract.get("repair_round_cap", 5)
     if repair_round_cap != 5:
@@ -1405,6 +1420,7 @@ def validate_test_contract(
         "required_context_pipeline_stages": list(required_context_stages),
         "required_agent_roles": list(required_roles),
         "repair_round_cap": repair_round_cap,
+        "commands_must_use_portable_python3_b": True,
         "status": "passed",
     }
 
@@ -3468,8 +3484,7 @@ def validate_config(
                 raise ValueError("entrypoint must be an object")
             valid_entrypoints.append(entry)
             command = entry.get("command")
-            if not isinstance(command, str) or "python -B" not in command:
-                raise ValueError(f"entrypoint command must use python -B: {entry.get('id')}")
+            validate_entrypoint_command_contract(command, entry.get("id"))
             assert_no_local_absolute_path(command)
             for command_text in entry.get("verification_commands", []):
                 assert_no_local_absolute_path(str(command_text))

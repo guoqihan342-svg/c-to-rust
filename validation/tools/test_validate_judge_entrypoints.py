@@ -1210,6 +1210,20 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertIn("artifact ref sha256 mismatch for config/competition-env/environment.json", joined_errors)
         self.assertNotIn("test_contract.semantic_claim_source must match claim_boundary", joined_errors)
 
+    def test_test_contract_requires_portable_python3_b_command_contract(self) -> None:
+        config = load_default_config()
+        config["test_contract"].pop("commands_must_use_portable_python3_b", None)
+        config["test_contract"]["commands_must_use_python_b"] = True
+        temp_config = write_temp_config(config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("test_contract.commands_must_use_portable_python3_b must be true" in error for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_opencode_profile_requires_explicit_launch_policy_fields(self) -> None:
         config = load_default_config()
         entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
@@ -4100,6 +4114,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("entrypoint proof_class must be allowed" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_default_entrypoint_commands_use_portable_python3_b_contract(self) -> None:
+        config = load_default_config()
+
+        for entry in config["entrypoints"]:
+            argv = shlex.split(entry["command"])
+            self.assertGreaterEqual(len(argv), 3, entry["id"])
+            self.assertEqual(argv[:2], ["python3", "-B"], entry["id"])
+
+    def test_entrypoint_command_rejects_bare_python_launcher(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "before_after_judge_demo")
+        command = entry["command"]
+        if command.startswith("python3 -B "):
+            command = command.replace("python3 -B ", "python -B ", 1)
+        entry["command"] = command
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("entrypoint command must use portable python3 -B" in error for error in result["errors"]),
             result["errors"],
         )
 

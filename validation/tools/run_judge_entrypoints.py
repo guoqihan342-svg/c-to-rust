@@ -28,6 +28,9 @@ DEFAULT_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/
 COMPETITION_CONFIG_ROOT = Path("config/competition-env")
 ENTRYPOINT_TIMEOUT_EXIT_CODE = 124
 DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS = 600 * 60
+PORTABLE_PYTHON_COMMAND = "python3"
+PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
+_RESOLVED_PYTHON_COMMAND: list[str] | None = None
 
 
 def main() -> int:
@@ -528,6 +531,7 @@ def run_entrypoint_command(
     if not command:
         raise SystemExit(f"judge entrypoint missing command: {entry_id}")
     argv = shlex.split(command)
+    effective_argv = argv if dry_run else resolve_local_entrypoint_argv(argv)
     stdout_path = log_dir / f"{safe_file_component(entry_id)}.stdout.log"
     stderr_path = log_dir / f"{safe_file_component(entry_id)}.stderr.log"
     result = {
@@ -540,6 +544,7 @@ def run_entrypoint_command(
         "key_artifacts": dict(entry.get("expected_artifacts", {})) if isinstance(entry.get("expected_artifacts"), dict) else {},
         "command": command,
         "argv": argv,
+        "effective_argv": effective_argv,
         "timeout_seconds": timeout_seconds,
         "timeout_policy": {
             "scope": "entrypoint_command",
@@ -557,7 +562,7 @@ def run_entrypoint_command(
         return result
 
     try:
-        completed = command_runner(argv, cwd=repo_root, text=True, capture_output=True, timeout=timeout_seconds)
+        completed = command_runner(effective_argv, cwd=repo_root, text=True, capture_output=True, timeout=timeout_seconds)
     except Exception as error:
         stdout_text = stream_text(getattr(error, "stdout", ""))
         stderr_text = stream_text(getattr(error, "stderr", ""))
@@ -584,6 +589,45 @@ def run_entrypoint_command(
         "stderr": artifact_ref(stderr_path, repo_root=repo_root),
     }
     return result
+
+
+def resolve_local_entrypoint_argv(argv: list[str]) -> list[str]:
+    if len(argv) >= 2 and argv[0] == PORTABLE_PYTHON_COMMAND and argv[1] == "-B":
+        return [*portable_python_command_argv(), *argv[1:]]
+    return list(argv)
+
+
+def portable_python_command_argv() -> list[str]:
+    global _RESOLVED_PYTHON_COMMAND
+    override = os.environ.get(PYTHON_COMMAND_OVERRIDE_ENV)
+    if override:
+        return shlex.split(override, posix=os.name != "nt")
+    if _RESOLVED_PYTHON_COMMAND is not None:
+        return list(_RESOLVED_PYTHON_COMMAND)
+    candidates: list[list[str]] = [[PORTABLE_PYTHON_COMMAND], ["python"]]
+    if os.name == "nt":
+        candidates.append(["py", "-3"])
+    for candidate in candidates:
+        if python_command_is_runnable(candidate):
+            _RESOLVED_PYTHON_COMMAND = candidate
+            return list(candidate)
+    _RESOLVED_PYTHON_COMMAND = [PORTABLE_PYTHON_COMMAND]
+    return list(_RESOLVED_PYTHON_COMMAND)
+
+
+def python_command_is_runnable(candidate: list[str]) -> bool:
+    try:
+        completed = subprocess.run(
+            [*candidate, "-B", "-c", "import sys"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return int(completed.returncode) == 0
 
 
 def resolve_input_path(path: Path, *, repo_root: Path) -> Path:

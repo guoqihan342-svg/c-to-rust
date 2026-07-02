@@ -65,10 +65,10 @@
     ]
   },
   "reproduction": {
-    "run_batch_profile_command": "python -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-20260701 --out-root target/competition-out-flashdb-explicit-workers-20260701",
-    "summary_validation_command": "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-20260701/summary/competition-run-summary.json",
-    "evaluate_profile_command": "python -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
-    "evaluate_profile_summary_validation_command": "python -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
+    "run_batch_profile_command": "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-20260701 --out-root target/competition-out-flashdb-explicit-workers-20260701",
+    "summary_validation_command": "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-20260701/summary/competition-run-summary.json",
+    "evaluate_profile_command": "python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json --run-id harness-flashdb-explicit-workers-evaluate-profile-20260701 --out-root target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701",
+    "evaluate_profile_summary_validation_command": "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
   },
   "summary": {
     "final_gate": "passed",

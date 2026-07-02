@@ -81,7 +81,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "24f69845df5b181164f6281d2c241d7e7a802c9b03f665bacdb0842e721d1a61"
+      "sha256": "304d441d2a1bda4a5ff025cd67e536bedcd9d7de7ff2c021d03d0bc4b8df8a23"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
