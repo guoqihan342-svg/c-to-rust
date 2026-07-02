@@ -514,6 +514,11 @@ def validate_before_after_exhibit_inputs(repo_root: Path, *, exhibit: dict[str, 
             field=f"before-after exhibit units[{index}]",
             exhibit_path=exhibit_path,
         )
+        validate_before_after_unit_provenance(
+            unit,
+            field=f"before-after exhibit units[{index}]",
+            exhibit_path=exhibit_path,
+        )
     stage_contracts = exhibit.get("stage_contracts")
     repairer = stage_contracts.get("repairer") if isinstance(stage_contracts, dict) else None
     if isinstance(repairer, dict) and repairer.get("status") == "verified":
@@ -575,6 +580,95 @@ def validate_before_after_unit_matches_workflow(
         unit.get("unsafe_reduction") == before_after.get("unsafe_reduction"),
         f"{field}.unsafe_reduction must match workflow metrics translation_before_after: {exhibit_path}",
     )
+
+
+def validate_before_after_unit_provenance(
+    unit: dict[str, Any],
+    *,
+    field: str,
+    exhibit_path: Path,
+) -> None:
+    accepted_patch = unit.get("accepted_patch")
+    accepted_patch_bound = isinstance(accepted_patch, dict) and isinstance(accepted_patch.get("path"), str)
+    repair_history_bound = isinstance(unit.get("repair_history"), dict)
+    patch_origin = unit.get("patch_origin")
+    if patch_origin is not None:
+        require(isinstance(patch_origin, dict), f"{field}.patch_origin must be an object: {exhibit_path}")
+        require(
+            patch_origin.get("source") in {"accepted_safe_evidence", "unbound"},
+            f"{field}.patch_origin.source must stay inside accepted evidence boundary: {exhibit_path}",
+        )
+        require(
+            patch_origin.get("accepted_patch_bound") is accepted_patch_bound,
+            f"{field}.patch_origin.accepted_patch_bound must match accepted_patch binding: {exhibit_path}",
+        )
+        require(
+            patch_origin.get("repair_history_bound") is repair_history_bound,
+            f"{field}.patch_origin.repair_history_bound must match repair_history binding: {exhibit_path}",
+        )
+        if "opencode_session_bound" in patch_origin:
+            require(
+                isinstance(patch_origin.get("opencode_session_bound"), bool),
+                f"{field}.patch_origin.opencode_session_bound must be boolean: {exhibit_path}",
+            )
+        if "semantic_claim_source" in patch_origin:
+            require(
+                isinstance(patch_origin.get("semantic_claim_source"), str)
+                and bool(patch_origin.get("semantic_claim_source")),
+                f"{field}.patch_origin.semantic_claim_source must be non-empty: {exhibit_path}",
+            )
+        if "generated_draft_semantic_pass" in patch_origin:
+            require(
+                patch_origin.get("generated_draft_semantic_pass") is False,
+                f"{field}.patch_origin.generated_draft_semantic_pass must be false: {exhibit_path}",
+            )
+        require(
+            patch_origin.get("semantic_gate") is False,
+            f"{field}.patch_origin.semantic_gate must be false: {exhibit_path}",
+        )
+        require(
+            patch_origin.get("translation_coverage_numerator") == 0,
+            f"{field}.patch_origin.translation_coverage_numerator must be 0: {exhibit_path}",
+        )
+    provenance = unit.get("safety_loop_provenance")
+    if provenance is not None:
+        require(isinstance(provenance, dict), f"{field}.safety_loop_provenance must be an object: {exhibit_path}")
+        if isinstance(patch_origin, dict):
+            require(
+                provenance.get("patch_source") == patch_origin.get("source"),
+                f"{field}.safety_loop_provenance.patch_source must match patch_origin.source: {exhibit_path}",
+            )
+        require(
+            provenance.get("unsafe_delta") == unit.get("unsafe_reduction"),
+            f"{field}.safety_loop_provenance.unsafe_delta must match unsafe_reduction: {exhibit_path}",
+        )
+        require(
+            provenance.get("repair_history_bound") is repair_history_bound,
+            f"{field}.safety_loop_provenance.repair_history_bound must match repair_history binding: {exhibit_path}",
+        )
+        if "opencode_session_bound" in provenance:
+            require(
+                isinstance(provenance.get("opencode_session_bound"), bool),
+                f"{field}.safety_loop_provenance.opencode_session_bound must be boolean: {exhibit_path}",
+            )
+        if "repair_rounds" in unit:
+            require(
+                provenance.get("repair_rounds") == unit.get("repair_rounds"),
+                f"{field}.safety_loop_provenance.repair_rounds must match unit repair_rounds: {exhibit_path}",
+            )
+        if isinstance(unit.get("auto_recovered"), bool):
+            require(
+                provenance.get("auto_recovered") is unit.get("auto_recovered"),
+                f"{field}.safety_loop_provenance.auto_recovered must match unit auto_recovered: {exhibit_path}",
+            )
+        require(
+            provenance.get("semantic_gate") is False,
+            f"{field}.safety_loop_provenance.semantic_gate must be false: {exhibit_path}",
+        )
+        require(
+            provenance.get("translation_coverage_numerator") == 0,
+            f"{field}.safety_loop_provenance.translation_coverage_numerator must be 0: {exhibit_path}",
+        )
 
 
 def validate_path_sha_binding(
@@ -758,6 +852,8 @@ def compact_before_after_units(exhibit: dict[str, Any]) -> list[dict[str, Any]]:
             "accepted_patch",
             "patch_log",
             "unsafe_reduction",
+            "patch_origin",
+            "safety_loop_provenance",
             "repair_history",
         ]:
             if key in unit:

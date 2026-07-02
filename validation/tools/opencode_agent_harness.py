@@ -3609,6 +3609,7 @@ def write_before_after_exhibit_profile_report(
             "measured_unsafe_unit_count": int(translation_before_after.get("measured_unsafe_unit_count", 0)),
             "accepted_patch_unit_count": int(translation_before_after.get("accepted_patch_unit_count", 0)),
         },
+        "safety_loop_provenance": before_after_safety_loop_provenance_rollup(units),
         "units": units,
         "stage_contracts": stage_contracts,
         "reproduction": {
@@ -3636,6 +3637,43 @@ def write_before_after_exhibit_profile_report(
     return {"binding": binding, "payload": payload}
 
 
+def before_after_safety_loop_provenance_rollup(units: list[dict[str, Any]]) -> dict[str, Any]:
+    accepted_evidence_bound = 0
+    opencode_session_bound = 0
+    repair_history_bound = 0
+    measured_unsafe_reduction = 0
+    for unit in units:
+        patch_origin = unit.get("patch_origin") if isinstance(unit.get("patch_origin"), dict) else {}
+        provenance = (
+            unit.get("safety_loop_provenance")
+            if isinstance(unit.get("safety_loop_provenance"), dict)
+            else {}
+        )
+        if patch_origin.get("accepted_patch_bound") is True:
+            accepted_evidence_bound += 1
+        if provenance.get("opencode_session_bound") is True:
+            opencode_session_bound += 1
+        if provenance.get("repair_history_bound") is True:
+            repair_history_bound += 1
+        unsafe_delta = provenance.get("unsafe_delta") if isinstance(provenance.get("unsafe_delta"), dict) else {}
+        if unsafe_delta.get("status") == "measured":
+            measured_unsafe_reduction += 1
+    return {
+        "status": "bound" if units else "not_provided",
+        "unit_count": len(units),
+        "accepted_evidence_bound_unit_count": accepted_evidence_bound,
+        "opencode_session_bound_unit_count": opencode_session_bound,
+        "repair_history_bound_unit_count": repair_history_bound,
+        "measured_unsafe_reduction_unit_count": measured_unsafe_reduction,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "evidence_boundary": (
+            "This rollup is a judge-facing provenance summary only. "
+            "It does not convert patch origin, repair history, or OpenCode sessions into semantic acceptance."
+        ),
+    }
+
+
 def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
     units = []
     for unit in workflow_metrics.get("per_unit_statuses", []):
@@ -3654,6 +3692,12 @@ def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[st
             "accepted_patch": evidence.get("accepted_patch", {}),
             "unsafe_reduction": evidence.get("unsafe_reduction", {}),
         }
+        exhibit_unit["patch_origin"] = before_after_patch_origin(evidence=evidence, unit=unit)
+        exhibit_unit["safety_loop_provenance"] = before_after_safety_loop_provenance(
+            evidence=evidence,
+            unit=unit,
+            patch_origin=exhibit_unit["patch_origin"],
+        )
         if "repair_rounds" in unit:
             exhibit_unit["repair_rounds"] = int(unit.get("repair_rounds", 0) or 0)
         if "auto_recovered" in unit:
@@ -3670,6 +3714,73 @@ def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[st
             exhibit_unit["claim_boundary"] = evidence["claim_boundary"]
         units.append(exhibit_unit)
     return units
+
+
+def before_after_patch_origin(*, evidence: dict[str, Any], unit: dict[str, Any]) -> dict[str, Any]:
+    accepted_patch = evidence.get("accepted_patch")
+    accepted_patch_bound = isinstance(accepted_patch, dict) and isinstance(accepted_patch.get("path"), str)
+    opencode_session_bound = any(
+        isinstance(unit.get(field), dict) or isinstance(evidence.get(field), dict)
+        for field in (
+            "opencode_session_evidence",
+            "opencode_contract_verification",
+            "handoff_contract",
+        )
+    )
+    claim_boundary = evidence.get("claim_boundary") if isinstance(evidence.get("claim_boundary"), dict) else {}
+    semantic_claim_source = str(claim_boundary.get("semantic_claim_source") or "accepted_evidence_binding")
+    source = "accepted_safe_evidence" if accepted_patch_bound else "unbound"
+    return {
+        "source": source,
+        "accepted_patch_bound": accepted_patch_bound,
+        "opencode_session_bound": opencode_session_bound,
+        "repair_history_bound": isinstance(unit.get("repair_history"), dict),
+        "semantic_claim_source": semantic_claim_source,
+        "generated_draft_semantic_pass": bool(claim_boundary.get("generated_draft_semantic_pass", False)),
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "evidence_boundary": (
+            "Patch origin is an audit label for the before/after exhibit. "
+            "It does not turn accepted evidence or OpenCode session output into a semantic gate."
+        ),
+    }
+
+
+def before_after_safety_loop_provenance(
+    *,
+    evidence: dict[str, Any],
+    unit: dict[str, Any],
+    patch_origin: dict[str, Any],
+) -> dict[str, Any]:
+    unsafe_reduction = evidence.get("unsafe_reduction") if isinstance(evidence.get("unsafe_reduction"), dict) else {}
+    baseline_verification = (
+        evidence.get("baseline_verification")
+        if isinstance(evidence.get("baseline_verification"), dict)
+        else unit.get("baseline_verification")
+        if isinstance(unit.get("baseline_verification"), dict)
+        else {}
+    )
+    opencode_session_bound = patch_origin.get("opencode_session_bound") is True
+    repair_history_bound = patch_origin.get("repair_history_bound") is True
+    status = "accepted_evidence_bound" if patch_origin.get("accepted_patch_bound") is True else "not_bound"
+    if opencode_session_bound:
+        status = "opencode_session_bound"
+    return {
+        "status": status,
+        "patch_source": str(patch_origin.get("source", "unbound")),
+        "baseline_verification_status": str(baseline_verification.get("status", "not_bound")),
+        "unsafe_delta": json.loads(json.dumps(unsafe_reduction)),
+        "opencode_session_bound": opencode_session_bound,
+        "repair_history_bound": repair_history_bound,
+        "repair_rounds": int(unit.get("repair_rounds", 0) or 0),
+        "auto_recovered": bool(unit.get("auto_recovered", False)),
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "evidence_boundary": (
+            "Safety-loop provenance summarizes bound artifacts only. "
+            "Semantic acceptance remains owned by oracle/diff/summary validators."
+        ),
+    }
 
 
 def before_after_stage_contracts(

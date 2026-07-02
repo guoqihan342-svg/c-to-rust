@@ -148,6 +148,28 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             self.assertEqual(exhibits["input_reports"][0]["units"][0]["accepted_patch"]["path"], "evidence/before-after/accepted.patch")
             self.assertEqual(exhibits["input_reports"][0]["units"][0]["patch_log"]["path"], "evidence/before-after/step-log.jsonl")
             self.assertEqual(exhibits["input_reports"][0]["units"][0]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["patch_origin"]["source"],
+                "accepted_safe_evidence",
+            )
+            self.assertFalse(exhibits["input_reports"][0]["units"][0]["patch_origin"]["semantic_gate"])
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["patch_origin"]["translation_coverage_numerator"],
+                0,
+            )
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["status"],
+                "accepted_evidence_bound",
+            )
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["unsafe_delta"]["reduced_by"],
+                3,
+            )
+            self.assertFalse(exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["semantic_gate"])
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["translation_coverage_numerator"],
+                0,
+            )
             self.assertEqual(report["release_note_inputs"]["before_after_exhibits"], exhibits)
             self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
             self.assertEqual(report["harness_architecture"]["before_after_report_count"], 1)
@@ -697,6 +719,27 @@ class MilestoneReleaseReportTests(unittest.TestCase):
             "accepted_patch": before_after_unit["accepted_patch"],
             "patch_log": before_after_unit["patch_log"],
             "unsafe_reduction": before_after_unit["unsafe_reduction"],
+            "patch_origin": {
+                "source": "accepted_safe_evidence",
+                "accepted_patch_bound": True,
+                "opencode_session_bound": False,
+                "repair_history_bound": isinstance(repair_history, dict),
+                "semantic_claim_source": "accepted_evidence_binding",
+                "generated_draft_semantic_pass": False,
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+            },
+            "safety_loop_provenance": {
+                "status": "accepted_evidence_bound",
+                "patch_source": "accepted_safe_evidence",
+                "unsafe_delta": before_after_unit["unsafe_reduction"],
+                "opencode_session_bound": False,
+                "repair_history_bound": isinstance(repair_history, dict),
+                "repair_rounds": workflow_metrics["per_unit_statuses"][0].get("repair_rounds", 0),
+                "auto_recovered": bool(workflow_metrics["per_unit_statuses"][0].get("auto_recovered", False)),
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+            },
         }
         if isinstance(repair_history, dict):
             exhibit_unit["repair_history"] = repair_history

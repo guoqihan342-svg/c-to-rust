@@ -1765,6 +1765,12 @@ def before_after_exhibit_unit_overlays(
             root_cause_key = unit.get("root_cause_key")
             if isinstance(root_cause_key, str) and root_cause_key:
                 overlay["root_cause_key"] = root_cause_key
+            patch_origin = patch_origin_summary(unit.get("patch_origin"))
+            if patch_origin is not None:
+                overlay["patch_origin"] = patch_origin
+            safety_loop_provenance = safety_loop_provenance_summary(unit.get("safety_loop_provenance"))
+            if safety_loop_provenance is not None:
+                overlay["safety_loop_provenance"] = safety_loop_provenance
             if overlay:
                 result[unit_id] = overlay
     return result
@@ -1837,6 +1843,75 @@ def repair_history_summary(value: object) -> dict[str, Any] | None:
     return result
 
 
+def patch_origin_summary(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    source = value.get("source")
+    if not isinstance(source, str) or not source:
+        return None
+    result: dict[str, Any] = {"source": source}
+    for key in [
+        "accepted_patch_bound",
+        "opencode_session_bound",
+        "repair_history_bound",
+        "generated_draft_semantic_pass",
+        "semantic_gate",
+    ]:
+        if isinstance(value.get(key), bool):
+            result[key] = value[key]
+    semantic_claim_source = value.get("semantic_claim_source")
+    if isinstance(semantic_claim_source, str) and semantic_claim_source:
+        result["semantic_claim_source"] = semantic_claim_source
+    translation_coverage_numerator = int_or_none(value.get("translation_coverage_numerator"))
+    if translation_coverage_numerator is not None:
+        result["translation_coverage_numerator"] = translation_coverage_numerator
+    return result
+
+
+def safety_loop_provenance_summary(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    status = value.get("status")
+    if not isinstance(status, str) or not status:
+        return None
+    result: dict[str, Any] = {"status": status}
+    patch_source = value.get("patch_source")
+    if isinstance(patch_source, str) and patch_source:
+        result["patch_source"] = patch_source
+    baseline_verification_status = value.get("baseline_verification_status")
+    if isinstance(baseline_verification_status, str) and baseline_verification_status:
+        result["baseline_verification_status"] = baseline_verification_status
+    unsafe_delta = unsafe_reduction_summary(value.get("unsafe_delta"))
+    if unsafe_delta is not None:
+        result["unsafe_delta"] = unsafe_delta
+    for key in [
+        "opencode_session_bound",
+        "repair_history_bound",
+        "auto_recovered",
+        "semantic_gate",
+    ]:
+        if isinstance(value.get(key), bool):
+            result[key] = value[key]
+    repair_rounds = int_or_none(value.get("repair_rounds"))
+    if repair_rounds is not None:
+        result["repair_rounds"] = repair_rounds
+    translation_coverage_numerator = int_or_none(value.get("translation_coverage_numerator"))
+    if translation_coverage_numerator is not None:
+        result["translation_coverage_numerator"] = translation_coverage_numerator
+    return result
+
+
+def unsafe_reduction_summary(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return {
+        "status": value.get("status", "unknown"),
+        "baseline_total_unsafe": int_or_none(value.get("baseline_total_unsafe")),
+        "current_total_unsafe": int_or_none(value.get("current_total_unsafe")),
+        "reduced_by": int_or_none(value.get("reduced_by")),
+    }
+
+
 def before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -1875,6 +1950,12 @@ def before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
         root_cause_key = item.get("root_cause_key")
         if isinstance(root_cause_key, str) and root_cause_key:
             unit["root_cause_key"] = root_cause_key
+        patch_origin = patch_origin_summary(item.get("patch_origin"))
+        if patch_origin is not None:
+            unit["patch_origin"] = patch_origin
+        safety_loop_provenance = safety_loop_provenance_summary(item.get("safety_loop_provenance"))
+        if safety_loop_provenance is not None:
+            unit["safety_loop_provenance"] = safety_loop_provenance
         result.append(unit)
     return result
 

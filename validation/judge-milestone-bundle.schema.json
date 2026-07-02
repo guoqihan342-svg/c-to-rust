@@ -195,7 +195,9 @@
                     "repair_history": {"$ref": "#/definitions/repairHistorySummary"},
                     "repair_rounds": {"type": "integer", "minimum": 0},
                     "auto_recovered": {"type": "boolean"},
-                    "root_cause_key": {"type": "string", "minLength": 1}
+                    "root_cause_key": {"type": "string", "minLength": 1},
+                    "patch_origin": {"$ref": "#/definitions/patchOriginSummary"},
+                    "safety_loop_provenance": {"$ref": "#/definitions/safetyLoopProvenanceSummary"}
                   }
                 }
               }
@@ -1052,6 +1054,46 @@
         "statuses": {"type": "array", "items": {"type": "string"}},
         "rollback_ids": {"type": "array", "items": {"type": "string"}},
         "verified": {"type": "boolean"}
+      }
+    },
+    "patchOriginSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "source",
+        "semantic_gate",
+        "translation_coverage_numerator"
+      ],
+      "properties": {
+        "source": {"enum": ["accepted_safe_evidence", "unbound"]},
+        "accepted_patch_bound": {"type": "boolean"},
+        "opencode_session_bound": {"type": "boolean"},
+        "repair_history_bound": {"type": "boolean"},
+        "semantic_claim_source": {"type": "string", "minLength": 1},
+        "generated_draft_semantic_pass": {"const": false},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0}
+      }
+    },
+    "safetyLoopProvenanceSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "semantic_gate",
+        "translation_coverage_numerator"
+      ],
+      "properties": {
+        "status": {"type": "string", "minLength": 1},
+        "patch_source": {"enum": ["accepted_safe_evidence", "unbound"]},
+        "baseline_verification_status": {"type": "string", "minLength": 1},
+        "unsafe_delta": {"$ref": "#/definitions/unsafeReduction"},
+        "opencode_session_bound": {"type": "boolean"},
+        "repair_history_bound": {"type": "boolean"},
+        "repair_rounds": {"type": "integer", "minimum": 0},
+        "auto_recovered": {"type": "boolean"},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0}
       }
     },
     "comparisonRow": {

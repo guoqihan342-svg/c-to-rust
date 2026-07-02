@@ -357,6 +357,33 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                             "statuses": ["failed", "passed", "verified"],
                             "verified": True,
                         },
+                        "patch_origin": {
+                            "source": "accepted_safe_evidence",
+                            "accepted_patch_bound": True,
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                        "safety_loop_provenance": {
+                            "status": "accepted_evidence_bound",
+                            "patch_source": "accepted_safe_evidence",
+                            "baseline_verification_status": "passed",
+                            "unsafe_delta": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "repair_rounds": 1,
+                            "auto_recovered": True,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
                     }
                 ],
             },
@@ -704,6 +731,22 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                 "verified": True,
             },
         )
+        self.assertEqual(before_after_unit["patch_origin"]["source"], "accepted_safe_evidence")
+        self.assertTrue(before_after_unit["patch_origin"]["accepted_patch_bound"])
+        self.assertFalse(before_after_unit["patch_origin"]["opencode_session_bound"])
+        self.assertTrue(before_after_unit["patch_origin"]["repair_history_bound"])
+        self.assertFalse(before_after_unit["patch_origin"]["semantic_gate"])
+        self.assertEqual(before_after_unit["patch_origin"]["translation_coverage_numerator"], 0)
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["status"], "accepted_evidence_bound")
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["patch_source"], "accepted_safe_evidence")
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["baseline_verification_status"], "passed")
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["unsafe_delta"]["reduced_by"], 2)
+        self.assertFalse(before_after_unit["safety_loop_provenance"]["opencode_session_bound"])
+        self.assertTrue(before_after_unit["safety_loop_provenance"]["repair_history_bound"])
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["repair_rounds"], 1)
+        self.assertTrue(before_after_unit["safety_loop_provenance"]["auto_recovered"])
+        self.assertFalse(before_after_unit["safety_loop_provenance"]["semantic_gate"])
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["translation_coverage_numerator"], 0)
         self.assertFalse(report["before_after_repair_exhibit"]["semantic_gate"])
         self.assertFalse(report["before_after_repair_exhibit"]["generated_draft_semantic_pass"])
         self.assertEqual(report["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
