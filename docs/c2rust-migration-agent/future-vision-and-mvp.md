@@ -88,7 +88,7 @@ P0-C/P0-D 详细冲刺顺序：
 
 回归验收命令：每次触碰 harness 先跑 `python -B -m unittest validation.tools.test_opencode_agent_harness -q`；触碰评委入口或 public packet 再跑 judge validator/local-artifact deep validation；触碰 C2Rust baseline 再跑 `test_auto_migrate`、`test_validate_auto_translation_evidence`、schema/reporting/judge bundle 负例组和目标 slice 的 `validate_auto_translation_evidence --require-semantic-pass`。
 
-H7 后续硬化只作为回归门禁，不允许抢占 P0-C/P0-D 主线：`run_judge_entrypoints.py` 已继承有限 timeout 合同（per-entrypoint `--timeout-seconds`、超时规范化为 124、`root_cause_key=process_timeout`、run report timeout policy）；剩余可后置硬化是关键 JSON/log 原子写，以及 `python3 -B` portable command 合同。`validate_judge_entrypoints.py` 和 `config/competition-env/judge-entrypoints/flashdb-harness.json` 也要从裸 `python -B` 约束收敛到 portable Python contract。这些项只在评委 runner、validator 或 local-artifact deep validation 暴露漂移时立即处理，否则排在 P0-C2/P0-C3/P0-D 之后。
+H7 后续硬化只作为回归门禁，不允许抢占 P0-C/P0-D 主线：`run_judge_entrypoints.py` 已继承有限 timeout 合同（per-entrypoint `--timeout-seconds`、超时规范化为 124、`root_cause_key=process_timeout`、run report timeout policy），且关键 run report、selected validation config、bundle/public packet、release notes 与 entrypoint stdout/stderr 已切到同目录临时文件加 `os.replace` 的原子写；剩余可后置硬化主要是 `python3 -B` portable command 合同。`validate_judge_entrypoints.py` 和 `config/competition-env/judge-entrypoints/flashdb-harness.json` 也要从裸 `python -B` 约束收敛到 portable Python contract。这些项只在评委 runner、validator 或 local-artifact deep validation 暴露漂移时立即处理，否则排在 P0-C2/P0-C3/P0-D 之后。
 
 ### H7 后 P0 冲刺队列
 

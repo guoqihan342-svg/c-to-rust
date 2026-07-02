@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import shlex
 import subprocess
 import sys
+import tempfile
 from typing import Any, Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -208,7 +210,7 @@ def post_run_validation_config_path(
     if isinstance(contract, dict) and isinstance(contract.get("required_entrypoint_ids"), list):
         contract["required_entrypoint_ids"] = selected_ids
     path = out_path.parent / "selected-entrypoints-validation-config.json"
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(path, payload)
     return path
 
 
@@ -258,7 +260,7 @@ def write_run_report(
         claim_boundary=report["claim_boundary"],
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(out_path, report)
     return report
 
 
@@ -281,13 +283,13 @@ def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root
         "status": "derived_after_release_notes",
         "hash_boundary": "packet_hashes_run_report_bundle_and_release_notes",
     }
-    out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(out_path, report)
     bundle = judge_milestone_bundle.build_judge_milestone_bundle(
         run_report_path=out_path,
         out_path=bundle_path,
         repo_root=repo_root,
     )
-    release_notes_path.write_text(milestone_release_notes.build_release_notes(bundle), encoding="utf-8")
+    atomic_write_text(release_notes_path, milestone_release_notes.build_release_notes(bundle))
     write_public_release_packet(
         report=report,
         bundle=bundle,
@@ -350,7 +352,7 @@ def write_public_release_packet(
         "must_not_claim": public_packet_must_not_claim(bundle.get("must_not_claim", [])),
         "reproduction_commands": bundle.get("reproduction_commands", {}),
     }
-    public_packet_path.write_text(json.dumps(packet, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_json(public_packet_path, packet)
     return packet
 
 
@@ -560,8 +562,8 @@ def run_entrypoint_command(
         stdout_text = stream_text(getattr(error, "stdout", ""))
         stderr_text = stream_text(getattr(error, "stderr", ""))
         stderr_text += f"{type(error).__name__}: {error}\n"
-        stdout_path.write_text(stdout_text, encoding="utf-8")
-        stderr_path.write_text(stderr_text, encoding="utf-8")
+        atomic_write_text(stdout_path, stdout_text)
+        atomic_write_text(stderr_path, stderr_text)
         result["exit_code"] = command_exception_exit_code(error)
         result["status"] = "failed"
         result["error"] = {"type": type(error).__name__, "message": str(error)}
@@ -573,8 +575,8 @@ def run_entrypoint_command(
         }
         return result
 
-    stdout_path.write_text(completed.stdout or "", encoding="utf-8")
-    stderr_path.write_text(completed.stderr or "", encoding="utf-8")
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
     result["exit_code"] = int(completed.returncode)
     result["status"] = "passed" if completed.returncode == 0 else "failed"
     result["logs"] = {
@@ -624,6 +626,30 @@ def stream_text(value: object) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return str(value)
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as handle:
+            fd = None
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
 def command_exception_exit_code(error: Exception) -> int:

@@ -682,6 +682,33 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(entrypoint["logs"]["stdout"]["sha256"], runner.validator.sha256_file(stdout_log))
         self.assertEqual(entrypoint["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
 
+    def test_write_run_report_is_atomic_when_replace_fails(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-atomic-report-", dir=REPO_ROOT / "target"))
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        old_report = '{"status":"old"}\n'
+        out_path.write_text(old_report, encoding="utf-8")
+
+        with patch.object(runner.os, "replace", side_effect=OSError("simulated replace failure")):
+            with self.assertRaisesRegex(OSError, "simulated replace failure"):
+                runner.write_run_report(
+                    out_path=out_path,
+                    status="failed",
+                    dry_run=True,
+                    config_ref={"path": "config.json", "status": "present"},
+                    configured_entrypoint_count=0,
+                    config_archive={"status": "present"},
+                    command_results=[],
+                    preflight_validation={"status": "passed"},
+                    validation={"status": "skipped", "reason": "dry_run"},
+                    readiness_ref=None,
+                )
+
+        self.assertEqual(out_path.read_text(encoding="utf-8"), old_report)
+        self.assertEqual(list(out_path.parent.glob(".judge-entrypoints-run-report.json.*.tmp")), [])
+
     def test_command_launch_exception_writes_failed_report_and_hashed_logs(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 
