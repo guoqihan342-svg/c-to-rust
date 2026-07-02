@@ -12,7 +12,7 @@
 /* observable outputs: return_code */
 /* fixture case: empty-crc-zero input_ref=cases[0] expected_ref=validation/l2_slices/fixtures/real-fdb-calc-crc32.json expected_outputs={"return_code": 0} */
 /* fixture case: ascii-123456789-crc-zero input_ref=cases[1] expected_ref=validation/l2_slices/fixtures/real-fdb-calc-crc32.json expected_outputs={"return_code": 3421780262} */
-/* source file: src/fdb_utils.c (sha256: 207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc) */
+/* source file: src/fdb_utils.c (sha256: bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0) */
 /* global dependency: crc32_table (same_file_top_level_declared) from src/fdb_utils.c */
 static const uint8_t empty_crc_zero_buf[] = { 0 };
 

@@ -102,7 +102,7 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "824831132187f5312bb9dfc3883eb23922f08f464691f6a74bcee1e5f966123e"
+        "sha256": "502b927f412830b1b8156b01f3e7d9ab59f7b9ca4144db384f96f0ab62edfb97"
       },
       "proof_class": "local-simulation",
       "purpose": "core-translation-before-after-exhibit",
@@ -114,7 +114,7 @@
       "run_id": "competition-flashdb-before-after-exhibit",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "1303923286d38b8f66de0c4f00f783cdb70a351e80d33cee63846cfa3aac16c5"
+        "sha256": "70f3a7a9c6e0e35ba419ca934eac16b77b8e16eef76916501eafee6fa00aa5b3"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json"
@@ -154,7 +154,7 @@
       "run_id": "harness-flashdb-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
-        "sha256": "c5cc4ac0426daa154e2929938e04de12d6e1a16178773c686e0aedb4d6e9259c"
+        "sha256": "4011a2b1f5d0df82a500f7a7508e84ffbfd654123888f472a2a98a15cf9823a5"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
@@ -196,7 +196,7 @@
       "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json",
-        "sha256": "53d071aa0524c53a16fde0015afd82c03c8f01ea391858da752f3f9285c0d0fc"
+        "sha256": "b569e93b88b47ac7dff2203bdbf7d239497059811ca5a6faece321024eed6f1b"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"

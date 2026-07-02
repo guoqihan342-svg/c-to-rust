@@ -20,9 +20,16 @@ REQUIRED_ARTIFACT_ROOTS = {
     "target/competition-out/logs",
 }
 LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
     ".json",
     ".jsonl",
     ".md",
+    ".rs",
     ".sh",
     ".toml",
     ".txt",

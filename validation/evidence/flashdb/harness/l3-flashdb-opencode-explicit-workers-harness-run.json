@@ -125,7 +125,7 @@
   "schema_version": 1,
   "source": {
     "path": "sources/FlashDB/src/fdb_utils.c",
-    "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
   },
   "status": "passed",
   "summary": {
@@ -157,7 +157,7 @@
       "slice_id": "real-fdb-calc-crc32",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-        "sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147"
+        "sha256": "c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70"
       },
       "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
       "summary": {
@@ -178,7 +178,7 @@
       "slice_id": "real-fdb-blob-make",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-        "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
+        "sha256": "b93b8f807f597a44ebc10fba7ea2d2f25631fea5614795b77c1c2c74ed8bde5b"
       },
       "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
       "summary": {

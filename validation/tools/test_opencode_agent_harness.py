@@ -1705,6 +1705,16 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_c_source_sha256_is_stable_across_line_endings(self) -> None:
+        with temp_repo_dir() as tmp:
+            source_file = Path(tmp) / "FlashDB" / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_bytes(b"int first_unit(int value) {\r\n    return value + 1;\r\n}\r\n")
+
+            expected = hashlib.sha256(b"int first_unit(int value) {\n    return value + 1;\n}\n").hexdigest()
+
+            self.assertEqual(harness.sha256_file(source_file), expected)
+
     def test_run_batch_profile_opencode_passes_preflight_report_to_workers(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

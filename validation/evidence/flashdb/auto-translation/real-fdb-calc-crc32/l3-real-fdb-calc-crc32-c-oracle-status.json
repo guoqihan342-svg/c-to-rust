@@ -1,7 +1,7 @@
 {
   "accepted_oracle": {
     "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
-    "sha256": "e90c3d8c485601055a332cc66c76c9b29e7f64b1596653784466f0c954628cef",
+    "sha256": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
     "status": "passed"
   },
   "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
@@ -25,7 +25,7 @@
         "resolution": "source_root_relative",
         "resolved_path": "sources/FlashDB/src/fdb_utils.c",
         "role": "source",
-        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+        "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
       },
       {
         "path": "src/fdb_file.c",
@@ -257,7 +257,7 @@
       {
         "path": "src/fdb_utils.c",
         "role": "source",
-        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+        "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
       }
     ],
     "status": "draft_requires_review"
@@ -265,7 +265,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-    "sha256": "82b8b989c6cd6bf733720fb74be9046b54e24516e21258aa9f0b2c83a90c7426",
+    "sha256": "679817b06b6b91dbad29b121d3f57064ea9f8763b85c67a796e614a78ad66045",
     "status": "draft"
   },
   "schema_version": 1,

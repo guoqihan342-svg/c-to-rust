@@ -12,18 +12,33 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
 VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
+_VALIDATOR_MODULE = None
 
 
 def load_validator_module():
+    global _VALIDATOR_MODULE
+    if _VALIDATOR_MODULE is not None:
+        return _VALIDATOR_MODULE
     spec = importlib.util.spec_from_file_location("validate_auto_translation_evidence_under_test", VALIDATOR)
     if spec is None or spec.loader is None:
         raise AssertionError("could not load validate_auto_translation_evidence module")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    _VALIDATOR_MODULE = module
     return module
 
 
 class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
+    def test_sha256_uses_lf_stable_text_hashing_for_json_refs(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "manifest.json"
+            path.write_bytes(b"{\"status\":\"passed\"}\r\n")
+
+            expected = hashlib.sha256(b"{\"status\":\"passed\"}\n").hexdigest()
+
+            self.assertEqual(module.sha256(path), expected)
+
     def _c2rust_compile_fixture(self, tmp_path: Path) -> tuple[dict, dict, Path]:
         output_file = tmp_path / "c2rust-baseline-output.rs"
         artifact_file = tmp_path / "c2rust-baseline-output.rlib"
@@ -36,7 +51,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         output_ref = {
             "path": output_file.as_posix(),
             "status": "generated",
-            "sha256": hashlib.sha256(output_file.read_bytes()).hexdigest(),
+            "sha256": self._sha256(output_file),
         }
         baseline = {
             "compile": {
@@ -56,7 +71,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                 "artifact": {
                     "path": artifact_file.as_posix(),
                     "status": "compiled",
-                    "sha256": hashlib.sha256(artifact_file.read_bytes()).hexdigest(),
+                    "sha256": self._sha256(artifact_file),
                 },
                 "diagnostics": [],
             }
@@ -1332,7 +1347,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             baseline["output"] = {
                 "path": output_path.as_posix(),
                 "status": "generated",
-                "sha256": hashlib.sha256(output_path.read_bytes()).hexdigest(),
+                "sha256": self._sha256(output_path),
                 "source_files": [],
             }
             baseline.pop("compile", None)
@@ -1384,14 +1399,14 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             output_ref = {
                 "path": output_file.as_posix(),
                 "status": "generated",
-                "sha256": hashlib.sha256(output_file.read_bytes()).hexdigest(),
+                "sha256": self._sha256(output_file),
                 "source_files": [generated_ref],
             }
             baseline = {
                 "generation": {
                     "compile_commands": {
                         "path": compile_commands.as_posix(),
-                        "sha256": hashlib.sha256(compile_commands.read_bytes()).hexdigest(),
+                        "sha256": self._sha256(compile_commands),
                     },
                     "command": {
                         "argv": ["c2rust", "transpile", "--emit-build-files", compile_commands.as_posix()],
@@ -1411,7 +1426,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     "candidate_output": {
                         "path": output_file.as_posix(),
                         "status": "generated",
-                        "sha256": hashlib.sha256(output_file.read_bytes()).hexdigest(),
+                        "sha256": self._sha256(output_file),
                     },
                     "command": {
                         "argv": ["rustc", "--crate-type", "lib", output_file.as_posix()],
@@ -1425,7 +1440,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
                     "artifact": {
                         "path": artifact_file.as_posix(),
                         "status": "compiled",
-                        "sha256": hashlib.sha256(artifact_file.read_bytes()).hexdigest(),
+                        "sha256": self._sha256(artifact_file),
                     },
                     "diagnostics": [],
                 },
@@ -4338,7 +4353,15 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         accepted_path = self._repo_path(accepted["path"])
         accepted_sha = self._sha256(accepted_path)
         accepted["sha256"] = accepted_sha
+        harness_ref = c_oracle.get("harness_draft_ref")
+        if isinstance(harness_ref, dict) and isinstance(harness_ref.get("path"), str):
+            harness_ref["sha256"] = self._sha256(self._repo_path(harness_ref["path"]))
         self._write_json(c_oracle_path, c_oracle)
+        if isinstance(harness_ref, dict):
+            cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            cache["c_oracle_harness_identity"] = dict(harness_ref)
+            self._write_json(cache_path, cache)
         self._bind_manifest_ref(evidence_dir, prefix, "c_oracle", c_oracle_path, "C_ORACLE_GENERATED")
 
         diff_path = evidence_dir / f"{prefix}-diff.json"
@@ -4350,6 +4373,22 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         negative = json.loads(negative_path.read_text(encoding="utf-8"))
         self._refresh_embedded_ref_sha(negative, "accepted_negative_diff")
         self._write_json(negative_path, negative)
+
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        fixture = final.get("fixture")
+        if isinstance(fixture, dict) and isinstance(fixture.get("path"), str):
+            fixture_sha = self._sha256(self._repo_path(fixture["path"]))
+            fixture["sha256"] = fixture_sha
+            accepted_final = final.get("accepted_evidence_binding")
+            if isinstance(accepted_final, dict):
+                accepted_final["fixture_sha256"] = fixture_sha
+                paths = accepted_final.get("paths", {})
+                path_sha256 = accepted_final.get("path_sha256", {})
+                if isinstance(paths, dict) and isinstance(path_sha256, dict):
+                    for key, path_text in paths.items():
+                        path_sha256[key] = self._sha256(self._repo_path(path_text))
+        self._write_json(final_path, final)
 
         auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
         auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
@@ -5398,11 +5437,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     def _sha256(self, path: Path) -> str:
-        digest = hashlib.sha256()
-        with path.open("rb") as fh:
-            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
+        return load_validator_module().sha256(path)
 
     def _sha256_json(self, payload: dict) -> str:
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()

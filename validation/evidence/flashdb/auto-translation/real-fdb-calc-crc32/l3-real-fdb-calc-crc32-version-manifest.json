@@ -38,12 +38,12 @@
     },
     "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "c2rust_baseline_identity": {
-      "sha256": "257e69752bee580e315d5224aba3c5a2496befd74e0258501419bd10e23b29cf",
+      "sha256": "e940fe65966f9c5d9758550e4dc6bae513c813b23822da3d229d4b18e9dc8161",
       "status": "generated"
     },
     "c_oracle_harness_identity": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "82b8b989c6cd6bf733720fb74be9046b54e24516e21258aa9f0b2c83a90c7426",
+      "sha256": "679817b06b6b91dbad29b121d3f57064ea9f8763b85c67a796e614a78ad66045",
       "status": "draft"
     },
     "cache_input_fields": [
@@ -84,19 +84,19 @@
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "ec9f51cabd9d3f9311da4fdb9b4ec89663ba4399a9290311e2ffbf6bc9fed761",
+        "sha256": "d946711eb72714a67751e351418fe31fdcbdfd61f3c8f8ef3ec859d566f45274",
         "status": "generated"
       },
       "route_decision": {
         "level": "L4",
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-        "sha256": "7b24668bdd8ea39eff8e8c71ea3e09d8da3e10900748b5a0d32f12a6a2626715",
+        "sha256": "14ff03fb9f7040ceb77c624fe52400ef40728b492df19869477516133a8968e4",
         "status": "refused"
       },
       "validation_profile": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
         "profile": "L4-accepted-evidence",
-        "sha256": "dfb2cea2cbb533add339827dc326451483a4da5a2a1567380ffce69e32f20928",
+        "sha256": "de919284a9715e0766799e17a4820d4f79ae3add5a19b4ddddd2ec1b87ac9d29",
         "status": "passed"
       }
     },
@@ -143,7 +143,7 @@
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "05993f49b9bfde378aabb10cb28eba045d496d1a2b1d6121bda0acb4e7c69422",
+      "sha256": "182bdeb481ecd69925296c750bde18f14ac25563bb22ced747ba2b9303c1bbd1",
       "status": "refused"
     },
     "scalar_ub_contract_identity": {
@@ -175,7 +175,7 @@
     "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "25f300f59d14ae0b8de2bd7c4bbb37c62199e24b04265840bd87703e02c8f902",
+      "sha256": "de2900a7aeccfb468afd310c40f7b03e8591ff884965b1ff897a137a71776422",
       "status": "passed"
     }
   },

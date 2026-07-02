@@ -56,7 +56,7 @@
     ],
     "harness_draft_ref": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.c",
-      "sha256": "82b8b989c6cd6bf733720fb74be9046b54e24516e21258aa9f0b2c83a90c7426",
+      "sha256": "679817b06b6b91dbad29b121d3f57064ea9f8763b85c67a796e614a78ad66045",
       "status": "draft"
     },
     "source_file_hashes": {

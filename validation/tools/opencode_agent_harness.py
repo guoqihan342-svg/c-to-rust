@@ -76,9 +76,16 @@ OPENCODE_RUNTIME_ENV_KEYS = (
     "TMP",
 )
 LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
     ".json",
     ".jsonl",
     ".md",
+    ".rs",
     ".sh",
     ".toml",
     ".txt",

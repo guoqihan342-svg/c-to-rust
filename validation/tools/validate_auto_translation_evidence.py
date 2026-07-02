@@ -14,12 +14,17 @@ import hashlib
 import json
 import re
 from pathlib import Path
+import sys
 from typing import Any, Iterable
 
 import jsonschema
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools import validate_judge_entrypoints as judge_validator
 L4_REFUSED_FORBIDDEN_ARTIFACT_STATUSES = {
     "accepted_after_gates",
     "accepted_evidence_bound",
@@ -3471,11 +3476,7 @@ def c_parameter_declaration(parameter: dict[str, Any]) -> str:
 
 
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return judge_validator.sha256_file(path)
 
 
 def sha256_json(value: Any) -> str:
