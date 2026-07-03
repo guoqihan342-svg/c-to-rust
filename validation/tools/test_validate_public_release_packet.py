@@ -186,6 +186,21 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         run_id,
     ]
     marker_command_line = shlex.join(marker_command)
+    opencode_prompt = f"Run OpenCode preflight marker for {run_id}"
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        "max",
+        "--model",
+        "GLM-5.1",
+        opencode_prompt,
+    ]
+    opencode_command_line = shlex.join(opencode_argv)
     launch_policy = {
         "opencode_agent": None,
         "opencode_command": "opencode",
@@ -213,8 +228,11 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
             "worker_command": marker_command,
             "worker_command_line": marker_command_line,
             "worker_command_sha256": judge_validator.sha256_text(marker_command_line),
+            "opencode_argv": opencode_argv,
+            "opencode_command_line": opencode_command_line,
             "launch_policy": launch_policy,
             "launch_policy_sha256": launch_policy_sha256,
+            "prompt": opencode_prompt,
             "opencode_runtime_env": runtime_env,
         },
     )
@@ -250,6 +268,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "marker_exists": True,
         "marker_path": repo_relative(marker_path),
         "opencode_run_launched": True,
+        "argv": opencode_argv,
         "launch_policy": launch_policy,
         "launch_policy_sha256": launch_policy_sha256,
         "opencode_runtime_env": runtime_env,
@@ -327,6 +346,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "contract_status": "executed",
         "marker_exists": True,
         "opencode_run_launched": True,
+        "opencode_run_argv_bound": True,
         "opencode_runtime_env": runtime_env,
         "opencode_runtime_env_sha256": runtime_env["env_sha256"],
         "proof_class": "local-simulation",
@@ -1280,6 +1300,34 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("handoff_contract sha256 mismatch" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_preflight_handoff_missing_opencode_run_argv(self) -> None:
+        temp_dir = Path(
+            tempfile.mkdtemp(prefix="public-release-packet-opencode-handoff-missing-argv-", dir=REPO_ROOT / "target")
+        )
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        preflight_path = packet_preflight_path(packet)
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload.pop("opencode_argv")
+        write_json(handoff_path, handoff_payload)
+        preflight_payload["handoff_contract"]["sha256"] = judge_validator.sha256_file(handoff_path)
+        write_json(preflight_path, preflight_payload)
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["preflight_report"]["sha256"] = (
+            judge_validator.sha256_file(preflight_path)
+        )
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("handoff_contract.opencode_argv must be a non-empty string list" in error for error in result["errors"]),
             result["errors"],
         )
 

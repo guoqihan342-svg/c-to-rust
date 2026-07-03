@@ -737,8 +737,11 @@ def validate_competition_smoke_entrypoint_contract(entry: dict[str, Any]) -> dic
     entry_id = str(entry.get("id"))
     command = require_string(entry.get("command"), f"{entry_id}.command")
     argv = shlex.split(command, posix=True)
-    if "validation/tools/run_competition_smoke.py" not in argv:
-        raise ValueError(f"{entry_id} command must run validation/tools/run_competition_smoke.py")
+    expected_prefix = [PORTABLE_PYTHON_COMMAND, "-B", "validation/tools/run_competition_smoke.py"]
+    if argv[: len(expected_prefix)] != expected_prefix:
+        raise ValueError(
+            f"{entry_id} command must execute validation/tools/run_competition_smoke.py as argv[2]"
+        )
     flags = parsed_command_flags(command)
     proof_class = require_command_flag(flags, "--proof-class", f"{entry_id}.command")
     run_id = require_command_flag(flags, "--run-id", f"{entry_id}.command")

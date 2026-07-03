@@ -634,6 +634,8 @@ def require_opencode_preflight_proof_summary_contract(
         raise ValueError(f"{label}.marker_exists must be true")
     if proof.get("opencode_run_launched") is not True:
         raise ValueError(f"{label}.opencode_run_launched must be true")
+    if proof.get("opencode_run_argv_bound") is not True:
+        raise ValueError(f"{label}.opencode_run_argv_bound must be true")
     if proof.get("proof_class") == "competition-exact":
         raise ValueError(f"{label}.proof_class must not claim competition-exact without host attestation")
     if not judge_validator.opencode_models_argv_matches(
@@ -775,6 +777,23 @@ def require_opencode_preflight_session_contract(
     worker_command_sha256 = handoff_payload.get("worker_command_sha256")
     if worker_command_sha256 != judge_validator.sha256_text(worker_command_line):
         raise ValueError(f"{label}.handoff_contract.worker_command_sha256 must match worker_command_line")
+    report_argv = judge_validator.require_string_argv(preflight_payload.get("argv"), f"{label}.argv")
+    handoff_argv = judge_validator.require_string_argv(
+        handoff_payload.get("opencode_argv"),
+        f"{label}.handoff_contract.opencode_argv",
+    )
+    if report_argv != handoff_argv:
+        raise ValueError(f"{label}.argv must match handoff_contract.opencode_argv")
+    judge_validator.validate_opencode_run_argv_binding(report_argv, f"{label}.argv", launch_policy=preflight_policy)
+    handoff_command_line = judge_validator.require_string(
+        handoff_payload.get("opencode_command_line"),
+        f"{label}.handoff_contract.opencode_command_line",
+    )
+    if handoff_command_line != judge_validator.shell_command_line(handoff_argv):
+        raise ValueError(f"{label}.handoff_contract.opencode_command_line must match opencode_argv")
+    handoff_prompt = judge_validator.require_string(handoff_payload.get("prompt"), f"{label}.handoff_contract.prompt")
+    if handoff_prompt != handoff_argv[-1]:
+        raise ValueError(f"{label}.handoff_contract.prompt must match opencode_argv prompt")
     marker_path_text = judge_validator.require_string(preflight_payload.get("marker_path"), f"{label}.marker_path")
     expected_marker_path = judge_validator.require_string(
         handoff_payload.get("expected_marker_path"),

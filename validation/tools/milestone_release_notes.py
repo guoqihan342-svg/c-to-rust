@@ -322,6 +322,7 @@ def require_opencode_preflight_proof_summary_contract(summary: Any, label: str) 
     require(summary.get("contract_status") == "executed", f"{label}.contract_status must be executed")
     require_true_value(summary.get("marker_exists"), f"{label}.marker_exists")
     require_true_value(summary.get("opencode_run_launched"), f"{label}.opencode_run_launched")
+    require_true_value(summary.get("opencode_run_argv_bound"), f"{label}.opencode_run_argv_bound")
     require(
         summary.get("proof_class") != "competition-exact",
         f"{label}.proof_class must not claim competition-exact without host attestation",
@@ -426,6 +427,7 @@ def opencode_preflight_lines(summary: dict[str, Any]) -> list[str]:
         f"| Preflight contract | {text(summary.get('contract_status'), 'unknown')} |",
         f"| Marker exists | {bool_text(summary.get('marker_exists'))} |",
         f"| OpenCode run launched | {bool_text(summary.get('opencode_run_launched'))} |",
+        f"| OpenCode run argv bound | {bool_text(summary.get('opencode_run_argv_bound'))} |",
         f"| Proof class | {text(summary.get('proof_class'), 'unknown')} |",
         f"| Chat output is evidence | {bool_text(summary.get('chat_output_is_evidence'))} |",
         f"| Semantic gate | {bool_text(summary.get('semantic_gate'))} |",

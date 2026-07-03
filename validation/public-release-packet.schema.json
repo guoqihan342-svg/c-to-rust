@@ -325,6 +325,7 @@
         "chat_output_is_evidence",
         "semantic_gate",
         "translation_coverage_numerator",
+        "opencode_run_argv_bound",
         "boundary"
       ],
       "properties": {
@@ -351,6 +352,7 @@
         "contract_status": {"type": "string"},
         "marker_exists": {"type": "boolean"},
         "opencode_run_launched": {"type": "boolean"},
+        "opencode_run_argv_bound": {"type": "boolean"},
         "proof_class": {"type": "string"},
         "chat_output_is_evidence": {"const": false},
         "semantic_gate": {"const": false},

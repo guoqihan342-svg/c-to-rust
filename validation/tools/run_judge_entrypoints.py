@@ -458,6 +458,7 @@ def public_packet_opencode_preflight_proof_summary(
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
+        "opencode_run_argv_bound": False,
         "boundary": (
             "OpenCode preflight proof is absent; runtime output is not semantic evidence "
             "and does not increase translator coverage."

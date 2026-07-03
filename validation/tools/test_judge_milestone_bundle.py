@@ -79,6 +79,21 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
         run_id,
     ]
     worker_command_line = bundle.validator.shell_command_line(worker_command)
+    opencode_prompt = f"Run OpenCode preflight marker for {run_id}"
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        "max",
+        "--model",
+        "GLM-5.1",
+        opencode_prompt,
+    ]
+    opencode_command_line = bundle.validator.shell_command_line(opencode_argv)
     launch_policy = {
         "opencode_agent": None,
         "opencode_command": "opencode",
@@ -106,8 +121,11 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
             "worker_command": worker_command,
             "worker_command_line": worker_command_line,
             "worker_command_sha256": bundle.validator.sha256_text(worker_command_line),
+            "opencode_argv": opencode_argv,
+            "opencode_command_line": opencode_command_line,
             "launch_policy": launch_policy,
             "launch_policy_sha256": launch_policy_sha256,
+            "prompt": opencode_prompt,
             "opencode_runtime_env": runtime_env,
         },
     )
@@ -145,6 +163,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
             "status": "passed",
             "exit_code": 0,
             "process_returncode": 0,
+            "argv": opencode_argv,
             "opencode_run_launched": True,
             "marker_path": repo_relative(marker_path),
             "marker_exists": True,
@@ -529,6 +548,38 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         )
 
         self.assertNotEqual(summary["status"], "passed")
+
+    def test_opencode_preflight_proof_summary_requires_opencode_run_argv(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-opencode-argv-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload.pop("opencode_argv")
+        write_json(handoff_path, handoff_payload)
+        preflight_payload["handoff_contract"]["sha256"] = bundle.validator.sha256_file(handoff_path)
+        write_json(preflight_path, preflight_payload)
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["status"], "failed")
+        self.assertFalse(summary.get("opencode_run_argv_bound"))
 
     def test_bundle_binds_all_entrypoints_metrics_and_opencode_runtime(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
@@ -1658,6 +1709,31 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertFalse(scorecard["claim_boundary"]["semantic_gate"])
         self.assertFalse(scorecard["semantic_gate"])
         self.assertEqual(scorecard["translation_coverage_numerator"], 0)
+
+    def test_publishability_requires_complete_opencode_preflight_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        publishability = bundle.build_publishability(
+            status="passed",
+            readiness={"all_entrypoints_executed": True},
+            proof_classes={"all_entrypoints_competition_exact": True},
+            blockers=[],
+            opencode_runtime={
+                "enabled_entrypoint_count": 1,
+                "preflight_proof_summary": {
+                    "status": "passed",
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "required_model": "GLM-5.1",
+                    "model_listed": True,
+                },
+            },
+        )
+
+        self.assertEqual(publishability["status"], "internal_preview")
+        self.assertFalse(publishability["external_milestone_claim_ready"])
+        self.assertFalse(publishability["external_milestone"])
+        self.assertFalse(publishability["opencode_glm51_publishable"])
 
     def test_known_gaps_keep_c2rust_baseline_gap_without_verified_baseline_exhibit(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

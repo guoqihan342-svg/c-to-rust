@@ -571,6 +571,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "contract_status": "executed",
                     "marker_exists": True,
                     "opencode_run_launched": True,
+                    "opencode_run_argv_bound": True,
                     "proof_class": "local-simulation",
                     "chat_output_is_evidence": False,
                     "semantic_gate": False,

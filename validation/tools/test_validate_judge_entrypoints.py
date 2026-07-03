@@ -5747,6 +5747,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_competition_smoke_entrypoint_rejects_python_c_spoof(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "competition_environment_smoke")
+        entry["command"] = (
+            "python3 -B -c \"import sys; sys.exit(0)\" "
+            "validation/tools/run_competition_smoke.py "
+            f"--proof-class {entry['proof_class']} "
+            f"--run-id {entry['run_id']} "
+            "--out-root target/competition-smoke-flashdb-judge-entrypoint"
+        )
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "competition_environment_smoke command must execute validation/tools/run_competition_smoke.py as argv[2]"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_verification_command_rejects_bare_python_launcher(self) -> None:
         config = load_default_config()
         entry = entrypoint_by_id(config, "before_after_judge_demo")

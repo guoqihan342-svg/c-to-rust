@@ -640,13 +640,7 @@ def build_publishability(
     preflight_status = preflight_summary.get("status") if opencode_enabled else "not-required"
     if not isinstance(preflight_status, str) or not preflight_status:
         preflight_status = "missing"
-    opencode_glm51_publishable = opencode_enabled and (
-        preflight_summary.get("status") == "passed"
-        and preflight_summary.get("opencode_command") == validator.COMPETITION_OPENCODE_COMMAND
-        and preflight_summary.get("opencode_model") == validator.COMPETITION_OPENCODE_MODEL
-        and preflight_summary.get("required_model") == validator.COMPETITION_OPENCODE_MODEL
-        and preflight_summary.get("model_listed") is True
-    )
+    opencode_glm51_publishable = opencode_enabled and opencode_preflight_summary_publishable(preflight_summary)
     return {
         "status": "blocked"
         if blocked
@@ -676,6 +670,50 @@ def build_publishability(
             "OpenCode with GLM-5.1 and does not convert chat/session output into semantic acceptance."
         ),
     }
+
+
+def opencode_preflight_summary_publishable(summary: dict[str, Any]) -> bool:
+    if summary.get("status") != "passed":
+        return False
+    if summary.get("required_when_opencode_runtime_enabled") is not True:
+        return False
+    if summary.get("chat_output_is_evidence") is not False:
+        return False
+    if summary.get("semantic_gate") is not False:
+        return False
+    if int_or_zero(summary.get("translation_coverage_numerator")) != 0:
+        return False
+    if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
+        return False
+    if summary.get("opencode_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("model_availability_status") != "available":
+        return False
+    if summary.get("model_listed") is not True:
+        return False
+    if int_or_zero(summary.get("process_returncode")) != 0:
+        return False
+    if summary.get("contract_status") != "executed":
+        return False
+    if summary.get("marker_exists") is not True:
+        return False
+    if summary.get("opencode_run_launched") is not True:
+        return False
+    if summary.get("opencode_run_argv_bound") is not True:
+        return False
+    if not validator.opencode_models_argv_matches(
+        summary.get("model_probe_argv"),
+        expected_command=validator.COMPETITION_OPENCODE_COMMAND,
+    ):
+        return False
+    runtime_env = summary.get("opencode_runtime_env")
+    if not isinstance(runtime_env, dict):
+        return False
+    if summary.get("opencode_runtime_env_sha256") != runtime_env.get("env_sha256"):
+        return False
+    return True
 
 
 def build_semantic_evidence_rollup(run_report: dict[str, Any]) -> dict[str, Any]:
@@ -1958,6 +1996,11 @@ def opencode_preflight_proof_summary_from_index(
             "contract_status": contract.get("status"),
             "marker_exists": preflight_payload.get("marker_exists"),
             "opencode_run_launched": preflight_payload.get("opencode_run_launched"),
+            "opencode_run_argv_bound": opencode_preflight_session_contract_passed(
+                preflight_payload,
+                contract=contract,
+                repo_root=repo_root,
+            ),
         }
     )
     if runtime_env is not None:
@@ -1984,6 +2027,7 @@ def opencode_preflight_absent_summary(*, required: bool, entrypoint_id: str | No
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
+        "opencode_run_argv_bound": False,
         "boundary": (
             "OpenCode preflight proof is absent; runtime output is not semantic evidence "
             "and does not increase translator coverage."
@@ -2034,6 +2078,8 @@ def opencode_preflight_summary_passed(
     if summary.get("marker_exists") is not True:
         return False
     if summary.get("opencode_run_launched") is not True:
+        return False
+    if summary.get("opencode_run_argv_bound") is not True:
         return False
     if not isinstance(summary.get("opencode_runtime_env"), dict):
         return False
@@ -2117,6 +2163,33 @@ def opencode_preflight_session_contract_passed(
         if worker_command_line != validator.shell_command_line(worker_command):
             return False
         if handoff_payload.get("worker_command_sha256") != validator.sha256_text(worker_command_line):
+            return False
+        report_argv = validator.require_string_argv(
+            preflight_payload.get("argv"),
+            "opencode_preflight_proof_summary.preflight_report.argv",
+        )
+        handoff_argv = validator.require_string_argv(
+            handoff_payload.get("opencode_argv"),
+            "opencode_preflight_proof_summary.handoff_contract.opencode_argv",
+        )
+        if report_argv != handoff_argv:
+            return False
+        validator.validate_opencode_run_argv_binding(
+            report_argv,
+            "opencode_preflight_proof_summary.preflight_report.argv",
+            launch_policy=preflight_policy,
+        )
+        handoff_command_line = validator.require_string(
+            handoff_payload.get("opencode_command_line"),
+            "opencode_preflight_proof_summary.handoff_contract.opencode_command_line",
+        )
+        if handoff_command_line != validator.shell_command_line(handoff_argv):
+            return False
+        handoff_prompt = validator.require_string(
+            handoff_payload.get("prompt"),
+            "opencode_preflight_proof_summary.handoff_contract.prompt",
+        )
+        if handoff_prompt != handoff_argv[-1]:
             return False
         marker_path_text = validator.require_string(
             preflight_payload.get("marker_path"),

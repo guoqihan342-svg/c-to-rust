@@ -13,6 +13,19 @@ def repo_relative(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
 
 
+def passed_validation_result() -> dict:
+    return {
+        "status": "passed",
+        "source_pin_contract": {
+            "status": "passed",
+            "target_id": "flashdb",
+            "repository": "https://gitcode.com/xwxf/FlashDB.git",
+            "branch": "competition",
+            "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        },
+    }
+
+
 class RunJudgeEntrypointsTests(unittest.TestCase):
     def setUp(self) -> None:
         self.portable_python_patch = patch(
@@ -82,7 +95,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         with patch.object(
             runner.validator,
             "validate_config",
-            side_effect=[{"status": "passed"}, {"status": "passed"}],
+            side_effect=[passed_validation_result(), passed_validation_result()],
         ) as validate_config:
             with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
                 report = runner.run_judge_entrypoints(
@@ -251,7 +264,11 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
             return payload
 
-        with patch.object(runner.validator, "validate_config", side_effect=[{"status": "passed"}, {"status": "passed"}]):
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[passed_validation_result(), passed_validation_result()],
+        ):
             with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
                 report = runner.run_judge_entrypoints(
                     config_path=config_path,
@@ -574,7 +591,11 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
             return payload
 
-        with patch.object(runner.validator, "validate_config", side_effect=[{"status": "passed"}, {"status": "passed"}]):
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[passed_validation_result(), passed_validation_result()],
+        ):
             with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
                 with patch.object(
                     runner.milestone_release_notes,
@@ -635,7 +656,11 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
             return payload
 
-        with patch.object(runner.validator, "validate_config", side_effect=[{"status": "passed"}, {"status": "passed"}]):
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[passed_validation_result(), passed_validation_result()],
+        ):
             with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
                 with patch.object(
                     runner.validate_public_release_packet,
@@ -949,7 +974,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         with patch.object(
             runner.validator,
             "validate_config",
-            side_effect=[{"status": "passed"}, {"status": "passed"}],
+            side_effect=[passed_validation_result(), passed_validation_result()],
         ):
             with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
                 report = runner.run_judge_entrypoints(
