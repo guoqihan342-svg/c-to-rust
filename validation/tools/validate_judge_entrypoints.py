@@ -923,11 +923,15 @@ def validate_competition_smoke_command_log_contract(
     command_log_path: Path,
     *,
     expected_steps: list[str] | None = None,
+    expected_step_results: dict[str, dict[str, Any]] | None = None,
+    require_opencode_glm_model: bool = False,
 ) -> dict[str, Any]:
     if not command_log_path.is_file():
         raise ValueError("competition_smoke_command_log path must exist")
     checked_entries = 0
     observed_steps: set[str] = set()
+    observed_step_counts: dict[str, int] = {}
+    opencode_glm_probe_verified = False
     with command_log_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
             stripped = line.strip()
@@ -942,6 +946,7 @@ def validate_competition_smoke_command_log_contract(
             step = entry.get("step")
             if isinstance(step, str) and step:
                 observed_steps.add(step)
+                observed_step_counts[step] = observed_step_counts.get(step, 0) + 1
             command = entry.get("command")
             if not isinstance(command, list) or not command:
                 raise ValueError(f"competition_smoke_command_log line {line_number} command must be a non-empty list")
@@ -977,17 +982,64 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         f"competition_smoke_command_log {field} must be repo-relative POSIX: {value}"
                     ) from error
+            if step == "opencode-glm-model-probe":
+                if entry.get("returncode") != 0:
+                    raise ValueError("competition_smoke_command_log opencode-glm-model-probe returncode must be 0")
+                if not opencode_models_argv_matches(command, expected_command=COMPETITION_OPENCODE_COMMAND):
+                    raise ValueError(
+                        "competition_smoke_command_log opencode-glm-model-probe command must be opencode models"
+                    )
+                stdout = entry.get("stdout")
+                if not isinstance(stdout, str):
+                    raise ValueError("competition_smoke_command_log opencode-glm-model-probe stdout must be a string")
+                if not opencode_models_output_mentions_required_model(stdout, COMPETITION_OPENCODE_MODEL):
+                    raise ValueError(
+                        "competition_smoke_command_log opencode-glm-model-probe stdout must list "
+                        f"{COMPETITION_OPENCODE_MODEL}"
+                    )
+                opencode_glm_probe_verified = True
+            if isinstance(step, str) and expected_step_results is not None and step in expected_step_results:
+                expected_step = expected_step_results[step]
+                if entry.get("returncode") != expected_step.get("returncode"):
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} returncode must match summary"
+                    )
+                expected_timed_out = expected_step.get("timed_out") is True
+                if (entry.get("timed_out") is True) != expected_timed_out:
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} timed_out must match summary"
+                    )
+                if expected_timed_out and entry.get("timeout_seconds") != expected_step.get("timeout_seconds"):
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} timeout_seconds must match summary"
+                    )
+                if entry.get("failure_class") != expected_step.get("failure_class"):
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} failure_class must match summary"
+                    )
             checked_entries += 1
     if checked_entries == 0:
         raise ValueError("competition_smoke_command_log must contain at least one entry")
     if expected_steps is not None:
+        expected_step_set = set(expected_steps)
         missing_steps = [step for step in expected_steps if step not in observed_steps]
         if missing_steps:
             raise ValueError(f"competition_smoke_command_log missing summary steps: {missing_steps}")
+        unexpected_steps = sorted(observed_steps - expected_step_set)
+        if unexpected_steps:
+            raise ValueError(f"competition_smoke_command_log unexpected steps: {unexpected_steps}")
+        duplicate_steps = sorted(
+            step for step, count in observed_step_counts.items() if step in expected_step_set and count > 1
+        )
+        if duplicate_steps:
+            raise ValueError(f"competition_smoke_command_log duplicate summary steps: {duplicate_steps}")
+    if require_opencode_glm_model and not opencode_glm_probe_verified:
+        raise ValueError("competition_smoke_command_log missing verified opencode-glm-model-probe entry")
     return {
         "status": "passed",
         "entry_count": checked_entries,
         "observed_steps": sorted(observed_steps),
+        "opencode_glm_probe_verified": opencode_glm_probe_verified,
     }
 
 
@@ -4932,9 +4984,16 @@ def validate_harness_artifact_contracts(
                 for step in smoke_summary_payload.get("steps", [])
                 if isinstance(step, dict)
             ]
+            expected_step_results = {
+                require_string(step.get("step"), "competition_smoke_summary.steps[].step"): step
+                for step in smoke_summary_payload.get("steps", [])
+                if isinstance(step, dict)
+            }
             result["competition_smoke_command_log"] = validate_competition_smoke_command_log_contract(
                 command_log_path,
                 expected_steps=expected_log_steps,
+                expected_step_results=expected_step_results,
+                require_opencode_glm_model=smoke_summary_payload.get("proof_class") == "competition-exact",
             )
         if "vendored_clang_verification" in artifacts:
             vendored_clang_path = repo_path(str(artifacts["vendored_clang_verification"]), repo_root=repo_root)

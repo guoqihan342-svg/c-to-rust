@@ -83,6 +83,7 @@ PROOF_CLASSES = ["competition-exact", "ci-approximation", "wsl-local-simulation"
 DEFAULT_STEP_TIMEOUT_SECONDS = 600
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+PUBLIC_PYTHON_ARGV = ["python3", "-B"]
 REQUIRED_TOOL_MISSING_PATTERNS = (
     "gcc is not installed",
     "g++ is not installed",
@@ -347,7 +348,7 @@ def smoke_commands(
 ) -> list[tuple[str, list[str]]]:
     slice_spec_arg = repo_relative_path(slice_spec, repo_root, "slice_spec")
     vendored_clang_command = [
-        sys.executable,
+        *PUBLIC_PYTHON_ARGV,
         rel_path(VERIFY_VENDORED_CLANG, repo_root),
         "--proof-class",
         proof_class,
@@ -378,7 +379,7 @@ def smoke_commands(
             (
                 "core-auto-evidence-validator",
                 [
-                    sys.executable,
+                    *PUBLIC_PYTHON_ARGV,
                     rel_path(AUTO_EVIDENCE_VALIDATOR, repo_root),
                     "--target-id",
                     target_id,
@@ -392,7 +393,7 @@ def smoke_commands(
             (
                 "evidence-governance",
                 [
-                    sys.executable,
+                    *PUBLIC_PYTHON_ARGV,
                     rel_path(EVIDENCE_GOVERNANCE, repo_root),
                     "--policy-tier",
                     "ci",
@@ -403,7 +404,7 @@ def smoke_commands(
             (
                 "translator-coverage-matrix",
                 [
-                    sys.executable,
+                    *PUBLIC_PYTHON_ARGV,
                     rel_path(TRANSLATOR_COVERAGE_MATRIX, repo_root),
                     "--output",
                     rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
@@ -412,7 +413,7 @@ def smoke_commands(
             (
                 "milestone-release-report",
                 [
-                    sys.executable,
+                    *PUBLIC_PYTHON_ARGV,
                     rel_path(MILESTONE_RELEASE_REPORT, repo_root),
                     "--coverage-report",
                     rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
@@ -423,7 +424,7 @@ def smoke_commands(
             (
                 "lightweight-unittest",
                 [
-                    sys.executable,
+                    *PUBLIC_PYTHON_ARGV,
                     "-m",
                     "unittest",
                     "validation.tools.test_competition_environment_profile",

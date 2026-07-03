@@ -181,6 +181,30 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["command_log"]["sha256"], module.sha256_lf_stable(command_log))
 
+    def test_smoke_runner_internal_python_commands_use_portable_python3_b(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            fake_runner = FakeCommandRunner()
+
+            module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="smoke-portable-python-test",
+            )
+
+            python_commands = [
+                command
+                for command in fake_runner.commands
+                if any(argument.endswith(".py") for argument in command) or command[1:3] == ["-m", "unittest"]
+            ]
+            self.assertGreater(len(python_commands), 0)
+            for command in python_commands:
+                self.assertEqual(command[:2], ["python3", "-B"])
+                self.assertNotIn(sys.executable, command)
+
     def test_smoke_runner_requires_explicit_confirmation_for_competition_exact(self) -> None:
         module = load_smoke_module()
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
@@ -725,7 +749,9 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                     if isinstance(argument, str)
                 ]
                 self.assertNotIn(module.sys.executable, logged_arguments)
-                self.assertIn("python.exe", logged_arguments)
+                self.assertNotIn("python.exe", logged_arguments)
+                self.assertIn("python3", logged_arguments)
+                self.assertIn("-B", logged_arguments)
         finally:
             module.sys.executable = original_executable
 

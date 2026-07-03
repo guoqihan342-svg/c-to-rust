@@ -127,22 +127,38 @@ def resume_replay_commands(
     }
 
 
-def write_valid_command_log(path: Path) -> str:
+def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
+    command_steps = steps or [
+        {
+            "step": step,
+            "returncode": 0,
+        }
+        for step in validator.REQUIRED_COMPETITION_SMOKE_STEPS
+    ]
     path.write_text(
         "".join(
             json.dumps(
                 {
-                    "step": step,
-                    "command": ["python3", "-B", "validation/tools/run_competition_smoke.py", "--step", step],
-                    "returncode": 0,
+                    "step": step["step"],
+                    "command": [
+                        "python3",
+                        "-B",
+                        "validation/tools/run_competition_smoke.py",
+                        "--step",
+                        step["step"],
+                    ],
+                    "returncode": step.get("returncode", 0),
                     "stdout": "",
                     "stderr": "",
+                    **({"timed_out": True} if step.get("timed_out") is True else {}),
+                    **({"timeout_seconds": step["timeout_seconds"]} if "timeout_seconds" in step else {}),
+                    **({"failure_class": step["failure_class"]} if "failure_class" in step else {}),
                 },
                 sort_keys=True,
             )
             + "\n"
-            for step in validator.REQUIRED_COMPETITION_SMOKE_STEPS
+            for step in command_steps
         ),
         encoding="utf-8",
     )
@@ -3877,7 +3893,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "final_gate": {"status": "passed"},
                 },
             )
-            payload["command_log"]["sha256"] = write_valid_command_log(command_log)
+            payload["command_log"]["sha256"] = write_valid_command_log(command_log, payload["steps"])
             write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
@@ -3945,7 +3961,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "final_gate": {"status": "passed"},
                 },
             )
-            payload["command_log"]["sha256"] = write_valid_command_log(command_log)
+            payload["command_log"]["sha256"] = write_valid_command_log(command_log, payload["steps"])
             write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
@@ -4149,7 +4165,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     {
                         "step": "environment-check",
                         "command": ["python3", "-B", "validation/tools/run_competition_smoke.py"],
-                        "returncode": 0,
+                        "returncode": 1,
                         "stdout": "",
                         "stderr": "",
                     },
@@ -4176,6 +4192,192 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     smoke_contract={
                         "proof_class": "local-simulation",
                         "run_id": "smoke-command-log-step-coverage-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_command_log_returncode_drift_from_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-command-log-returncode-drift-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_json(evidence_governance, {})
+            write_json(coverage_matrix, {})
+            write_json(milestone, {})
+            drifted_steps = [dict(step) for step in payload["steps"]]
+            for step in drifted_steps:
+                if step["step"] == "environment-check":
+                    step["returncode"] = 0
+            payload["command_log"]["sha256"] = write_valid_command_log(command_log, drifted_steps)
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log step environment-check returncode must match summary",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-command-log-returncode-drift-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_exact_glm_probe_stdout_without_required_model(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["proof_class"] = "competition-exact"
+            payload["run_id"] = "smoke-exact-glm-command-log-test"
+            payload["execution_environment"].update(
+                {
+                    "competition_exact_host_attested": True,
+                    "detected_ci": False,
+                    "detected_wsl": False,
+                    "kind": "competition-host",
+                    "system": "Linux",
+                }
+            )
+            payload["competition_profile_match"].update(
+                {
+                    "cargo_mirror_config_present": True,
+                    "clang_lane_verified": True,
+                    "kernel_match": True,
+                    "os_name_match": True,
+                    "python_version_match": True,
+                }
+            )
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["status"] = "passed"
+                step["returncode"] = 0
+                step["log_path"] = artifacts["command_log"]
+                step.pop("proof_class_effect", None)
+            payload["steps"].append(
+                {
+                    "step": "opencode-glm-model-probe",
+                    "status": "passed",
+                    "returncode": 0,
+                    "log_path": artifacts["command_log"],
+                }
+            )
+            payload["opencode_model_availability"] = {
+                "status": "available",
+                "required_model": "GLM-5.1",
+                "model_listed": True,
+                "opencode_command": "opencode",
+                "argv": ["opencode", "models"],
+                "process_returncode": 0,
+            }
+
+            write_json(summary_path, payload)
+            write_json(
+                vendored_path,
+                {
+                    **valid_vendored_clang_verification_payload(),
+                    "proof_class": "competition-exact",
+                    "clang_required": True,
+                },
+            )
+            write_json(evidence_governance, {})
+            write_json(coverage_matrix, {})
+            write_json(milestone, {})
+            command_log.parent.mkdir(parents=True, exist_ok=True)
+            command_log_entries = []
+            for step in payload["steps"]:
+                name = step["step"]
+                if name == "opencode-glm-model-probe":
+                    command = ["opencode", "models"]
+                    stdout = "zhipu/GLM-5.10\nopencode/not-GLM-5.1\n"
+                else:
+                    command = [
+                        "python3",
+                        "-B",
+                        "validation/tools/run_competition_smoke.py",
+                        "--step",
+                        name,
+                    ]
+                    stdout = ""
+                command_log_entries.append(
+                    json.dumps(
+                        {
+                            "step": name,
+                            "command": command,
+                            "returncode": 0,
+                            "stdout": stdout,
+                            "stderr": "",
+                        },
+                        sort_keys=True,
+                    )
+                )
+            command_log.write_text("\n".join(command_log_entries) + "\n", encoding="utf-8")
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log opencode-glm-model-probe stdout must list GLM-5.1",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-exact-glm-command-log-test",
                     },
                 )
 
