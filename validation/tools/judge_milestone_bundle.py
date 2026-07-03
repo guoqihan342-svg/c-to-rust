@@ -179,6 +179,7 @@ def build_judge_milestone_bundle(
             readiness=readiness,
             blockers=blockers,
             claim_scope=claim_scope,
+            publishability=publishability,
         ),
         "claim_boundary": claim_boundary,
         "claim_scope": claim_scope,
@@ -571,9 +572,11 @@ def build_bundle_summary(
     readiness: dict[str, Any],
     blockers: list[str],
     claim_scope: dict[str, Any],
+    publishability: dict[str, Any],
 ) -> dict[str, Any]:
     executed = int_or_zero(readiness.get("executed_count"))
     configured = int_or_zero(readiness.get("configured_count"))
+    external_milestone_claim_ready = publishability.get("external_milestone_claim_ready") is True
     return {
         "report_kind": "judge-milestone-bundle-summary",
         "headline": (
@@ -583,7 +586,7 @@ def build_bundle_summary(
         "source_run_headline": run_report.get("summary", {}).get("headline")
         if isinstance(run_report.get("summary"), dict)
         else None,
-        "external_milestone_claim_ready": status == "passed",
+        "external_milestone_claim_ready": external_milestone_claim_ready,
         "claim_scope": claim_scope,
         "blockers": blockers,
         "readiness": {
@@ -695,16 +698,24 @@ def build_publishability(
     if not isinstance(preflight_status, str) or not preflight_status:
         preflight_status = "missing"
     opencode_glm51_publishable = opencode_enabled and opencode_preflight_summary_publishable(preflight_summary)
+    external_ready = competition_exact_publishable and opencode_glm51_publishable
+    publication_scope_value = (
+        "full"
+        if external_ready
+        else "internal_preview_full"
+        if all_entrypoints_run_publishable
+        else scope
+    )
     return {
         "status": "blocked"
         if blocked
         else "external_release_ready"
-        if competition_exact_publishable and opencode_glm51_publishable
+        if external_ready
         else "internal_preview",
         "scope": scope,
-        "publication_scope": scope,
-        "external_milestone_claim_ready": competition_exact_publishable and opencode_glm51_publishable,
-        "external_milestone": competition_exact_publishable and opencode_glm51_publishable,
+        "publication_scope": publication_scope_value,
+        "external_milestone_claim_ready": external_ready,
+        "external_milestone": external_ready,
         "blocker_count": len(blockers),
         "blockers": blockers,
         "all_entrypoints_run_publishable": all_entrypoints_run_publishable,
@@ -1670,8 +1681,10 @@ def build_release_tag_readiness(*, repo_commit: dict[str, Any], publishability: 
 
 
 def publication_scope(*, claim_scope: dict[str, Any], publishability: dict[str, Any]) -> str:
-    if publishability.get("all_entrypoints_run_publishable"):
+    if publishability.get("external_milestone_claim_ready"):
         return "full"
+    if publishability.get("all_entrypoints_run_publishable"):
+        return "internal_preview_full"
     if claim_scope.get("external_review_index_ready"):
         return "partial"
     return "blocked"

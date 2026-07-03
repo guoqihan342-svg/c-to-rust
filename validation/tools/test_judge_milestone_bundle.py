@@ -1027,7 +1027,8 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["claim_scope"]["translator_generated_coverage_ready"], False)
         self.assertEqual(report["publishability"]["status"], "internal_preview")
         self.assertEqual(report["publishability"]["scope"], "full")
-        self.assertEqual(report["publishability"]["publication_scope"], "full")
+        self.assertEqual(report["publishability"]["publication_scope"], "internal_preview_full")
+        self.assertFalse(report["summary"]["external_milestone_claim_ready"])
         self.assertEqual(report["publishability"]["blocker_count"], 0)
         self.assertEqual(report["publishability"]["blockers"], [])
         self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
@@ -1154,7 +1155,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         publication_manifest = report["publication_manifest"]
         self.assertEqual(publication_manifest["report_kind"], "publication-manifest")
         self.assertEqual(publication_manifest["bundle_version"], 1)
-        self.assertEqual(publication_manifest["publication_scope"], "full")
+        self.assertEqual(publication_manifest["publication_scope"], "internal_preview_full")
         self.assertEqual(publication_manifest["source_commit"]["status"], "present")
         self.assertRegex(publication_manifest["source_commit"]["commit"], r"^[0-9a-f]{40}$")
         self.assertEqual(publication_manifest["repo_commit"], publication_manifest["source_commit"])

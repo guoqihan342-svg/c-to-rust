@@ -262,10 +262,18 @@ def require_publishability_contract(bundle: dict[str, Any], *, blockers: list[st
     require(scope in {"blocked", "partial", "full"}, "publishability.scope must be blocked, partial, or full")
     publication_scope = publishability.get("publication_scope")
     require(
-        publication_scope in {"blocked", "partial", "full"},
-        "publishability.publication_scope must be blocked, partial, or full",
+        publication_scope in {"blocked", "partial", "internal_preview_full", "full"},
+        "publishability.publication_scope must be blocked, partial, internal_preview_full, or full",
     )
-    require(publication_scope == scope, "publishability.publication_scope must match scope")
+    expected_publication_scope = (
+        "internal_preview_full"
+        if readiness == "internal_preview" and scope == "full"
+        else scope
+    )
+    require(
+        publication_scope == expected_publication_scope,
+        "publishability.publication_scope must match external readiness",
+    )
     blocker_count = publishability.get("blocker_count")
     require(
         isinstance(blocker_count, int) and blocker_count == len(blockers),

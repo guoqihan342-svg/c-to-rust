@@ -583,6 +583,24 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
             )
 
 
+def require_publishability_publication_scope_contract(publishability: dict[str, Any]) -> None:
+    status = publishability.get("status")
+    scope = publishability.get("scope")
+    publication_scope = publishability.get("publication_scope")
+    allowed = {"blocked", "partial", "internal_preview_full", "full"}
+    if publication_scope not in allowed:
+        raise ValueError("publishability.publication_scope must be blocked, partial, internal_preview_full, or full")
+    expected_publication_scope = (
+        "internal_preview_full"
+        if status == "internal_preview" and scope == "full"
+        else scope
+    )
+    if publication_scope != expected_publication_scope:
+        raise ValueError("publishability.publication_scope must match external readiness")
+    if publication_scope == "full" and publishability.get("external_milestone_claim_ready") is not True:
+        raise ValueError("publishability.publication_scope=full requires external_milestone_claim_ready=true")
+
+
 def require_published_artifact_refs_are_hash_bound(publication: dict[str, Any], *, repo_root: Path) -> None:
     refs = publication.get("published_artifact_refs", [])
     if not isinstance(refs, list):
@@ -922,6 +940,10 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     ):
         if packet.get(field) != bundle.get(field):
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+
+    require_publishability_publication_scope_contract(
+        require_object(packet.get("publishability"), "publishability")
+    )
 
     summary = require_object(packet.get("summary"), "summary")
     if summary.get("blockers") != bundle.get("blockers", []):

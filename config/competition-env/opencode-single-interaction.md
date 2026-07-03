@@ -8,6 +8,14 @@
 
 比赛评测方式：OpenCode 读取本仓库，用**一次交互**完成 C→Rust 迁移。若评测方设置 **600 分钟（10 小时）**超时上限，把它视为外部预算参考；本项目的设计目标仍是准确性优先，而不是为了压缩时间牺牲验证。不允许多轮手动调 prompt、不允许中途切分支、不允许外部人工干预。
 
+## 比赛 Agent 运行合同
+
+比赛侧 agent 证据只认一条启动策略：命令为 `opencode`，模型为 `GLM-5.1`，repo-owned agent 为 `c2rust-migrator`，variant 为 `max`。所有 OpenCode preflight、worker、resume replay 和 public packet 证据都必须保留等价于 `--opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max` 的机器可校验字段。
+
+`opencode-preflight` 必须先在同一个 repo-local runtime env 下运行 `opencode models`，并证明模型列表精确包含 `GLM-5.1`。如果模型不可用、命令不是 `opencode`、agent 不是 `c2rust-migrator`、variant 不是 `max`，或 preflight/session/handoff 证据缺失，harness 必须 fail-closed，记录 `opencode_model_unavailable` 或对应 launch-contract blocker，并且不得启动 worker 或写成比赛通过证据。
+
+Codex 聊天、Codex 子智能体、其它 OpenCode 模型、本机 `local-simulation` 或手工编辑 artifact 都只能作为开发辅助；它们不能关闭 P0-H9，不能写成 competition-facing agent evidence，也不能替代 C oracle / Rust replay / diff / unsafe ledger / final validator。OpenCode chat/session 文本只用于命令合同审计，语义接受只看落盘 artifact 和 validator。
+
 ## 目标
 
 一次 OpenCode 会话内完成：
@@ -212,7 +220,7 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
 
 - **不修改项目 Rust/Python 源码**（除非证据目录中已存在 `blocked_repairs` 且原文案明确允许修复）。
 - **不生成手写 `c_source` 字符串**（必须从真实 C 源文件通过 `extract_source_slice.py` 抽取）。
-- **不启动 LLM code generation**（本项目翻译只走 clang-lowered typed IR + generic emitter，不走 AI/LLM 候选生成）。
+- **不启动不受控 LLM code generation**。比赛 agent 只能通过上述 `OpenCode + GLM-5.1 + c2rust-migrator + max` 包装层执行 harness 分配的命令或受限 safety-transform attempt；不能让聊天输出、手写源码、其它模型或绕过 validator 的候选进入语义证据。
 - **允许并行 subagent/batch worker**，但只处理互不依赖的 slice；必须隔离输出目录、记录 worker 状态，并由统一 validator/final verification 收敛。planned batch 可以保留 planner 顺序写 report/merge input，但不能替代最终 validator。
 - **SQLite 只是 harness ledger**，用于 assignment、lease、artifact index 和 merge plan；不能用 SQLite 中的状态替代 evidence validator。
 - **优先使用 `run_competition.py` 直接 source 参数或 `--extract-spec` 做真实 C slice 抽取、迁移和汇总**；`--slice-spec` 仍可用于已经抽取好的 spec，多个隔离 worker 的结果通过重复 `--worker-summary` 进入同一 summary validator。

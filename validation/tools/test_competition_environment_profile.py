@@ -279,6 +279,30 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         text,
                     )
 
+    def test_opencode_single_interaction_declares_judge_agent_runtime_contract(self) -> None:
+        docs = [
+            PROFILE_DIR / "opencode-single-interaction.md",
+            PROFILE_DIR / "opencode-single-interaction.en.md",
+        ]
+
+        for doc in docs:
+            text = doc.read_text(encoding="utf-8")
+            with self.subTest(doc=doc.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("opencode", text)
+                self.assertIn("GLM-5.1", text)
+                self.assertIn("c2rust-migrator", text)
+                self.assertIn("max", text)
+                self.assertIn("opencode models", text)
+                self.assertIn("opencode_model_unavailable", text)
+                self.assertIn("--opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max", text)
+                self.assertIn("P0-H9", text)
+                self.assertIn("C oracle", text)
+                self.assertIn("Rust replay", text)
+                self.assertIn("diff", text)
+                self.assertIn("unsafe ledger", text)
+                self.assertIn("final validator", text)
+                self.assertRegex(text, r"(不受控 LLM code generation|uncontrolled LLM code generation)")
+
     def test_opencode_single_interaction_context_md_is_handoff_only(self) -> None:
         docs = [
             PROFILE_DIR / "opencode-single-interaction.md",

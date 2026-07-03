@@ -378,7 +378,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "publishability": {
                 "status": "internal_preview",
                 "scope": "full",
-                "publication_scope": "full",
+                "publication_scope": "internal_preview_full",
                 "external_milestone_claim_ready": False,
                 "external_milestone": False,
                 "blocker_count": 0,
@@ -646,7 +646,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             },
             "publication_manifest": {
                 "report_kind": "publication-manifest",
-                "publication_scope": "full",
+                "publication_scope": "internal_preview_full",
                 "repo_commit": {
                     "status": "present",
                     "commit": "1234567890abcdef1234567890abcdef12345678",

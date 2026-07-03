@@ -973,7 +973,7 @@ def valid_packet(root: Path) -> dict:
         "publishability": {
             "status": "internal_preview",
             "scope": "full",
-            "publication_scope": "full",
+            "publication_scope": "internal_preview_full",
             "external_milestone_claim_ready": False,
             "external_milestone": False,
             "blocker_count": 0,
@@ -2121,6 +2121,26 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("publishability must match judge_milestone_bundle.publishability" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_internal_preview_publication_scope_full(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-publishability-scope-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publishability"]["publication_scope"] = "full"
+        write_json(bundle_path, bundle_payload)
+        packet["publishability"] = json.loads(json.dumps(bundle_payload["publishability"]))
+        packet["judge_milestone_bundle"]["sha256"] = packet_validator.judge_validator.sha256_file(bundle_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("publishability.publication_scope must match external readiness" in error for error in result["errors"]),
             result["errors"],
         )
 

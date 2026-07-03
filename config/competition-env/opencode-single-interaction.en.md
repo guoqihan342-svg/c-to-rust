@@ -6,6 +6,14 @@ Chinese original: `opencode-single-interaction.md`.
 
 The competition evaluation model: OpenCode reads this repository and completes the C-to-Rust migration in a **single interaction**. If the evaluator sets a **600-minute (10-hour)** timeout cap, treat it as an external budget reference. This project still optimizes for accuracy first, not for saving time at the cost of validation. No multi-round prompt tuning, no mid-session branch switching, no external human intervention.
 
+## Competition Agent Runtime Contract
+
+Judge-facing agent evidence recognizes exactly one launch policy: command `opencode`, model `GLM-5.1`, repo-owned agent `c2rust-migrator`, and variant `max`. Every OpenCode preflight, worker, resume replay, and public packet artifact must preserve machine-checkable fields equivalent to `--opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max`.
+
+`opencode-preflight` must first run `opencode models` under the same repo-local runtime env and prove that the model list contains the exact `GLM-5.1` token. If the model is unavailable, the command is not `opencode`, the agent is not `c2rust-migrator`, the variant is not `max`, or preflight/session/handoff evidence is missing, the harness must fail closed, record `opencode_model_unavailable` or the corresponding launch-contract blocker, and must not launch workers or publish the result as passing competition evidence.
+
+Codex chat, Codex subagents, other OpenCode models, local `local-simulation`, and hand-edited artifacts are development aids only. They cannot close P0-H9, cannot be labeled competition-facing agent evidence, and cannot replace the C oracle / Rust replay / diff / unsafe ledger / final validator chain. OpenCode chat/session text is command-contract audit evidence only; semantic acceptance comes only from on-disk artifacts and validators.
+
 ## Goal
 
 Complete within one OpenCode session:
@@ -210,7 +218,7 @@ If a command fails outside the harness retry path, record the reason and do not 
 
 - **Do not modify project Rust/Python source code** (unless `blocked_repairs` evidence already exists and the original text explicitly allows repair).
 - **Do not generate hand-written `c_source` strings** (must extract from real C source files via `extract_source_slice.py`).
-- **Do not initiate LLM code generation** (this project translates through clang-lowered typed IR + generic emitter only, not AI/LLM candidate generation).
+- **Do not initiate uncontrolled LLM code generation**. The competition agent may only execute harness-assigned commands or bounded safety-transform attempts through the `OpenCode + GLM-5.1 + c2rust-migrator + max` wrapper; chat output, hand-written source, other models, or candidates that bypass validators cannot enter semantic evidence.
 - **Parallel subagents/batch workers are allowed** only for independent slices. Outputs must be isolated, worker status must be recorded, and acceptance must converge through the common validator/final verification. Planned batch execution may preserve planner order in the report/merge input, but it cannot replace the final validator.
 - **SQLite is only a harness ledger** for assignment, lease, artifact index, and merge plans; SQLite state cannot replace evidence validation.
 - **Prefer `run_competition.py` direct source arguments or `--extract-spec` for real C slice extraction, migration, and aggregation**; `--slice-spec` remains available for already-extracted specs, and isolated worker results enter the same summary validator through repeated `--worker-summary`.

@@ -307,7 +307,8 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         )
         milestone_bundle = json.loads((out_path.parent / "judge-milestone-bundle.json").read_text(encoding="utf-8"))
         self.assertEqual(milestone_bundle["status"], "passed")
-        self.assertTrue(milestone_bundle["summary"]["external_milestone_claim_ready"])
+        self.assertFalse(milestone_bundle["summary"]["external_milestone_claim_ready"])
+        self.assertEqual(milestone_bundle["publishability"]["status"], "internal_preview")
         self.assertFalse(milestone_bundle["claim_boundary"]["semantic_gate"])
         self.assertEqual(milestone_bundle["judge_entrypoints_run_report"]["sha256"], runner.validator.sha256_file(out_path))
         release_notes = (out_path.parent / "milestone-release-notes.md").read_text(encoding="utf-8")
@@ -317,6 +318,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         public_packet = json.loads((out_path.parent / "public-release-packet.json").read_text(encoding="utf-8"))
         self.assertEqual(public_packet["report_kind"], "public-release-packet")
         self.assertEqual(public_packet["status"], "passed")
+        self.assertFalse(public_packet["publishability"]["external_milestone_claim_ready"])
         self.assertEqual(public_packet["judge_entrypoints_run_report"]["sha256"], runner.validator.sha256_file(out_path))
         self.assertEqual(
             public_packet["judge_milestone_bundle"]["sha256"],

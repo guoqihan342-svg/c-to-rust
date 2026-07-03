@@ -134,7 +134,7 @@
       "properties": {
         "status": {"enum": ["blocked", "internal_preview", "external_release_ready"]},
         "scope": {"enum": ["full", "partial", "blocked"]},
-        "publication_scope": {"enum": ["full", "partial", "blocked"]},
+        "publication_scope": {"enum": ["full", "internal_preview_full", "partial", "blocked"]},
         "external_milestone_claim_ready": {"type": "boolean"},
         "external_milestone": {"type": "boolean"},
         "blocker_count": {"type": "integer", "minimum": 0},
@@ -1059,7 +1059,7 @@
       "properties": {
         "report_kind": {"const": "publication-manifest"},
         "bundle_version": {"const": 1},
-        "publication_scope": {"enum": ["full", "partial", "blocked"]},
+        "publication_scope": {"enum": ["full", "internal_preview_full", "partial", "blocked"]},
         "source_commit": {
           "type": "object",
           "additionalProperties": true,
