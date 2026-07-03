@@ -749,7 +749,7 @@ def evidence_cost_retention_fixture() -> dict:
 
 
 def valid_packet(root: Path) -> dict:
-    run_report = write_text_artifact(root / "summary" / "judge-entrypoints-run-report.json", "{}\n")
+    run_report_path = root / "summary" / "judge-entrypoints-run-report.json"
     readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
     bundle_path = root / "summary" / "judge-milestone-bundle.json"
     opencode_preflight_proof = write_opencode_preflight_fixture(root)
@@ -806,6 +806,12 @@ def valid_packet(root: Path) -> dict:
         "sha256": judge_validator.sha256_file(archive_manifest_path),
     }
     competition_config_archive["materialized_manifest"] = archive_manifest_ref
+    write_json(run_report_path, {"competition_config_archive": competition_config_archive})
+    run_report = {
+        "path": repo_relative(run_report_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(run_report_path),
+    }
     bundle_self_ref = {
         "path": repo_relative(bundle_path),
         "status": "self",
@@ -1262,6 +1268,47 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(packet["evidence_cost_retention"]["rollup"]["total_bytes"], 120)
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
+
+    def test_validate_packet_rejects_competition_config_archive_drift_from_bound_run_report(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+
+        run_report_path = REPO_ROOT / packet["judge_entrypoints_run_report"]["path"]
+        run_report_payload = json.loads(run_report_path.read_text(encoding="utf-8"))
+        drifted_archive = json.loads(json.dumps(packet["competition_config_archive"]))
+        drifted_archive["external_ref_count"] += 1
+        run_report_payload["competition_config_archive"] = drifted_archive
+        write_json(run_report_path, run_report_payload)
+        run_report_ref = {
+            "path": repo_relative(run_report_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(run_report_path),
+        }
+        packet["judge_entrypoints_run_report"] = run_report_ref
+        packet["publication_manifest"]["judge_entrypoints_run_report"] = run_report_ref
+
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["judge_entrypoints_run_report"] = run_report_ref
+        bundle_payload["publication_manifest"]["judge_entrypoints_run_report"] = run_report_ref
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "competition_config_archive must match judge_entrypoints_run_report.competition_config_archive" in error
+                for error in result["errors"]
+            )
+        )
 
     def test_public_release_packet_schema_requires_summary_blockers(self) -> None:
         schema = json.loads((REPO_ROOT / "validation" / "public-release-packet.schema.json").read_text(encoding="utf-8"))

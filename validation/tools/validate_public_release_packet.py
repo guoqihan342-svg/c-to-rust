@@ -260,6 +260,23 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
             raise ValueError(f"competition_config_archive.external_refs.{path_text}: {error}") from error
 
 
+def require_competition_config_archive_matches_run_report(packet: dict[str, Any], *, repo_root: Path) -> None:
+    run_report_ref = require_object(packet.get("judge_entrypoints_run_report"), "judge_entrypoints_run_report")
+    try:
+        checked_run_report = judge_validator.validate_ref(run_report_ref, repo_root=repo_root)
+    except ValueError as error:
+        raise ValueError(f"judge_entrypoints_run_report: {error}") from error
+    run_report_path = judge_validator.repo_path(str(checked_run_report["path"]), repo_root=repo_root)
+    try:
+        run_report = judge_validator.load_json(run_report_path)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"judge_entrypoints_run_report: unable to read JSON payload: {error}") from error
+    if packet.get("competition_config_archive") != run_report.get("competition_config_archive"):
+        raise ValueError(
+            "competition_config_archive must match judge_entrypoints_run_report.competition_config_archive"
+        )
+
+
 def require_materialized_competition_config_archive_manifest(
     archive: dict[str, Any],
     *,
@@ -855,6 +872,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
         if field in publication and publication.get(field) != packet.get(field):
             raise ValueError(f"publication_manifest.{field} must match public_release_packet.{field}")
+    require_competition_config_archive_matches_run_report(packet, repo_root=repo_root)
 
     for field in (
         "publication_manifest",

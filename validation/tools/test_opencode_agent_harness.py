@@ -2083,6 +2083,76 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
             self.assertEqual(agent_index["reports"]["opencode_preflight_report"], expected_preflight_binding)
 
+    def test_run_batch_profile_opencode_auto_preflight_failure_writes_blocked_report_before_planning(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-auto-preflight-blocked",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "timeout_seconds": 13,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="gpt-5.4\n", stderr="")
+                raise AssertionError(f"batch preflight failure must not launch OpenCode worker or marker command: {argv}")
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-profile-opencode-preflight-blocked",
+                out_root=out_root,
+                command_runner=fake_preflight_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["report_kind"], "batch-profile-report")
+            self.assertEqual(result["status"], "blocked")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["blocked_phase"], "opencode-preflight")
+            self.assertEqual(result["root_cause_key"], "opencode_model_unavailable")
+            self.assertFalse(result["semantic_gate"])
+            self.assertEqual(result["translation_coverage_numerator"], 0)
+            self.assertFalse(result["local_simulation_closes_p0_h9"])
+            self.assertEqual(result["worker_count"], 0)
+            self.assertNotIn("run_plan", result)
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+            self.assertFalse((out_root / "harness" / "plans").exists())
+
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            self.assertTrue(preflight_report.exists())
+            preflight_payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            self.assertEqual(result["opencode_preflight_report"]["path"], repo_rel(preflight_report))
+            self.assertEqual(result["opencode_preflight_report"]["status"], "failed")
+            self.assertEqual(result["opencode_preflight_report"]["root_cause_key"], "opencode_model_unavailable")
+            self.assertEqual(result["h9_blocker"], preflight_payload["h9_blocker"])
+            self.assertFalse(result["h9_blocker"]["opencode_run_launched"])
+
+            batch_report = out_root / "harness" / "batch-profile-report.json"
+            self.assertEqual(json.loads(batch_report.read_text(encoding="utf-8")), result)
+
     def test_run_batch_profile_opencode_hostless_rehearsal_executes_auto_preflight_and_worker_contracts(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

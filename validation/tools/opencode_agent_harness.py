@@ -1237,6 +1237,65 @@ def explicit_worker_slice_spec_source_sha256(spec: dict[str, Any], source_file: 
     return None
 
 
+def write_blocked_batch_preflight_report(
+    *,
+    profile: dict[str, Any],
+    profile_path: Path,
+    run_id: str,
+    out_root: Path,
+    proof_class: str,
+    mode: str,
+    preflight_result: dict[str, Any],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    report_path = out_root / "harness" / "batch-profile-report.json"
+    raw_preflight_path = preflight_result.get("report_path", out_root / "harness" / "opencode-preflight-report.json")
+    preflight_report_path = repo_path(Path(str(raw_preflight_path)), repo_root=repo_root)
+    preflight_binding: dict[str, Any] = {
+        "path": repo_relative(preflight_report_path, repo_root=repo_root),
+        "sha256": sha256_file(preflight_report_path) if preflight_report_path.is_file() else "",
+        "status": str(preflight_result.get("status", "failed")),
+        "root_cause_key": str(preflight_result.get("root_cause_key", "")),
+    }
+    if isinstance(preflight_result.get("contract_verification"), dict):
+        preflight_binding["contract_status"] = str(preflight_result["contract_verification"].get("status", ""))
+    if isinstance(preflight_result.get("opencode_model_availability"), dict):
+        preflight_binding["opencode_model_availability"] = preflight_result["opencode_model_availability"]
+
+    h9_blocker = preflight_result.get("h9_blocker") if isinstance(preflight_result.get("h9_blocker"), dict) else None
+    result: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "batch-profile-report",
+        "status": "blocked",
+        "exit_code": 1,
+        "blocked_phase": "opencode-preflight",
+        "root_cause_key": str(preflight_result.get("root_cause_key", "opencode_preflight_failed")),
+        "profile_id": profile_required_string(profile, "profile_id"),
+        "profile_path": repo_relative(profile_path, repo_root=repo_root),
+        "profile_sha256": sha256_file(profile_path),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "proof_class": proof_class,
+        "mode": mode,
+        "worker_count": 0,
+        "opencode_preflight_report": preflight_binding,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "local_simulation_closes_p0_h9": False,
+        "evidence_boundary": (
+            "Batch profile stopped before planning because OpenCode preflight did not pass. "
+            "No SQLite ledger, worker plan, OpenCode worker, semantic gate, or translation coverage claim was produced."
+        ),
+        "next_required_action": "rerun_on_real_opencode_glm51_max_host",
+        "report_path": repo_relative(report_path, repo_root=repo_root),
+    }
+    if h9_blocker is not None:
+        result["h9_blocker"] = h9_blocker
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, result)
+    return result
+
+
 def run_batch_profile(
     *,
     profile_path: Path,
@@ -1297,9 +1356,15 @@ def run_batch_profile(
             str(preflight_result.get("report_path", out_root / "harness" / "opencode-preflight-report.json"))
         )
         if preflight_result.get("status") != "passed" or int(preflight_result.get("exit_code", 1)) != 0:
-            raise SystemExit(
-                "opencode preflight failed before batch profile execution: "
-                f"{repo_relative(repo_path(opencode_preflight_report, repo_root=repo_root), repo_root=repo_root)}"
+            return write_blocked_batch_preflight_report(
+                profile=profile,
+                profile_path=profile_path,
+                run_id=run_id,
+                out_root=out_root,
+                proof_class=proof_class,
+                mode=mode,
+                preflight_result=preflight_result,
+                repo_root=repo_root,
             )
 
     reset_batch_profile_ledger(out_root=out_root, repo_root=repo_root)
