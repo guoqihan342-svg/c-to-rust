@@ -664,6 +664,17 @@ def require_publishability_publication_scope_contract(
             raise ValueError(
                 "competition_host_readiness.competition_exact_host_verified must be true for external_release_ready"
             )
+    if publishability.get("competition_exact_publishable") is True:
+        if readiness.get("all_entrypoints_competition_exact") is not True:
+            raise ValueError(
+                "publishability.competition_exact_publishable requires "
+                "competition_host_readiness.all_entrypoints_competition_exact=true"
+            )
+        if readiness.get("competition_exact_host_verified") is not True:
+            raise ValueError(
+                "publishability.competition_exact_publishable requires "
+                "competition_host_readiness.competition_exact_host_verified=true"
+            )
 
 
 def require_published_artifact_refs_are_hash_bound(publication: dict[str, Any], *, repo_root: Path) -> None:
@@ -1040,6 +1051,10 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     expected_proof_class_rollup = bundle.get("proof_class_rollup", bundle.get("proof_classes"))
     if summary.get("proof_class_rollup") != expected_proof_class_rollup:
         raise ValueError("summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup")
+    require_competition_host_readiness_matches_proof_class_rollup(
+        require_object(packet.get("competition_host_readiness"), "competition_host_readiness"),
+        require_object(expected_proof_class_rollup, "judge_milestone_bundle.proof_class_rollup"),
+    )
 
     runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
     boundary = require_object(packet.get("opencode_patch_boundary"), "opencode_patch_boundary")
@@ -1067,6 +1082,34 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             "must_not_claim must include judge_milestone_bundle.must_not_claim entries: "
             f"{missing_claims}"
         )
+
+
+def require_competition_host_readiness_matches_proof_class_rollup(
+    readiness: dict[str, Any],
+    proof_class_rollup: dict[str, Any],
+) -> None:
+    field_pairs = (
+        ("actual_highest_proof_class", "highest_proof_class"),
+        ("all_entrypoints_competition_exact", "all_entrypoints_competition_exact"),
+        ("competition_exact_host_verified", "competition_exact_host_verified"),
+    )
+    for readiness_field, rollup_field in field_pairs:
+        if readiness.get(readiness_field) != proof_class_rollup.get(rollup_field):
+            raise ValueError(
+                f"competition_host_readiness.{readiness_field} must match "
+                f"judge_milestone_bundle.proof_class_rollup.{rollup_field}"
+            )
+    if readiness.get("status") == "ready":
+        if proof_class_rollup.get("all_entrypoints_competition_exact") is not True:
+            raise ValueError(
+                "competition_host_readiness.status=ready requires "
+                "judge_milestone_bundle.proof_class_rollup.all_entrypoints_competition_exact=true"
+            )
+        if proof_class_rollup.get("competition_exact_host_verified") is not True:
+            raise ValueError(
+                "competition_host_readiness.status=ready requires "
+                "judge_milestone_bundle.proof_class_rollup.competition_exact_host_verified=true"
+            )
 
 
 def require_bound_bundle_identity_contract(packet: dict[str, Any], bundle: dict[str, Any]) -> None:

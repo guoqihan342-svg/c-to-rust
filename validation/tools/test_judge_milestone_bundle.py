@@ -2275,6 +2275,61 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertFalse(report["summary"]["external_milestone_claim_ready"])
         self.assertFalse(report["claim_boundary"]["semantic_gate"])
 
+    def test_standalone_bundle_removes_stale_publication_siblings(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-stale-publication-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        stale_packet = temp_dir / "summary" / "public-release-packet.json"
+        stale_notes = temp_dir / "summary" / "milestone-release-notes.md"
+        stale_packet.parent.mkdir(parents=True, exist_ok=True)
+        stale_packet.write_text('{"report_kind":"stale-public-release-packet"}\n', encoding="utf-8")
+        stale_notes.write_text("# stale release notes\n", encoding="utf-8")
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "headline": "Judge entrypoints passed: 1/4 executed; semantic_gate=false",
+                    "readiness": {
+                        "all_entrypoints_executed": False,
+                        "executed_count": 1,
+                        "configured_count": 4,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "key_artifacts": {},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("not_all_entrypoints_executed", report["blockers"])
+        self.assertFalse(stale_packet.exists())
+        self.assertFalse(stale_notes.exists())
+
     def test_bundle_prefers_post_run_validation_artifact_refs_over_key_artifact_paths(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

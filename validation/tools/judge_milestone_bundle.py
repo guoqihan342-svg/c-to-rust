@@ -47,6 +47,7 @@ def build_judge_milestone_bundle(
     repo_root = repo_root.resolve()
     run_report_path = resolve_input_path(run_report_path, repo_root=repo_root)
     out_path = resolve_output_path(out_path, repo_root=repo_root)
+    remove_stale_publication_siblings(out_path)
     run_report = validator.load_json(run_report_path)
     entrypoints = [entry for entry in run_report.get("entrypoints", []) if isinstance(entry, dict)]
     readiness = run_report.get("summary", {}).get("readiness", {}) if isinstance(run_report.get("summary"), dict) else {}
@@ -3629,6 +3630,11 @@ def resolve_output_path(path: Path, *, repo_root: Path) -> Path:
     path_text = path.as_posix()
     validator.assert_repo_relative_posix(path_text)
     return validator.repo_path(path_text, repo_root=repo_root)
+
+
+def remove_stale_publication_siblings(out_path: Path) -> None:
+    for filename in ("public-release-packet.json", "milestone-release-notes.md"):
+        (out_path.parent / filename).unlink(missing_ok=True)
 
 
 def normalize_retention_classes(value: dict[str, Any]) -> dict[str, dict[str, int]]:

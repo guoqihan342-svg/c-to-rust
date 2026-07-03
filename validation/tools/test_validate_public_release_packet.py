@@ -672,6 +672,10 @@ def sync_packet_bound_bundle(packet: dict, *, rebuild_release_notes: bool = True
     for field in ("publishability", "competition_host_readiness"):
         if field in packet:
             bundle_payload[field] = json.loads(json.dumps(packet[field]))
+    summary = packet.get("summary") if isinstance(packet.get("summary"), dict) else {}
+    if isinstance(summary.get("proof_class_rollup"), dict):
+        bundle_payload["proof_classes"] = json.loads(json.dumps(summary["proof_class_rollup"]))
+        bundle_payload["proof_class_rollup"] = json.loads(json.dumps(summary["proof_class_rollup"]))
     write_json(bundle_path, bundle_payload)
     packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
 
@@ -1023,10 +1027,20 @@ def valid_packet(root: Path) -> dict:
             "boundary": "Competition host readiness is an H9 launch contract, not semantic acceptance.",
         },
         "proof_classes": {
-            "rollup": {
-                "trusted_proof_classes": ["local-simulation"],
-                "has_competition_exact": False,
-            }
+            "all": ["local-simulation"],
+            "highest_proof_class": "local-simulation",
+            "has_competition_exact": False,
+            "all_entrypoints_competition_exact": False,
+            "competition_exact_host_verified": False,
+            "entrypoints": [
+                {
+                    "id": "opencode_multi_worker_evaluate_profile",
+                    "proof_class": "local-simulation",
+                    "competition_exact_host_attested": False,
+                }
+            ],
+            "non_exact_entrypoints": ["opencode_multi_worker_evaluate_profile"],
+            "host_attestation_missing_entrypoints": [],
         },
         "harness_architecture_summary": {
             "report_kind": "harness-architecture-summary",
@@ -1494,6 +1508,57 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         packet["competition_host_readiness"].update(
             {
                 "status": "ready",
+                "actual_highest_proof_class": "competition-exact",
+                "all_entrypoints_competition_exact": True,
+                "competition_exact_host_verified": True,
+                "external_milestone_claim_ready": True,
+                "missing_requirements": [],
+                "blocker_count": 0,
+            }
+        )
+        packet["summary"]["proof_class_rollup"].update(
+            {
+                "all": ["competition-exact"],
+                "highest_proof_class": "competition-exact",
+                "has_competition_exact": True,
+                "all_entrypoints_competition_exact": True,
+                "competition_exact_host_verified": True,
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "proof_class": "competition-exact",
+                        "competition_exact_host_attested": True,
+                    }
+                ],
+                "non_exact_entrypoints": [],
+                "host_attestation_missing_entrypoints": [],
+            }
+        )
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["proof_class"] = "competition-exact"
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed", result["errors"])
+
+    def test_validate_packet_rejects_host_ready_when_proof_class_rollup_is_local_simulation(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-host-ready-rollup-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["publishability"].update(
+            {
+                "status": "external_release_ready",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": True,
+                "external_milestone": True,
+                "competition_exact_publishable": True,
+                "focused_run": False,
+            }
+        )
+        packet["competition_host_readiness"].update(
+            {
+                "status": "ready",
                 "all_entrypoints_competition_exact": True,
                 "competition_exact_host_verified": True,
                 "external_milestone_claim_ready": True,
@@ -1507,7 +1572,15 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
 
-        self.assertEqual(result["status"], "passed", result["errors"])
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "competition_host_readiness.all_entrypoints_competition_exact must match "
+                "judge_milestone_bundle.proof_class_rollup.all_entrypoints_competition_exact" in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
 
     def test_validate_packet_rejects_competition_exact_preflight_when_host_blocked(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-exact-blocked-", dir=REPO_ROOT / "target"))
@@ -2307,6 +2380,27 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("competition_host_readiness.status must be ready" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_competition_exact_publishable_without_host_attestation(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-exact-publishable-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["publishability"]["competition_exact_publishable"] = True
+        packet["competition_host_readiness"]["all_entrypoints_competition_exact"] = True
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "publishability.competition_exact_publishable requires competition_host_readiness.competition_exact_host_verified=true"
+                in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 
