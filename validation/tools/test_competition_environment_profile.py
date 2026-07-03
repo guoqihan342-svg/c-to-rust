@@ -1536,6 +1536,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("--opencode-agent c2rust-migrator", skill)
         self.assertIn("--opencode-variant max", skill)
         self.assertIn("opencode` + `GLM-5.1` + `c2rust-migrator` + `max", skill)
+        self.assertIn("COMPETITION_EXACT_HOST=1", skill)
+        self.assertIn("competition_exact_host_attestation", skill)
         self.assertIn("opencode_model_availability", skill)
         self.assertIn("opencode_model_unavailable", skill)
         self.assertIn("local-simulation OpenCode pass does not close P0-H9", skill)

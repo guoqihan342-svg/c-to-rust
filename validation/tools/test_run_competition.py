@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -2048,16 +2049,20 @@ class RunCompetitionTests(unittest.TestCase):
             out_root = tmp_path / "competition-out"
             spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
             write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
-            fake_runner = FakeCommandRunner(fail_commands_containing={"toolchain-check.sh"})
-
-            result = module.run_competition(
-                slice_specs=[spec_path],
-                out_root=out_root,
-                proof_class="competition-exact",
-                command_runner=fake_runner,
-                repo_root=REPO_ROOT,
-                run_id="run-test",
+            fake_runner = FakeCommandRunner(
+                fail_commands_containing={"toolchain-check.sh"},
+                stdout_by_command_marker={"opencode models": "zhipu/GLM-5.1\n"},
             )
+
+            with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+                result = module.run_competition(
+                    slice_specs=[spec_path],
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
 
             self.assertEqual(result.exit_code, 1)
             summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
@@ -2065,6 +2070,72 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["slices"]["failed"], 0)
             self.assertEqual(summary["final_gate"]["status"], "failed")
+            attestation = summary["competition_exact_host_attestation"]
+            availability = attestation["opencode_model_availability"]
+            self.assertTrue(attestation["competition_exact_host_attested"])
+            self.assertEqual(availability["argv"], ["opencode", "models"])
+            self.assertTrue(availability["model_listed"])
+            stdout_path = out_root / availability["logs"]["stdout"]
+            stderr_path = out_root / availability["logs"]["stderr"]
+            self.assertEqual(stdout_path.read_text(encoding="utf-8"), "zhipu/GLM-5.1\n")
+            self.assertEqual(stderr_path.read_text(encoding="utf-8"), "")
+            self.assertEqual(availability["stdout_sha256"], lf_stable_sha256(stdout_path))
+            self.assertEqual(availability["stderr_sha256"], lf_stable_sha256(stderr_path))
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertEqual(command_texts[0], "opencode models")
+
+    def test_runner_rejects_competition_exact_without_host_attestation_before_launch(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            fake_runner = FakeCommandRunner()
+
+            with mock.patch.dict(module.os.environ, {}, clear=True):
+                with self.assertRaisesRegex(SystemExit, "requires COMPETITION_EXACT_HOST=1"):
+                    module.run_competition(
+                        slice_specs=[spec_path],
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        command_runner=fake_runner,
+                        repo_root=REPO_ROOT,
+                        run_id="run-test",
+                    )
+
+            self.assertEqual(fake_runner.commands, [])
+            self.assertFalse((out_root / "summary" / "competition-run-summary.json").exists())
+
+    def test_runner_rejects_competition_exact_when_opencode_models_lacks_glm51(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            fake_runner = FakeCommandRunner(
+                stdout_by_command_marker={
+                    "opencode models": "openai/gpt-5.1\nopencode/not-GLM-5.1\nzhipu/glm-5.1\n",
+                }
+            )
+
+            with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+                with self.assertRaisesRegex(SystemExit, "requires opencode models to list GLM-5.1"):
+                    module.run_competition(
+                        slice_specs=[spec_path],
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        command_runner=fake_runner,
+                        repo_root=REPO_ROOT,
+                        run_id="run-test",
+                    )
+
+            self.assertEqual(fake_runner.commands, [["opencode", "models"]])
+            self.assertEqual(
+                (out_root / "logs" / "opencode-models.stdout.log").read_text(encoding="utf-8"),
+                "openai/gpt-5.1\nopencode/not-GLM-5.1\nzhipu/glm-5.1\n",
+            )
+            self.assertEqual((out_root / "logs" / "opencode-models.stderr.log").read_text(encoding="utf-8"), "")
+            self.assertFalse((out_root / "summary" / "competition-run-summary.json").exists())
 
 
 if __name__ == "__main__":

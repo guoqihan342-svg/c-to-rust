@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -26,6 +27,10 @@ AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
 AUTO_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
 EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
 UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
+COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_VARIANT = "max"
 LF_STABLE_TEXT_SUFFIXES = {
     ".c",
     ".cc",
@@ -140,6 +145,7 @@ def run_competition(
 
     repo_root = repo_root.resolve()
     out_root = out_root if out_root.is_absolute() else repo_root / out_root
+    require_competition_exact_host(proof_class)
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "summary").mkdir(parents=True, exist_ok=True)
     logs_dir = out_root / "logs"
@@ -151,8 +157,15 @@ def run_competition(
         accepted_evidence_root = repo_root / accepted_evidence_root
     generated_slice_specs_root = out_root / "slice-specs"
     generated_slice_specs_root.mkdir(parents=True, exist_ok=True)
-
     started = time.monotonic()
+    exact_host_attestation = build_competition_exact_host_attestation(
+        proof_class=proof_class,
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+    )
+
     run_id = run_id or time.strftime("run-%Y%m%dT%H%M%SZ", time.gmtime())
     slice_failures = 0
     gate_failures = 0
@@ -373,6 +386,8 @@ def run_competition(
             "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
         },
     }
+    if exact_host_attestation is not None:
+        summary["competition_exact_host_attestation"] = exact_host_attestation
     if worker_statuses:
         summary["workers"] = {
             "count": len(worker_statuses),
@@ -421,6 +436,79 @@ def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Pa
         errors="replace",
         capture_output=True,
     )
+
+
+def require_competition_exact_host(proof_class: str) -> None:
+    if proof_class != "competition-exact":
+        return
+    if os.environ.get(COMPETITION_EXACT_HOST_ENV) == "1":
+        return
+    raise SystemExit(
+        "proof_class=competition-exact requires COMPETITION_EXACT_HOST=1 before OpenCode preflight, "
+        "SQLite ledger initialization, worker fanout, or summary publication"
+    )
+
+
+def build_competition_exact_host_attestation(
+    *,
+    proof_class: str,
+    command_runner: CommandRunner,
+    repo_root: Path,
+    logs_dir: Path,
+    out_root: Path,
+) -> dict[str, Any] | None:
+    if proof_class != "competition-exact":
+        return None
+    result = run_logged_step(
+        "opencode-glm-model-probe",
+        [COMPETITION_OPENCODE_COMMAND, "models"],
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+    )
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    stdout_path.write_text(result.stdout or "", encoding="utf-8")
+    stderr_path.write_text(result.stderr or "", encoding="utf-8")
+    model_listed = opencode_models_stdout_lists_required_model(result.stdout or "")
+    if result.returncode != 0:
+        raise SystemExit(
+            "proof_class=competition-exact requires successful 'opencode models' before launch; "
+            f"probe failed with returncode={result.returncode}"
+        )
+    if not model_listed:
+        raise SystemExit("proof_class=competition-exact requires opencode models to list GLM-5.1 before launch")
+    return {
+        "competition_exact_host_attested": True,
+        "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "required_variant": COMPETITION_OPENCODE_VARIANT,
+        "opencode_model_availability": {
+            "status": "available",
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "model_listed": True,
+            "opencode_command": COMPETITION_OPENCODE_COMMAND,
+            "argv": [COMPETITION_OPENCODE_COMMAND, "models"],
+            "process_returncode": result.returncode,
+            "logs": {
+                "stdout": summary_reference_path(stdout_path, repo_root=repo_root, out_root=out_root),
+                "stderr": summary_reference_path(stderr_path, repo_root=repo_root, out_root=out_root),
+            },
+            "stdout_sha256": sha256(stdout_path),
+            "stderr_sha256": sha256(stderr_path),
+        },
+    }
+
+
+def opencode_models_stdout_lists_required_model(stdout: str) -> bool:
+    for token in re.split(r"[\s,;]+", stdout):
+        candidate = token.strip().strip("'\"`[](){}")
+        if candidate == COMPETITION_OPENCODE_MODEL:
+            return True
+        if "/" in candidate and candidate.rsplit("/", 1)[-1] == COMPETITION_OPENCODE_MODEL:
+            return True
+    return False
 
 
 def load_worker_summary_statuses(
