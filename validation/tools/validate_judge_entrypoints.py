@@ -260,7 +260,12 @@ def classify_readiness_error(message: str) -> dict[str, str]:
                 "do not hand-edit target artifacts"
             ),
         }
-    if "opencode_model_unavailable" in message or ("GLM-5.1" in message and "model" in message.lower()):
+    if (
+        "opencode_model_unavailable" in message
+        or "required_model_not_listed" in message
+        or "model_listed must be true" in message
+        or ("GLM-5.1" in message and "model" in message.lower())
+    ):
         return {
             "root_cause_key": "opencode_model_unavailable",
             "message": message,

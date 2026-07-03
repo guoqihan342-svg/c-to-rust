@@ -2209,6 +2209,71 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         )
         self.assertEqual(summary["blockers"][0]["proof_class_effect"], "h9_release_blocker")
 
+    def test_readiness_summary_classifies_required_model_not_listed_as_opencode_model_unavailable(self) -> None:
+        summary = validator.build_readiness_summary(
+            {
+                "status": "failed",
+                "entrypoint_count": 1,
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                        "status": "failed",
+                        "proof_class": "real-opencode-glm51",
+                        "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+                    }
+                ],
+                "claim_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "errors": [
+                    "opencode_model_availability.missing_model_reason required_model_not_listed"
+                ],
+            }
+        )
+
+        self.assertEqual(summary["readiness"]["blocker_count"], 1)
+        self.assertEqual(
+            summary["readiness"]["blocker_root_cause_counts"],
+            {"opencode_model_unavailable": 1},
+        )
+        self.assertEqual(
+            summary["blockers"][0]["recommended_action"],
+            "rerun on an OpenCode runtime whose model list exposes GLM-5.1",
+        )
+        self.assertEqual(summary["blockers"][0]["proof_class_effect"], "h9_release_blocker")
+
+    def test_readiness_summary_classifies_model_listed_contract_failure_as_opencode_model_unavailable(self) -> None:
+        summary = validator.build_readiness_summary(
+            {
+                "status": "failed",
+                "entrypoint_count": 1,
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                        "status": "failed",
+                        "proof_class": "real-opencode-glm51",
+                        "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+                    }
+                ],
+                "claim_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "errors": ["opencode_model_availability.model_listed must be true"],
+            }
+        )
+
+        self.assertEqual(
+            summary["readiness"]["blocker_root_cause_counts"],
+            {"opencode_model_unavailable": 1},
+        )
+        self.assertEqual(summary["blockers"][0]["proof_class_effect"], "h9_release_blocker")
+
     def test_validate_config_can_focus_selected_entrypoints(self) -> None:
         result = validator.validate_config(
             validator.DEFAULT_CONFIG,
