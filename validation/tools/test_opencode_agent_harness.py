@@ -1973,7 +1973,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 raise AssertionError(f"competition-exact overclaim should fail before launch: {argv}")
 
-            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": ""}):
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": "0"}):
                 with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
                     harness.run_batch_profile(
                         profile_path=profile_path,
