@@ -3298,6 +3298,34 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_judge_evidence_index_rejects_worker_report_identity_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-report-identity-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        worker = payload["opencode_agent_runtime"]["workers"][0]
+        worker_report_path = REPO_ROOT / worker["worker_report"]["path"]
+        worker_report = json.loads(worker_report_path.read_text(encoding="utf-8"))
+        worker_report["report_kind"] = "not-run-worker-report"
+        worker_report["worker_id"] = "other-worker"
+        write_json(worker_report_path, worker_report)
+        worker["worker_report"]["sha256"] = validator.sha256_file(worker_report_path)
+
+        with self.assertRaisesRegex(ValueError, "worker_report.report_kind must be run-worker-report"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
     def test_judge_evidence_index_requires_matching_worker_opencode_launch_policy(self) -> None:
         payload = valid_opencode_judge_index_payload()
         worker_preflight = payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]

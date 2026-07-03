@@ -1989,11 +1989,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 contract_path = out_root / "harness" / "opencode-preflight-contract.json"
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
-                marker_path.parent.mkdir(parents=True, exist_ok=True)
-                marker_path.write_text(
-                    json.dumps({"schema_version": 1, "run_id": "run-profile-opencode-auto"}, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
+                write_valid_preflight_marker(marker_path, run_id="run-profile-opencode-auto")
                 stdout = json.dumps(
                     {
                         "type": "tool_use",
@@ -2098,8 +2094,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
                 contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
-                marker_path.parent.mkdir(parents=True, exist_ok=True)
-                marker_path.write_text(json.dumps({"run_id": "preflight-env"}, sort_keys=True) + "\n", encoding="utf-8")
+                write_valid_preflight_marker(marker_path, run_id="preflight-env")
                 stdout = json.dumps(
                     {
                         "type": "tool_use",
@@ -4451,6 +4446,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             report_path = REPO_ROOT / result["report_path"]
             self.assertTrue(report_path.exists())
             report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["report_kind"], "run-worker-report")
             self.assertEqual(report["mode"], "deterministic")
             self.assertEqual(report["runner_kind"], "repo-local-c2rust-migrator")
             report_rel = repo_rel(report_path)
@@ -5809,11 +5805,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 contract_path = out_root / "harness" / "opencode-preflight-contract.json"
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
-                marker_path.parent.mkdir(parents=True, exist_ok=True)
-                marker_path.write_text(
-                    json.dumps({"schema_version": 1, "run_id": "preflight-run"}, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
+                write_valid_preflight_marker(marker_path, run_id="preflight-run")
                 stdout = json.dumps(
                     {
                         "type": "tool_use",
@@ -5857,6 +5849,49 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertRegex(report["launch_policy_sha256"], r"^[0-9a-f]{64}$")
             contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
             self.assertEqual(contract["launch_policy"], expected_policy)
+
+    def test_opencode_preflight_rejects_invalid_marker_payload(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                marker_path.parent.mkdir(parents=True, exist_ok=True)
+                marker_path.write_text(
+                    json.dumps({"schema_version": 1, "run_id": "preflight-run", "status": "written"}, sort_keys=True)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"]},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["root_cause_key"], "invalid_preflight_marker")
+            self.assertEqual(result["contract_verification"]["status"], "executed")
+            self.assertTrue(result["marker_exists"])
 
     def test_opencode_preflight_fails_closed_when_glm_model_is_not_listed(self) -> None:
         with temp_repo_dir() as tmp:
@@ -6146,11 +6181,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 contract_path = out_root / "harness" / "opencode-preflight-contract.json"
                 contract = json.loads(contract_path.read_text(encoding="utf-8"))
                 marker_path = REPO_ROOT / contract["expected_marker_path"]
-                marker_path.parent.mkdir(parents=True, exist_ok=True)
-                marker_path.write_text(
-                    json.dumps({"schema_version": 1, "run_id": "preflight-run"}, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
+                write_valid_preflight_marker(marker_path, run_id="preflight-run")
                 stdout = json.dumps(
                     {
                         "type": "tool_use",
@@ -8177,6 +8208,14 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
 
 def repo_rel(path: Path) -> str:
     return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+
+
+def write_valid_preflight_marker(marker_path: Path, *, run_id: str) -> None:
+    harness.write_opencode_preflight_marker(
+        marker_path=Path(repo_rel(marker_path)),
+        run_id=run_id,
+        repo_root=REPO_ROOT,
+    )
 
 
 def temp_repo_dir():

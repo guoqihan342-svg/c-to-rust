@@ -555,7 +555,7 @@ def baseline_manifest_evidence_text(row: dict[str, Any]) -> str:
 
 def command_lines(commands: dict[str, Any]) -> list[str]:
     lines = []
-    for key in ["run_judge_entrypoints", "validate_judge_entrypoints"]:
+    for key in ["run_judge_entrypoints", "build_bundle", "validate_judge_entrypoints"]:
         value = commands.get(key)
         if isinstance(value, str) and value:
             lines.extend([f"- `{key}`:", "", f"```bash\n{value}\n```"])

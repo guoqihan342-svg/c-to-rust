@@ -5404,6 +5404,7 @@ def run_worker(
         )
     report = {
         "schema_version": SCHEMA_VERSION,
+        "report_kind": "run-worker-report",
         "run_id": run_id,
         "worker_id": worker_id,
         "attempt": attempt_number,
@@ -5885,10 +5886,16 @@ def run_opencode_preflight(
         repo_root=repo_root,
     )
     marker_exists = marker_path.exists()
+    marker_validation = validate_opencode_preflight_marker_payload(
+        marker_path,
+        run_id=run_id,
+        repo_root=repo_root,
+    ) if marker_exists else {"status": "missing", "reason": "marker file is absent"}
     preflight_passed = (
         int(completed.returncode) == 0
         and contract_verification.get("status") == "executed"
         and marker_exists
+        and marker_validation.get("status") == "passed"
     )
     root_cause_key = None
     if not preflight_passed:
@@ -5898,6 +5905,8 @@ def run_opencode_preflight(
             root_cause_key = "opencode_process_failed"
         elif contract_verification.get("status") != "executed":
             root_cause_key = "opencode_contract_not_executed"
+        elif marker_exists and marker_validation.get("status") != "passed":
+            root_cause_key = "invalid_preflight_marker"
         else:
             root_cause_key = "missing_preflight_marker"
 
@@ -5920,6 +5929,7 @@ def run_opencode_preflight(
         "opencode_session_evidence": session_binding,
         "opencode_model_availability": model_availability,
         "contract_verification": contract_verification,
+        "marker_validation": marker_validation,
         "logs": {
             "stdout": repo_relative(stdout_path, repo_root=repo_root),
             "stderr": repo_relative(stderr_path, repo_root=repo_root),
@@ -6262,6 +6272,33 @@ def validate_hash_bound_artifact_ref(
             f"{label}.sha256 mismatch: {repo_relative(report_path, repo_root=repo_root)}"
         )
     return artifact_path
+
+
+def validate_opencode_preflight_marker_payload(
+    marker_path: Path,
+    *,
+    run_id: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    try:
+        payload = load_json(marker_path)
+    except Exception as error:  # noqa: BLE001 - convert malformed marker artifacts into fail-closed evidence.
+        return {
+            "status": "failed",
+            "reason": f"marker_json_invalid:{type(error).__name__}",
+        }
+    failed_fields: list[str] = []
+    if payload.get("report_kind") != "opencode-preflight-marker":
+        failed_fields.append("report_kind")
+    if payload.get("run_id") != run_id:
+        failed_fields.append("run_id")
+    if payload.get("status") != "written":
+        failed_fields.append("status")
+    return {
+        "status": "passed" if not failed_fields else "failed",
+        "failed_fields": failed_fields,
+        "path": repo_relative(marker_path, repo_root=repo_root),
+    }
 
 
 def write_opencode_preflight_marker(

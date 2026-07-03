@@ -91,6 +91,12 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("## Readiness Blockers", notes)
         self.assertIn(f"- `{blocker}`", notes)
 
+    def test_release_notes_publish_bundle_rebuild_command(self) -> None:
+        notes = milestone_release_notes.build_release_notes(self._bundle())
+
+        self.assertIn("python -B -m validation.tools.judge_milestone_bundle", notes)
+        self.assertIn("- `build_bundle`:", notes)
+
     def test_release_notes_reject_passed_bundle_with_blockers(self) -> None:
         payload = self._bundle()
         payload["blockers"] = ["validated_artifact_sha256_mismatch:before_after_judge_demo:judge_evidence_index"]
@@ -592,6 +598,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             ],
             "reproduction_commands": {
                 "run_judge_entrypoints": "python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json",
+                "build_bundle": "python -B -m validation.tools.judge_milestone_bundle --config config/competition-env/judge-entrypoints/flashdb-harness.json --run-report target/competition-out/summary/judge-entrypoints-run-report.json --output target/competition-out/summary/judge-milestone-bundle.json",
                 "validate_judge_entrypoints": "python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --require-local-artifacts",
                 "entrypoints": [
                     {

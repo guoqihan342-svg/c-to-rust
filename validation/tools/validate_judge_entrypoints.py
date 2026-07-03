@@ -2848,6 +2848,12 @@ def validate_opencode_worker_runtime(
             load_json(repo_path(bindings["worker_report"]["path"], repo_root=repo_root)),
             f"{label}.worker_report file",
         )
+        if worker_report_payload.get("report_kind") != "run-worker-report":
+            raise ValueError(f"{label}.worker_report.report_kind must be run-worker-report")
+        if worker_report_payload.get("worker_id") != worker_id:
+            raise ValueError(f"{label}.worker_report.worker_id must match worker_id")
+        if worker_report_payload.get("runner_kind") != "opencode-run":
+            raise ValueError(f"{label}.worker_report.runner_kind must be opencode-run")
         worker_runtime_env = validate_opencode_runtime_env_contract(
             worker_report_payload.get("opencode_runtime_env"),
             f"{label}.worker_report",
