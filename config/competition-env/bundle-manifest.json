@@ -27,9 +27,29 @@
       "sha256": "3fbdba24a915048b212fbd91ed6eb0a53e56ac531c8c37ab9263679a8f705aa6"
     },
     {
+      "path": "scripts/c2rust-migrator.py",
+      "role": "repo-local-c2rust-migrator-entrypoint",
+      "sha256": "40ebee1cf487ff7bcb01ebae7659a933eb2b39d282b466a7f73d52cad3e1087c"
+    },
+    {
+      "path": "crates/c2r-translator/Cargo.lock",
+      "role": "rust-translator-dependency-lock",
+      "sha256": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117"
+    },
+    {
+      "path": "validation/l2_slices/Cargo.lock",
+      "role": "l2-slices-dependency-lock",
+      "sha256": "3bd2a2865c265e83e826a21f983fb09f60e04ccccaeb46e62a708c03af44af72"
+    },
+    {
+      "path": "flashDB_rust/Cargo.lock",
+      "role": "flashdb-rust-reference-dependency-lock",
+      "sha256": "d14f8a5456775c700dcb3ed51b6ac55a415aba9bf24e054e9102010d24ffe432"
+    },
+    {
       "path": ".github/workflows/core-translator-validation-ci.yml",
       "role": "ci-validation-workflow",
-      "sha256": "b38d90ea85c77bdcbf419a089c8413380f4c4d062afc4289d1d2df23466fc739"
+      "sha256": "25a757c1a9c8e40fd355d7f86120fa84f59a48fb9a1830a4c337daca8568aa8d"
     },
     {
       "path": ".codex/skills/c2rust-migration/SKILL.md",
@@ -141,12 +161,12 @@
     {
       "path": "config/competition-env/README.md",
       "role": "competition-env-readme",
-      "sha256": "845785bb8deae83e7c168c41b3589d1387495210e12010a24882ac5438badcf9"
+      "sha256": "193914af5df035ddeefea919f0efd2caf8ac5de4d0993d9afdda6ba60b59b944"
     },
     {
       "path": "config/competition-env/README.en.md",
       "role": "competition-env-readme",
-      "sha256": "904a82e1dbe2da0624af00fd9cc83aba6b1db369b624460d99ef3ce258637d7e"
+      "sha256": "5798108bae6ca518928db099e72445102ea9dcd471ffa512b25cff1c7b12bae5"
     }
   ],
   "report_kind": "competition-env-bundle",

@@ -35,7 +35,7 @@
 ## 文件说明
 
 - `environment.json`：机器可读环境基线、镜像源和适配策略。
-- `bundle-manifest.json`：比赛配置目录的机器可读归档合同，hash 绑定环境 profile、镜像配置、shell 入口、planned batch profiles、judge entrypoint index、review checklist 和 OpenCode runbook；同时通过 `external_refs` 绑定 `requirements.txt`、`opencode.json`、FlashDB bootstrap、核心 CI workflow、repo-owned skill 和 `.opencode/agents/c2rust-migrator.md`。`validate_judge_entrypoints` 会校验它，但它不是 semantic gate。
+- `bundle-manifest.json`：比赛配置目录的机器可读归档合同，hash 绑定环境 profile、镜像配置、shell 入口、planned batch profiles、judge entrypoint index、review checklist 和 OpenCode runbook；同时通过 `external_refs` 绑定 `requirements.txt`、`opencode.json`、FlashDB bootstrap、repo-local C2Rust migrator 入口、Rust dependency locks、核心 CI workflow、repo-owned skill 和 `.opencode/agents/c2rust-migrator.md`。`validate_judge_entrypoints` 会校验它，但它不是 semantic gate。
 - `apt/sources.list`：Ubuntu Noble APT 镜像配置。
 - `pip/pip.conf`：pip 镜像配置。
 - `npm/.npmrc`：npm registry 配置。

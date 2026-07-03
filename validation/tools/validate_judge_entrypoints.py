@@ -56,9 +56,13 @@ COMPETITION_ENV_EXTERNAL_REF_ROLES = {
     "requirements.txt": "python-dependency-lock",
     "opencode.json": "opencode-config",
     "scripts/bootstrap_flashdb_sources.sh": "source-bootstrap-script",
+    "scripts/c2rust-migrator.py": "repo-local-c2rust-migrator-entrypoint",
     ".github/workflows/core-translator-validation-ci.yml": "ci-validation-workflow",
     ".codex/skills/c2rust-migration/SKILL.md": "repo-owned-agent-skill",
     ".opencode/agents/c2rust-migrator.md": "opencode-agent-runbook",
+    "crates/c2r-translator/Cargo.lock": "rust-translator-dependency-lock",
+    "validation/l2_slices/Cargo.lock": "l2-slices-dependency-lock",
+    "flashDB_rust/Cargo.lock": "flashdb-rust-reference-dependency-lock",
 }
 ROUTE_GOVERNANCE_METRICS_SCHEMA = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
 LOCAL_ABSOLUTE_PATH = re.compile(
@@ -324,6 +328,7 @@ LF_STABLE_TEXT_SUFFIXES = {
     ".h",
     ".json",
     ".jsonl",
+    ".lock",
     ".md",
     ".conf",
     ".rs",

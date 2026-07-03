@@ -1607,8 +1607,13 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             "requirements.txt",
             "opencode.json",
             "scripts/bootstrap_flashdb_sources.sh",
+            "scripts/c2rust-migrator.py",
+            "crates/c2r-translator/Cargo.lock",
+            "validation/l2_slices/Cargo.lock",
+            "flashDB_rust/Cargo.lock",
             ".github/workflows/core-translator-validation-ci.yml",
             ".codex/skills/c2rust-migration/SKILL.md",
+            ".opencode/agents/c2rust-migrator.md",
         }
         self.assertTrue(required_external_refs.issubset(set(bundle["external_refs"])))
 
