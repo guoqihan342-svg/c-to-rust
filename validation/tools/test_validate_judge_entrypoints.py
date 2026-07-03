@@ -2897,6 +2897,17 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "graph_nodes missing required nodes: \\['repair_retry'\\]"):
             validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
 
+    def test_judge_evidence_index_rejects_unexpected_graph_nodes(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["harness_architecture"]["graph_nodes"].append("unreviewed_stage")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "judge_evidence_index.harness_architecture.graph_nodes must be "
+            "\\['load_plan', 'fanout_workers', 'worker', 'repair_retry', 'merge', 'report'\\]",
+        ):
+            validator.validate_judge_evidence_index_contract(payload, path_text="target/out/harness/judge-evidence-index.json")
+
     def test_judge_evidence_index_requires_retry_checkpoint_and_round_cap(self) -> None:
         payload = valid_opencode_judge_index_payload()
         payload["harness_architecture"]["retry_policy"]["checkpoint"] = "sqlite"

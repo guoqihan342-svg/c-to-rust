@@ -3583,6 +3583,11 @@ def validate_judge_graph_contract(
     missing_nodes = [node for node in REQUIRED_JUDGE_GRAPH_NODES if node not in graph_nodes]
     if missing_nodes:
         raise ValueError(f"judge_evidence_index.harness_architecture.graph_nodes missing required nodes: {missing_nodes}")
+    if list(graph_nodes) != list(REQUIRED_JUDGE_GRAPH_NODES):
+        raise ValueError(
+            "judge_evidence_index.harness_architecture.graph_nodes must be "
+            f"{list(REQUIRED_JUDGE_GRAPH_NODES)}"
+        )
 
     retry_policy = require_object(architecture.get("retry_policy"), "judge_evidence_index.harness_architecture.retry_policy")
     if retry_policy.get("checkpoint") != "repair_hints":
