@@ -865,6 +865,16 @@ def valid_packet(root: Path) -> dict:
             "file_count": len(archive_files),
             "bundle_manifest": config_bundle_ref,
             "materialized_manifest": archive_manifest_ref,
+            "external_ref_count": len(competition_config_archive["external_refs"]),
+            "external_refs": {
+                path: {
+                    "path": ref["path"],
+                    "role": ref["role"],
+                    "status": ref["status"],
+                    "sha256": ref["sha256"],
+                }
+                for path, ref in competition_config_archive["external_refs"].items()
+            },
         },
         "supported_subset": {
             "claims": ["public packet validator fixture"],
@@ -1774,6 +1784,36 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("competition_config_archive.external_refs missing required refs" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_publication_archive_external_ref_projection_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-publication-refs-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        dropped_ref = next(iter(packet["publication_manifest"]["competition_config_archive"]["external_refs"]))
+        del packet["publication_manifest"]["competition_config_archive"]["external_refs"][dropped_ref]
+        packet["publication_manifest"]["competition_config_archive"]["external_ref_count"] -= 1
+
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "publication_manifest.competition_config_archive.external_refs must match competition_config_archive.external_refs"
+                in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 

@@ -258,6 +258,40 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
             judge_validator.validate_ref(ref, repo_root=repo_root)
         except ValueError as error:
             raise ValueError(f"competition_config_archive.external_refs.{path_text}: {error}") from error
+    require_publication_archive_external_refs_projection(
+        publication_archive,
+        external_refs,
+    )
+
+
+def require_publication_archive_external_refs_projection(
+    publication_archive: dict[str, Any],
+    archive_external_refs: dict[str, Any],
+) -> None:
+    label = "publication_manifest.competition_config_archive.external_refs"
+    publication_external_refs = require_object(publication_archive.get("external_refs"), label)
+    if publication_archive.get("external_ref_count") != len(publication_external_refs):
+        raise ValueError(
+            "publication_manifest.competition_config_archive.external_ref_count must match "
+            "publication_manifest.competition_config_archive.external_refs length"
+        )
+    expected_projection = {
+        path_text: {
+            "path": path_text,
+            "role": judge_validator.require_string(
+                ref.get("role"),
+                f"competition_config_archive.external_refs.{path_text}.role",
+            ),
+            "status": ref.get("status"),
+            "sha256": ref.get("sha256"),
+        }
+        for path_text, ref in sorted(archive_external_refs.items())
+    }
+    if publication_external_refs != expected_projection:
+        raise ValueError(
+            "publication_manifest.competition_config_archive.external_refs must match "
+            "competition_config_archive.external_refs"
+        )
 
 
 def require_competition_config_archive_matches_run_report(packet: dict[str, Any], *, repo_root: Path) -> None:
