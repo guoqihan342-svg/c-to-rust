@@ -38,6 +38,14 @@ def assert_no_local_absolute_command_arguments(testcase: unittest.TestCase, comm
             testcase.assertFalse(Path(argument).is_absolute(), argument)
 
 
+def assert_no_local_absolute_command_log_text(testcase: unittest.TestCase, command_entries: list[dict]) -> None:
+    for entry in command_entries:
+        for field in ("stdout", "stderr"):
+            value = entry.get(field, "")
+            if isinstance(value, str):
+                testcase.assertNotRegex(value, LOCAL_ABSOLUTE_PATH)
+
+
 class FakeCommandRunner:
     def __init__(
         self,
@@ -630,6 +638,44 @@ class RunCompetitionSmokeTests(unittest.TestCase):
 
                 self.assertEqual(logged, expected)
                 self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
+
+    def test_command_log_sanitizes_stdout_and_stderr_host_paths(self) -> None:
+        module = load_smoke_module()
+
+        def noisy_runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                "include path: /mnt/c/Users/me/FlashDB/inc\ncwd: //wsl.localhost/Ubuntu/home/me/project\n",
+                r"output path: \\wsl$\Ubuntu\home\me\project\target\out.json",
+            )
+
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=noisy_runner,
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-output-sanitize-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            assert_no_local_absolute_command_arguments(self, command_entries)
+            assert_no_local_absolute_command_log_text(self, command_entries)
+            joined_output = "\n".join(
+                str(entry.get(field, ""))
+                for entry in command_entries
+                for field in ("stdout", "stderr")
+            )
+            self.assertIn("inc", joined_output)
+            self.assertIn("project", joined_output)
+            self.assertIn("out.json", joined_output)
 
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
         module = load_smoke_module()

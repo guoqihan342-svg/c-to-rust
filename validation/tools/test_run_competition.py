@@ -14,9 +14,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = REPO_ROOT / "validation" / "tools" / "run_competition.py"
 SUMMARY_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
 LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
     ".json",
     ".jsonl",
     ".md",
+    ".rs",
     ".sh",
     ".toml",
     ".txt",

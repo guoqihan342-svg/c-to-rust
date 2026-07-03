@@ -915,6 +915,18 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         "competition_smoke_command_log command contains forbidden local absolute path"
                     )
+            for field in ("stdout", "stderr"):
+                value = entry.get(field)
+                if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+                    raise ValueError(
+                        "competition_smoke_command_log output contains forbidden local absolute path"
+                    )
+            for field in ("cwd", "workdir"):
+                value = entry.get(field)
+                if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+                    raise ValueError(
+                        "competition_smoke_command_log workdir contains forbidden local absolute path"
+                    )
             checked_entries += 1
     if checked_entries == 0:
         raise ValueError("competition_smoke_command_log must contain at least one entry")

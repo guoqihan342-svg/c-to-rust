@@ -7,6 +7,7 @@ from pathlib import Path
 import jsonschema
 
 from validation.tools import route_governance_metrics_report
+from validation.tools import milestone_release_report
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -475,8 +476,8 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
         workflow = Path(".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
 
         self.assertIn("validation/route-governance-metrics.schema.json", workflow)
-        self.assertIn("python -m unittest validation.tools.test_route_governance_metrics_report", workflow)
-        self.assertIn("python validation/tools/route_governance_metrics_report.py", workflow)
+        self.assertIn("python3 -B -m unittest validation.tools.test_route_governance_metrics_report", workflow)
+        self.assertIn("python3 -B validation/tools/route_governance_metrics_report.py", workflow)
 
     def _coverage_report(self) -> dict:
         return {
@@ -665,7 +666,10 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
 
 
 def sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    data = path.read_bytes()
+    if path.suffix.lower() in milestone_release_report.LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 if __name__ == "__main__":

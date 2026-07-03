@@ -27,9 +27,16 @@ AUTO_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_tr
 EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
 UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
 LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
     ".json",
     ".jsonl",
     ".md",
+    ".rs",
     ".sh",
     ".toml",
     ".txt",

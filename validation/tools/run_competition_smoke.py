@@ -38,6 +38,7 @@ LOCAL_HOST_PATH_UNQUOTED = (
     r"/tmp/[^\s;&|]+|"
     r"/var/[^\s;&|]+|"
     r"\\\\wsl\$\\[^\s;&|]+|"
+    r"\\\\wsl\.localhost\\[^\s;&|]+|"
     r"//wsl\.localhost/[^\s;&|]+"
     r")"
 )
@@ -50,6 +51,7 @@ LOCAL_HOST_PATH_DOUBLE_QUOTED = (
     r'/tmp/[^"]+|'
     r'/var/[^"]+|'
     r'\\\\wsl\$\\[^"]+|'
+    r'\\\\wsl\.localhost\\[^"]+|'
     r'//wsl\.localhost/[^"]+'
     r")"
 )
@@ -62,6 +64,7 @@ LOCAL_HOST_PATH_SINGLE_QUOTED = (
     r"/tmp/[^']+|"
     r"/var/[^']+|"
     r"\\\\wsl\$\\[^']+|"
+    r"\\\\wsl\.localhost\\[^']+|"
     r"//wsl\.localhost/[^']+"
     r")"
 )
@@ -467,8 +470,8 @@ def run_logged_step(
         "step": step,
         "command": command_for_log(command, repo_root=repo_root, out_root=out_root),
         "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "stdout": output_text_for_log(result.stdout),
+        "stderr": output_text_for_log(result.stderr),
         "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
         **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
         **({"failure_class": failure_class} if failure_class else {}),
@@ -732,6 +735,10 @@ def sanitize_host_paths_in_command_text(argument: str) -> str:
         return path_basename(match.group("plain_path"))
 
     return LOCAL_HOST_PATH_IN_COMMAND.sub(replace_match, argument)
+
+
+def output_text_for_log(value: str) -> str:
+    return sanitize_host_paths_in_command_text(value)
 
 
 def path_basename(path_text: str) -> str:
