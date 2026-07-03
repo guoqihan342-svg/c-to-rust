@@ -286,6 +286,41 @@ def validate_entrypoint_command_contract(command: Any, entrypoint_id: Any) -> li
     return validate_portable_python3_b_command(command, "entrypoint command")
 
 
+def validate_opencode_preflight_template_command(command: Any, label: str) -> list[str]:
+    argv = validate_portable_python3_b_command(command, label)
+    expected_prefix = [
+        PORTABLE_PYTHON_COMMAND,
+        "-B",
+        "-m",
+        "validation.tools.opencode_agent_harness",
+        "opencode-preflight",
+    ]
+    if argv[: len(expected_prefix)] != expected_prefix:
+        raise ValueError(
+            f"{label} must run python3 -B -m validation.tools.opencode_agent_harness opencode-preflight"
+        )
+    flags: dict[str, str] = {}
+    index = len(expected_prefix)
+    while index < len(argv):
+        flag = argv[index]
+        if not flag.startswith("--"):
+            raise ValueError(f"{label} has unexpected positional argument: {flag}")
+        if flag in flags:
+            raise ValueError(f"{label} duplicate {flag}")
+        if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+            raise ValueError(f"{label} {flag} must have a value")
+        flags[flag] = argv[index + 1]
+        index += 2
+    for required in ("--run-id", "--out-root"):
+        if required not in flags:
+            raise ValueError(f"{label} must include {required}")
+    if flags.get("--opencode-model") != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{label} must include --opencode-model {COMPETITION_OPENCODE_MODEL}")
+    if flags.get("--opencode-variant") != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{label} must include --opencode-variant {COMPETITION_OPENCODE_VARIANT}")
+    return argv
+
+
 def json_path(parts: tuple[str, ...]) -> str:
     return "$" + "".join(f".{part}" for part in parts)
 
@@ -345,6 +380,26 @@ def validate_ref(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     return {"path": path_text, "sha256": actual_sha, "status": "present"}
 
 
+def shell_double_quoted_constant(script_text: str, name: str) -> str:
+    match = re.search(rf'(?m)^{re.escape(name)}="([^"]*)"$', script_text)
+    if not match:
+        raise ValueError(f"bootstrap_flashdb_sources.sh {name} must be declared")
+    return match.group(1)
+
+
+def validate_flashdb_bootstrap_source_pin(script_path: Path, source_pin: dict[str, Any]) -> None:
+    script_text = script_path.read_text(encoding="utf-8")
+    expected_values = {
+        "FLASHDB_REPOSITORY": require_string(source_pin.get("repository"), "environment.source_pins.flashdb.repository"),
+        "FLASHDB_BRANCH": require_string(source_pin.get("branch"), "environment.source_pins.flashdb.branch"),
+        "FLASHDB_COMMIT": require_string(source_pin.get("commit"), "environment.source_pins.flashdb.commit"),
+    }
+    for constant, expected in expected_values.items():
+        actual = shell_double_quoted_constant(script_text, constant)
+        if actual != expected:
+            raise ValueError(f"bootstrap_flashdb_sources.sh {constant} must match environment.source_pins.flashdb")
+
+
 def validate_competition_env_bundle_contract(
     config: dict[str, Any],
     *,
@@ -376,6 +431,11 @@ def validate_competition_env_bundle_contract(
     for field in ("path", "profile_id", "sha256"):
         if canonical_profile.get(field) != environment_profile.get(field):
             raise ValueError(f"competition env bundle canonical_environment_profile.{field} must match environment_profile")
+    environment_payload = load_json(repo_path(require_string(environment_profile.get("path"), "environment_profile.path"), repo_root=repo_root))
+    flashdb_source_pin = require_object(
+        require_object(environment_payload.get("source_pins"), "environment.source_pins").get("flashdb"),
+        "environment.source_pins.flashdb",
+    )
 
     files = manifest.get("files")
     if not isinstance(files, list) or not files:
@@ -468,6 +528,12 @@ def validate_competition_env_bundle_contract(
             "status": "present",
         }
         external_roles[path_text] = role
+        if path_text == "opencode.json":
+            opencode_config = load_json(path)
+            if opencode_config.get("plugin") != []:
+                raise ValueError("opencode.json plugin must be empty for competition profile")
+        if path_text == "scripts/bootstrap_flashdb_sources.sh":
+            validate_flashdb_bootstrap_source_pin(path, flashdb_source_pin)
     missing_external_refs = sorted(set(COMPETITION_ENV_EXTERNAL_REF_ROLES) - set(result_external_refs))
     if missing_external_refs:
         raise ValueError(f"competition env bundle external_refs missing required refs: {missing_external_refs}")
@@ -529,18 +595,10 @@ def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_
         "environment_profile.opencode_runtime.preflight_command_template",
     )
     assert_no_local_absolute_path(preflight_template)
-    if "opencode-preflight" not in preflight_template:
-        raise ValueError("environment_profile.opencode_runtime.preflight_command_template must run opencode-preflight")
-    if f"--opencode-model {COMPETITION_OPENCODE_MODEL}" not in preflight_template:
-        raise ValueError(
-            "environment_profile.opencode_runtime.preflight_command_template "
-            f"must include --opencode-model {COMPETITION_OPENCODE_MODEL}"
-        )
-    if f"--opencode-variant {COMPETITION_OPENCODE_VARIANT}" not in preflight_template:
-        raise ValueError(
-            "environment_profile.opencode_runtime.preflight_command_template "
-            f"must include --opencode-variant {COMPETITION_OPENCODE_VARIANT}"
-        )
+    validate_opencode_preflight_template_command(
+        preflight_template,
+        "environment_profile.opencode_runtime.preflight_command_template",
+    )
     boundary = require_object(runtime.get("claim_boundary"), "environment_profile.opencode_runtime.claim_boundary")
     if boundary.get("semantic_gate") is not False:
         raise ValueError("environment_profile.opencode_runtime.claim_boundary.semantic_gate must be false")
@@ -3630,6 +3688,9 @@ def validate_resume_manifest_replay_command(
     require_hint: bool,
 ) -> dict[str, Any]:
     command_payload = require_object(value, label)
+    replay_safety = require_object(command_payload.get("replay_safety"), f"{label}.replay_safety")
+    if replay_safety.get("status") != "ready":
+        raise ValueError(f"{label}.replay_safety.status must be ready")
     argv = command_payload.get("argv")
     if not isinstance(argv, list) or not argv or not all(isinstance(item, str) and item for item in argv):
         raise ValueError(f"{label}.argv must be a non-empty string list")
@@ -3642,7 +3703,7 @@ def validate_resume_manifest_replay_command(
     expected_prefix = ["python3", "-B", "-m", "validation.tools.opencode_agent_harness", expected_subcommand]
     if argv[: len(expected_prefix)] != expected_prefix:
         raise ValueError(f"{label} command must run opencode_agent_harness {expected_subcommand}")
-    flags = argv_flags(argv)
+    flags = argv_flags(argv, label=label)
     if flags.get("--db") != ledger_path:
         raise ValueError(f"resume_manifest worker {worker_id} {label} --db must match ledger.path")
     if flags.get("--run-id") != run_id:
@@ -3657,7 +3718,9 @@ def validate_resume_manifest_replay_command(
     if not require_hint and flags.get("--hint-id"):
         raise ValueError(f"resume_manifest worker {worker_id} {label} command must not include --hint-id")
     preflight = worker.get("opencode_preflight_report")
-    if mode == "opencode" and isinstance(preflight, dict) and isinstance(preflight.get("path"), str):
+    if mode == "opencode":
+        if not isinstance(preflight, dict) or not isinstance(preflight.get("path"), str):
+            raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report is required")
         if flags.get("--opencode-preflight-report") != preflight["path"]:
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} --opencode-preflight-report must match opencode_preflight_report.path"
@@ -3695,12 +3758,14 @@ def validate_resume_manifest_replay_command(
     return {"status": "passed", "subcommand": expected_subcommand, "mode": mode}
 
 
-def argv_flags(argv: list[str]) -> dict[str, str]:
+def argv_flags(argv: list[str], *, label: str) -> dict[str, str]:
     flags: dict[str, str] = {}
     index = 0
     while index < len(argv):
         part = argv[index]
         if part.startswith("--") and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
+            if part in flags:
+                raise ValueError(f"{label} duplicate {part}")
             flags[part] = argv[index + 1]
             index += 2
             continue

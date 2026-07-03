@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from validation.tools import validate_judge_entrypoints as validator
@@ -117,6 +118,11 @@ def resume_replay_commands(
             "summary_path": repo_relative(summary),
             "report_path": repo_relative(report),
             "out_root": repo_relative(worker_root),
+            "replay_safety": {
+                "status": "ready",
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+            },
         }
     }
 
@@ -1508,6 +1514,52 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 manifest_path=temp_manifest,
                 repo_root=REPO_ROOT,
             )
+
+    def test_competition_env_bundle_rejects_opencode_config_plugins(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+        original_load_json = validator.load_json
+
+        def load_json_with_plugin(path: Path) -> dict:
+            if Path(path).as_posix().endswith("opencode.json"):
+                return {"$schema": "https://opencode.ai/config.json", "plugin": ["superpowers"]}
+            return original_load_json(path)
+
+        with mock.patch.object(validator, "load_json", side_effect=load_json_with_plugin):
+            with self.assertRaisesRegex(ValueError, "opencode.json plugin must be empty"):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_competition_env_bundle_rejects_bootstrap_source_pin_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+        original_read_text = Path.read_text
+
+        def read_text_with_bootstrap_drift(path: Path, *args: object, **kwargs: object) -> str:
+            text = original_read_text(path, *args, **kwargs)
+            if Path(path).as_posix().endswith("scripts/bootstrap_flashdb_sources.sh"):
+                return text.replace(
+                    'FLASHDB_COMMIT="f9d0421315c564fb890a1b14eee77b290e0d7bbe"',
+                    'FLASHDB_COMMIT="0000000000000000000000000000000000000000"',
+                )
+            return text
+
+        with mock.patch.object(Path, "read_text", read_text_with_bootstrap_drift):
+            with self.assertRaisesRegex(ValueError, "bootstrap_flashdb_sources.sh FLASHDB_COMMIT must match"):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
 
     def test_environment_profile_hash_mismatch_preserves_claim_boundary_for_test_contract(self) -> None:
         config = load_default_config()
@@ -5173,6 +5225,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "--opencode-variant max"):
+            validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
+
+    def test_environment_profile_preflight_template_rejects_duplicate_opencode_variant_override(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="environment-opencode-variant-duplicate-", dir=REPO_ROOT / "target"))
+        config = load_default_config()
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment["opencode_runtime"]["preflight_command_template"] += " --opencode-variant default"
+        environment_path = temp_dir / "environment-with-duplicate-opencode-variant.json"
+        write_json(environment_path, environment)
+        profile_ref = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+
+        with self.assertRaisesRegex(ValueError, "duplicate --opencode-variant"):
             validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
 
     def test_tracked_manifest_reproduction_command_must_match_entrypoint_command(self) -> None:

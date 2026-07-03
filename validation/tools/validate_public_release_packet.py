@@ -666,6 +666,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     bundle_ref = require_object(packet.get("judge_milestone_bundle"), "judge_milestone_bundle")
     bundle_path = judge_validator.repo_path(str(bundle_ref.get("path")), repo_root=repo_root)
     bundle = judge_validator.load_json(bundle_path)
+    require_bound_bundle_identity_contract(packet, bundle)
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
     for field in ("judge_entrypoints_run_report", "readiness_report"):
         if packet.get(field) != bundle.get(field):
@@ -712,6 +713,17 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             "must_not_claim must include judge_milestone_bundle.must_not_claim entries: "
             f"{missing_claims}"
         )
+
+
+def require_bound_bundle_identity_contract(packet: dict[str, Any], bundle: dict[str, Any]) -> None:
+    if bundle.get("schema_version") != 1:
+        raise ValueError("judge_milestone_bundle.schema_version must be 1")
+    if bundle.get("report_kind") != "judge-milestone-bundle":
+        raise ValueError("judge_milestone_bundle.report_kind must be judge-milestone-bundle")
+    if bundle.get("status") not in {"passed", "blocked"}:
+        raise ValueError("judge_milestone_bundle.status must be passed or blocked")
+    if packet.get("status") != bundle.get("status"):
+        raise ValueError("public_release_packet.status must match judge_milestone_bundle.status")
 
 
 def expected_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:

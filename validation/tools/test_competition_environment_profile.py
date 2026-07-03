@@ -1025,6 +1025,132 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 require_hint=False,
             )
 
+    def test_judge_validator_rejects_resume_replay_duplicate_opencode_variant_override(self) -> None:
+        worker = {
+            "worker_id": "worker-001",
+            "opencode_preflight_report": {
+                "path": "target/harness/opencode-preflight-report.json",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "opencode_agent": None,
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": True,
+                },
+            },
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-preflight-report",
+            "target/harness/opencode-preflight-report.json",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-variant",
+            "default",
+            "--opencode-variant",
+            "max",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "duplicate --opencode-variant"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_judge_validator_rejects_resume_replay_when_replay_safety_not_ready(self) -> None:
+        worker = {"worker_id": "worker-001"}
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "deterministic",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "replay_safety.status must be ready"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "blocked", "reason": "missing_summary"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_judge_validator_rejects_opencode_resume_replay_without_preflight_binding(self) -> None:
+        worker = {"worker_id": "worker-001"}
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-variant",
+            "max",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "opencode_preflight_report is required"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
     def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         flashdb = profile["source_pins"]["flashdb"]
