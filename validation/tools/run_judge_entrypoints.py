@@ -450,13 +450,13 @@ def public_packet_opencode_preflight_proof_summary(
 def public_packet_opencode_attempt_summary(value: object, *, repo_root: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {"status": "absent"}
+    if value.get("status") not in {"present", "passed"} or not isinstance(value.get("path"), str):
+        return {"status": "absent"}
     result: dict[str, Any] = {
         "path": value.get("path"),
         "sha256": value.get("sha256"),
         "status": value.get("status", "unknown"),
     }
-    if value.get("status") != "present" or not isinstance(value.get("path"), str):
-        return result
     try:
         payload = validator.load_json(resolve_input_path(Path(value["path"]), repo_root=repo_root))
     except (OSError, ValueError, json.JSONDecodeError):

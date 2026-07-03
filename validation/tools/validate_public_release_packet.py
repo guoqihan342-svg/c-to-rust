@@ -145,6 +145,12 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
         checked_bundle_file = judge_validator.validate_ref(bundle_file, repo_root=repo_root)
     except ValueError as error:
         raise ValueError(f"competition_config_archive.files.{COMPETITION_BUNDLE_MANIFEST_PATH}: {error}") from error
+    require_competition_config_archive_matches_bundle_manifest(
+        archive,
+        files,
+        repo_root=repo_root,
+        bundle_manifest_path=str(checked_bundle_file["path"]),
+    )
 
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
     publication_archive = require_object(
@@ -186,6 +192,126 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
             raise ValueError(f"competition_config_archive.external_refs.{path_text}: {error}") from error
 
 
+def require_competition_config_archive_matches_bundle_manifest(
+    archive: dict[str, Any],
+    files: dict[str, Any],
+    *,
+    repo_root: Path,
+    bundle_manifest_path: str,
+) -> None:
+    manifest_path = judge_validator.repo_path(bundle_manifest_path, repo_root=repo_root)
+    manifest = judge_validator.load_json(manifest_path)
+    judge_validator.validate_competition_env_bundle_contract(
+        {
+            "environment_profile": require_object(
+                manifest.get("canonical_environment_profile"),
+                "competition env bundle canonical_environment_profile",
+            )
+        },
+        repo_root=repo_root,
+        manifest_path=manifest_path,
+    )
+
+    manifest_files = manifest_entries_by_path(manifest.get("files"), "competition env bundle files")
+    expected_file_paths = sorted({COMPETITION_BUNDLE_MANIFEST_PATH, *manifest_files})
+    actual_file_paths = sorted(files)
+    missing_files = sorted(set(expected_file_paths) - set(actual_file_paths))
+    if missing_files:
+        raise ValueError(f"competition_config_archive.files missing bundle-manifest listed files: {missing_files}")
+    unexpected_files = sorted(set(actual_file_paths) - set(expected_file_paths))
+    if unexpected_files:
+        raise ValueError(f"competition_config_archive.files contains files not listed by bundle-manifest: {unexpected_files}")
+    if archive.get("file_count") != len(files):
+        raise ValueError("competition_config_archive.file_count must match competition_config_archive.files length")
+
+    bundle_manifest_ref = require_object(
+        files.get(COMPETITION_BUNDLE_MANIFEST_PATH),
+        f"competition_config_archive.files.{COMPETITION_BUNDLE_MANIFEST_PATH}",
+    )
+    validate_archive_ref_matches_manifest(
+        bundle_manifest_ref,
+        expected_path=COMPETITION_BUNDLE_MANIFEST_PATH,
+        expected_sha=judge_validator.sha256_file(manifest_path),
+        label=f"competition_config_archive.files.{COMPETITION_BUNDLE_MANIFEST_PATH}",
+        repo_root=repo_root,
+    )
+    for path_text, entry in manifest_files.items():
+        validate_archive_ref_matches_manifest(
+            require_object(files.get(path_text), f"competition_config_archive.files.{path_text}"),
+            expected_path=path_text,
+            expected_sha=judge_validator.require_string(
+                entry.get("sha256"),
+                f"competition env bundle {path_text}.sha256",
+            ),
+            label=f"competition_config_archive.files.{path_text}",
+            repo_root=repo_root,
+        )
+
+    external_refs = require_object(archive.get("external_refs"), "competition_config_archive.external_refs")
+    manifest_external_refs = manifest_entries_by_path(
+        manifest.get("external_refs"),
+        "competition env bundle external_refs",
+    )
+    missing_external_refs = sorted(set(manifest_external_refs) - set(external_refs))
+    if missing_external_refs:
+        raise ValueError(
+            "competition_config_archive.external_refs missing required refs from bundle-manifest: "
+            f"{missing_external_refs}"
+        )
+    unexpected_external_refs = sorted(set(external_refs) - set(manifest_external_refs))
+    if unexpected_external_refs:
+        raise ValueError(
+            "competition_config_archive.external_refs contains refs not listed by bundle-manifest: "
+            f"{unexpected_external_refs}"
+        )
+    if archive.get("external_ref_count") != len(external_refs):
+        raise ValueError("competition_config_archive.external_ref_count must match competition_config_archive.external_refs length")
+    for path_text, entry in manifest_external_refs.items():
+        ref = require_object(external_refs.get(path_text), f"competition_config_archive.external_refs.{path_text}")
+        role = judge_validator.require_string(ref.get("role"), f"competition_config_archive.external_refs.{path_text}.role")
+        expected_role = judge_validator.require_string(entry.get("role"), f"competition env bundle external_ref {path_text}.role")
+        if role != expected_role:
+            raise ValueError(f"competition_config_archive.external_refs.{path_text}.role must match bundle-manifest")
+        validate_archive_ref_matches_manifest(
+            ref,
+            expected_path=path_text,
+            expected_sha=judge_validator.require_string(
+                entry.get("sha256"),
+                f"competition env bundle external_ref {path_text}.sha256",
+            ),
+            label=f"competition_config_archive.external_refs.{path_text}",
+            repo_root=repo_root,
+        )
+
+
+def manifest_entries_by_path(value: Any, label: str) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{label} must be a non-empty list")
+    entries: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(value):
+        entry = require_object(item, f"{label}[{index}]")
+        path_text = judge_validator.require_string(entry.get("path"), f"{label}[{index}].path")
+        if path_text in entries:
+            raise ValueError(f"{label} contains duplicate path: {path_text}")
+        entries[path_text] = entry
+    return entries
+
+
+def validate_archive_ref_matches_manifest(
+    ref: dict[str, Any],
+    *,
+    expected_path: str,
+    expected_sha: str,
+    label: str,
+    repo_root: Path,
+) -> None:
+    checked = judge_validator.validate_ref(ref, repo_root=repo_root)
+    if checked["path"] != expected_path:
+        raise ValueError(f"{label}.path must match bundle-manifest path")
+    if checked["sha256"] != expected_sha:
+        raise ValueError(f"{label}.sha256 must match bundle-manifest sha256")
+
+
 def checked_artifact_refs(packet: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     refs: dict[str, Any] = {}
     for name in CORE_ARTIFACT_REFS:
@@ -207,6 +333,7 @@ def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_roo
         boundary.get("translation_coverage_numerator"),
         "opencode_patch_boundary.translation_coverage_numerator",
     )
+    require_opencode_safety_transform_attempt_boundary_contract(packet, boundary, repo_root=repo_root)
     proof = require_object(
         boundary.get("opencode_preflight_proof_summary"),
         "opencode_patch_boundary.opencode_preflight_proof_summary",
@@ -217,6 +344,102 @@ def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_roo
             "opencode_patch_boundary.opencode_preflight_proof_summary",
             repo_root=repo_root,
         )
+
+
+def require_opencode_safety_transform_attempt_boundary_contract(
+    packet: dict[str, Any],
+    boundary: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> None:
+    label = "opencode_patch_boundary.opencode_safety_transform_attempt"
+    summary = require_object(boundary.get("opencode_safety_transform_attempt"), label)
+    publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    attempt_refs = opencode_safety_transform_attempt_refs(publication)
+    status = summary.get("status")
+    if status == "absent":
+        if attempt_refs:
+            raise ValueError(
+                f"{label}.status must be present when publication_manifest publishes "
+                "opencode_safety_transform_attempt"
+            )
+        return
+    if status not in {"present", "passed"}:
+        raise ValueError(f"{label}.status must be present, passed, or absent")
+    if len(attempt_refs) != 1:
+        raise ValueError(
+            "publication_manifest.published_artifact_refs must include exactly one "
+            "opencode_safety_transform_attempt when opencode_patch_boundary summary is present"
+        )
+
+    published_ref = attempt_refs[0]
+    if summary.get("path") != published_ref.get("path"):
+        raise ValueError(f"{label}.path must match publication_manifest.published_artifact_refs")
+    if summary.get("sha256") != published_ref.get("sha256"):
+        raise ValueError(f"{label}.sha256 must match publication_manifest.published_artifact_refs")
+    if summary.get("artifact_read_status") != "passed":
+        raise ValueError(f"{label}.artifact_read_status must be passed")
+    if summary.get("attempt_status") != "accepted":
+        raise ValueError(f"{label}.attempt_status must be accepted")
+
+    attempt_result = judge_validator.validate_opencode_safety_transform_attempt_contract(
+        published_ref,
+        repo_root=repo_root,
+    )
+    expected = {
+        "unit_count": attempt_result["unit_count"],
+        "round_count": attempt_result["round_count"],
+        "rollback_ref_count": attempt_result["rollback_ref_count"],
+        "max_repair_rounds": attempt_result["repair_round_cap"],
+    }
+    for field, expected_value in expected.items():
+        if summary.get(field) != expected_value:
+            raise ValueError(f"{label}.{field} must match bound opencode_safety_transform_attempt artifact")
+
+    payload = judge_validator.load_json(judge_validator.repo_path(str(published_ref["path"]), repo_root=repo_root))
+    retry_statuses = opencode_attempt_retry_statuses(payload)
+    if summary.get("accepted_retry_hint_statuses") != retry_statuses:
+        raise ValueError(f"{label}.accepted_retry_hint_statuses must match bound artifact retry hints")
+    if summary.get("accepted_retry_hint_status") != summarize_retry_statuses(retry_statuses):
+        raise ValueError(f"{label}.accepted_retry_hint_status must match bound artifact retry hints")
+
+
+def opencode_safety_transform_attempt_refs(publication: dict[str, Any]) -> list[dict[str, Any]]:
+    refs = publication.get("published_artifact_refs")
+    if refs is None:
+        return []
+    if not isinstance(refs, list):
+        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    return [
+        require_object(ref, "publication_manifest.published_artifact_refs[]")
+        for ref in refs
+        if (
+            isinstance(ref, dict)
+            and ref.get("artifact_name") == "opencode_safety_transform_attempt"
+            and ref.get("status") in {"present", "passed"}
+        )
+    ]
+
+
+def opencode_attempt_retry_statuses(payload: dict[str, Any]) -> list[str]:
+    hints: list[dict[str, Any]] = []
+    top_level = payload.get("accepted_retry_hint")
+    if isinstance(top_level, dict):
+        hints.append(top_level)
+    units = payload.get("safety_transform_units")
+    if isinstance(units, list):
+        for unit in units:
+            if isinstance(unit, dict) and isinstance(unit.get("accepted_retry_hint"), dict):
+                hints.append(unit["accepted_retry_hint"])
+    return [status for hint in hints if isinstance((status := hint.get("status", "unknown")), str)]
+
+
+def summarize_retry_statuses(statuses: list[str]) -> str:
+    if not statuses:
+        return "unknown"
+    if len(set(statuses)) == 1:
+        return statuses[0]
+    return "mixed"
 
 
 def require_opencode_preflight_proof_summary_contract(

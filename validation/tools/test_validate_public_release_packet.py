@@ -200,6 +200,138 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
     }
 
 
+def write_opencode_safety_transform_attempt_fixture(
+    root: Path,
+    *,
+    max_repair_rounds: int = 5,
+) -> dict:
+    attempt_path = root / "workers" / "worker-a" / "harness" / "opencode-safety-transform-attempt-1.json"
+    evidence_root = attempt_path.parent / "attempt-evidence"
+    refs = {
+        "summary": write_text_artifact(evidence_root / "summary.json", '{"final_gate_status":"passed"}\n'),
+        "workflow_metrics": write_text_artifact(evidence_root / "workflow-metrics.json", '{"status":"passed"}\n'),
+        "baseline": write_text_artifact(evidence_root / "baseline-unsafe.rs", "unsafe fn baseline() {}\n"),
+        "final": write_text_artifact(evidence_root / "final-safe.rs", "fn final_safe() {}\n"),
+        "accepted_patch": write_text_artifact(evidence_root / "accepted.patch", "accepted patch\n"),
+        "patch_log": write_text_artifact(evidence_root / "patch-log.jsonl", '{"round":1}\n'),
+        "oracle": write_text_artifact(evidence_root / "oracle.json", '{"status":"passed"}\n'),
+        "schema_diff": write_text_artifact(evidence_root / "schema-diff.json", '{"status":"passed"}\n'),
+        "unsafe_scan": write_text_artifact(evidence_root / "unsafe-scan.json", '{"status":"passed"}\n'),
+    }
+    payload = {
+        "schema_version": 1,
+        "report_kind": "opencode-safety-transform-attempt",
+        "run_id": "opencode-run",
+        "worker_id": "worker-a",
+        "attempt": 1,
+        "status": "accepted",
+        "summary": {
+            **refs["summary"],
+            "final_gate_status": "passed",
+        },
+        "workflow_metrics": refs["workflow_metrics"],
+        "contract_verification": {"status": "executed"},
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "attempt_contract": {
+            "single_patch_per_round": True,
+            "max_repair_rounds": max_repair_rounds,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+        "safety_transform_unit_count": 1,
+        "safety_transform_units": [
+            {
+                "unit_id": "flashdb/real-fdb-calc-crc32",
+                "status": "converged",
+                "attempt": 1,
+                "round_contract": {
+                    "single_patch_per_round": True,
+                    "max_repair_rounds": max_repair_rounds,
+                },
+                "patch_evidence": {
+                    "baseline": refs["baseline"],
+                    "final": refs["final"],
+                    "accepted_patch": refs["accepted_patch"],
+                    "patch_log": refs["patch_log"],
+                },
+                "verification_delta": {
+                    "compiled": True,
+                    "oracle_evidence": refs["oracle"],
+                    "semantic_evidence": {"schema_diff": refs["schema_diff"]},
+                    "unsafe_scan_evidence": refs["unsafe_scan"],
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                        "ratio": 0.0,
+                    },
+                },
+                "rounds": [
+                    {
+                        "round": 1,
+                        "single_patch_per_round": True,
+                        "patch": refs["accepted_patch"],
+                        "patch_log": refs["patch_log"],
+                        "oracle_evidence": refs["oracle"],
+                        "schema_diff": refs["schema_diff"],
+                        "unsafe_scan_evidence": refs["unsafe_scan"],
+                        "unsafe_delta": {
+                            "status": "measured",
+                            "baseline_total_unsafe": 2,
+                            "current_total_unsafe": 0,
+                            "reduced_by": 2,
+                            "ratio": 0.0,
+                        },
+                    }
+                ],
+                "accepted_retry_hint": {"status": "not_exercised"},
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+            }
+        ],
+        "evidence_boundary": "OpenCode chat/session output is audit provenance only.",
+    }
+    write_json(attempt_path, payload)
+    return {
+        "artifact_name": "opencode_safety_transform_attempt",
+        "path": repo_relative(attempt_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(attempt_path),
+    }
+
+
+def attach_opencode_safety_attempt(packet: dict, attempt_ref: dict) -> None:
+    attempt_summary = {
+        "path": attempt_ref["path"],
+        "sha256": attempt_ref["sha256"],
+        "status": "present",
+        "artifact_read_status": "passed",
+        "attempt_status": "accepted",
+        "accepted_retry_hint_status": "not_exercised",
+        "accepted_retry_hint_statuses": ["not_exercised"],
+        "rollback_ref_count": 0,
+        "round_count": 1,
+        "max_repair_rounds": 5,
+        "unit_count": 1,
+    }
+    packet["opencode_patch_boundary"]["opencode_safety_transform_attempt"] = attempt_summary
+    packet["publication_manifest"].setdefault("published_artifact_refs", []).append(json.loads(json.dumps(attempt_ref)))
+
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+    notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+    notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+    packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
 def packet_preflight_path(packet: dict) -> Path:
     proof = packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]
     return REPO_ROOT / proof["preflight_report"]["path"]
@@ -245,22 +377,33 @@ def valid_packet(root: Path) -> dict:
     bundle_path = root / "summary" / "judge-milestone-bundle.json"
     opencode_preflight_proof = write_opencode_preflight_fixture(root)
     config_bundle_manifest = REPO_ROOT / "config" / "competition-env" / "bundle-manifest.json"
+    config_bundle_payload = json.loads(config_bundle_manifest.read_text(encoding="utf-8"))
     config_bundle_ref = {
         "path": repo_relative(config_bundle_manifest),
         "status": "present",
         "sha256": judge_validator.sha256_file(config_bundle_manifest),
     }
+    archive_files = {
+        "config/competition-env/bundle-manifest.json": {
+            **config_bundle_ref,
+            "bytes": config_bundle_manifest.stat().st_size,
+        }
+    }
+    for manifest_file in config_bundle_payload["files"]:
+        path_text = manifest_file["path"]
+        path = REPO_ROOT / path_text
+        archive_files[path_text] = {
+            "path": path_text,
+            "status": "present",
+            "sha256": judge_validator.sha256_file(path),
+            "bytes": path.stat().st_size,
+        }
     competition_config_archive = {
         "report_kind": "competition-config-archive",
         "status": "present",
         "root": "config/competition-env",
-        "file_count": 1,
-        "files": {
-            "config/competition-env/bundle-manifest.json": {
-                **config_bundle_ref,
-                "bytes": config_bundle_manifest.stat().st_size,
-            }
-        },
+        "file_count": len(archive_files),
+        "files": archive_files,
         "external_ref_count": len(judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES),
         "external_refs": {
             path: {
@@ -290,7 +433,7 @@ def valid_packet(root: Path) -> dict:
             "report_kind": "competition-config-archive",
             "status": "present",
             "root": "config/competition-env",
-            "file_count": 1,
+            "file_count": len(archive_files),
             "bundle_manifest": config_bundle_ref,
         },
         "supported_subset": {
@@ -635,6 +778,52 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("required_model must be GLM-5.1" in error for error in result["errors"]), result["errors"])
 
+    def test_validate_packet_accepts_deep_bound_opencode_safety_attempt(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir)
+        attach_opencode_safety_attempt(packet, attempt_ref)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed", result["errors"])
+
+    def test_validate_packet_rejects_opencode_safety_attempt_boundary_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-hash-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir)
+        attach_opencode_safety_attempt(packet, attempt_ref)
+        packet["opencode_patch_boundary"]["opencode_safety_transform_attempt"]["sha256"] = "0" * 64
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("opencode_safety_transform_attempt.sha256 must match" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_opencode_safety_attempt_non_five_round_cap(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-rounds-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir, max_repair_rounds=4)
+        attach_opencode_safety_attempt(packet, attempt_ref)
+        packet["opencode_patch_boundary"]["opencode_safety_transform_attempt"]["max_repair_rounds"] = 4
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("attempt_contract.max_repair_rounds must be 5" in error for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_preflight_session_without_shell_call(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-no-shell-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -849,6 +1038,21 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("competition_config_archive.external_refs missing required refs" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_requires_archive_manifest_listed_config_files(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-manifest-files-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        del packet["competition_config_archive"]["files"]["config/competition-env/environment.json"]
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("competition_config_archive.files missing bundle-manifest listed files" in error for error in result["errors"]),
             result["errors"],
         )
 

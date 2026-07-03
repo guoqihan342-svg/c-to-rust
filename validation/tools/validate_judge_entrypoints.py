@@ -2030,7 +2030,7 @@ def opencode_command_argv_matches(command_arg: Any, expected_command: str) -> bo
 def opencode_models_argv_matches(value: Any, *, expected_command: str) -> bool:
     if not isinstance(value, list) or len(value) != 2:
         return False
-    return opencode_command_argv_matches(value[0], expected_command) and value[1] == "models"
+    return value == [expected_command, "models"]
 
 
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
@@ -2411,6 +2411,13 @@ def validate_opencode_preflight_binding(
         marker_path = repo_path(marker_path_text, repo_root=repo_root)
         if not marker_path.is_file():
             raise ValueError(f"{label}.marker_path must exist")
+        marker_payload = require_object(load_json(marker_path), f"{label}.marker file")
+        if marker_payload.get("report_kind") != "opencode-preflight-marker":
+            raise ValueError(f"{label}.marker.report_kind must be opencode-preflight-marker")
+        if marker_payload.get("run_id") != result.get("run_id"):
+            raise ValueError(f"{label}.marker.run_id must match preflight run_id")
+        if marker_payload.get("status") != "written":
+            raise ValueError(f"{label}.marker.status must be written")
         session_binding = validate_hash_bound_artifact_binding(
             preflight_payload.get("opencode_session_evidence"),
             f"{label}.opencode_session_evidence",

@@ -854,6 +854,11 @@ def preflight_marker_command_line(preflight_path: Path) -> str:
     return contract_payload["worker_command_line"]
 
 
+def preflight_marker_path(preflight_path: Path) -> Path:
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    return REPO_ROOT / preflight_payload["marker_path"]
+
+
 def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, profile_payload: dict) -> None:
     profile_path = root / "profile.json"
     set_artifact_ref(payload["evidence_artifact_refs"]["profile"], profile_path, profile_payload)
@@ -2538,6 +2543,64 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
         preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
         preflight_payload["opencode_model_availability"]["argv"] = ["opencode", "list-models"]
+        write_json(preflight_path, preflight_payload)
+        new_sha = validator.sha256_file(preflight_path)
+        payload["evidence_artifact_refs"]["opencode_preflight_report"]["sha256"] = new_sha
+        payload["opencode_agent_runtime"]["opencode_preflight_report"]["sha256"] = new_sha
+        payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]["sha256"] = new_sha
+
+        with self.assertRaisesRegex(ValueError, "opencode_model_availability.argv must be opencode models"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_marker_payload_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-marker-drift-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        marker_path = preflight_marker_path(preflight_path)
+        marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker_payload["run_id"] = "different-run"
+        write_json(marker_path, marker_payload)
+
+        with self.assertRaisesRegex(ValueError, "marker.run_id must match preflight run_id"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_absolute_preflight_model_probe_argv(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-model-argv-absolute-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_payload["opencode_model_availability"]["argv"] = [
+            "C:/Users/me/AppData/Roaming/npm/opencode.CMD",
+            "models",
+        ]
         write_json(preflight_path, preflight_payload)
         new_sha = validator.sha256_file(preflight_path)
         payload["evidence_artifact_refs"]["opencode_preflight_report"]["sha256"] = new_sha
