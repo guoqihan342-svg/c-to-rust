@@ -106,6 +106,13 @@ REQUIRED_COMPETITION_SMOKE_STEPS = (
     "milestone-release-report",
     "lightweight-unittest",
 )
+COMPETITION_SMOKE_PYTHON_STEP_SCRIPTS = {
+    "vendored-clang-verification": "validation/tools/verify_vendored_clang.py",
+    "core-auto-evidence-validator": "validation/tools/validate_auto_translation_evidence.py",
+    "evidence-governance": "validation/tools/evidence_governance.py",
+    "translator-coverage-matrix": "validation/tools/translator_coverage_matrix.py",
+    "milestone-release-report": "validation/tools/milestone_release_report.py",
+}
 EXPECTED_ARTIFACT_REF_ALIASES = {
     "competition_summary": "competition_run_summary",
 }
@@ -1089,6 +1096,8 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         "competition_smoke_command_log command contains forbidden local absolute path"
                     )
+            if isinstance(step, str):
+                validate_competition_smoke_step_command(step, command)
             validate_competition_smoke_command_repo_inputs(command)
             for field in ("stdout", "stderr"):
                 value = entry.get(field)
@@ -1179,6 +1188,20 @@ def validate_competition_smoke_command_log_contract(
         "observed_steps": sorted(observed_steps),
         "opencode_glm_probe_verified": opencode_glm_probe_verified,
     }
+
+
+def validate_competition_smoke_step_command(step: str, command: list[str]) -> None:
+    expected_script = COMPETITION_SMOKE_PYTHON_STEP_SCRIPTS.get(step)
+    if expected_script is not None:
+        if len(command) < 3 or command[:2] != [PORTABLE_PYTHON_COMMAND, "-B"]:
+            raise ValueError(f"competition_smoke_command_log step {step} command must use portable python3 -B")
+        if command[2] != expected_script:
+            raise ValueError(
+                f"competition_smoke_command_log step {step} command must execute {expected_script} as argv[2]"
+            )
+        return
+    if step == "lightweight-unittest" and command[:4] != [PORTABLE_PYTHON_COMMAND, "-B", "-m", "unittest"]:
+        raise ValueError("competition_smoke_command_log step lightweight-unittest command must run python3 -B -m unittest")
 
 
 def validate_competition_smoke_command_repo_inputs(command: list[str]) -> None:

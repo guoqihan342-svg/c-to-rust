@@ -141,13 +141,7 @@ def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
             json.dumps(
                 {
                     "step": step["step"],
-                    "command": [
-                        "python3",
-                        "-B",
-                        "validation/tools/run_competition_smoke.py",
-                        "--step",
-                        step["step"],
-                    ],
+                    "command": valid_competition_smoke_step_command(step["step"]),
                     "returncode": step.get("returncode", 0),
                     "stdout": "",
                     "stderr": "",
@@ -164,6 +158,32 @@ def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
         encoding="utf-8",
     )
     return validator.sha256_file(path)
+
+
+def valid_competition_smoke_step_command(step: str) -> list[str]:
+    script_by_step = {
+        "vendored-clang-verification": "validation/tools/verify_vendored_clang.py",
+        "core-auto-evidence-validator": "validation/tools/validate_auto_translation_evidence.py",
+        "evidence-governance": "validation/tools/evidence_governance.py",
+        "translator-coverage-matrix": "validation/tools/translator_coverage_matrix.py",
+        "milestone-release-report": "validation/tools/milestone_release_report.py",
+    }
+    if step == "environment-check":
+        return ["bash", "-lc", "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"]
+    if step == "lightweight-unittest":
+        return [
+            "python3",
+            "-B",
+            "-m",
+            "unittest",
+            "validation.tools.test_competition_environment_profile",
+            "validation.tools.test_validate_competition_run_summary",
+        ]
+    if step == "opencode-glm-model-probe":
+        return ["opencode", "models"]
+    if step in script_by_step:
+        return ["python3", "-B", script_by_step[step]]
+    return ["python3", "-B", "validation/tools/run_competition_smoke.py", "--step", step]
 
 
 def temp_json_ref(path: Path, payload: dict) -> dict:
@@ -4651,13 +4671,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     command = ["opencode", "models"]
                     stdout = "zhipu/GLM-5.10\nopencode/not-GLM-5.1\n"
                 else:
-                    command = [
-                        "python3",
-                        "-B",
-                        "validation/tools/run_competition_smoke.py",
-                        "--step",
-                        name,
-                    ]
+                    command = valid_competition_smoke_step_command(name)
                     stdout = ""
                 command_log_entries.append(
                     json.dumps(
@@ -7137,6 +7151,75 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "command repo input --slice-spec must be repo-relative POSIX"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_python_step_without_python3_b(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "evidence-governance",
+                        "command": ["python", "-B", "validation/tools/evidence_governance.py"],
+                        "returncode": 0,
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "step evidence-governance command must use portable python3 -B"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_python_step_c_flag_spoof(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "evidence-governance",
+                        "command": [
+                            "python3",
+                            "-B",
+                            "-c",
+                            "print('validation/tools/evidence_governance.py')",
+                        ],
+                        "returncode": 0,
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "step evidence-governance command must execute validation/tools/evidence_governance.py as argv\\[2\\]"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_lightweight_unittest_without_module_mode(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "lightweight-unittest",
+                        "command": [
+                            "python3",
+                            "-B",
+                            "validation/tools/test_competition_environment_profile.py",
+                        ],
+                        "returncode": 0,
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "step lightweight-unittest command must run python3 -B -m unittest"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
     def test_competition_smoke_command_log_rejects_parent_traversal_out_root_ref(self) -> None:
