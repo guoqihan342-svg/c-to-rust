@@ -70,6 +70,16 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "| opencode-agent-runbook | .opencode/agents/c2rust-migrator.md | bbbbbbbbbbbb | present |",
             notes,
         )
+        self.assertIn("## Release Tag Readiness", notes)
+        self.assertIn("| Status | not_tagged |", notes)
+        self.assertIn("| Tag name | none |", notes)
+        self.assertIn("| Tag target commit | none |", notes)
+        self.assertIn("| Tag matches repo commit | false |", notes)
+        self.assertIn("| Remote release notes | not_published |", notes)
+        self.assertIn("| External review record | not_recorded |", notes)
+        self.assertIn("| External milestone claim ready | false |", notes)
+        self.assertIn("| Semantic gate | false |", notes)
+        self.assertIn("| Translation coverage numerator | 0 |", notes)
         self.assertIn("## Self-Heal Classification", notes)
         self.assertIn("| Blocked repairs | 1 |", notes)
         self.assertIn("| Human action required | 1 |", notes)
@@ -150,6 +160,15 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             milestone_release_notes.build_release_notes(payload)
 
         self.assertIn("publishability.status", str(raised.exception))
+
+    def test_release_notes_reject_missing_release_tag_readiness(self) -> None:
+        payload = self._bundle()
+        payload["publication_manifest"].pop("release_tag_readiness", None)
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("release_tag_readiness", str(raised.exception))
 
     def test_release_notes_reject_missing_evidence_cost_retention(self) -> None:
         payload = self._bundle()
@@ -652,6 +671,20 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "whole-project FlashDB migration",
                     "production-ready translation quality",
                 ],
+                "release_tag_readiness": {
+                    "report_kind": "release-tag-readiness",
+                    "status": "not_tagged",
+                    "tag_name": None,
+                    "tag_target_commit": None,
+                    "repo_commit": "1234567890abcdef1234567890abcdef12345678",
+                    "tag_matches_repo_commit": False,
+                    "remote_release_notes_status": "not_published",
+                    "external_review_record_status": "not_recorded",
+                    "external_milestone_claim_ready": False,
+                    "semantic_gate": False,
+                    "translation_coverage_numerator": 0,
+                    "boundary": "Tag and release records are publication readiness evidence only.",
+                },
                 "claim_boundary": {
                     "semantic_gate": False,
                     "publication_manifest_is_semantic_gate": False,

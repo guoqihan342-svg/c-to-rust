@@ -71,6 +71,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "",
         *publishability_lines(object_or_empty(bundle.get("publishability"))),
         "",
+        "## Release Tag Readiness",
+        "",
+        *release_tag_readiness_lines(object_or_empty(publication.get("release_tag_readiness"))),
+        "",
         "## Readiness Blockers",
         "",
         *blocker_lines(bundle.get("blockers")),
@@ -234,6 +238,7 @@ def require_bundle_contract(bundle: dict[str, Any]) -> None:
     )
     require_false_field(publication, "claim_boundary", "generated_draft_semantic_pass", prefix="publication_manifest")
     require_zero_field(publication, "claim_boundary", "translation_coverage_numerator", prefix="publication_manifest")
+    require_release_tag_readiness_contract(object_or_empty(publication.get("release_tag_readiness")))
     require_publishability_contract(bundle, blockers=blockers)
     require_opencode_runtime_contract(bundle)
     require_opencode_evidence_policy_contract(bundle)
@@ -288,6 +293,33 @@ def require_publishability_contract(bundle: dict[str, Any], *, blockers: list[st
         require(opencode_ready, "publishability.opencode_glm51_publishable must be true for external_release_ready")
     require_false_value(publishability.get("semantic_gate"), "publishability.semantic_gate")
     require_zero_value(publishability.get("translation_coverage_numerator"), "publishability.translation_coverage_numerator")
+
+
+def require_release_tag_readiness_contract(readiness: dict[str, Any]) -> None:
+    require(readiness.get("report_kind") == "release-tag-readiness", "release_tag_readiness.report_kind must be release-tag-readiness")
+    require(readiness.get("status") == "not_tagged", "release_tag_readiness.status must be not_tagged")
+    require_false_value(readiness.get("tag_matches_repo_commit"), "release_tag_readiness.tag_matches_repo_commit")
+    require(
+        readiness.get("remote_release_notes_status") == "not_published",
+        "release_tag_readiness.remote_release_notes_status must be not_published",
+    )
+    require(
+        readiness.get("external_review_record_status") == "not_recorded",
+        "release_tag_readiness.external_review_record_status must be not_recorded",
+    )
+    require_false_value(
+        readiness.get("external_milestone_claim_ready"),
+        "release_tag_readiness.external_milestone_claim_ready",
+    )
+    require_false_value(readiness.get("semantic_gate"), "release_tag_readiness.semantic_gate")
+    require_zero_value(
+        readiness.get("translation_coverage_numerator"),
+        "release_tag_readiness.translation_coverage_numerator",
+    )
+    require(
+        isinstance(readiness.get("boundary"), str) and bool(readiness.get("boundary")),
+        "release_tag_readiness.boundary must be present",
+    )
 
 
 def require_opencode_runtime_contract(bundle: dict[str, Any]) -> None:
@@ -650,6 +682,23 @@ def publishability_lines(publishability: dict[str, Any]) -> list[str]:
         f"| Target artifacts regenerable | {bool_text(publishability.get('target_artifacts_regenerable'))} |",
         f"| Semantic gate | {bool_text(publishability.get('semantic_gate'))} |",
         f"| Translation coverage numerator | {int_text(publishability.get('translation_coverage_numerator'))} |",
+    ]
+
+
+def release_tag_readiness_lines(readiness: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(readiness.get('status'), 'unknown')} |",
+        f"| Tag name | {text(readiness.get('tag_name'), 'none')} |",
+        f"| Tag target commit | {text(readiness.get('tag_target_commit'), 'none')} |",
+        f"| Repo commit | {text(readiness.get('repo_commit'), 'unknown')} |",
+        f"| Tag matches repo commit | {bool_text(readiness.get('tag_matches_repo_commit'))} |",
+        f"| Remote release notes | {text(readiness.get('remote_release_notes_status'), 'unknown')} |",
+        f"| External review record | {text(readiness.get('external_review_record_status'), 'unknown')} |",
+        f"| External milestone claim ready | {bool_text(readiness.get('external_milestone_claim_ready'))} |",
+        f"| Semantic gate | {bool_text(readiness.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(readiness.get('translation_coverage_numerator'))} |",
     ]
 
 

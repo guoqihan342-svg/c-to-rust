@@ -1519,6 +1519,10 @@ def build_publication_manifest(
         "published_artifact_refs": artifact_refs,
         "published_artifact_count": len(artifact_refs),
         "publishability": publishability,
+        "release_tag_readiness": build_release_tag_readiness(
+            repo_commit=repo_commit,
+            publishability=publishability,
+        ),
         "claim_scope": claim_scope,
         "claim_boundary": {
             "semantic_gate": False,
@@ -1541,6 +1545,27 @@ def build_publication_manifest(
             "OpenCode chat output as semantic evidence",
         ],
         "must_not_claim": must_not_claim,
+    }
+
+
+def build_release_tag_readiness(*, repo_commit: dict[str, Any], publishability: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "report_kind": "release-tag-readiness",
+        "status": "not_tagged",
+        "tag_name": None,
+        "tag_target_commit": None,
+        "repo_commit": repo_commit.get("commit") if isinstance(repo_commit.get("commit"), str) else None,
+        "tag_matches_repo_commit": False,
+        "remote_release_notes_status": "not_published",
+        "external_review_record_status": "not_recorded",
+        "external_milestone_claim_ready": False,
+        "publishability_status": publishability.get("status"),
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Tag, remote release notes, and external review records are publication readiness evidence only. "
+            "They do not create semantic acceptance or translator-generated coverage."
+        ),
     }
 
 

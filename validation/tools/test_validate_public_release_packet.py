@@ -827,6 +827,24 @@ def valid_packet(root: Path) -> dict:
             "branch": "competition",
             "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         },
+        "release_tag_readiness": {
+            "report_kind": "release-tag-readiness",
+            "status": "not_tagged",
+            "tag_name": None,
+            "tag_target_commit": None,
+            "repo_commit": repo_commit_ref["commit"],
+            "tag_matches_repo_commit": False,
+            "remote_release_notes_status": "not_published",
+            "external_review_record_status": "not_recorded",
+            "external_milestone_claim_ready": False,
+            "publishability_status": "internal_preview",
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "Tag, remote release notes, and external review records are publication readiness evidence only. "
+                "They do not create semantic acceptance or translator-generated coverage."
+            ),
+        },
         "judge_entrypoints_run_report": run_report,
         "readiness_report": readiness,
         "judge_milestone_bundle": bundle_self_ref,
@@ -1221,6 +1239,13 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(ref_status["properties"]["translation_coverage_numerator"]["const"], 0)
         self.assertIn("harness_architecture_summary", schema["required"])
         self.assertIn("evidence_cost_retention", schema["required"])
+        self.assertIn("release_tag_readiness", schema["properties"]["publication_manifest"]["required"])
+        tag_readiness = schema["properties"]["publication_manifest"]["properties"]["release_tag_readiness"]
+        self.assertEqual(tag_readiness["$ref"], "#/$defs/releaseTagReadiness")
+        tag_readiness = schema["$defs"]["releaseTagReadiness"]
+        self.assertEqual(tag_readiness["properties"]["report_kind"]["const"], "release-tag-readiness")
+        self.assertEqual(tag_readiness["properties"]["semantic_gate"]["const"], False)
+        self.assertEqual(tag_readiness["properties"]["translation_coverage_numerator"]["const"], 0)
 
     def test_validate_packet_rejects_harness_contract_matrix_missing_report_stage(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-harness-matrix-", dir=REPO_ROOT / "target"))
@@ -1773,7 +1798,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
     def test_public_release_packet_schema_requires_publication_manifest_identity(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-schema-identity-", dir=REPO_ROOT / "target"))
         packet = valid_packet(temp_dir)
-        for field in ("report_kind", "bundle_version", "source_commit", "repo_commit", "target_source_pin"):
+        for field in ("report_kind", "bundle_version", "source_commit", "repo_commit", "target_source_pin", "release_tag_readiness"):
             del packet["publication_manifest"][field]
         schema = judge_validator.load_json(packet_validator.PACKET_SCHEMA)
 

@@ -118,7 +118,8 @@
         "bundle_version",
         "source_commit",
         "repo_commit",
-        "target_source_pin"
+        "target_source_pin",
+        "release_tag_readiness"
       ],
       "properties": {
         "report_kind": {"const": "publication-manifest"},
@@ -136,7 +137,8 @@
             "branch": {"type": "string", "minLength": 1},
             "canonical_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
           }
-        }
+        },
+        "release_tag_readiness": {"$ref": "#/$defs/releaseTagReadiness"}
       }
     },
     "publishability": {
@@ -261,6 +263,37 @@
         "path": {"type": "string"},
         "status": {"const": "present"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "releaseTagReadiness": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "status",
+        "tag_name",
+        "tag_target_commit",
+        "tag_matches_repo_commit",
+        "remote_release_notes_status",
+        "external_review_record_status",
+        "external_milestone_claim_ready",
+        "semantic_gate",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "release-tag-readiness"},
+        "status": {"const": "not_tagged"},
+        "tag_name": {"type": ["string", "null"]},
+        "tag_target_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "repo_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "tag_matches_repo_commit": {"const": false},
+        "remote_release_notes_status": {"const": "not_published"},
+        "external_review_record_status": {"const": "not_recorded"},
+        "external_milestone_claim_ready": {"const": false},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
       }
     },
     "commitRef": {
