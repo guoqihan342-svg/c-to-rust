@@ -1448,6 +1448,21 @@ def validate_entrypoint_profile_contract(
                 value = worker_payload.get(field)
                 if isinstance(value, str):
                     observed_commits.add(value)
+    if entrypoint_requires_multi_worker(entry):
+        if not isinstance(workers, list) or len(workers) < 2:
+            raise ValueError(f"{entry.get('id')} multi-worker profile workers must contain at least 2 workers")
+        worker_ids = [
+            require_string(
+                require_object(worker, f"{entry.get('id')}.profile.workers[{index}]").get("worker_id"),
+                f"{entry.get('id')}.profile.workers[{index}].worker_id",
+            )
+            for index, worker in enumerate(workers)
+        ]
+        if len(set(worker_ids)) != len(worker_ids):
+            raise ValueError(f"{entry.get('id')} multi-worker profile worker_id values must be unique")
+        max_workers = profile.get("max_workers")
+        if not isinstance(max_workers, int) or max_workers < len(workers):
+            raise ValueError(f"{entry.get('id')} multi-worker profile max_workers must be >= worker count")
     disallowed = sorted(commit for commit in observed_commits if commit not in allowed_commits)
     if disallowed:
         raise ValueError(f"{entry.get('id')} profile uses commits outside source_pin_policy: {disallowed}")
@@ -1457,6 +1472,12 @@ def validate_entrypoint_profile_contract(
         "observed_commits": sorted(observed_commits),
         "status": "passed",
     }
+    if entrypoint_requires_multi_worker(entry):
+        result["multi_worker_contract"] = {
+            "status": "passed",
+            "worker_count": len(workers),
+            "max_workers": profile["max_workers"],
+        }
     expected_artifacts = entry.get("expected_artifacts") if isinstance(entry.get("expected_artifacts"), dict) else {}
     requires_opencode_profile = (
         "opencode" in str(entry.get("id", ""))
@@ -1469,6 +1490,10 @@ def validate_entrypoint_profile_contract(
     if profile.get("mode") == "opencode":
         result["opencode_launch_policy"] = validate_opencode_profile_launch_policy(profile, entry_id=str(entry.get("id")))
     return result
+
+
+def entrypoint_requires_multi_worker(entry: dict[str, Any]) -> bool:
+    return "multi_worker" in str(entry.get("id", "")) or "multi-worker" in str(entry.get("purpose", ""))
 
 
 def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id: str) -> dict[str, Any]:
@@ -3475,6 +3500,7 @@ def validate_judge_graph_contract(
     architecture: dict[str, Any],
     *,
     opencode_runtime_result: dict[str, Any] | None,
+    minimum_worker_count: int = 1,
 ) -> dict[str, Any]:
     graph_runtime = architecture.get("graph_runtime")
     graph_nodes = architecture.get("graph_nodes")
@@ -3500,6 +3526,11 @@ def validate_judge_graph_contract(
     worker_count = architecture.get("worker_count")
     if not isinstance(worker_count, int) or worker_count < 1:
         raise ValueError("judge_evidence_index.harness_architecture.worker_count must be a positive integer")
+    if worker_count < minimum_worker_count:
+        raise ValueError(
+            f"judge_evidence_index.harness_architecture.worker_count must be >= {minimum_worker_count} "
+            "for multi-worker entrypoint"
+        )
     for field in ("max_workers", "effective_workers"):
         value = parallelism.get(field)
         if not isinstance(value, int) or value < worker_count:
@@ -3512,6 +3543,7 @@ def validate_judge_graph_contract(
         "graph_runtime": graph_runtime,
         "graph_nodes": list(graph_nodes),
         "worker_count": worker_count,
+        "minimum_worker_count": minimum_worker_count,
         "retry_round_cap": 5,
     }
 
@@ -3698,6 +3730,7 @@ def validate_judge_evidence_index_contract(
     path_text: str,
     repo_root: Path | None = None,
     expected_artifacts: dict[str, Any] | None = None,
+    minimum_worker_count: int = 1,
 ) -> dict[str, Any]:
     if payload.get("report_kind") != "judge-evidence-index":
         raise ValueError(f"judge_evidence_index report_kind must be judge-evidence-index: {path_text}")
@@ -3740,6 +3773,7 @@ def validate_judge_evidence_index_contract(
     graph_contract = validate_judge_graph_contract(
         architecture,
         opencode_runtime_result=opencode_runtime_result,
+        minimum_worker_count=minimum_worker_count,
     )
     headline_contract = validate_judge_headline_contract(
         payload,
@@ -4706,6 +4740,7 @@ def validate_harness_artifact_contracts(
             path_text=str(artifacts["judge_evidence_index"]),
             repo_root=repo_root,
             expected_artifacts=artifacts,
+            minimum_worker_count=2 if entrypoint is not None and entrypoint_requires_multi_worker(entrypoint) else 1,
         )
     if "competition_summary" in artifacts:
         competition_summary_path = repo_path(str(artifacts["competition_summary"]), repo_root=repo_root)

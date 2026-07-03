@@ -1720,6 +1720,40 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_multi_worker_entrypoint_requires_multi_worker_profile(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["workers"] = source_profile["workers"][:1]
+        source_profile["max_workers"] = 1
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "explicit-workers-single-worker.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "single-worker-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "multi_worker_evaluate_profile multi-worker profile workers must contain at least 2 workers",
+            result["errors"],
+        )
+
     def test_opencode_profile_requires_explicit_model(self) -> None:
         config = load_default_config()
         entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
@@ -4531,6 +4565,26 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["opencode_safety_transform_attempt"]["status"], "passed")
         self.assertEqual(result["opencode_safety_transform_attempt"]["round_count"], 1)
+
+    def test_multi_worker_entrypoint_requires_multi_worker_judge_graph(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="multi-worker-judge-index-", dir=target_dir))
+        judge_index_path = temp_dir / "harness" / "judge-evidence-index.json"
+        payload = valid_deterministic_judge_index_payload()
+        payload["evidence_artifact_refs"] = {}
+        write_json(judge_index_path, payload)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "judge_evidence_index.harness_architecture.worker_count must be >= 2 for multi-worker entrypoint",
+        ):
+            validator.validate_harness_artifact_contracts(
+                {"judge_evidence_index": repo_relative(judge_index_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+                entrypoint={"id": "multi_worker_evaluate_profile", "purpose": "harness-architecture-multi-worker-evaluate"},
+            )
 
     def test_resume_manifest_claim_boundary_fails_closed(self) -> None:
         target_dir = REPO_ROOT / "target"
