@@ -52,14 +52,9 @@
       "sha256": "25a757c1a9c8e40fd355d7f86120fa84f59a48fb9a1830a4c337daca8568aa8d"
     },
     {
-      "path": ".codex/skills/c2rust-migration/SKILL.md",
-      "role": "repo-owned-agent-skill",
-      "sha256": "6181d350c0e8fd044ed85da4c7a4a1dc283b3eadf015585cb94f0b1da3304dcc"
-    },
-    {
       "path": ".opencode/agents/c2rust-migrator.md",
       "role": "opencode-agent-runbook",
-      "sha256": "30b129504137c1ec9642429d4973d9f724e50c0a404ca22deacaf5fdeafb4e2d"
+      "sha256": "edbdf48930fd9b5671e2fd8e4cc42d494c25186c89f3e88935e347b0e4e5f4da"
     }
   ],
   "files": [
@@ -161,12 +156,12 @@
     {
       "path": "config/competition-env/README.md",
       "role": "competition-env-readme",
-      "sha256": "193914af5df035ddeefea919f0efd2caf8ac5de4d0993d9afdda6ba60b59b944"
+      "sha256": "0127398587363fa554ff2dc7a18d0cf552a59dc6636940a150491982b08a0d45"
     },
     {
       "path": "config/competition-env/README.en.md",
       "role": "competition-env-readme",
-      "sha256": "5798108bae6ca518928db099e72445102ea9dcd471ffa512b25cff1c7b12bae5"
+      "sha256": "2f1b75ef2aa8278a770e8ce469f9c3956695f3802db9c4e405bc14a6d7e0f5fc"
     }
   ],
   "report_kind": "competition-env-bundle",

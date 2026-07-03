@@ -190,6 +190,113 @@
         "minLength": 1
       }
     },
+    "competition_exact_host_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "competition_exact_host_attested",
+        "required_agent_tool",
+        "required_model",
+        "required_variant",
+        "opencode_model_availability"
+      ],
+      "properties": {
+        "competition_exact_host_attested": {
+          "type": "boolean"
+        },
+        "required_agent_tool": {
+          "type": "string",
+          "enum": [
+            "opencode"
+          ]
+        },
+        "required_model": {
+          "type": "string",
+          "enum": [
+            "GLM-5.1"
+          ]
+        },
+        "required_variant": {
+          "type": "string",
+          "enum": [
+            "max"
+          ]
+        },
+        "opencode_model_availability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "required_model",
+            "model_listed",
+            "opencode_command",
+            "argv",
+            "process_returncode",
+            "logs",
+            "stdout_sha256",
+            "stderr_sha256"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "available"
+              ]
+            },
+            "required_model": {
+              "type": "string",
+              "enum": [
+                "GLM-5.1"
+              ]
+            },
+            "model_listed": {
+              "type": "boolean"
+            },
+            "opencode_command": {
+              "type": "string",
+              "enum": [
+                "opencode"
+              ]
+            },
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "process_returncode": {
+              "type": "integer"
+            },
+            "logs": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stdout",
+                "stderr"
+              ],
+              "properties": {
+                "stdout": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "stderr": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "stdout_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "stderr_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
     "workers": {
       "type": "object",
       "additionalProperties": false,

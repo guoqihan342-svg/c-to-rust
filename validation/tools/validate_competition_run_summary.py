@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
 from typing import Any
 
 import jsonschema
@@ -36,6 +37,9 @@ LF_STABLE_TEXT_SUFFIXES = {
     ".yaml",
     ".yml",
 }
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_VARIANT = "max"
 
 
 def main() -> int:
@@ -70,6 +74,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
     validate_final_gate(summary)
     validate_slice_counts(summary)
     validate_workers(summary)
+    validate_competition_exact_host_attestation(summary, summary_path=summary_path, repo_root=repo_root)
 
     return {
         "status": "passed",
@@ -79,6 +84,100 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
         "semantic_pass": summary["slices"]["semantic_pass"],
         "final_gate": summary["final_gate"]["status"],
     }
+
+
+def validate_competition_exact_host_attestation(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    proof_class = summary["proof_class"]
+    attestation = summary.get("competition_exact_host_attestation")
+    if proof_class != "competition-exact":
+        if attestation is not None:
+            raise SystemExit(
+                "competition run summary competition_exact_host_attestation is allowed only for "
+                "proof_class=competition-exact"
+            )
+        return
+    if not isinstance(attestation, dict):
+        raise SystemExit(
+            "competition run summary proof_class=competition-exact requires "
+            "competition_exact_host_attestation"
+        )
+    if attestation.get("competition_exact_host_attested") is not True:
+        raise SystemExit(
+            "competition run summary proof_class=competition-exact requires "
+            "competition_exact_host_attestation.competition_exact_host_attested=true"
+        )
+    if attestation.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit("competition exact host attestation required_agent_tool must be opencode")
+    if attestation.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit("competition exact host attestation required_model must be GLM-5.1")
+    if attestation.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
+        raise SystemExit("competition exact host attestation required_variant must be max")
+    availability = attestation.get("opencode_model_availability")
+    if not isinstance(availability, dict):
+        raise SystemExit("competition exact host attestation opencode_model_availability must be an object")
+    validate_opencode_model_availability_for_exact_host(
+        availability,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+
+
+def validate_opencode_model_availability_for_exact_host(
+    availability: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    if availability.get("status") != "available":
+        raise SystemExit("competition exact host opencode_model_availability.status must be available")
+    if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit("competition exact host opencode_model_availability.required_model must be GLM-5.1")
+    if availability.get("model_listed") is not True:
+        raise SystemExit("competition exact host opencode_model_availability.model_listed must be true")
+    if availability.get("opencode_command") != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit("competition exact host opencode_model_availability.opencode_command must be opencode")
+    if int(availability.get("process_returncode", -1)) != 0:
+        raise SystemExit("competition exact host opencode_model_availability.process_returncode must be 0")
+    if not opencode_models_argv_matches(availability.get("argv")):
+        raise SystemExit("competition exact host opencode_model_availability.argv must be opencode models")
+    logs = availability.get("logs")
+    if not isinstance(logs, dict):
+        raise SystemExit("competition exact host opencode_model_availability.logs must be an object")
+    for stream in ("stdout", "stderr"):
+        log_ref = logs.get(stream)
+        if not isinstance(log_ref, str) or not is_repo_relative_posix_path(log_ref):
+            raise SystemExit(f"competition exact host opencode_model_availability.logs.{stream} must be repo-relative POSIX")
+        log_path = resolve_summary_artifact(log_ref, summary_path=summary_path, repo_root=repo_root)
+        if log_path is None:
+            raise SystemExit(f"competition exact host opencode_model_availability.logs.{stream} does not exist")
+        expected_sha = availability.get(f"{stream}_sha256")
+        if not isinstance(expected_sha, str) or not is_sha256(expected_sha):
+            raise SystemExit(f"competition exact host opencode_model_availability.{stream}_sha256 must be a sha256")
+        if sha256(log_path) != expected_sha:
+            raise SystemExit(f"competition exact host opencode_model_availability.logs.{stream} sha256 mismatch")
+        if stream == "stdout":
+            stdout_text = log_path.read_text(encoding="utf-8", errors="replace")
+            if not opencode_models_stdout_lists_required_model(stdout_text):
+                raise SystemExit("competition exact host opencode_model_availability.logs.stdout must list GLM-5.1")
+
+
+def opencode_models_argv_matches(value: Any) -> bool:
+    return value == [COMPETITION_OPENCODE_COMMAND, "models"]
+
+
+def opencode_models_stdout_lists_required_model(stdout: str) -> bool:
+    for token in re.split(r"[\s,;]+", stdout):
+        candidate = token.strip().strip("'\"`[](){}")
+        if candidate == COMPETITION_OPENCODE_MODEL:
+            return True
+        if "/" in candidate and candidate.rsplit("/", 1)[-1] == COMPETITION_OPENCODE_MODEL:
+            return True
+    return False
 
 
 def validate_artifact_roots(artifact_roots: list[str], *, repo_root: Path) -> None:

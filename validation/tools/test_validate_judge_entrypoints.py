@@ -1612,10 +1612,39 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             "validation/l2_slices/Cargo.lock",
             "flashDB_rust/Cargo.lock",
             ".github/workflows/core-translator-validation-ci.yml",
-            ".codex/skills/c2rust-migration/SKILL.md",
             ".opencode/agents/c2rust-migrator.md",
         }
         self.assertTrue(required_external_refs.issubset(set(bundle["external_refs"])))
+
+    def test_competition_env_bundle_rejects_codex_or_plugin_external_refs(self) -> None:
+        manifest_path = REPO_ROOT / "config" / "competition-env" / "bundle-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        forbidden_paths = [
+            ".codex/skills/c2rust-migration/SKILL.md",
+            "docs/superpowers/plans/legacy.md",
+            ".opencode/node_modules/package/index.js",
+            ".opencode/package.json",
+            ".opencode/package-lock.json",
+        ]
+        for forbidden_path in forbidden_paths:
+            with self.subTest(forbidden_path=forbidden_path):
+                payload = json.loads(json.dumps(manifest))
+                payload["external_refs"].append(
+                    {
+                        "path": forbidden_path,
+                        "role": "forbidden-dev-tooling",
+                        "sha256": "0" * 64,
+                    }
+                )
+                with tempfile.TemporaryDirectory(prefix="competition-env-bundle-") as tmp:
+                    candidate = Path(tmp) / "bundle-manifest.json"
+                    candidate.write_text(json.dumps(payload), encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "competition env bundle unexpected external_ref"):
+                        validator.validate_competition_env_bundle_contract(
+                            load_default_config(),
+                            repo_root=REPO_ROOT,
+                            manifest_path=candidate,
+                        )
 
     def test_context_pack_entrypoints_must_be_repo_relative_when_declared(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -1910,6 +1939,34 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         with mock.patch.object(validator, "load_json", side_effect=load_json_with_plugin):
             with self.assertRaisesRegex(ValueError, "opencode.json plugin must be empty"):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_competition_env_bundle_rejects_opencode_agent_required_preflight_tool_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+        original_read_text = Path.read_text
+
+        def read_text_with_required_openspec(path: Path, *args: object, **kwargs: object) -> str:
+            text = original_read_text(path, *args, **kwargs)
+            if Path(path).as_posix().endswith(".opencode/agents/c2rust-migrator.md"):
+                return text.replace(
+                    "  --opencode-variant max\n```",
+                    "  --opencode-variant max\nopenspec validate --all --strict\n```",
+                )
+            return text
+
+        with mock.patch.object(Path, "read_text", read_text_with_required_openspec):
+            with self.assertRaisesRegex(
+                ValueError,
+                "OpenCode agent runbook Required Preflight must not depend on OpenSpec or superpowers",
+            ):
                 validator.validate_competition_env_bundle_contract(
                     load_default_config(),
                     manifest_path=temp_manifest,
@@ -7492,6 +7549,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "returncode": 0,
                         "stdout": "include path: /mnt/c/Users/runner/FlashDB/inc",
                         "stderr": r"output path: \\wsl$\Ubuntu\home\runner\project\target\out.json",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "output contains forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_include_flag_host_paths_in_output_text(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["bash", "-lc", "echo ok"],
+                        "returncode": 0,
+                        "workdir": ".",
+                        "stdout": (
+                            "cc args: -I/mnt/c/Users/runner/FlashDB/include "
+                            "-isystem//wsl.localhost/Ubuntu/home/runner/sysroot"
+                        ),
                     },
                     sort_keys=True,
                 )

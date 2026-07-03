@@ -68,11 +68,8 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         )
         self.assertIn("## Competition Config Archive", notes)
         self.assertIn("| Config files | 21 |", notes)
-        self.assertIn("| External refs | 2 |", notes)
-        self.assertIn(
-            "| repo-owned-agent-skill | .codex/skills/c2rust-migration/SKILL.md | aaaaaaaaaaaa | present |",
-            notes,
-        )
+        self.assertIn("| External refs | 1 |", notes)
+        self.assertNotIn(".codex/skills/c2rust-migration/SKILL.md", notes)
         self.assertIn(
             "| opencode-agent-runbook | .opencode/agents/c2rust-migrator.md | bbbbbbbbbbbb | present |",
             notes,
@@ -121,7 +118,8 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("| Before/after repair sources | 1 |", notes)
         self.assertIn("| Repair delta sources | 1 |", notes)
         self.assertIn("| raw C2Rust | not_verified_here | no | 0 |", notes)
-        self.assertIn("python -B -m validation.tools.run_judge_entrypoints", notes)
+        self.assertIn("python3 -B -m validation.tools.run_judge_entrypoints", notes)
+        self.assertNotIn("python -B -m validation.tools.run_judge_entrypoints", notes)
         self.assertIn("accepted_evidence_is_not_translator_generated_coverage", notes)
         self.assertIn("whole-project FlashDB migration", notes)
 
@@ -147,8 +145,27 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
     def test_release_notes_publish_bundle_rebuild_command(self) -> None:
         notes = milestone_release_notes.build_release_notes(self._bundle())
 
-        self.assertIn("python -B -m validation.tools.judge_milestone_bundle", notes)
+        self.assertIn("python3 -B -m validation.tools.judge_milestone_bundle", notes)
+        self.assertNotIn("python -B -m validation.tools.judge_milestone_bundle", notes)
         self.assertIn("- `build_bundle`:", notes)
+
+    def test_release_notes_reject_external_ready_when_host_readiness_blocked(self) -> None:
+        payload = self._bundle()
+        payload["publishability"].update(
+            {
+                "status": "external_release_ready",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": True,
+                "external_milestone": True,
+                "competition_exact_publishable": True,
+                "focused_run": False,
+            }
+        )
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("competition_host_readiness.status must be ready", str(raised.exception))
 
     def test_release_notes_reject_passed_bundle_with_blockers(self) -> None:
         payload = self._bundle()
@@ -671,14 +688,8 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                         "sha256": "1" * 64,
                         "status": "present",
                     },
-                    "external_ref_count": 2,
+                    "external_ref_count": 1,
                     "external_refs": {
-                        ".codex/skills/c2rust-migration/SKILL.md": {
-                            "path": ".codex/skills/c2rust-migration/SKILL.md",
-                            "sha256": "a" * 64,
-                            "status": "present",
-                            "role": "repo-owned-agent-skill",
-                        },
                         ".opencode/agents/c2rust-migrator.md": {
                             "path": ".opencode/agents/c2rust-migrator.md",
                             "sha256": "b" * 64,
@@ -797,13 +808,13 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "whole_project_flashdb_translation",
             ],
             "reproduction_commands": {
-                "run_judge_entrypoints": "python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json",
-                "build_bundle": "python -B -m validation.tools.judge_milestone_bundle --config config/competition-env/judge-entrypoints/flashdb-harness.json --run-report target/competition-out/summary/judge-entrypoints-run-report.json --output target/competition-out/summary/judge-milestone-bundle.json",
-                "validate_judge_entrypoints": "python -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --require-local-artifacts",
+                "run_judge_entrypoints": "python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json",
+                "build_bundle": "python3 -B -m validation.tools.judge_milestone_bundle --config config/competition-env/judge-entrypoints/flashdb-harness.json --run-report target/competition-out/summary/judge-entrypoints-run-report.json --output target/competition-out/summary/judge-milestone-bundle.json",
+                "validate_judge_entrypoints": "python3 -B -m validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --require-local-artifacts",
                 "entrypoints": [
                     {
                         "id": "before_after_judge_demo",
-                        "command": "python -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
+                        "command": "python3 -B -m validation.tools.judge_demo --profile config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
                     }
                 ],
             },

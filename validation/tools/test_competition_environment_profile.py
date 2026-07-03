@@ -356,7 +356,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("GLM-5.1", public_text)
         self.assertIn("opencode models", public_text)
         self.assertIn("opencode_model_unavailable", public_text)
-        self.assertIn(".codex/skills/c2rust-migration/SKILL.md", public_text)
+        self.assertIn(".opencode/agents/c2rust-migrator.md", public_text)
 
     def test_competition_profile_records_flashdb_source_pin(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
@@ -1556,6 +1556,13 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("opencode_session_evidence", skill)
         self.assertIn("contract_verification", skill)
         self.assertIn("recompute", skill)
+        self.assertIn("Required Preflight", skill)
+        self.assertIn("OpenSpec", skill)
+        self.assertIn("superpowers", skill)
+        self.assertIn("optional and non-gating", skill)
+        self.assertIn("Keep Codex skills out of the competition config archive", skill)
+        self.assertIn(".codex/skills/*", skill)
+        self.assertIn(".opencode/node_modules/*", skill)
 
     def test_opencode_runbooks_track_safety_attempt_session_recompute_contract(self) -> None:
         docs = [

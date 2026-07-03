@@ -58,7 +58,6 @@ COMPETITION_ENV_EXTERNAL_REF_ROLES = {
     "scripts/bootstrap_flashdb_sources.sh": "source-bootstrap-script",
     "scripts/c2rust-migrator.py": "repo-local-c2rust-migrator-entrypoint",
     ".github/workflows/core-translator-validation-ci.yml": "ci-validation-workflow",
-    ".codex/skills/c2rust-migration/SKILL.md": "repo-owned-agent-skill",
     ".opencode/agents/c2rust-migrator.md": "opencode-agent-runbook",
     "crates/c2r-translator/Cargo.lock": "rust-translator-dependency-lock",
     "validation/l2_slices/Cargo.lock": "l2-slices-dependency-lock",
@@ -66,7 +65,7 @@ COMPETITION_ENV_EXTERNAL_REF_ROLES = {
 }
 ROUTE_GOVERNANCE_METRICS_SCHEMA = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
 LOCAL_ABSOLUTE_PATH = re.compile(
-    r"(?:^|[^A-Za-z0-9_])(?:"
+    r"(?:(?:^|[^A-Za-z0-9_])|-(?:isystem|iquote|idirafter|include|isysroot|I|L|o)=?|--sysroot=)(?:"
     r"[A-Za-z]:[\\/]|"
     r"/mnt/[A-Za-z]/|"
     r"/home/|/Users/|/tmp/|/var/|/workspace/|/__w/|/opt/|/builds/|"
@@ -526,6 +525,43 @@ def validate_flashdb_bootstrap_source_pin(script_path: Path, source_pin: dict[st
             raise ValueError(f"bootstrap_flashdb_sources.sh {constant} must match environment.source_pins.flashdb")
 
 
+def markdown_section(text: str, heading: str) -> str:
+    pattern = re.compile(rf"(?ms)^##\s+{re.escape(heading)}\s*\n(?P<body>.*?)(?=^##\s+|\Z)")
+    match = pattern.search(text)
+    if not match:
+        raise ValueError(f"OpenCode agent runbook must include {heading}")
+    return match.group("body")
+
+
+def validate_opencode_agent_runbook_contract(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    required_preflight = markdown_section(text, "Required Preflight")
+    lower_required_preflight = required_preflight.lower()
+    if "opencode-preflight" not in required_preflight:
+        raise ValueError("OpenCode agent runbook Required Preflight must include opencode-preflight")
+    for required in (
+        f"--opencode-model {COMPETITION_OPENCODE_MODEL}",
+        f"--opencode-agent {COMPETITION_OPENCODE_AGENT}",
+        f"--opencode-variant {COMPETITION_OPENCODE_VARIANT}",
+    ):
+        if required not in required_preflight:
+            raise ValueError(f"OpenCode agent runbook Required Preflight must include {required}")
+    if "openspec" in lower_required_preflight or "superpowers" in lower_required_preflight:
+        raise ValueError(
+            "OpenCode agent runbook Required Preflight must not depend on OpenSpec or superpowers"
+        )
+    optional_governance = markdown_section(text, "Optional Governance Checks")
+    lower_optional_governance = optional_governance.lower()
+    if (
+        "openspec" not in lower_optional_governance
+        or "not" not in lower_optional_governance
+        or "competition preflight" not in lower_optional_governance
+    ):
+        raise ValueError(
+            "OpenCode agent runbook Optional Governance Checks must mark OpenSpec as non-gating"
+        )
+
+
 def validate_opencode_glm_host_acceptance_contract(
     payload: dict[str, Any],
     *,
@@ -723,6 +759,8 @@ def validate_competition_env_bundle_contract(
             opencode_config = load_json(path)
             if opencode_config.get("plugin") != []:
                 raise ValueError("opencode.json plugin must be empty for competition profile")
+        if path_text == ".opencode/agents/c2rust-migrator.md":
+            validate_opencode_agent_runbook_contract(path)
         if path_text == "scripts/bootstrap_flashdb_sources.sh":
             validate_flashdb_bootstrap_source_pin(path, flashdb_source_pin)
     missing_external_refs = sorted(set(COMPETITION_ENV_EXTERNAL_REF_ROLES) - set(result_external_refs))

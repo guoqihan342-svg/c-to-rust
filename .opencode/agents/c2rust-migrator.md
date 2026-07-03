@@ -80,14 +80,24 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --opencode-model GLM-5.1 \
   --opencode-agent c2rust-migrator \
   --opencode-variant max
-openspec status --change "design-c2rust-migration-agent" --json
-openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```
 
 For competition agent evidence, `opencode-preflight` must prove the same repo-local
 runtime can run `opencode models` and list `GLM-5.1`. If the model is missing,
 the run remains local/blocked evidence only; do not mark P0-H9 or the OpenCode
 agent path as closed.
+
+## Optional Governance Checks
+
+OpenSpec checks are development/governance sanity checks only. They are not
+competition preflight gates, are not required by the archived competition
+environment profile, and must not block or replace the OpenCode + GLM-5.1
+preflight contract above.
+
+```bash
+openspec status --change "design-c2rust-migration-agent" --json
+openspec instructions apply --change "design-c2rust-migration-agent" --json
+```
 
 ## Roles
 

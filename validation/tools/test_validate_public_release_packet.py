@@ -891,7 +891,7 @@ def valid_packet(root: Path) -> dict:
     bundle_must_not_claim = ["bundle_status_is_not_project_level_translation_success"]
     packet_must_not_claim = [*bundle_must_not_claim, "public_release_packet_is_not_semantic_gate"]
     reproduction_commands = {
-        "run_judge_entrypoints": "python -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json"
+        "run_judge_entrypoints": "python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json"
     }
     before_after_repair_exhibit = {
         "report_kind": "before-after-repair-exhibit-rollup",
@@ -2141,6 +2141,35 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("publishability.publication_scope must match external readiness" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_external_ready_when_host_readiness_blocked(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-host-readiness-blocked-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publishability"].update(
+            {
+                "status": "external_release_ready",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": True,
+                "external_milestone": True,
+                "competition_exact_publishable": True,
+                "focused_run": False,
+            }
+        )
+        write_json(bundle_path, bundle_payload)
+        packet["publishability"] = json.loads(json.dumps(bundle_payload["publishability"]))
+        packet["judge_milestone_bundle"]["sha256"] = packet_validator.judge_validator.sha256_file(bundle_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("competition_host_readiness.status must be ready" in error for error in result["errors"]),
             result["errors"],
         )
 

@@ -1829,15 +1829,15 @@ def build_reproduction_commands(
     config_path = config.get("path") if isinstance(config.get("path"), str) else None
     if config_path:
         runner_command = (
-            "python -B -m validation.tools.run_judge_entrypoints "
+            "python3 -B -m validation.tools.run_judge_entrypoints "
             f"--config {config_path} --out {run_report_rel}"
         )
     else:
-        runner_command = f"python -B -m validation.tools.run_judge_entrypoints --out {run_report_rel}"
+        runner_command = f"python3 -B -m validation.tools.run_judge_entrypoints --out {run_report_rel}"
     return {
         "run_judge_entrypoints": runner_command,
         "build_bundle": (
-            "python -B -m validation.tools.judge_milestone_bundle "
+            "python3 -B -m validation.tools.judge_milestone_bundle "
             f"--run-report {run_report_rel} --out {bundle_rel}"
         ),
         "entrypoints": [

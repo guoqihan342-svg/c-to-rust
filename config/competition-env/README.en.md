@@ -33,7 +33,7 @@ This directory is the standalone entrypoint for the competition/evaluation envir
 ## Files
 
 - `environment.json`: machine-readable baseline, mirrors, and adaptation policy.
-- `bundle-manifest.json`: machine-readable archive contract for this competition config directory. It hash-binds the environment profile, mirror configs, shell entrypoints, planned batch profiles, judge entrypoint index, review checklist, and OpenCode runbook; through `external_refs` it also binds `requirements.txt`, `opencode.json`, the FlashDB bootstrap script, the repo-local C2Rust migrator entrypoint, Rust dependency locks, the core CI workflow, the repo-owned skill, and `.opencode/agents/c2rust-migrator.md`. `validate_judge_entrypoints` verifies it, but it is not a semantic gate.
+- `bundle-manifest.json`: machine-readable archive contract for this competition config directory. It hash-binds the environment profile, mirror configs, shell entrypoints, planned batch profiles, judge entrypoint index, review checklist, and OpenCode runbook; through `external_refs` it also binds `requirements.txt`, `opencode.json`, the FlashDB bootstrap script, the repo-local C2Rust migrator entrypoint, Rust dependency locks, the core CI workflow, and `.opencode/agents/c2rust-migrator.md`. Codex skills remain developer guidance only and are not competition reproduction inputs. `validate_judge_entrypoints` verifies it, but it is not a semantic gate.
 - `apt/sources.list`: Ubuntu Noble APT mirror configuration.
 - `pip/pip.conf`: pip mirror configuration.
 - `npm/.npmrc`: npm registry configuration.

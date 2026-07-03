@@ -196,6 +196,33 @@ def write_summary_with_workflow_metrics(summary_path: Path, summary: dict) -> No
     summary_path.write_text(json.dumps(summary), encoding="utf-8")
 
 
+def add_competition_exact_host_attestation(summary: dict, summary_path: Path, *, stdout_text: str = "provider/GLM-5.1\n") -> None:
+    stdout_path = summary_path.parent / "opencode-models.stdout.log"
+    stderr_path = summary_path.parent / "opencode-models.stderr.log"
+    stdout_path.write_text(stdout_text, encoding="utf-8")
+    stderr_path.write_text("", encoding="utf-8")
+    summary["competition_exact_host_attestation"] = {
+        "competition_exact_host_attested": True,
+        "required_agent_tool": "opencode",
+        "required_model": "GLM-5.1",
+        "required_variant": "max",
+        "opencode_model_availability": {
+            "status": "available",
+            "required_model": "GLM-5.1",
+            "model_listed": True,
+            "opencode_command": "opencode",
+            "argv": ["opencode", "models"],
+            "process_returncode": 0,
+            "logs": {
+                "stdout": stdout_path.name,
+                "stderr": stderr_path.name,
+            },
+            "stdout_sha256": lf_stable_sha256(stdout_path),
+            "stderr_sha256": lf_stable_sha256(stderr_path),
+        },
+    }
+
+
 class ValidateCompetitionRunSummaryTests(unittest.TestCase):
     def test_core_ci_runs_competition_run_summary_validator_tests(self) -> None:
         workflow = (REPO_ROOT / ".github" / "workflows" / "core-translator-validation-ci.yml").read_text(
@@ -214,6 +241,54 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["proof_class"], "wsl-local-simulation")
+
+    def test_rejects_competition_exact_without_host_attestation(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["proof_class"] = "competition-exact"
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaisesRegex(SystemExit, "requires competition_exact_host_attestation"):
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+    def test_accepts_competition_exact_with_host_and_glm_attestation(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["proof_class"] = "competition-exact"
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            add_competition_exact_host_attestation(summary, summary_path)
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            result = module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["proof_class"], "competition-exact")
+
+    def test_rejects_competition_exact_when_probe_stdout_lacks_glm51(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["proof_class"] = "competition-exact"
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            add_competition_exact_host_attestation(summary, summary_path, stdout_text="GLM-5.10 not-GLM-5.1\n")
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaisesRegex(SystemExit, "logs.stdout must list GLM-5.1"):
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+    def test_rejects_non_exact_summary_with_exact_host_attestation(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            add_competition_exact_host_attestation(summary, summary_path)
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaisesRegex(SystemExit, "allowed only for proof_class=competition-exact"):
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
 
     def test_accepts_valid_competition_run_summary_with_worker_statuses(self) -> None:
         module = load_validator_module()

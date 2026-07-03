@@ -583,7 +583,11 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
             )
 
 
-def require_publishability_publication_scope_contract(publishability: dict[str, Any]) -> None:
+def require_publishability_publication_scope_contract(
+    publishability: dict[str, Any],
+    *,
+    competition_host_readiness: dict[str, Any] | None = None,
+) -> None:
     status = publishability.get("status")
     scope = publishability.get("scope")
     publication_scope = publishability.get("publication_scope")
@@ -599,6 +603,22 @@ def require_publishability_publication_scope_contract(publishability: dict[str, 
         raise ValueError("publishability.publication_scope must match external readiness")
     if publication_scope == "full" and publishability.get("external_milestone_claim_ready") is not True:
         raise ValueError("publishability.publication_scope=full requires external_milestone_claim_ready=true")
+    if status == "external_release_ready":
+        if publishability.get("all_entrypoints_run_publishable") is not True:
+            raise ValueError("publishability.all_entrypoints_run_publishable must be true for external_release_ready")
+        if publishability.get("competition_exact_publishable") is not True:
+            raise ValueError("publishability.competition_exact_publishable must be true for external_release_ready")
+        if publishability.get("opencode_glm51_publishable") is not True:
+            raise ValueError("publishability.opencode_glm51_publishable must be true for external_release_ready")
+        if publishability.get("focused_run") is not False:
+            raise ValueError("publishability.focused_run must be false for external_release_ready")
+        readiness = competition_host_readiness if isinstance(competition_host_readiness, dict) else {}
+        if readiness.get("status") != "ready":
+            raise ValueError("competition_host_readiness.status must be ready for external_release_ready")
+        if readiness.get("competition_exact_host_verified") is not True:
+            raise ValueError(
+                "competition_host_readiness.competition_exact_host_verified must be true for external_release_ready"
+            )
 
 
 def require_published_artifact_refs_are_hash_bound(publication: dict[str, Any], *, repo_root: Path) -> None:
@@ -942,7 +962,11 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
 
     require_publishability_publication_scope_contract(
-        require_object(packet.get("publishability"), "publishability")
+        require_object(packet.get("publishability"), "publishability"),
+        competition_host_readiness=require_object(
+            packet.get("competition_host_readiness"),
+            "competition_host_readiness",
+        ),
     )
 
     summary = require_object(packet.get("summary"), "summary")

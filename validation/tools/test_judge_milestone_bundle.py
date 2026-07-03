@@ -1291,12 +1291,6 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                     }
                 },
                 "external_refs": {
-                    ".codex/skills/c2rust-migration/SKILL.md": {
-                        "path": ".codex/skills/c2rust-migration/SKILL.md",
-                        "sha256": "2" * 64,
-                        "status": "present",
-                        "role": "repo-owned-agent-skill",
-                    },
                     ".opencode/agents/c2rust-migrator.md": {
                         "path": ".opencode/agents/c2rust-migrator.md",
                         "sha256": "3" * 64,
@@ -1307,11 +1301,8 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(ref["external_ref_count"], 2)
-        self.assertEqual(
-            ref["external_refs"][".codex/skills/c2rust-migration/SKILL.md"]["role"],
-            "repo-owned-agent-skill",
-        )
+        self.assertEqual(ref["external_ref_count"], 1)
+        self.assertNotIn(".codex/skills/c2rust-migration/SKILL.md", ref["external_refs"])
         self.assertEqual(
             ref["external_refs"][".opencode/agents/c2rust-migrator.md"]["role"],
             "opencode-agent-runbook",

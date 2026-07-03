@@ -304,6 +304,27 @@ def require_publishability_contract(bundle: dict[str, Any], *, blockers: list[st
         require(external_claim, "publishability.external_milestone_claim_ready must be true for external_release_ready")
         require(external_milestone, "publishability.external_milestone must be true for external_release_ready")
         require(opencode_ready, "publishability.opencode_glm51_publishable must be true for external_release_ready")
+        require(
+            publishability.get("all_entrypoints_run_publishable") is True,
+            "publishability.all_entrypoints_run_publishable must be true for external_release_ready",
+        )
+        require(
+            publishability.get("competition_exact_publishable") is True,
+            "publishability.competition_exact_publishable must be true for external_release_ready",
+        )
+        require(
+            publishability.get("focused_run") is False,
+            "publishability.focused_run must be false for external_release_ready",
+        )
+        host_readiness = object_or_empty(bundle.get("competition_host_readiness"))
+        require(
+            host_readiness.get("status") == "ready",
+            "competition_host_readiness.status must be ready for external_release_ready",
+        )
+        require(
+            host_readiness.get("competition_exact_host_verified") is True,
+            "competition_host_readiness.competition_exact_host_verified must be true for external_release_ready",
+        )
     require_false_value(publishability.get("semantic_gate"), "publishability.semantic_gate")
     require_zero_value(publishability.get("translation_coverage_numerator"), "publishability.translation_coverage_numerator")
 

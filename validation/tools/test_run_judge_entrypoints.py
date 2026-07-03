@@ -740,8 +740,8 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertIn("validation/l2_slices/Cargo.lock", archive["external_refs"])
         self.assertIn("flashDB_rust/Cargo.lock", archive["external_refs"])
         self.assertIn(".github/workflows/core-translator-validation-ci.yml", archive["external_refs"])
-        self.assertIn(".codex/skills/c2rust-migration/SKILL.md", archive["external_refs"])
         self.assertIn(".opencode/agents/c2rust-migrator.md", archive["external_refs"])
+        self.assertNotIn(".codex/skills/c2rust-migration/SKILL.md", archive["external_refs"])
         self.assertEqual(
             archive["external_refs"]["scripts/c2rust-migrator.py"]["role"],
             "repo-local-c2rust-migrator-entrypoint",
@@ -757,10 +757,6 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(
             archive["external_refs"]["flashDB_rust/Cargo.lock"]["role"],
             "flashdb-rust-reference-dependency-lock",
-        )
-        self.assertEqual(
-            archive["external_refs"][".codex/skills/c2rust-migration/SKILL.md"]["role"],
-            "repo-owned-agent-skill",
         )
         self.assertEqual(
             archive["external_refs"][".opencode/agents/c2rust-migrator.md"]["role"],
