@@ -25,7 +25,7 @@ def load_smoke_module():
 
 
 LOCAL_ABSOLUTE_PATH = re.compile(
-    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|\\\\wsl\$\\|//wsl\.localhost/)"
+    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|\\\\wsl\$\\|//wsl\$/|//wsl\.localhost/)"
 )
 
 
@@ -625,6 +625,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             "echo ok; /mnt/c/Users/me/tool.exe": "echo ok; tool.exe",
             r"echo ok && \\wsl$\Ubuntu\home\me\tool.exe": "echo ok && tool.exe",
             "echo ok | //wsl.localhost/Ubuntu/home/me/python3": "echo ok | python3",
+            "echo ok | //wsl$/Ubuntu/home/me/python3": "echo ok | python3",
             r'echo ok; "C:\Program Files\Python314\python.exe"': 'echo ok; "python.exe"',
         }
 
@@ -646,7 +647,11 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             return subprocess.CompletedProcess(
                 command,
                 0,
-                "include path: /mnt/c/Users/me/FlashDB/inc\ncwd: //wsl.localhost/Ubuntu/home/me/project\n",
+                (
+                    "include path: /mnt/c/Users/me/FlashDB/inc\n"
+                    "cwd: //wsl.localhost/Ubuntu/home/me/project\n"
+                    "source: //wsl$/Ubuntu/home/me/project/src/fdb.c\n"
+                ),
                 r"output path: \\wsl$\Ubuntu\home\me\project\target\out.json",
             )
 
@@ -675,6 +680,8 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             )
             self.assertIn("inc", joined_output)
             self.assertIn("project", joined_output)
+            self.assertIn("fdb.c", joined_output)
+            self.assertNotIn("//wsl$", joined_output)
             self.assertIn("out.json", joined_output)
 
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:

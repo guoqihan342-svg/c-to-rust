@@ -39,6 +39,7 @@ LOCAL_HOST_PATH_UNQUOTED = (
     r"/var/[^\s;&|]+|"
     r"\\\\wsl\$\\[^\s;&|]+|"
     r"\\\\wsl\.localhost\\[^\s;&|]+|"
+    r"//wsl\$/[^\s;&|]+|"
     r"//wsl\.localhost/[^\s;&|]+"
     r")"
 )
@@ -52,6 +53,7 @@ LOCAL_HOST_PATH_DOUBLE_QUOTED = (
     r'/var/[^"]+|'
     r'\\\\wsl\$\\[^"]+|'
     r'\\\\wsl\.localhost\\[^"]+|'
+    r'//wsl\$/[^"]+|'
     r'//wsl\.localhost/[^"]+'
     r")"
 )
@@ -65,6 +67,7 @@ LOCAL_HOST_PATH_SINGLE_QUOTED = (
     r"/var/[^']+|"
     r"\\\\wsl\$\\[^']+|"
     r"\\\\wsl\.localhost\\[^']+|"
+    r"//wsl\$/[^']+|"
     r"//wsl\.localhost/[^']+"
     r")"
 )
