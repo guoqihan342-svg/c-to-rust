@@ -83,6 +83,7 @@ VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES = (
 PORTABLE_PYTHON_COMMAND = "python3"
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_VARIANT = "max"
 
 
 def main() -> int:
@@ -526,6 +527,11 @@ def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_
         raise ValueError(
             "environment_profile.opencode_runtime.preflight_command_template "
             f"must include --opencode-model {COMPETITION_OPENCODE_MODEL}"
+        )
+    if f"--opencode-variant {COMPETITION_OPENCODE_VARIANT}" not in preflight_template:
+        raise ValueError(
+            "environment_profile.opencode_runtime.preflight_command_template "
+            f"must include --opencode-variant {COMPETITION_OPENCODE_VARIANT}"
         )
     boundary = require_object(runtime.get("claim_boundary"), "environment_profile.opencode_runtime.claim_boundary")
     if boundary.get("semantic_gate") is not False:
@@ -1343,6 +1349,8 @@ def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id
     if command != COMPETITION_OPENCODE_COMMAND:
         raise ValueError(f"{entry_id} opencode profile opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
     variant = require_string(profile.get("opencode_variant"), f"{entry_id} opencode profile opencode_variant")
+    if variant != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{entry_id} opencode profile opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
     model = profile.get("opencode_model")
     if not isinstance(model, str) or not model:
         raise ValueError(f"{entry_id} opencode profile opencode_model must be a non-empty string")
@@ -1981,6 +1989,8 @@ def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: s
     if command != COMPETITION_OPENCODE_COMMAND:
         raise ValueError(f"{label}.launch_policy.opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
     variant = require_string(policy.get("opencode_variant"), f"{label}.launch_policy.opencode_variant")
+    if variant != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{label}.launch_policy.opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
     model = policy.get("opencode_model")
     if not isinstance(model, str) or not model:
         raise ValueError(f"{label}.launch_policy.opencode_model must be a non-empty string")
@@ -2218,6 +2228,7 @@ def validate_opencode_contract_recomputed_from_session(
     summary_path: Path,
     label: str,
     repo_root: Path,
+    verification_field: str = "contract_verification",
 ) -> dict[str, Any]:
     recomputed = recompute_opencode_contract_execution(
         session_evidence=session_evidence,
@@ -2228,7 +2239,7 @@ def validate_opencode_contract_recomputed_from_session(
     reason = recomputed.get("contract_failure_reason") or recomputed.get("status")
     if recomputed.get("status") != "executed":
         raise ValueError(
-            f"{label}.contract_verification.status recomputed from opencode_session_evidence "
+            f"{label}.{verification_field}.status recomputed from opencode_session_evidence "
             f"must be executed: {reason}"
         )
     for field in (
@@ -2250,14 +2261,14 @@ def validate_opencode_contract_recomputed_from_session(
     ):
         if field in embedded_verification and embedded_verification.get(field) != recomputed.get(field):
             raise ValueError(
-                f"{label}.contract_verification.{field} must match recomputed opencode_session_evidence"
+                f"{label}.{verification_field}.{field} must match recomputed opencode_session_evidence"
             )
     if recomputed.get("first_shell_workdir_matches_repo_root") is not True:
-        raise ValueError(f"{label}.contract_verification.first_shell_workdir_matches_repo_root must be true")
+        raise ValueError(f"{label}.{verification_field}.first_shell_workdir_matches_repo_root must be true")
     if recomputed.get("expected_workdir_status") != "repo_root":
-        raise ValueError(f"{label}.contract_verification.expected_workdir_status must be repo_root")
+        raise ValueError(f"{label}.{verification_field}.expected_workdir_status must be repo_root")
     if recomputed.get("contract_failure_reason") != "":
-        raise ValueError(f"{label}.contract_verification.contract_failure_reason must be empty")
+        raise ValueError(f"{label}.{verification_field}.contract_failure_reason must be empty")
     for command in recomputed.get("executed_shell_commands", []):
         assert_no_local_absolute_path(command)
     return recomputed
@@ -2528,11 +2539,72 @@ def validate_opencode_worker_runtime(
     for command in executed_commands:
         assert_no_local_absolute_path(command)
 
+    recomputed_contract = None
+    if repo_root is not None:
+        handoff_payload = require_object(
+            load_json(repo_path(bindings["handoff_contract"]["path"], repo_root=repo_root)),
+            f"{label}.handoff_contract file",
+        )
+        if handoff_payload.get("runner_kind") != "opencode-run":
+            raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-run")
+        if handoff_payload.get("worker_id") != worker_id:
+            raise ValueError(f"{label}.handoff_contract.worker_id must match worker_id")
+        if "run_id" in expected_preflight and handoff_payload.get("run_id") != expected_preflight.get("run_id"):
+            raise ValueError(f"{label}.handoff_contract.run_id must match opencode_preflight_report.run_id")
+        handoff_policy = validate_opencode_launch_policy_binding(
+            handoff_payload.get("launch_policy"),
+            handoff_payload.get("launch_policy_sha256"),
+            f"{label}.handoff_contract",
+        )
+        compare_opencode_launch_policy(
+            handoff_policy,
+            expected_preflight["launch_policy"],
+            f"{label}.handoff_contract",
+            expected_label="opencode_preflight_report",
+        )
+        worker_command = handoff_payload.get("worker_command")
+        if not isinstance(worker_command, list) or not worker_command or not all(
+            isinstance(item, str) and item for item in worker_command
+        ):
+            raise ValueError(f"{label}.handoff_contract.worker_command must be a non-empty string list")
+        worker_command_line = require_string(
+            handoff_payload.get("worker_command_line"),
+            f"{label}.handoff_contract.worker_command_line",
+        )
+        if worker_command_line != shell_command_line(worker_command):
+            raise ValueError(f"{label}.handoff_contract.worker_command_line must match worker_command")
+        worker_command_sha256 = validate_sha256_hex(
+            handoff_payload.get("worker_command_sha256"),
+            f"{label}.handoff_contract.worker_command_sha256",
+        )
+        if worker_command_sha256 != sha256_text(worker_command_line):
+            raise ValueError(f"{label}.handoff_contract.worker_command_sha256 must match worker_command_line")
+        expected_summary_path = require_string(
+            handoff_payload.get("expected_summary_path"),
+            f"{label}.handoff_contract.expected_summary_path",
+        )
+        if expected_summary_path != bindings["summary"]["path"]:
+            raise ValueError(f"{label}.handoff_contract.expected_summary_path must match summary.path")
+        session_evidence = require_object(
+            load_json(repo_path(bindings["opencode_session_evidence"]["path"], repo_root=repo_root)),
+            f"{label}.opencode_session_evidence file",
+        )
+        recomputed_contract = validate_opencode_contract_recomputed_from_session(
+            embedded_verification=verification,
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=repo_path(expected_summary_path, repo_root=repo_root),
+            label=label,
+            repo_root=repo_root,
+            verification_field="opencode_contract_verification",
+        )
+
     return {
         "worker_id": worker_id,
         "status": "passed",
         "contract_verification_status": "executed",
         "bindings": bindings,
+        "recomputed_contract": recomputed_contract,
     }
 
 

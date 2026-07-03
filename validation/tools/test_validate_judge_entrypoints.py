@@ -859,6 +859,94 @@ def preflight_marker_path(preflight_path: Path) -> Path:
     return REPO_ROOT / preflight_payload["marker_path"]
 
 
+def worker_command(worker_root: Path) -> list[str]:
+    return [
+        "python3",
+        "-B",
+        "scripts/c2rust-migrator.py",
+        "--phase",
+        "migrate",
+        "--input",
+        repo_relative(worker_root / "harness" / "request.json"),
+    ]
+
+
+def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *, run_id: str, launch_policy: dict) -> None:
+    summary_path = worker_root / "summary" / "competition-run-summary.json"
+    worker_report_path = worker_root / "harness" / "run-worker-report.json"
+    handoff_path = worker_root / "harness" / "opencode-handoff-contract.json"
+    session_path = worker_root / "logs" / "opencode-session-evidence.json"
+    stdout_path = worker_root / "logs" / "stdout.log"
+    stderr_path = worker_root / "logs" / "stderr.log"
+    command = worker_command(worker_root)
+    command_line = shlex.join(command)
+    set_artifact_ref(worker["summary"], summary_path)
+    set_artifact_ref(worker["worker_report"], worker_report_path)
+    write_json(
+        handoff_path,
+        {
+            "schema_version": 1,
+            "runner_kind": "opencode-run",
+            "run_id": run_id,
+            "worker_id": worker["worker_id"],
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+            "worker_command": command,
+            "worker_command_line": command_line,
+            "worker_command_sha256": validator.sha256_text(command_line),
+            "expected_summary_path": repo_relative(summary_path),
+        },
+    )
+    worker["handoff_contract"]["path"] = repo_relative(handoff_path)
+    worker["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+    write_json(
+        session_path,
+        {
+            "schema_version": 1,
+            "process_returncode": 0,
+            "parsed": True,
+            "format": "jsonl",
+            "session_events": [
+                {
+                    "part": {
+                        "tool": "bash",
+                        "state": {"input": {"command": command_line, "workdir": str(REPO_ROOT)}},
+                    }
+                }
+            ],
+        },
+    )
+    worker["opencode_session_evidence"]["path"] = repo_relative(session_path)
+    worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+    set_artifact_ref(worker["logs"]["stdout"], stdout_path)
+    set_artifact_ref(worker["logs"]["stderr"], stderr_path)
+    worker["opencode_contract_verification"] = {
+        "status": "executed",
+        "expected_worker_command_line": command_line,
+        "expected_summary_path": repo_relative(summary_path),
+        "expected_worker_command_sha256": validator.sha256_text(command_line),
+        "executed_shell_command_count": 1,
+        "executed_shell_commands": [command_line],
+        "first_tool_name": "bash",
+        "first_shell_command": command_line,
+        "first_shell_tool_name": "bash",
+        "first_shell_workdir_status": "repo_root",
+        "expected_workdir_status": "repo_root",
+        "first_shell_command_matches_worker_command": True,
+        "first_shell_workdir_matches_repo_root": True,
+        "worker_command_seen": True,
+        "summary_exists": True,
+        "tools_before_first_shell": [],
+        "contract_failure_reason": "",
+    }
+
+
+def rewrite_worker_session_evidence(worker: dict, session_payload: dict) -> None:
+    session_path = REPO_ROOT / worker["opencode_session_evidence"]["path"]
+    write_json(session_path, session_payload)
+    worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+
+
 def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, profile_payload: dict) -> None:
     profile_path = root / "profile.json"
     set_artifact_ref(payload["evidence_artifact_refs"]["profile"], profile_path, profile_payload)
@@ -878,12 +966,7 @@ def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, pro
     for worker in payload["opencode_agent_runtime"]["workers"]:
         worker_id = worker["worker_id"]
         worker_root = root / "workers" / worker_id
-        set_artifact_ref(worker["summary"], worker_root / "summary" / "competition-run-summary.json")
-        set_artifact_ref(worker["worker_report"], worker_root / "harness" / "run-worker-report.json")
-        set_artifact_ref(worker["handoff_contract"], worker_root / "harness" / "opencode-handoff-contract.json")
-        set_artifact_ref(worker["opencode_session_evidence"], worker_root / "logs" / "opencode-session-evidence.json")
-        set_artifact_ref(worker["logs"]["stdout"], worker_root / "logs" / "stdout.log")
-        set_artifact_ref(worker["logs"]["stderr"], worker_root / "logs" / "stderr.log")
+        write_worker_opencode_contract_artifacts(worker, worker_root, run_id=payload["run_id"], launch_policy=launch_policy)
 
 
 def valid_opencode_judge_index_payload() -> dict:
@@ -1458,12 +1541,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "opencode profile opencode_command must be opencode"):
             validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
 
+    def test_opencode_profile_requires_max_variant(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_variant"] = "default"
+
+        with self.assertRaisesRegex(ValueError, "opencode profile opencode_variant must be max"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
     def test_opencode_launch_policy_binding_requires_glm_51(self) -> None:
         policy = opencode_launch_policy()
         policy["opencode_model"] = "gpt-5.4"
         policy_sha = opencode_launch_policy_sha256(policy)
 
         with self.assertRaisesRegex(ValueError, "launch_policy.opencode_model must be GLM-5.1"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_opencode_launch_policy_binding_requires_max_variant(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_variant"] = "default"
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_variant must be max"):
             validator.validate_opencode_launch_policy_binding(
                 policy,
                 policy_sha,
@@ -2865,6 +2967,41 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
 
         with self.assertRaisesRegex(ValueError, "opencode_workdir_mismatch"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_worker_session_without_shell_call(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-no-shell-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        worker = payload["opencode_agent_runtime"]["workers"][0]
+        rewrite_worker_session_evidence(
+            worker,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [],
+            },
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "opencode_contract_verification.status recomputed from opencode_session_evidence must be executed",
+        ):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
@@ -4840,6 +4977,24 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             any("environment_profile.opencode_runtime must be an object" in error for error in result["errors"]),
             result["errors"],
         )
+
+    def test_environment_profile_preflight_template_requires_max_variant(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="environment-opencode-variant-", dir=REPO_ROOT / "target"))
+        config = load_default_config()
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment["opencode_runtime"]["preflight_command_template"] = environment["opencode_runtime"][
+            "preflight_command_template"
+        ].replace("--opencode-variant max", "--opencode-variant default")
+        environment_path = temp_dir / "environment-with-default-opencode-variant.json"
+        write_json(environment_path, environment)
+        profile_ref = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+
+        with self.assertRaisesRegex(ValueError, "--opencode-variant max"):
+            validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
 
     def test_tracked_manifest_reproduction_command_must_match_entrypoint_command(self) -> None:
         config = load_default_config()
