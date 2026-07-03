@@ -8455,7 +8455,7 @@ def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[s
 
 def opencode_workdir_matches_repo_root(workdir: str, *, repo_root: Path) -> bool:
     if not workdir:
-        return True
+        return False
     try:
         observed = normalize_windows_extended_path(Path(workdir).resolve())
         expected = normalize_windows_extended_path(repo_root.resolve())

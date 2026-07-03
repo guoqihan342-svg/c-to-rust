@@ -2828,7 +2828,7 @@ def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[st
 
 def opencode_workdir_matches_repo_root(workdir: str, *, repo_root: Path) -> bool:
     if not workdir:
-        return True
+        return False
     try:
         return Path(workdir).resolve() == repo_root.resolve()
     except OSError:

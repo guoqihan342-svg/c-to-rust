@@ -4240,6 +4240,47 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_judge_evidence_index_rejects_preflight_missing_workdir(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-missing-workdir-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        marker_command_line = preflight_marker_command_line(preflight_path)
+        rewrite_preflight_session_evidence(
+            preflight_path,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": marker_command_line}},
+                        }
+                    }
+                ],
+            },
+        )
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_workdir_mismatch"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
     def test_judge_evidence_index_rejects_worker_session_without_shell_call(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-no-shell-", dir=REPO_ROOT / "target"))
         payload = valid_opencode_judge_index_payload()
@@ -4269,6 +4310,46 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             ValueError,
             "opencode_contract_verification.status recomputed from opencode_session_evidence must be executed",
         ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_worker_session_missing_workdir(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-missing-workdir-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        worker = payload["opencode_agent_runtime"]["workers"][0]
+        command_line = worker["opencode_contract_verification"]["expected_worker_command_line"]
+        rewrite_worker_session_evidence(
+            worker,
+            {
+                "schema_version": 1,
+                "process_returncode": 0,
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": [
+                    {
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": command_line}},
+                        }
+                    }
+                ],
+            },
+        )
+
+        with self.assertRaisesRegex(ValueError, "opencode_workdir_mismatch"):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),

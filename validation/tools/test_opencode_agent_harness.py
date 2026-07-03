@@ -2179,7 +2179,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "type": "tool_use",
                         "part": {
                             "tool": "bash",
-                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
                         },
                     }
                 )
@@ -2502,7 +2505,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "type": "tool_use",
                         "part": {
                             "tool": "bash",
-                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
                         },
                     }
                 )
@@ -5638,7 +5644,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "type": "tool_use",
                         "part": {
                             "tool": "bash",
-                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
                         },
                     }
                 )
@@ -5730,7 +5739,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "type": "tool_use",
                         "part": {
                             "tool": "bash",
-                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
                         },
                     }
                 )
@@ -6225,11 +6237,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "session_events": [
                 {
                     "type": "tool_use",
-                    "part": {"tool": "bash", "state": {"input": {"command": wrong_command}}},
+                    "part": {"tool": "bash", "state": {"input": {"command": wrong_command, "workdir": str(REPO_ROOT)}}},
                 },
                 {
                     "type": "tool_use",
-                    "part": {"tool": "bash", "state": {"input": {"command": expected_command}}},
+                    "part": {"tool": "bash", "state": {"input": {"command": expected_command, "workdir": str(REPO_ROOT)}}},
                 },
             ],
         }
@@ -6267,7 +6279,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "session_events": [
                 {
                     "type": "tool_use",
-                    "part": {"tool": "bash", "state": {"input": {"command": quoted_command}}},
+                    "part": {"tool": "bash", "state": {"input": {"command": quoted_command, "workdir": str(REPO_ROOT)}}},
                 },
             ],
         }
@@ -6358,7 +6370,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "session_events": [
                     {
                         "type": "tool_use",
-                        "part": {"tool": "bash", "state": {"input": {"command": expected_command_line}}},
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": expected_command_line, "workdir": str(REPO_ROOT)}},
+                        },
                     }
                 ]
             },
@@ -6430,6 +6445,42 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(verification["contract_failure_reason"], "opencode_workdir_mismatch")
         self.assertEqual(verification["first_shell_workdir_status"], "non_repo_root")
         self.assertEqual(verification["expected_workdir_status"], "repo_root")
+
+    def test_opencode_contract_rejects_shell_command_without_workdir(self) -> None:
+        worker_command = [
+            "python3",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker-a/harness/worker-a-request-attempt-1.json",
+        ]
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "state": {"input": {"command": harness.shell_command_line(worker_command)}},
+                    },
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "opencode_workdir_mismatch")
+        self.assertEqual(verification["first_shell_workdir_status"], "non_repo_root")
+        self.assertFalse(verification["first_shell_workdir_matches_repo_root"])
 
     def test_opencode_contract_rejects_any_tool_before_first_shell_command(self) -> None:
         worker_command = [
@@ -6559,7 +6610,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "part": {
                             "tool": "bash",
                             "state": {
-                                "input": {"command": contract["worker_command_line"]},
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
                                 "status": "completed",
                             },
                         },
@@ -6619,7 +6670,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "part": {
                             "tool": "bash",
                             "state": {
-                                "input": {"command": contract["worker_command_line"]},
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
                                 "status": "completed",
                             },
                         },
@@ -7937,7 +7988,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "type": "tool_use",
                         "part": {
                             "tool": "bash",
-                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
                         },
                     }
                 )
@@ -8012,7 +8066,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                         "type": "tool_use",
                         "part": {
                             "tool": "bash",
-                            "state": {"input": {"command": contract["worker_command_line"]}, "status": "completed"},
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
                         },
                     }
                 )
