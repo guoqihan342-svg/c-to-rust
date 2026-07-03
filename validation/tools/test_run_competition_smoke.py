@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -218,6 +219,16 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                 )
 
         self.assertIn("--confirm-competition-exact", str(raised.exception))
+
+    def test_detect_execution_environment_requires_exact_host_env_value_one(self) -> None:
+        module = load_smoke_module()
+
+        with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "0"}, clear=False):
+            self.assertFalse(module.detect_execution_environment()["competition_exact_host_attested"])
+        with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "false"}, clear=False):
+            self.assertFalse(module.detect_execution_environment()["competition_exact_host_attested"])
+        with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+            self.assertTrue(module.detect_execution_environment()["competition_exact_host_attested"])
 
     def test_smoke_runner_marks_gate_failure_without_slice_count_claims(self) -> None:
         module = load_smoke_module()

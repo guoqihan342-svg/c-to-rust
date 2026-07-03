@@ -29,6 +29,7 @@ TRANSLATOR_COVERAGE_MATRIX = REPO_ROOT / "validation" / "tools" / "translator_co
 MILESTONE_RELEASE_REPORT = REPO_ROOT / "validation" / "tools" / "milestone_release_report.py"
 VERIFY_VENDORED_CLANG = REPO_ROOT / "validation" / "tools" / "verify_vendored_clang.py"
 DEFAULT_SLICE_SPEC = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
 LOCAL_HOST_PATH_UNQUOTED = (
     r"(?:"
     r"[A-Za-z]:[\\/][^\s;&|]+|"
@@ -585,7 +586,7 @@ def detect_execution_environment() -> dict[str, Any]:
         "kind": kind,
         "detected_ci": bool(detected_ci),
         "detected_wsl": detected_wsl,
-        "competition_exact_host_attested": bool(os.environ.get("COMPETITION_EXACT_HOST")),
+        "competition_exact_host_attested": os.environ.get(COMPETITION_EXACT_HOST_ENV) == "1",
         "system": platform.system(),
         "release": uname.release,
         "version": uname.version,
