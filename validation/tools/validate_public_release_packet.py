@@ -503,6 +503,20 @@ def require_opencode_preflight_proof_summary_contract(
     launch_policy = require_object(preflight_payload.get("launch_policy"), f"{label}.preflight_report.launch_policy")
     if launch_policy.get("opencode_model") != proof.get("opencode_model"):
         raise ValueError(f"{label}.opencode_model must match preflight_report.launch_policy.opencode_model")
+    preflight_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        preflight_payload.get("opencode_runtime_env"),
+        f"{label}.preflight_report",
+    )
+    proof_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        proof.get("opencode_runtime_env"),
+        label,
+    )
+    if proof_runtime_env != preflight_runtime_env:
+        raise ValueError(f"{label}.opencode_runtime_env must match preflight_report.opencode_runtime_env")
+    if proof.get("opencode_runtime_env_sha256") != preflight_runtime_env["env_sha256"]:
+        raise ValueError(
+            f"{label}.opencode_runtime_env_sha256 must match preflight_report.opencode_runtime_env.env_sha256"
+        )
     contract = require_object(
         preflight_payload.get("contract_verification"),
         f"{label}.preflight_report.contract_verification",
@@ -564,6 +578,16 @@ def require_opencode_preflight_session_contract(
         raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-preflight")
     if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
         raise ValueError(f"{label}.handoff_contract.run_id must match preflight_report.run_id")
+    preflight_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        preflight_payload.get("opencode_runtime_env"),
+        label,
+    )
+    handoff_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        handoff_payload.get("opencode_runtime_env"),
+        f"{label}.handoff_contract",
+    )
+    if handoff_runtime_env != preflight_runtime_env:
+        raise ValueError(f"{label}.handoff_contract.opencode_runtime_env must match preflight_report.opencode_runtime_env")
     handoff_policy = judge_validator.validate_opencode_launch_policy_binding(
         handoff_payload.get("launch_policy"),
         handoff_payload.get("launch_policy_sha256"),
@@ -620,6 +644,14 @@ def require_opencode_preflight_session_contract(
         judge_validator.load_json(judge_validator.repo_path(session_ref["path"], repo_root=repo_root)),
         f"{label}.opencode_session_evidence file",
     )
+    session_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        session_evidence.get("opencode_runtime_env"),
+        f"{label}.opencode_session_evidence",
+    )
+    if session_runtime_env != preflight_runtime_env:
+        raise ValueError(
+            f"{label}.opencode_session_evidence.opencode_runtime_env must match preflight_report.opencode_runtime_env"
+        )
     judge_validator.validate_opencode_contract_recomputed_from_session(
         embedded_verification=contract,
         session_evidence=session_evidence,

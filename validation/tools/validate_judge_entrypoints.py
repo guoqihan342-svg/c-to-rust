@@ -84,6 +84,14 @@ PORTABLE_PYTHON_COMMAND = "python3"
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
+OPENCODE_RUNTIME_ENV_KEYS = (
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+)
 
 
 def main() -> int:
@@ -2015,6 +2023,71 @@ def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: s
     return normalized
 
 
+def validate_opencode_runtime_env_contract(value: Any, label: str) -> dict[str, Any]:
+    runtime_env = require_object(value, f"{label}.opencode_runtime_env")
+    if runtime_env.get("status") != "isolated":
+        raise ValueError(f"{label}.opencode_runtime_env.status must be isolated")
+    scope = require_string(runtime_env.get("scope"), f"{label}.opencode_runtime_env.scope")
+    runtime_root = require_string(runtime_env.get("runtime_root"), f"{label}.opencode_runtime_env.runtime_root")
+    assert_repo_relative_posix(runtime_root)
+    runtime_root_path = PurePosixPath(runtime_root)
+    if len(runtime_root_path.parts) < 2 or runtime_root_path.parts[-2:] != ("opencode-runtime", scope):
+        raise ValueError(f"{label}.opencode_runtime_env.runtime_root must end with opencode-runtime/<scope>")
+    env = require_object(runtime_env.get("env"), f"{label}.opencode_runtime_env.env")
+    expected_env = {
+        "XDG_CONFIG_HOME": runtime_root_path / "config",
+        "XDG_DATA_HOME": runtime_root_path / "data",
+        "XDG_CACHE_HOME": runtime_root_path / "cache",
+        "TMPDIR": runtime_root_path / "tmp",
+        "TEMP": runtime_root_path / "tmp",
+        "TMP": runtime_root_path / "tmp",
+    }
+    if set(env) != set(OPENCODE_RUNTIME_ENV_KEYS):
+        raise ValueError(f"{label}.opencode_runtime_env.env keys must match OpenCode runtime keys")
+    normalized_env: dict[str, str] = {}
+    for key in OPENCODE_RUNTIME_ENV_KEYS:
+        path_text = require_string(env.get(key), f"{label}.opencode_runtime_env.env.{key}")
+        assert_repo_relative_posix(path_text)
+        env_path = PurePosixPath(path_text)
+        if env_path != expected_env[key]:
+            raise ValueError(f"{label}.opencode_runtime_env.env.{key} must be under runtime_root")
+        normalized_env[key] = env_path.as_posix()
+    if runtime_env.get("semantic_gate") is not False:
+        raise ValueError(f"{label}.opencode_runtime_env.semantic_gate must be false")
+    expected_sha = sha256_text(
+        json.dumps(
+            {
+                "scope": scope,
+                "runtime_root": runtime_root_path.as_posix(),
+                "env": normalized_env,
+            },
+            sort_keys=True,
+        )
+    )
+    actual_sha = validate_sha256_hex(runtime_env.get("env_sha256"), f"{label}.opencode_runtime_env.env_sha256")
+    if actual_sha != expected_sha:
+        raise ValueError(f"{label}.opencode_runtime_env.env_sha256 must match opencode_runtime_env")
+    return {
+        **runtime_env,
+        "scope": scope,
+        "runtime_root": runtime_root_path.as_posix(),
+        "env": normalized_env,
+        "env_sha256": expected_sha,
+        "semantic_gate": False,
+    }
+
+
+def compare_opencode_runtime_env(
+    actual: dict[str, Any],
+    expected: dict[str, Any],
+    label: str,
+    *,
+    expected_label: str,
+) -> None:
+    if actual != expected:
+        raise ValueError(f"{label}.opencode_runtime_env must match {expected_label}.opencode_runtime_env")
+
+
 def compare_opencode_launch_policy(
     actual: dict[str, Any],
     expected: dict[str, Any],
@@ -2355,6 +2428,10 @@ def validate_opencode_preflight_binding(
             raise ValueError(f"{label} file process_returncode must be 0")
         if preflight_payload.get("marker_exists") is not True:
             raise ValueError(f"{label} file marker_exists must be true")
+        preflight_runtime_env = validate_opencode_runtime_env_contract(
+            preflight_payload.get("opencode_runtime_env"),
+            label,
+        )
         if "run_id" in preflight_payload:
             file_run_id = require_string(preflight_payload.get("run_id"), f"{label} file.run_id")
             if "run_id" in result and file_run_id != result["run_id"]:
@@ -2388,6 +2465,16 @@ def validate_opencode_preflight_binding(
             raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-preflight")
         if handoff_payload.get("run_id") != result.get("run_id"):
             raise ValueError(f"{label}.handoff_contract.run_id must match preflight run_id")
+        handoff_runtime_env = validate_opencode_runtime_env_contract(
+            handoff_payload.get("opencode_runtime_env"),
+            f"{label}.handoff_contract",
+        )
+        compare_opencode_runtime_env(
+            handoff_runtime_env,
+            preflight_runtime_env,
+            f"{label}.handoff_contract",
+            expected_label=label,
+        )
         handoff_policy = validate_opencode_launch_policy_binding(
             handoff_payload.get("launch_policy"),
             handoff_payload.get("launch_policy_sha256"),
@@ -2438,6 +2525,16 @@ def validate_opencode_preflight_binding(
             load_json(repo_path(session_binding["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
         )
+        session_runtime_env = validate_opencode_runtime_env_contract(
+            session_evidence.get("opencode_runtime_env"),
+            f"{label}.opencode_session_evidence",
+        )
+        compare_opencode_runtime_env(
+            session_runtime_env,
+            preflight_runtime_env,
+            f"{label}.opencode_session_evidence",
+            expected_label=label,
+        )
         validate_opencode_contract_recomputed_from_session(
             embedded_verification=verification,
             session_evidence=session_evidence,
@@ -2470,6 +2567,7 @@ def validate_opencode_preflight_binding(
         ):
             raise ValueError(f"{label}.opencode_model_availability.argv must be opencode models")
         validate_opencode_model_probe_log_hashes(availability, label, repo_root=repo_root)
+        result["opencode_runtime_env"] = preflight_runtime_env
     return result
 
 
@@ -2541,6 +2639,14 @@ def validate_opencode_worker_runtime(
 
     recomputed_contract = None
     if repo_root is not None:
+        worker_report_payload = require_object(
+            load_json(repo_path(bindings["worker_report"]["path"], repo_root=repo_root)),
+            f"{label}.worker_report file",
+        )
+        worker_runtime_env = validate_opencode_runtime_env_contract(
+            worker_report_payload.get("opencode_runtime_env"),
+            f"{label}.worker_report",
+        )
         handoff_payload = require_object(
             load_json(repo_path(bindings["handoff_contract"]["path"], repo_root=repo_root)),
             f"{label}.handoff_contract file",
@@ -2561,6 +2667,16 @@ def validate_opencode_worker_runtime(
             expected_preflight["launch_policy"],
             f"{label}.handoff_contract",
             expected_label="opencode_preflight_report",
+        )
+        handoff_runtime_env = validate_opencode_runtime_env_contract(
+            handoff_payload.get("opencode_runtime_env"),
+            f"{label}.handoff_contract",
+        )
+        compare_opencode_runtime_env(
+            handoff_runtime_env,
+            worker_runtime_env,
+            f"{label}.handoff_contract",
+            expected_label=f"{label}.worker_report",
         )
         worker_command = handoff_payload.get("worker_command")
         if not isinstance(worker_command, list) or not worker_command or not all(
@@ -2589,6 +2705,16 @@ def validate_opencode_worker_runtime(
             load_json(repo_path(bindings["opencode_session_evidence"]["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
         )
+        session_runtime_env = validate_opencode_runtime_env_contract(
+            session_evidence.get("opencode_runtime_env"),
+            f"{label}.opencode_session_evidence",
+        )
+        compare_opencode_runtime_env(
+            session_runtime_env,
+            worker_runtime_env,
+            f"{label}.opencode_session_evidence",
+            expected_label=f"{label}.worker_report",
+        )
         recomputed_contract = validate_opencode_contract_recomputed_from_session(
             embedded_verification=verification,
             session_evidence=session_evidence,
@@ -2605,6 +2731,7 @@ def validate_opencode_worker_runtime(
         "contract_verification_status": "executed",
         "bindings": bindings,
         "recomputed_contract": recomputed_contract,
+        "opencode_runtime_env": worker_runtime_env if repo_root is not None else None,
     }
 
 

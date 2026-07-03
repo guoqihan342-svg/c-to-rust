@@ -10,6 +10,14 @@ from validation.tools import validate_public_release_packet as packet_validator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+OPENCODE_RUNTIME_ENV_KEYS = (
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+)
 
 
 def repo_relative(path: Path) -> str:
@@ -31,6 +39,35 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def opencode_runtime_env_contract(base_root: Path, *, scope: str) -> dict:
+    runtime_root = base_root / "opencode-runtime" / scope
+    runtime_paths = {
+        "XDG_CONFIG_HOME": runtime_root / "config",
+        "XDG_DATA_HOME": runtime_root / "data",
+        "XDG_CACHE_HOME": runtime_root / "cache",
+        "TMPDIR": runtime_root / "tmp",
+        "TEMP": runtime_root / "tmp",
+        "TMP": runtime_root / "tmp",
+    }
+    env = {key: repo_relative(runtime_paths[key]) for key in OPENCODE_RUNTIME_ENV_KEYS}
+    runtime_root_rel = repo_relative(runtime_root)
+    digest_payload = {
+        "scope": scope,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+    }
+    return {
+        "schema_version": 1,
+        "status": "isolated",
+        "scope": scope,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+        "env_sha256": judge_validator.sha256_text(json.dumps(digest_payload, sort_keys=True)),
+        "semantic_gate": False,
+        "evidence_boundary": "runtime env isolation is audit evidence only",
+    }
+
+
 def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run") -> dict:
     stdout_path = root / "logs" / "opencode-models.stdout.log"
     stderr_path = root / "logs" / "opencode-models.stderr.log"
@@ -40,6 +77,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
     marker_path = root / "harness" / "opencode-preflight-marker.json"
     handoff_path = root / "harness" / "opencode-preflight-contract.json"
     session_path = root / "logs" / "opencode-preflight-session-evidence.json"
+    runtime_env = opencode_runtime_env_contract(root, scope="preflight")
     marker_command = [
         "python3",
         "-B",
@@ -80,6 +118,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
             "worker_command_sha256": judge_validator.sha256_text(marker_command_line),
             "launch_policy": launch_policy,
             "launch_policy_sha256": launch_policy_sha256,
+            "opencode_runtime_env": runtime_env,
         },
     )
     write_json(
@@ -89,6 +128,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
             "process_returncode": 0,
             "parsed": True,
             "format": "jsonl",
+            "opencode_runtime_env": runtime_env,
             "session_events": [
                 {
                     "part": {
@@ -115,6 +155,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "opencode_run_launched": True,
         "launch_policy": launch_policy,
         "launch_policy_sha256": launch_policy_sha256,
+        "opencode_runtime_env": runtime_env,
         "handoff_contract": {
             "path": repo_relative(handoff_path),
             "status": "present",
@@ -189,6 +230,8 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "contract_status": "executed",
         "marker_exists": True,
         "opencode_run_launched": True,
+        "opencode_runtime_env": runtime_env,
+        "opencode_runtime_env_sha256": runtime_env["env_sha256"],
         "proof_class": "local-simulation",
         "chat_output_is_evidence": False,
         "semantic_gate": False,
@@ -349,6 +392,9 @@ def rewrite_packet_preflight_session(packet: dict, session_payload: dict) -> Non
     preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
     session_ref = preflight_payload["opencode_session_evidence"]
     session_path = REPO_ROOT / session_ref["path"]
+    existing_session = json.loads(session_path.read_text(encoding="utf-8"))
+    if "opencode_runtime_env" not in session_payload and "opencode_runtime_env" in existing_session:
+        session_payload["opencode_runtime_env"] = existing_session["opencode_runtime_env"]
     write_json(session_path, session_payload)
     session_ref["sha256"] = judge_validator.sha256_file(session_path)
     write_json(preflight_path, preflight_payload)
@@ -777,6 +823,20 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("required_model must be GLM-5.1" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_rejects_preflight_runtime_env_sha_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-runtime-env-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        proof = packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]
+        proof["opencode_runtime_env_sha256"] = "0" * 64
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any("opencode_runtime_env_sha256" in error for error in result["errors"]), result["errors"])
 
     def test_validate_packet_accepts_deep_bound_opencode_safety_attempt(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-", dir=REPO_ROOT / "target"))

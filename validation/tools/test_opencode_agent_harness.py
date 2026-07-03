@@ -2042,6 +2042,42 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             session = json.loads((out_root / "logs" / "opencode-preflight-session-evidence.json").read_text(encoding="utf-8"))
             self.assertEqual(session["opencode_runtime_env"], runtime_env)
 
+    def test_validate_opencode_runtime_env_contract_rejects_recomputed_wrong_runtime_root(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="worker-a",
+                repo_root=REPO_ROOT,
+            )
+            bad_root = out_root / "wrong-runtime" / "worker-a"
+            runtime_env["runtime_root"] = repo_rel(bad_root)
+            runtime_env["env"] = {
+                "XDG_CONFIG_HOME": repo_rel(bad_root / "config"),
+                "XDG_DATA_HOME": repo_rel(bad_root / "data"),
+                "XDG_CACHE_HOME": repo_rel(bad_root / "cache"),
+                "TMPDIR": repo_rel(bad_root / "tmp"),
+                "TEMP": repo_rel(bad_root / "tmp"),
+                "TMP": repo_rel(bad_root / "tmp"),
+            }
+            runtime_env["env_sha256"] = harness.sha256_text(
+                json.dumps(
+                    {
+                        "scope": runtime_env["scope"],
+                        "runtime_root": runtime_env["runtime_root"],
+                        "env": runtime_env["env"],
+                    },
+                    sort_keys=True,
+                )
+            )
+
+            with self.assertRaisesRegex(SystemExit, "runtime_root must end with opencode-runtime/<scope>"):
+                harness.validate_opencode_runtime_env_contract(
+                    runtime_env,
+                    context="unit-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_evaluate_runs_planning_workers_and_merge_as_one_command(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

@@ -7150,16 +7150,32 @@ def validate_opencode_runtime_env_contract(
         raise SystemExit(f"{context} opencode_runtime_env.scope is missing")
     if not isinstance(runtime_root, str) or not runtime_root:
         raise SystemExit(f"{context} opencode_runtime_env.runtime_root is missing")
-    repo_path(Path(runtime_root), repo_root=repo_root)
+    runtime_root_path = checked_relative_path(runtime_root)
+    if len(runtime_root_path.parts) < 2 or runtime_root_path.parts[-2:] != ("opencode-runtime", scope):
+        raise SystemExit(f"{context} opencode_runtime_env.runtime_root must end with opencode-runtime/<scope>")
+    repo_path(Path(runtime_root_path.as_posix()), repo_root=repo_root)
     if not isinstance(env, dict):
         raise SystemExit(f"{context} opencode_runtime_env.env is missing")
+    expected_env = {
+        "XDG_CONFIG_HOME": runtime_root_path / "config",
+        "XDG_DATA_HOME": runtime_root_path / "data",
+        "XDG_CACHE_HOME": runtime_root_path / "cache",
+        "TMPDIR": runtime_root_path / "tmp",
+        "TEMP": runtime_root_path / "tmp",
+        "TMP": runtime_root_path / "tmp",
+    }
+    if set(env) != set(expected_env):
+        raise SystemExit(f"{context} opencode_runtime_env.env keys mismatch")
     normalized_env: dict[str, str] = {}
     for key in OPENCODE_RUNTIME_ENV_KEYS:
         path_text_value = env.get(key)
         if not isinstance(path_text_value, str) or not path_text_value:
             raise SystemExit(f"{context} opencode_runtime_env.env.{key} is missing")
-        repo_path(Path(path_text_value), repo_root=repo_root)
-        normalized_env[key] = path_text_value
+        env_path = checked_relative_path(path_text_value)
+        if env_path != expected_env[key]:
+            raise SystemExit(f"{context} opencode_runtime_env.env.{key} must be under runtime_root")
+        repo_path(Path(env_path.as_posix()), repo_root=repo_root)
+        normalized_env[key] = env_path.as_posix()
     expected_digest = sha256_text(
         json.dumps(
             {

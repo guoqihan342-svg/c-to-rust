@@ -1765,6 +1765,14 @@ def opencode_preflight_proof_summary_from_index(
         if isinstance(preflight_payload.get("contract_verification"), dict)
         else {}
     )
+    runtime_env = None
+    try:
+        runtime_env = validator.validate_opencode_runtime_env_contract(
+            preflight_payload.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary",
+        )
+    except ValueError:
+        runtime_env = None
     result.update(
         {
             "run_id": preflight_payload.get("run_id"),
@@ -1781,6 +1789,9 @@ def opencode_preflight_proof_summary_from_index(
             "opencode_run_launched": preflight_payload.get("opencode_run_launched"),
         }
     )
+    if runtime_env is not None:
+        result["opencode_runtime_env"] = runtime_env
+        result["opencode_runtime_env_sha256"] = runtime_env["env_sha256"]
     result["status"] = (
         "passed"
         if opencode_preflight_summary_passed(
@@ -1853,6 +1864,10 @@ def opencode_preflight_summary_passed(
         return False
     if summary.get("opencode_run_launched") is not True:
         return False
+    if not isinstance(summary.get("opencode_runtime_env"), dict):
+        return False
+    if summary.get("opencode_runtime_env_sha256") != summary["opencode_runtime_env"].get("env_sha256"):
+        return False
     if not validator.opencode_models_argv_matches(
         summary.get("model_probe_argv"),
         expected_command=validator.COMPETITION_OPENCODE_COMMAND,
@@ -1884,6 +1899,10 @@ def opencode_preflight_session_contract_passed(
     try:
         if preflight_payload.get("process_returncode") != 0:
             return False
+        preflight_runtime_env = validator.validate_opencode_runtime_env_contract(
+            preflight_payload.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary",
+        )
         handoff_binding = validator.validate_hash_bound_artifact_binding(
             preflight_payload.get("handoff_contract"),
             "opencode_preflight_proof_summary.handoff_contract",
@@ -1896,6 +1915,12 @@ def opencode_preflight_session_contract_passed(
         if handoff_payload.get("runner_kind") != "opencode-preflight":
             return False
         if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
+            return False
+        handoff_runtime_env = validator.validate_opencode_runtime_env_contract(
+            handoff_payload.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary.handoff_contract",
+        )
+        if handoff_runtime_env != preflight_runtime_env:
             return False
         handoff_policy = validator.validate_opencode_launch_policy_binding(
             handoff_payload.get("launch_policy"),
@@ -1944,6 +1969,12 @@ def opencode_preflight_session_contract_passed(
             validator.load_json(validator.repo_path(session_binding["path"], repo_root=repo_root)),
             "opencode_preflight_proof_summary.opencode_session_evidence file",
         )
+        session_runtime_env = validator.validate_opencode_runtime_env_contract(
+            session_evidence.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary.opencode_session_evidence",
+        )
+        if session_runtime_env != preflight_runtime_env:
+            return False
         validator.validate_opencode_contract_recomputed_from_session(
             embedded_verification=contract,
             session_evidence=session_evidence,

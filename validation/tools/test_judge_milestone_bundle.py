@@ -8,6 +8,14 @@ import jsonschema
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_PATH = REPO_ROOT / "validation" / "judge-milestone-bundle.schema.json"
+OPENCODE_RUNTIME_ENV_KEYS = (
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+)
 
 
 def repo_relative(path: Path) -> str:
@@ -19,6 +27,37 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def opencode_runtime_env_contract(base_root: Path, *, scope: str) -> dict:
+    from validation.tools import judge_milestone_bundle as bundle
+
+    runtime_root = base_root / "opencode-runtime" / scope
+    runtime_paths = {
+        "XDG_CONFIG_HOME": runtime_root / "config",
+        "XDG_DATA_HOME": runtime_root / "data",
+        "XDG_CACHE_HOME": runtime_root / "cache",
+        "TMPDIR": runtime_root / "tmp",
+        "TEMP": runtime_root / "tmp",
+        "TMP": runtime_root / "tmp",
+    }
+    env = {key: repo_relative(runtime_paths[key]) for key in OPENCODE_RUNTIME_ENV_KEYS}
+    runtime_root_rel = repo_relative(runtime_root)
+    digest_payload = {
+        "scope": scope,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+    }
+    return {
+        "schema_version": 1,
+        "status": "isolated",
+        "scope": scope,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+        "env_sha256": bundle.validator.sha256_text(json.dumps(digest_payload, sort_keys=True)),
+        "semantic_gate": False,
+        "evidence_boundary": "runtime env isolation is audit evidence only",
+    }
+
+
 def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") -> dict:
     from validation.tools import judge_milestone_bundle as bundle
 
@@ -28,6 +67,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
     preflight_path = root / "harness" / "opencode-preflight-report.json"
     model_stdout_path = root / "logs" / "opencode-models.stdout.log"
     model_stderr_path = root / "logs" / "opencode-models.stderr.log"
+    runtime_env = opencode_runtime_env_contract(root, scope="preflight")
     worker_command = [
         "python3",
         "-B",
@@ -68,6 +108,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
             "worker_command_sha256": bundle.validator.sha256_text(worker_command_line),
             "launch_policy": launch_policy,
             "launch_policy_sha256": launch_policy_sha256,
+            "opencode_runtime_env": runtime_env,
         },
     )
     write_json(
@@ -77,6 +118,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
             "process_returncode": 0,
             "parsed": True,
             "format": "jsonl",
+            "opencode_runtime_env": runtime_env,
             "session_events": [
                 {
                     "part": {
@@ -108,6 +150,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
             "marker_exists": True,
             "launch_policy": launch_policy,
             "launch_policy_sha256": launch_policy_sha256,
+            "opencode_runtime_env": runtime_env,
             "handoff_contract": {
                 "path": repo_relative(handoff_path),
                 "sha256": bundle.validator.sha256_file(handoff_path),
@@ -418,6 +461,33 @@ def evidence_governance_payload() -> dict:
 
 
 class JudgeMilestoneBundleTests(unittest.TestCase):
+    def test_opencode_preflight_proof_summary_binds_runtime_env(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-runtime-env-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["status"], "passed")
+        self.assertEqual(summary["opencode_runtime_env"], preflight_payload["opencode_runtime_env"])
+        self.assertEqual(summary["opencode_runtime_env_sha256"], preflight_payload["opencode_runtime_env"]["env_sha256"])
+
     def test_opencode_preflight_proof_summary_recomputes_session_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
