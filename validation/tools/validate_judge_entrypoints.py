@@ -252,16 +252,20 @@ def assert_no_local_absolute_path(text: str) -> None:
         raise ValueError(f"text contains local absolute path: {text}")
 
 
-def validate_entrypoint_command_contract(command: Any, entrypoint_id: Any) -> list[str]:
+def validate_portable_python3_b_command(command: Any, label: str) -> list[str]:
     if not isinstance(command, str) or not command:
-        raise ValueError(f"entrypoint command must use portable python3 -B: {entrypoint_id}")
+        raise ValueError(f"{label} must use portable python3 -B")
     try:
         argv = shlex.split(command, posix=True)
     except ValueError as error:
-        raise ValueError(f"entrypoint command must be POSIX-shlex parseable: {entrypoint_id}: {error}") from error
+        raise ValueError(f"{label} must be POSIX-shlex parseable: {error}") from error
     if len(argv) < 3 or argv[0] != PORTABLE_PYTHON_COMMAND or argv[1] != "-B":
-        raise ValueError(f"entrypoint command must use portable python3 -B: {entrypoint_id}")
+        raise ValueError(f"{label} must use portable python3 -B")
     return argv
+
+
+def validate_entrypoint_command_contract(command: Any, entrypoint_id: Any) -> list[str]:
+    return validate_portable_python3_b_command(command, "entrypoint command")
 
 
 def json_path(parts: tuple[str, ...]) -> str:
@@ -3948,9 +3952,11 @@ def validate_config(
             validate_entrypoint_command_contract(command, entry.get("id"))
             assert_no_local_absolute_path(command)
             for command_text in entry.get("verification_commands", []):
+                validate_portable_python3_b_command(command_text, "verification command")
                 assert_no_local_absolute_path(str(command_text))
             audit_command = entry.get("audit_command")
             if isinstance(audit_command, str):
+                validate_portable_python3_b_command(audit_command, "audit command")
                 assert_no_local_absolute_path(audit_command)
             expected_artifacts = entry.get("expected_artifacts", {})
             review_checklist_result = validate_entrypoint_review_checklist_ref(entry, repo_root=repo_root)

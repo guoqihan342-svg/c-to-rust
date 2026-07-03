@@ -3,7 +3,7 @@
   "canonical_environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
+    "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
   },
   "claim_boundary": {
     "archive_is_semantic_gate": false,
@@ -14,7 +14,7 @@
     {
       "path": "config/competition-env/environment.json",
       "role": "environment-profile",
-      "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
+      "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
     },
     {
       "path": "config/competition-env/env.sh",
@@ -64,7 +64,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "502b927f412830b1b8156b01f3e7d9ab59f7b9ca4144db384f96f0ab62edfb97"
+      "sha256": "8cfd6da89ea2f139d5867141914783ba9ea80ca4d6aca02edc5f85332ebad0cd"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
@@ -84,7 +84,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "9d898a8d4d8358c1d883d8f8139c3aa5791215e1eb4e57689079255ac046a2e2"
+      "sha256": "f6c1cb269d0bccf8866cff1adc1bf4ca5ae03eaf0fe7da70f140427e330fd771"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",

@@ -325,6 +325,18 @@ def require_opencode_preflight_session_contract(
         raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-preflight")
     if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
         raise ValueError(f"{label}.handoff_contract.run_id must match preflight_report.run_id")
+    handoff_policy = judge_validator.validate_opencode_launch_policy_binding(
+        handoff_payload.get("launch_policy"),
+        handoff_payload.get("launch_policy_sha256"),
+        f"{label}.handoff_contract",
+    )
+    preflight_policy = judge_validator.validate_opencode_launch_policy_binding(
+        preflight_payload.get("launch_policy"),
+        preflight_payload.get("launch_policy_sha256"),
+        f"{label}.launch_policy",
+    )
+    if handoff_policy != preflight_policy:
+        raise ValueError(f"{label}.handoff_contract.launch_policy must match preflight_report.launch_policy")
     worker_command = handoff_payload.get("worker_command")
     if not isinstance(worker_command, list) or not worker_command or not all(
         isinstance(item, str) and item for item in worker_command
@@ -349,6 +361,16 @@ def require_opencode_preflight_session_contract(
     marker_path = judge_validator.repo_path(marker_path_text, repo_root=repo_root)
     if not marker_path.is_file():
         raise ValueError(f"{label}.marker_path must exist")
+    marker_payload = require_object(
+        judge_validator.load_json(marker_path),
+        f"{label}.marker file",
+    )
+    if marker_payload.get("report_kind") != "opencode-preflight-marker":
+        raise ValueError(f"{label}.marker.report_kind must be opencode-preflight-marker")
+    if marker_payload.get("run_id") != preflight_payload.get("run_id"):
+        raise ValueError(f"{label}.marker.run_id must match preflight_report.run_id")
+    if marker_payload.get("status") != "written":
+        raise ValueError(f"{label}.marker.status must be written")
 
     session_ref = judge_validator.validate_hash_bound_artifact_binding(
         preflight_payload.get("opencode_session_evidence"),

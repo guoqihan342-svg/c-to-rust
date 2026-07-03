@@ -4685,6 +4685,34 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_verification_command_rejects_bare_python_launcher(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "before_after_judge_demo")
+        entry["verification_commands"][0] = entry["verification_commands"][0].replace("python3 -B ", "python -B ", 1)
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("verification command must use portable python3 -B" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_audit_command_rejects_python3_without_b_flag(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "before_after_judge_demo")
+        entry["audit_command"] = entry["audit_command"].replace("python3 -B ", "python3 ", 1)
+        path = write_temp_config(config)
+
+        result = validator.validate_config(path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("audit command must use portable python3 -B" in error for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_historical_profile_commit_must_be_declared_in_source_pin_policy(self) -> None:
         config = load_default_config()
         config["source_pin_policy"]["allowed_historical_evidence_commits"] = []

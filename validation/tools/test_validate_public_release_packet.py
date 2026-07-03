@@ -52,11 +52,13 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
     ]
     marker_command_line = shlex.join(marker_command)
     launch_policy = {
+        "opencode_agent": None,
         "opencode_command": "opencode",
         "opencode_model": "GLM-5.1",
-        "opencode_variant": "max",
         "opencode_skip_permissions": False,
+        "opencode_variant": "max",
     }
+    launch_policy_sha256 = judge_validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
     write_json(
         marker_path,
         {
@@ -77,7 +79,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
             "worker_command_line": marker_command_line,
             "worker_command_sha256": judge_validator.sha256_text(marker_command_line),
             "launch_policy": launch_policy,
-            "launch_policy_sha256": judge_validator.sha256_text(json.dumps(launch_policy, sort_keys=True)),
+            "launch_policy_sha256": launch_policy_sha256,
         },
     )
     write_json(
@@ -112,6 +114,7 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "marker_path": repo_relative(marker_path),
         "opencode_run_launched": True,
         "launch_policy": launch_policy,
+        "launch_policy_sha256": launch_policy_sha256,
         "handoff_contract": {
             "path": repo_relative(handoff_path),
             "status": "present",
@@ -723,6 +726,59 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("handoff_contract sha256 mismatch" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_preflight_handoff_launch_policy_drift(self) -> None:
+        temp_dir = Path(
+            tempfile.mkdtemp(prefix="public-release-packet-opencode-handoff-policy-", dir=REPO_ROOT / "target")
+        )
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        preflight_path = packet_preflight_path(packet)
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["launch_policy"]["opencode_skip_permissions"] = True
+        handoff_payload["launch_policy_sha256"] = judge_validator.sha256_text(
+            json.dumps(handoff_payload["launch_policy"], sort_keys=True)
+        )
+        write_json(handoff_path, handoff_payload)
+        preflight_payload["handoff_contract"]["sha256"] = judge_validator.sha256_file(handoff_path)
+        write_json(preflight_path, preflight_payload)
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["preflight_report"]["sha256"] = (
+            judge_validator.sha256_file(preflight_path)
+        )
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("handoff_contract.launch_policy must match preflight_report.launch_policy" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_preflight_marker_payload_run_id_drift(self) -> None:
+        temp_dir = Path(
+            tempfile.mkdtemp(prefix="public-release-packet-opencode-marker-payload-", dir=REPO_ROOT / "target")
+        )
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        preflight_payload = json.loads(packet_preflight_path(packet).read_text(encoding="utf-8"))
+        marker_path = REPO_ROOT / preflight_payload["marker_path"]
+        marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker_payload["run_id"] = "different-run"
+        write_json(marker_path, marker_payload)
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("marker.run_id must match preflight_report.run_id" in error for error in result["errors"]),
             result["errors"],
         )
 

@@ -19,6 +19,149 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") -> dict:
+    from validation.tools import judge_milestone_bundle as bundle
+
+    marker_path = root / "harness" / "opencode-preflight-marker.json"
+    handoff_path = root / "harness" / "opencode-preflight-contract.json"
+    session_path = root / "logs" / "opencode-preflight-session-evidence.json"
+    preflight_path = root / "harness" / "opencode-preflight-report.json"
+    model_stdout_path = root / "logs" / "opencode-models.stdout.log"
+    model_stderr_path = root / "logs" / "opencode-models.stderr.log"
+    worker_command = [
+        "python3",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_relative(marker_path),
+        "--run-id",
+        run_id,
+    ]
+    worker_command_line = bundle.validator.shell_command_line(worker_command)
+    launch_policy = {
+        "opencode_agent": None,
+        "opencode_command": "opencode",
+        "opencode_model": "GLM-5.1",
+        "opencode_skip_permissions": False,
+        "opencode_variant": "max",
+    }
+    launch_policy_sha256 = bundle.validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
+    write_json(
+        marker_path,
+        {
+            "schema_version": 1,
+            "report_kind": "opencode-preflight-marker",
+            "run_id": run_id,
+            "status": "written",
+        },
+    )
+    write_json(
+        handoff_path,
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "runner_kind": "opencode-preflight",
+            "expected_marker_path": repo_relative(marker_path),
+            "worker_command": worker_command,
+            "worker_command_line": worker_command_line,
+            "worker_command_sha256": bundle.validator.sha256_text(worker_command_line),
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": launch_policy_sha256,
+        },
+    )
+    write_json(
+        session_path,
+        {
+            "schema_version": 1,
+            "process_returncode": 0,
+            "parsed": True,
+            "format": "jsonl",
+            "session_events": [
+                {
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": worker_command_line,
+                                "workdir": str(REPO_ROOT),
+                            }
+                        },
+                    }
+                }
+            ],
+        },
+    )
+    model_stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    model_stdout_path.write_text("GLM-5.1\n", encoding="utf-8")
+    model_stderr_path.write_text("", encoding="utf-8")
+    write_json(
+        preflight_path,
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "status": "passed",
+            "exit_code": 0,
+            "process_returncode": 0,
+            "opencode_run_launched": True,
+            "marker_path": repo_relative(marker_path),
+            "marker_exists": True,
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": launch_policy_sha256,
+            "handoff_contract": {
+                "path": repo_relative(handoff_path),
+                "sha256": bundle.validator.sha256_file(handoff_path),
+            },
+            "opencode_session_evidence": {
+                "path": repo_relative(session_path),
+                "sha256": bundle.validator.sha256_file(session_path),
+            },
+            "contract_verification": {
+                "status": "executed",
+                "expected_worker_command_line": worker_command_line,
+                "expected_summary_path": repo_relative(marker_path),
+                "expected_worker_command_sha256": bundle.validator.sha256_text(worker_command_line),
+                "executed_shell_command_count": 1,
+                "executed_shell_commands": [worker_command_line],
+                "first_tool_name": "bash",
+                "first_shell_command": worker_command_line,
+                "first_shell_tool_name": "bash",
+                "first_shell_workdir_status": "repo_root",
+                "expected_workdir_status": "repo_root",
+                "first_shell_command_matches_worker_command": True,
+                "first_shell_workdir_matches_repo_root": True,
+                "worker_command_seen": True,
+                "summary_exists": True,
+                "tools_before_first_shell": [],
+                "contract_failure_reason": "",
+            },
+            "opencode_model_availability": {
+                "status": "available",
+                "opencode_command": "opencode",
+                "required_model": "GLM-5.1",
+                "argv": ["opencode", "models"],
+                "process_returncode": 0,
+                "model_listed": True,
+                "stdout_sha256": bundle.validator.sha256_text(model_stdout_path.read_text(encoding="utf-8")),
+                "stderr_sha256": bundle.validator.sha256_text(model_stderr_path.read_text(encoding="utf-8")),
+                "logs": {
+                    "stdout": repo_relative(model_stdout_path),
+                    "stderr": repo_relative(model_stderr_path),
+                },
+            },
+        },
+    )
+    return {
+        "preflight_path": preflight_path,
+        "session_path": session_path,
+        "model_stdout_path": model_stdout_path,
+        "model_stderr_path": model_stderr_path,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": launch_policy_sha256,
+        "worker_command_line": worker_command_line,
+    }
+
+
 def route_metrics_payload(
     *,
     accepted_evidence_semantic_pass_count: int,
@@ -275,6 +418,39 @@ def evidence_governance_payload() -> dict:
 
 
 class JudgeMilestoneBundleTests(unittest.TestCase):
+    def test_opencode_preflight_proof_summary_recomputes_session_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-contract-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        session_path = Path(fixture["session_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+        session_payload["session_events"][0]["part"]["state"]["input"]["command"] = (
+            "python3 -B validation/tools/opencode_agent_harness.py list-workers --db target/fake.sqlite3"
+        )
+        write_json(session_path, session_payload)
+        preflight_payload["opencode_session_evidence"]["sha256"] = bundle.validator.sha256_file(session_path)
+        write_json(preflight_path, preflight_payload)
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertNotEqual(summary["status"], "passed")
+
     def test_bundle_binds_all_entrypoints_metrics_and_opencode_runtime(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
@@ -290,49 +466,15 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
         opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
         opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
-        opencode_preflight_path = temp_dir / "opencode" / "harness" / "opencode-preflight-report.json"
-        opencode_models_stdout_path = temp_dir / "opencode" / "logs" / "opencode-models.stdout.log"
-        opencode_models_stderr_path = temp_dir / "opencode" / "logs" / "opencode-models.stderr.log"
         c2rust_baseline = c2rust_baseline_rollup_fixture()
 
         write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
-        opencode_models_stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        opencode_models_stdout_path.write_bytes(b"zhipu/GLM-5.1\n")
-        opencode_models_stderr_path.write_bytes(b"")
-        launch_policy = {
-            "opencode_command": "opencode",
-            "opencode_model": "GLM-5.1",
-            "opencode_variant": "max",
-            "opencode_skip_permissions": False,
-        }
-        launch_policy_sha256 = bundle.validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
-        write_json(
-            opencode_preflight_path,
-            {
-                "schema_version": 1,
-                "run_id": "opencode",
-                "status": "passed",
-                "marker_exists": True,
-                "opencode_run_launched": True,
-                "launch_policy": launch_policy,
-                "launch_policy_sha256": launch_policy_sha256,
-                "contract_verification": {"status": "executed"},
-                "opencode_model_availability": {
-                    "status": "available",
-                    "opencode_command": "opencode",
-                    "required_model": "GLM-5.1",
-                    "argv": ["opencode", "models"],
-                    "process_returncode": 0,
-                    "model_listed": True,
-                    "stdout_sha256": bundle.validator.sha256_file(opencode_models_stdout_path),
-                    "stderr_sha256": bundle.validator.sha256_file(opencode_models_stderr_path),
-                    "logs": {
-                        "stdout": repo_relative(opencode_models_stdout_path),
-                        "stderr": repo_relative(opencode_models_stderr_path),
-                    },
-                },
-            },
-        )
+        preflight_fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        opencode_preflight_path = Path(preflight_fixture["preflight_path"])
+        opencode_models_stdout_path = Path(preflight_fixture["model_stdout_path"])
+        opencode_models_stderr_path = Path(preflight_fixture["model_stderr_path"])
+        launch_policy = dict(preflight_fixture["launch_policy"])
+        launch_policy_sha256 = str(preflight_fixture["launch_policy_sha256"])
         preflight_binding = {
             "path": repo_relative(opencode_preflight_path),
             "sha256": bundle.validator.sha256_file(opencode_preflight_path),

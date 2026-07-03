@@ -297,8 +297,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(flashdb["commit"], "f9d0421315c564fb890a1b14eee77b290e0d7bbe")
         self.assertEqual(
             flashdb["checkout_command"],
-            "git checkout -b competition f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+            "git checkout -B competition f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         )
+        self.assertNotIn("git checkout -b ", flashdb["checkout_command"])
         self.assertIn("--source-repository", flashdb["runner_required_flags"])
         self.assertIn("--source-branch", flashdb["runner_required_flags"])
         self.assertIn("--require-source-commit", flashdb["runner_required_flags"])

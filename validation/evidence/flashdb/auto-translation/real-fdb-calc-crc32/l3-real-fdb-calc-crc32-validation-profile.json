@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "d946711eb72714a67751e351418fe31fdcbdfd61f3c8f8ef3ec859d566f45274",
+        "sha256": "a080493e7de3db04aaee8422529c4ff51bff1cbf086fd5146c30018d455d1692",
         "status": "generated"
       },
       "candidate_id": "c2rust-baseline",
@@ -42,7 +42,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "d946711eb72714a67751e351418fe31fdcbdfd61f3c8f8ef3ec859d566f45274",
+          "sha256": "a080493e7de3db04aaee8422529c4ff51bff1cbf086fd5146c30018d455d1692",
           "status": "generated"
         },
         "candidate_id": "c2rust-baseline",
@@ -219,7 +219,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "2bcf920497380297538fa04d28cd28355ef572bb09ad9fccc59dba126ed116d7",
+        "sha256": "2f755b96fb7b805e5c32a0136594dc2c5da068647ecea4e9ad33c45e65bad1f9",
         "status": "lowered"
       },
       "status": "generated",
@@ -229,7 +229,7 @@
   "competition_environment": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
+    "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
   },
   "generated_draft_semantic_pass": false,
   "goal": "dev",

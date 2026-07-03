@@ -1781,7 +1781,17 @@ def opencode_preflight_proof_summary_from_index(
             "opencode_run_launched": preflight_payload.get("opencode_run_launched"),
         }
     )
-    result["status"] = "passed" if opencode_preflight_summary_passed(result, availability, repo_root=repo_root) else "failed"
+    result["status"] = (
+        "passed"
+        if opencode_preflight_summary_passed(
+            result,
+            availability,
+            preflight_payload=preflight_payload,
+            contract=contract,
+            repo_root=repo_root,
+        )
+        else "failed"
+    )
     return result
 
 
@@ -1821,6 +1831,8 @@ def opencode_preflight_summary_passed(
     summary: dict[str, Any],
     availability: dict[str, Any],
     *,
+    preflight_payload: dict[str, Any],
+    contract: dict[str, Any],
     repo_root: Path,
 ) -> bool:
     if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
@@ -1853,6 +1865,94 @@ def opencode_preflight_summary_passed(
             repo_root=repo_root,
         )
     except ValueError:
+        return False
+    if not opencode_preflight_session_contract_passed(
+        preflight_payload,
+        contract=contract,
+        repo_root=repo_root,
+    ):
+        return False
+    return True
+
+
+def opencode_preflight_session_contract_passed(
+    preflight_payload: dict[str, Any],
+    *,
+    contract: dict[str, Any],
+    repo_root: Path,
+) -> bool:
+    try:
+        if preflight_payload.get("process_returncode") != 0:
+            return False
+        handoff_binding = validator.validate_hash_bound_artifact_binding(
+            preflight_payload.get("handoff_contract"),
+            "opencode_preflight_proof_summary.handoff_contract",
+            repo_root=repo_root,
+        )
+        handoff_payload = validator.require_object(
+            validator.load_json(validator.repo_path(handoff_binding["path"], repo_root=repo_root)),
+            "opencode_preflight_proof_summary.handoff_contract file",
+        )
+        if handoff_payload.get("runner_kind") != "opencode-preflight":
+            return False
+        if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
+            return False
+        handoff_policy = validator.validate_opencode_launch_policy_binding(
+            handoff_payload.get("launch_policy"),
+            handoff_payload.get("launch_policy_sha256"),
+            "opencode_preflight_proof_summary.handoff_contract",
+        )
+        preflight_policy = validator.validate_opencode_launch_policy_binding(
+            preflight_payload.get("launch_policy"),
+            preflight_payload.get("launch_policy_sha256"),
+            "opencode_preflight_proof_summary.preflight_report",
+        )
+        if handoff_policy != preflight_policy:
+            return False
+        worker_command = handoff_payload.get("worker_command")
+        if not isinstance(worker_command, list) or not worker_command or not all(
+            isinstance(item, str) and item for item in worker_command
+        ):
+            return False
+        worker_command_line = validator.require_string(
+            handoff_payload.get("worker_command_line"),
+            "opencode_preflight_proof_summary.handoff_contract.worker_command_line",
+        )
+        if worker_command_line != validator.shell_command_line(worker_command):
+            return False
+        if handoff_payload.get("worker_command_sha256") != validator.sha256_text(worker_command_line):
+            return False
+        marker_path_text = validator.require_string(
+            preflight_payload.get("marker_path"),
+            "opencode_preflight_proof_summary.marker_path",
+        )
+        expected_marker_path = validator.require_string(
+            handoff_payload.get("expected_marker_path"),
+            "opencode_preflight_proof_summary.handoff_contract.expected_marker_path",
+        )
+        if marker_path_text != expected_marker_path:
+            return False
+        marker_path = validator.repo_path(marker_path_text, repo_root=repo_root)
+        if not marker_path.is_file():
+            return False
+        session_binding = validator.validate_hash_bound_artifact_binding(
+            preflight_payload.get("opencode_session_evidence"),
+            "opencode_preflight_proof_summary.opencode_session_evidence",
+            repo_root=repo_root,
+        )
+        session_evidence = validator.require_object(
+            validator.load_json(validator.repo_path(session_binding["path"], repo_root=repo_root)),
+            "opencode_preflight_proof_summary.opencode_session_evidence file",
+        )
+        validator.validate_opencode_contract_recomputed_from_session(
+            embedded_verification=contract,
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=marker_path,
+            label="opencode_preflight_proof_summary",
+            repo_root=repo_root,
+        )
+    except (OSError, ValueError, json.JSONDecodeError, TypeError):
         return False
     return True
 
