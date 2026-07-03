@@ -6127,6 +6127,25 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_validate_opencode_preflight_report_rejects_invalid_marker_payload(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            marker_path = REPO_ROOT / payload["marker_path"]
+            marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker_payload["report_kind"] = "not-opencode-preflight-marker"
+            marker_path.write_text(json.dumps(marker_payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight marker payload invalid"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_opencode_preflight_defaults_to_glm_51_model(self) -> None:
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",

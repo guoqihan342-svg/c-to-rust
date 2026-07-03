@@ -6113,6 +6113,16 @@ def validate_opencode_preflight_session_contract(
             "opencode preflight marker_path does not exist: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    marker_validation = validate_opencode_preflight_marker_payload(
+        marker_path,
+        run_id=run_id,
+        repo_root=repo_root,
+    )
+    if marker_validation.get("status") != "passed":
+        raise SystemExit(
+            "opencode preflight marker payload invalid: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
 
     handoff_path = validate_hash_bound_artifact_ref(
         report.get("handoff_contract"),
