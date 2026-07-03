@@ -47,6 +47,7 @@ PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
 HARNESS_MODULE = "validation.tools.opencode_agent_harness"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_VARIANT = "max"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
 ALLOWED_PROOF_CLASSES = frozenset(
     {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}
@@ -2507,11 +2508,14 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
         missing.append("opencode_preflight_report.launch_policy")
         policy = {}
     opencode_command = policy.get("opencode_command")
-    if not isinstance(opencode_command, str) or not opencode_command:
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
         missing.append("opencode_preflight_report.launch_policy.opencode_command")
     opencode_model = policy.get("opencode_model")
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         missing.append("opencode_preflight_report.launch_policy.opencode_model")
+    opencode_variant = policy.get("opencode_variant")
+    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
+        missing.append("opencode_preflight_report.launch_policy.opencode_variant")
     if not isinstance(policy.get("opencode_skip_permissions"), bool):
         missing.append("opencode_preflight_report.launch_policy.opencode_skip_permissions")
     runtime_env = preflight.get("opencode_runtime_env")
@@ -2558,7 +2562,7 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
         "opencode_runtime_env_sha256": runtime_env_sha256,
         "opencode_model_availability": {
             "status": "available",
-            "opencode_command": opencode_command,
+            "opencode_command": COMPETITION_OPENCODE_COMMAND,
             "required_model": COMPETITION_OPENCODE_MODEL,
             "process_returncode": model_probe_returncode,
             "model_listed": True,
