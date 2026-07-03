@@ -21,6 +21,7 @@ from validation.tools import validate_judge_entrypoints as validator
 
 DEFAULT_RUN_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
 DEFAULT_BUNDLE = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json")
+SELF_HEAL_SAMPLE_NEXT_ACTION_LIMIT = 5
 
 
 def main() -> int:
@@ -1280,6 +1281,7 @@ def build_quantitative_evaluation(
             "auto_recovery_rate": number_or_zero(repair_activity.get("auto_recovery_rate")),
             "human_interventions": int_or_zero(repair_activity.get("human_interventions")),
         },
+        "self_heal_classification": build_self_heal_classification(blocked_rollup),
         "baseline_comparison": {
             "raw_c2rust": comparison_row(
                 status="manifest_status_observed"
@@ -1331,6 +1333,54 @@ def build_quantitative_evaluation(
         "boundary": (
             "This scorecard summarizes existing validator-owned artifacts for judge review. It is not a new "
             "semantic gate, does not increase translator-generated coverage, and does not claim competition-exact proof."
+        ),
+    }
+
+
+def build_self_heal_classification(blocked_rollup: dict[str, Any]) -> dict[str, Any]:
+    next_actions = object_list(blocked_rollup.get("next_actions"))
+    route_counts: Counter[str] = Counter()
+    next_action_counts: Counter[str] = Counter()
+    smallest_next_test_kind_counts: Counter[str] = Counter()
+    for action in next_actions:
+        route = action.get("route")
+        if isinstance(route, str) and route:
+            route_counts[route] += 1
+        next_action = action.get("next_action")
+        if isinstance(next_action, str) and next_action:
+            next_action_counts[next_action] += 1
+        smallest_next_test_kind = action.get("smallest_next_test_kind")
+        if isinstance(smallest_next_test_kind, str) and smallest_next_test_kind:
+            smallest_next_test_kind_counts[smallest_next_test_kind] += 1
+    if not smallest_next_test_kind_counts:
+        for test in object_list(blocked_rollup.get("smallest_next_tests")):
+            kind = test.get("kind")
+            if isinstance(kind, str) and kind:
+                smallest_next_test_kind_counts[kind] += 1
+    return {
+        "report_kind": "self-heal-classification",
+        "source": "blocked_repairs_rollup",
+        "status": blocked_rollup.get("status") if isinstance(blocked_rollup.get("status"), str) else "unknown",
+        "blocked_repair_count": int_or_zero(blocked_rollup.get("blocked_repair_count")),
+        "human_action_required_count": int_or_zero(blocked_rollup.get("human_action_required_count")),
+        "status_counts": int_count_map(blocked_rollup.get("status_counts")),
+        "blocked_reason_counts": int_count_map(blocked_rollup.get("blocked_reason_counts")),
+        "ir_feature_gap_kinds": int_count_map(blocked_rollup.get("ir_feature_gap_kinds")),
+        "forbidden_change_counts": int_count_map(blocked_rollup.get("forbidden_change_counts")),
+        "source_span_kind_counts": int_count_map(blocked_rollup.get("source_span_kind_counts")),
+        "route_counts": sorted_int_counter(route_counts),
+        "next_action_counts": sorted_int_counter(next_action_counts),
+        "smallest_next_test_kind_counts": sorted_int_counter(smallest_next_test_kind_counts),
+        "next_action_count": len(next_actions),
+        "sample_next_action_limit": SELF_HEAL_SAMPLE_NEXT_ACTION_LIMIT,
+        "sample_next_actions": next_actions[:SELF_HEAL_SAMPLE_NEXT_ACTION_LIMIT],
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Self-heal classification is derived from fail-closed blocked-repair playbooks. It describes "
+            "repair categories and next actions for judge review only; it is not a semantic gate and does "
+            "not increase translator-generated coverage."
         ),
     }
 

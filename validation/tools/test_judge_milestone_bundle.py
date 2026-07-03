@@ -1114,6 +1114,15 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(quantitative_evaluation["outcome_counts"]["translator_generated_semantic_pass_count"], 0)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["blocked_repair_count"], 0)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["human_interventions"], 0)
+        self_heal_classification = quantitative_evaluation["self_heal_classification"]
+        self.assertEqual(self_heal_classification["report_kind"], "self-heal-classification")
+        self.assertEqual(self_heal_classification["status"], "none")
+        self.assertEqual(self_heal_classification["blocked_repair_count"], 0)
+        self.assertEqual(self_heal_classification["next_action_count"], 0)
+        self.assertEqual(self_heal_classification["sample_next_action_limit"], 5)
+        self.assertEqual(self_heal_classification["sample_next_actions"], [])
+        self.assertFalse(self_heal_classification["semantic_gate"])
+        self.assertEqual(self_heal_classification["translation_coverage_numerator"], 0)
         progress_delta = report["progress_delta_ledger"]
         self.assertEqual(progress_delta["report_kind"], "progress-delta-ledger")
         self.assertFalse(progress_delta["semantic_gate"])
@@ -2206,9 +2215,44 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["blocked_repairs_rollup"]["translation_coverage_numerator"], 0)
         self.assertFalse(blocked["semantic_gate"])
         self.assertEqual(blocked["translation_coverage_numerator"], 0)
+        classification = report["quantitative_evaluation"]["self_heal_classification"]
+        self.assertEqual(classification["report_kind"], "self-heal-classification")
+        self.assertEqual(classification["status"], "observed")
+        self.assertEqual(classification["source"], "blocked_repairs_rollup")
+        self.assertEqual(classification["blocked_repair_count"], 2)
+        self.assertEqual(classification["human_action_required_count"], 2)
+        self.assertEqual(classification["blocked_reason_counts"], blocked["blocked_reason_counts"])
+        self.assertEqual(classification["ir_feature_gap_kinds"], blocked["ir_feature_gap_kinds"])
+        self.assertEqual(classification["source_span_kind_counts"], blocked["source_span_kind_counts"])
+        self.assertEqual(classification["route_counts"], {"typed_ir": 1})
+        self.assertEqual(classification["next_action_counts"], {"bind_external_callee_semantics": 1})
+        self.assertEqual(classification["smallest_next_test_kind_counts"], {"callee_contract_replay": 1})
+        self.assertEqual(classification["next_action_count"], 1)
+        self.assertEqual(classification["sample_next_action_limit"], 5)
+        self.assertEqual(classification["sample_next_actions"], blocked["next_actions"])
+        self.assertFalse(classification["semantic_gate"])
+        self.assertFalse(classification["generated_draft_semantic_pass"])
+        self.assertEqual(classification["translation_coverage_numerator"], 0)
         self.assertIn("blocked_repairs_are_not_translation_success", report["must_not_claim"])
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         jsonschema.validate(report, schema)
+
+        missing_self_heal_classification = json.loads(json.dumps(report))
+        missing_self_heal_classification["quantitative_evaluation"].pop("self_heal_classification")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_self_heal_classification, schema)
+
+        missing_self_heal_sample_route = json.loads(json.dumps(report))
+        missing_self_heal_sample_route["quantitative_evaluation"]["self_heal_classification"]["sample_next_actions"][0].pop(
+            "route"
+        )
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_self_heal_sample_route, schema)
+
+        expanded_self_heal_claim = json.loads(json.dumps(report))
+        expanded_self_heal_claim["quantitative_evaluation"]["self_heal_classification"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded_self_heal_claim, schema)
 
         missing_next_action_route = json.loads(json.dumps(report))
         missing_next_action_route["blocked_repairs_rollup"]["rollup"]["next_actions"][0].pop("route")

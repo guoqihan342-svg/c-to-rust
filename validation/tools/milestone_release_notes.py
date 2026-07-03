@@ -100,6 +100,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         f"| Auto-recovered units | {nested_int(scorecard, 'outcome_counts', 'auto_recovered_unit_count')} |",
         f"| Unsafe reduction | {unsafe_reduction_text(scorecard.get('unsafe_reduction'), core_quality.get('unsafe_reduction'))} |",
         "",
+        "## Self-Heal Classification",
+        "",
+        *self_heal_classification_lines(object_or_empty(scorecard.get("self_heal_classification"))),
+        "",
         "## Progress Delta Ledger",
         "",
         *progress_delta_lines(progress_delta),
@@ -179,6 +183,19 @@ def require_bundle_contract(bundle: dict[str, Any]) -> None:
     require_false_field(scorecard, "claim_boundary", "scorecard_is_semantic_gate")
     require_false_field(scorecard, "claim_boundary", "generated_draft_semantic_pass")
     require_zero_field(scorecard, "claim_boundary", "translation_coverage_numerator")
+    self_heal = object_or_empty(scorecard.get("self_heal_classification"))
+    require_false_value(
+        self_heal.get("semantic_gate"),
+        "quantitative_evaluation.self_heal_classification.semantic_gate",
+    )
+    require_false_value(
+        self_heal.get("generated_draft_semantic_pass"),
+        "quantitative_evaluation.self_heal_classification.generated_draft_semantic_pass",
+    )
+    require_zero_value(
+        self_heal.get("translation_coverage_numerator"),
+        "quantitative_evaluation.self_heal_classification.translation_coverage_numerator",
+    )
     baseline = object_or_empty(scorecard.get("baseline_comparison"))
     for name, row in baseline.items():
         if not isinstance(row, dict):
@@ -416,6 +433,28 @@ def opencode_preflight_lines(summary: dict[str, Any]) -> list[str]:
     ]
 
 
+def self_heal_classification_lines(classification: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(classification.get('status'), 'unknown')} |",
+        f"| Blocked repairs | {int_text(classification.get('blocked_repair_count'))} |",
+        f"| Human action required | {int_text(classification.get('human_action_required_count'))} |",
+        f"| Status counts | {count_map_text(classification.get('status_counts'))} |",
+        f"| Blocked reasons | {count_map_text(classification.get('blocked_reason_counts'))} |",
+        f"| IR feature gaps | {count_map_text(classification.get('ir_feature_gap_kinds'))} |",
+        f"| Forbidden changes | {count_map_text(classification.get('forbidden_change_counts'))} |",
+        f"| Source span kinds | {count_map_text(classification.get('source_span_kind_counts'))} |",
+        f"| Routes | {count_map_text(classification.get('route_counts'))} |",
+        f"| Next actions | {count_map_text(classification.get('next_action_counts'))} |",
+        f"| Smallest next tests | {count_map_text(classification.get('smallest_next_test_kind_counts'))} |",
+        f"| Next action samples | {int_text(classification.get('next_action_count'))} |",
+        f"| Sample next-action limit | {int_text(classification.get('sample_next_action_limit'))} |",
+        f"| Semantic gate | {bool_text(classification.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(classification.get('translation_coverage_numerator'))} |",
+    ]
+
+
 def progress_delta_lines(progress_delta: dict[str, Any]) -> list[str]:
     capability = object_or_empty(progress_delta.get("capability_delta"))
     governance = object_or_empty(progress_delta.get("governance_delta"))
@@ -610,6 +649,22 @@ def int_text(value: Any) -> str:
     if isinstance(value, float):
         return str(value)
     return "0"
+
+
+def count_map_text(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none"
+    parts = []
+    for key in sorted(value):
+        count = value.get(key)
+        if isinstance(count, bool):
+            count_text = str(int(count))
+        elif isinstance(count, (int, float)):
+            count_text = str(int(count))
+        else:
+            count_text = "0"
+        parts.append(f"`{key}`: {count_text}")
+    return ", ".join(parts)
 
 
 def text(value: Any, default: str) -> str:

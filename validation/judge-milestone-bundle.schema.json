@@ -772,6 +772,7 @@
         "outcome_counts",
         "unsafe_reduction",
         "repair_activity",
+        "self_heal_classification",
         "baseline_comparison",
         "claim_boundary"
       ],
@@ -860,6 +861,94 @@
             "avg_repair_rounds": {"type": "number", "minimum": 0},
             "auto_recovery_rate": {"type": "number", "minimum": 0},
             "human_interventions": {"type": "integer", "minimum": 0}
+          }
+        },
+        "self_heal_classification": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "report_kind",
+            "source",
+            "status",
+            "blocked_repair_count",
+            "human_action_required_count",
+            "status_counts",
+            "blocked_reason_counts",
+            "ir_feature_gap_kinds",
+            "forbidden_change_counts",
+            "source_span_kind_counts",
+            "route_counts",
+            "next_action_counts",
+            "smallest_next_test_kind_counts",
+            "next_action_count",
+            "sample_next_action_limit",
+            "sample_next_actions",
+            "semantic_gate",
+            "generated_draft_semantic_pass",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "report_kind": {"const": "self-heal-classification"},
+            "source": {"const": "blocked_repairs_rollup"},
+            "status": {"type": "string"},
+            "blocked_repair_count": {"type": "integer", "minimum": 0},
+            "human_action_required_count": {"type": "integer", "minimum": 0},
+            "status_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "blocked_reason_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "ir_feature_gap_kinds": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "forbidden_change_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "source_span_kind_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "route_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "next_action_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "smallest_next_test_kind_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "next_action_count": {"type": "integer", "minimum": 0},
+            "sample_next_action_limit": {"const": 5},
+            "sample_next_actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["route", "status", "next_action"],
+                "properties": {
+                  "route": {"type": "string", "minLength": 1},
+                  "status": {"type": "string", "minLength": 1},
+                  "next_action": {"type": "string", "minLength": 1},
+                  "smallest_next_test_kind": {"type": "string", "minLength": 1},
+                  "smallest_next_test_command": {"type": "string", "minLength": 1},
+                  "expected_gate": {"type": "string", "minLength": 1},
+                  "human_intervention_point": {"type": "string", "minLength": 1}
+                }
+              }
+            },
+            "semantic_gate": {"const": false},
+            "generated_draft_semantic_pass": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
           }
         },
         "baseline_comparison": {

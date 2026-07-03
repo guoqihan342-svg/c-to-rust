@@ -49,6 +49,15 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "| Judge milestone bundle | target/competition-out/summary/judge-milestone-bundle.json | self | self |",
             notes,
         )
+        self.assertIn("## Self-Heal Classification", notes)
+        self.assertIn("| Blocked repairs | 1 |", notes)
+        self.assertIn("| Human action required | 1 |", notes)
+        self.assertIn("| Blocked reasons | `external_callee`: 1 |", notes)
+        self.assertIn("| IR feature gaps | `external_direct_callee_context`: 1 |", notes)
+        self.assertIn("| Routes | `typed_ir`: 1 |", notes)
+        self.assertIn("| Next actions | `bind_external_callee_semantics`: 1 |", notes)
+        self.assertIn("| Sample next-action limit | 5 |", notes)
+        self.assertIn("| Semantic gate | false |", notes)
         self.assertIn("## Progress Delta Ledger", notes)
         self.assertIn("| Capability delta count | 2 |", notes)
         self.assertIn("| Governance delta count | 3 |", notes)
@@ -132,6 +141,20 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             (
                 "quantitative_evaluation.outcome_counts.translation_coverage_numerator",
                 lambda payload: payload["quantitative_evaluation"]["outcome_counts"].__setitem__(
+                    "translation_coverage_numerator",
+                    1,
+                ),
+            ),
+            (
+                "quantitative_evaluation.self_heal_classification.semantic_gate",
+                lambda payload: payload["quantitative_evaluation"]["self_heal_classification"].__setitem__(
+                    "semantic_gate",
+                    True,
+                ),
+            ),
+            (
+                "quantitative_evaluation.self_heal_classification.translation_coverage_numerator",
+                lambda payload: payload["quantitative_evaluation"]["self_heal_classification"].__setitem__(
                     "translation_coverage_numerator",
                     1,
                 ),
@@ -341,6 +364,34 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "avg_repair_rounds": 1.0,
                     "auto_recovery_rate": 0.2,
                     "human_interventions": 0,
+                },
+                "self_heal_classification": {
+                    "report_kind": "self-heal-classification",
+                    "source": "blocked_repairs_rollup",
+                    "status": "observed",
+                    "blocked_repair_count": 1,
+                    "human_action_required_count": 1,
+                    "status_counts": {"observed": 1},
+                    "blocked_reason_counts": {"external_callee": 1},
+                    "ir_feature_gap_kinds": {"external_direct_callee_context": 1},
+                    "forbidden_change_counts": {"missing_l1_evidence": 1},
+                    "source_span_kind_counts": {"c_source": 1},
+                    "route_counts": {"typed_ir": 1},
+                    "next_action_counts": {"bind_external_callee_semantics": 1},
+                    "smallest_next_test_kind_counts": {"callee_contract_replay": 1},
+                    "next_action_count": 1,
+                    "sample_next_action_limit": 5,
+                    "sample_next_actions": [
+                        {
+                            "route": "typed_ir",
+                            "status": "blocked",
+                            "next_action": "bind_external_callee_semantics",
+                        }
+                    ],
+                    "semantic_gate": False,
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                    "boundary": "Self-heal classification is judge-facing repair context only.",
                 },
                 "baseline_comparison": {
                     "raw_c2rust": {
