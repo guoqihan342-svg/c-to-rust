@@ -2964,13 +2964,36 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
     )
     if summary_payload.get("final_gate_status") != "passed":
         raise ValueError("opencode_safety_transform_attempt.summary.final_gate_status must be passed")
-    workflow_metrics = None
-    if isinstance(payload.get("workflow_metrics"), dict):
-        workflow_metrics = validate_artifact_binding_shape(
-            payload.get("workflow_metrics"),
-            "opencode_safety_transform_attempt.workflow_metrics",
-            repo_root=repo_root,
-        )
+    summary_path = repo_path(summary["path"], repo_root=repo_root)
+    try:
+        validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
+    except SystemExit as error:
+        raise ValueError(f"opencode_safety_transform_attempt.summary validation failed: {error}") from error
+    worker_summary_payload = load_json(summary_path)
+    worker_final_gate = require_object(
+        worker_summary_payload.get("final_gate"),
+        "opencode_safety_transform_attempt.summary.final_gate",
+    )
+    if summary_payload.get("final_gate_status") != worker_final_gate.get("status"):
+        raise ValueError("opencode_safety_transform_attempt.summary.final_gate_status must match worker summary final_gate.status")
+    workflow_metrics = validate_artifact_binding_shape(
+        require_object(payload.get("workflow_metrics"), "opencode_safety_transform_attempt.workflow_metrics"),
+        "opencode_safety_transform_attempt.workflow_metrics",
+        repo_root=repo_root,
+    )
+    worker_workflow_metrics = validate_artifact_binding_shape(
+        require_object(
+            worker_summary_payload.get("workflow_metrics"),
+            "opencode_safety_transform_attempt.summary.workflow_metrics",
+        ),
+        "opencode_safety_transform_attempt.summary.workflow_metrics",
+        repo_root=repo_root,
+    )
+    compare_artifact_binding(
+        workflow_metrics,
+        worker_workflow_metrics,
+        "opencode_safety_transform_attempt.workflow_metrics must match worker summary workflow_metrics",
+    )
 
     contract = require_object(payload.get("attempt_contract"), "opencode_safety_transform_attempt.attempt_contract")
     if contract.get("single_patch_per_round") is not True:
@@ -3014,8 +3037,7 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
     }
-    if workflow_metrics is not None:
-        result["workflow_metrics"] = workflow_metrics
+    result["workflow_metrics"] = workflow_metrics
     return result
 
 

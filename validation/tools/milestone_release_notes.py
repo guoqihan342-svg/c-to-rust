@@ -204,8 +204,59 @@ def require_bundle_contract(bundle: dict[str, Any]) -> None:
     )
     require_false_field(publication, "claim_boundary", "generated_draft_semantic_pass", prefix="publication_manifest")
     require_zero_field(publication, "claim_boundary", "translation_coverage_numerator", prefix="publication_manifest")
+    require_publishability_contract(bundle, blockers=blockers)
     require_opencode_runtime_contract(bundle)
     require_opencode_evidence_policy_contract(bundle)
+
+
+def require_publishability_contract(bundle: dict[str, Any], *, blockers: list[str]) -> None:
+    publishability = bundle.get("publishability")
+    require(isinstance(publishability, dict), "publishability must be an object")
+    readiness = publishability.get("status")
+    require(
+        readiness in {"blocked", "internal_preview", "external_release_ready"},
+        "publishability.status must be blocked, internal_preview, or external_release_ready",
+    )
+    scope = publishability.get("scope")
+    require(scope in {"blocked", "partial", "full"}, "publishability.scope must be blocked, partial, or full")
+    publication_scope = publishability.get("publication_scope")
+    require(
+        publication_scope in {"blocked", "partial", "full"},
+        "publishability.publication_scope must be blocked, partial, or full",
+    )
+    require(publication_scope == scope, "publishability.publication_scope must match scope")
+    blocker_count = publishability.get("blocker_count")
+    require(
+        isinstance(blocker_count, int) and blocker_count == len(blockers),
+        "publishability.blocker_count must match blockers",
+    )
+    if "blockers" in publishability:
+        require(publishability.get("blockers") == blockers, "publishability.blockers must match bundle blockers")
+    require(publishability.get("required_agent_tool") == "opencode", "publishability.required_agent_tool must be opencode")
+    require(publishability.get("required_model") == "GLM-5.1", "publishability.required_model must be GLM-5.1")
+    require_true_value(publishability.get("opencode_glm51_required"), "publishability.opencode_glm51_required")
+    require(
+        isinstance(publishability.get("opencode_glm51_preflight_status"), str)
+        and bool(publishability.get("opencode_glm51_preflight_status")),
+        "publishability.opencode_glm51_preflight_status must be present",
+    )
+    opencode_ready = publishability.get("opencode_glm51_publishable") is True
+    external_milestone = publishability.get("external_milestone") is True
+    external_claim = publishability.get("external_milestone_claim_ready") is True
+    if bundle.get("status") == "blocked":
+        require(readiness == "blocked", "publishability.status must be blocked when bundle is blocked")
+        require(scope == "blocked", "publishability.scope must be blocked when bundle is blocked")
+        require(not external_claim, "publishability.external_milestone_claim_ready must be false when blocked")
+        require(not external_milestone, "publishability.external_milestone must be false when blocked")
+    if readiness == "internal_preview":
+        require(not external_claim, "publishability.external_milestone_claim_ready must be false for internal_preview")
+        require(not external_milestone, "publishability.external_milestone must be false for internal_preview")
+    if readiness == "external_release_ready":
+        require(external_claim, "publishability.external_milestone_claim_ready must be true for external_release_ready")
+        require(external_milestone, "publishability.external_milestone must be true for external_release_ready")
+        require(opencode_ready, "publishability.opencode_glm51_publishable must be true for external_release_ready")
+    require_false_value(publishability.get("semantic_gate"), "publishability.semantic_gate")
+    require_zero_value(publishability.get("translation_coverage_numerator"), "publishability.translation_coverage_numerator")
 
 
 def require_opencode_runtime_contract(bundle: dict[str, Any]) -> None:

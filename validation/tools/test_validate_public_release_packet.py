@@ -39,6 +39,101 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_competition_summary_fixture(summary_path: Path) -> tuple[dict, dict]:
+    metrics_path = summary_path.parent / "workflow-metrics.json"
+    summary = {
+        "schema_version": 1,
+        "run_id": "opencode-run",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": 1,
+        "translator_version": "test-fixture",
+        "slices": {
+            "attempted": 1,
+            "typed_ir_generated": 1,
+            "compiled": 1,
+            "semantic_pass": 1,
+            "refused": 0,
+            "blocked": 0,
+            "failed": 0,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "artifact_roots": [
+            "target/competition-out/evidence",
+            "target/competition-out/summary",
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": "passed",
+            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+        },
+    }
+    metrics = {
+        "schema_version": 1,
+        "run_id": "opencode-run",
+        "proof_class": "local-simulation",
+        "units_total": 1,
+        "units_converged": 1,
+        "units_baseline_only": 0,
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": 0,
+            "reduced_by": None,
+            "ratio": 0.0,
+        },
+        "translation_before_after": {
+            "status": "not_provided",
+            "unit_count": 0,
+            "measured_unsafe_unit_count": 0,
+            "accepted_patch_unit_count": 0,
+            "units": [],
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": False,
+        "always_equivalent": False,
+        "fail_closed_count": 0,
+        "root_cause_counts": {},
+        "wall_clock_seconds": 1,
+        "llm_calls": 0,
+        "per_unit_statuses": [
+            {
+                "unit_id": "flashdb/real-fdb-calc-crc32",
+                "source": "slice-spec",
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            }
+        ],
+    }
+    write_json(metrics_path, metrics)
+    summary["workflow_metrics"] = {
+        "path": repo_relative(metrics_path),
+        "sha256": judge_validator.sha256_file(metrics_path),
+    }
+    write_json(summary_path, summary)
+    return (
+        {"path": repo_relative(summary_path), "status": "present", "sha256": judge_validator.sha256_file(summary_path)},
+        {"path": repo_relative(metrics_path), "status": "present", "sha256": judge_validator.sha256_file(metrics_path)},
+    )
+
+
 def opencode_runtime_env_contract(base_root: Path, *, scope: str) -> dict:
     runtime_root = base_root / "opencode-runtime" / scope
     runtime_paths = {
@@ -250,9 +345,10 @@ def write_opencode_safety_transform_attempt_fixture(
 ) -> dict:
     attempt_path = root / "workers" / "worker-a" / "harness" / "opencode-safety-transform-attempt-1.json"
     evidence_root = attempt_path.parent / "attempt-evidence"
+    summary_ref, workflow_metrics_ref = write_competition_summary_fixture(evidence_root / "competition-run-summary.json")
     refs = {
-        "summary": write_text_artifact(evidence_root / "summary.json", '{"final_gate_status":"passed"}\n'),
-        "workflow_metrics": write_text_artifact(evidence_root / "workflow-metrics.json", '{"status":"passed"}\n'),
+        "summary": summary_ref,
+        "workflow_metrics": workflow_metrics_ref,
         "baseline": write_text_artifact(evidence_root / "baseline-unsafe.rs", "unsafe fn baseline() {}\n"),
         "final": write_text_artifact(evidence_root / "final-safe.rs", "fn final_safe() {}\n"),
         "accepted_patch": write_text_artifact(evidence_root / "accepted.patch", "accepted patch\n"),
@@ -581,6 +677,23 @@ def valid_packet(root: Path) -> dict:
         },
         "publishability": {
             "status": "internal_preview",
+            "scope": "full",
+            "publication_scope": "full",
+            "external_milestone_claim_ready": False,
+            "external_milestone": False,
+            "blocker_count": 0,
+            "blockers": [],
+            "all_entrypoints_run_publishable": True,
+            "focused_run": False,
+            "competition_exact_publishable": False,
+            "required_agent_tool": "opencode",
+            "required_model": "GLM-5.1",
+            "opencode_glm51_required": True,
+            "opencode_glm51_preflight_status": "passed",
+            "opencode_glm51_publishable": True,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "target_artifacts_regenerable": True,
         },
         "proof_classes": {
             "rollup": {

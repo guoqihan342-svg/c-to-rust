@@ -14,6 +14,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
 
         self.assertIn("# FlashDB Harness MVP Release Notes", notes)
         self.assertIn("Status: `passed`", notes)
+        self.assertIn("Readiness: `internal_preview`", notes)
         self.assertIn("## Readiness Blockers", notes)
         self.assertIn("- none", notes)
         self.assertIn("Repository commit: `1234567890abcdef1234567890abcdef12345678`", notes)
@@ -67,6 +68,13 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         blocker = "validated_artifact_sha256_mismatch:before_after_judge_demo:judge_evidence_index"
         payload["status"] = "blocked"
         payload["blockers"] = [blocker]
+        payload["publishability"]["status"] = "blocked"
+        payload["publishability"]["scope"] = "blocked"
+        payload["publishability"]["publication_scope"] = "blocked"
+        payload["publishability"]["external_milestone_claim_ready"] = False
+        payload["publishability"]["external_milestone"] = False
+        payload["publishability"]["blocker_count"] = 1
+        payload["publishability"]["blockers"] = [blocker]
 
         notes = milestone_release_notes.build_release_notes(payload)
 
@@ -82,6 +90,15 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             milestone_release_notes.build_release_notes(payload)
 
         self.assertIn("blockers must be empty when status is passed", str(raised.exception))
+
+    def test_release_notes_reject_unknown_publishability_status(self) -> None:
+        payload = self._bundle()
+        payload["publishability"]["status"] = "unknown"
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("publishability.status", str(raised.exception))
 
     def test_release_notes_reject_expanded_semantic_claims(self) -> None:
         cases = [
@@ -243,7 +260,18 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "publishability": {
                 "status": "internal_preview",
                 "scope": "full",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": False,
                 "external_milestone": False,
+                "blocker_count": 0,
+                "blockers": [],
+                "required_agent_tool": "opencode",
+                "required_model": "GLM-5.1",
+                "opencode_glm51_required": True,
+                "opencode_glm51_preflight_status": "passed",
+                "opencode_glm51_publishable": True,
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
             },
             "core_translation_quality": {
                 "translation_coverage_numerator": 0,

@@ -305,8 +305,6 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
     artifact_dir = path.parent / "attempt-evidence"
     refs = {}
     for name in (
-        "summary",
-        "workflow-metrics",
         "baseline-unsafe.rs",
         "final-safe.rs",
         "accepted.patch",
@@ -320,6 +318,14 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text(f"{name}\n", encoding="utf-8")
         refs[name] = {"path": repo_relative(artifact), "sha256": validator.sha256_file(artifact)}
+    summary_path = artifact_dir / "competition-run-summary.json"
+    summary_payload = valid_competition_run_summary_payload(run_id="run-test")
+    workflow_metrics_path = write_competition_run_summary_with_workflow_metrics(summary_path, summary_payload)
+    refs["summary"] = {"path": repo_relative(summary_path), "sha256": validator.sha256_file(summary_path)}
+    refs["workflow-metrics"] = {
+        "path": repo_relative(workflow_metrics_path),
+        "sha256": validator.sha256_file(workflow_metrics_path),
+    }
     payload = {
         "schema_version": 1,
         "report_kind": "opencode-safety-transform-attempt",
@@ -4242,6 +4248,47 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["repair_round_cap"], 5)
         self.assertFalse(result["semantic_gate"])
         self.assertEqual(result["translation_coverage_numerator"], 0)
+
+    def test_opencode_safety_transform_attempt_rejects_summary_final_gate_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        summary_path = REPO_ROOT / payload["summary"]["path"]
+        summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary_payload["final_gate"]["status"] = "failed"
+        write_json(summary_path, summary_payload)
+        payload["summary"]["sha256"] = validator.sha256_file(summary_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "summary.final_gate_status must match worker summary final_gate.status"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_workflow_metrics_binding_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        metrics_path = temp_dir / "attempt-evidence" / "workflow-metrics-drift.json"
+        write_json(metrics_path, {"schema_version": 1, "run_id": "run-test", "drifted": True})
+        payload["workflow_metrics"] = {
+            "path": repo_relative(metrics_path),
+            "sha256": validator.sha256_file(metrics_path),
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "workflow_metrics must match worker summary workflow_metrics"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
     def test_opencode_safety_transform_attempt_contract_rejects_non_five_round_cap(self) -> None:
         target_dir = REPO_ROOT / "target"

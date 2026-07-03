@@ -132,7 +132,13 @@ def build_judge_milestone_bundle(
     blockers.extend(validated_artifact_contract_errors)
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
-    publishability = build_publishability(status=status, readiness=readiness, proof_classes=proof_classes)
+    publishability = build_publishability(
+        status=status,
+        readiness=readiness,
+        proof_classes=proof_classes,
+        blockers=blockers,
+        opencode_runtime=opencode_runtime,
+    )
     reproduction_commands = build_reproduction_commands(
         run_report=run_report,
         run_report_path=run_report_path,
@@ -607,14 +613,60 @@ def build_publishability(
     status: str,
     readiness: dict[str, Any],
     proof_classes: dict[str, Any],
+    blockers: list[str],
+    opencode_runtime: dict[str, Any],
 ) -> dict[str, Any]:
     all_entrypoints = bool(readiness.get("all_entrypoints_executed"))
+    blocked = status != "passed" or bool(blockers)
+    all_entrypoints_run_publishable = not blocked and all_entrypoints
+    competition_exact_publishable = all_entrypoints_run_publishable and bool(
+        proof_classes.get("all_entrypoints_competition_exact")
+    )
+    scope = "full" if all_entrypoints_run_publishable else "partial" if status == "passed" else "blocked"
+    preflight_summary = (
+        opencode_runtime.get("preflight_proof_summary", {})
+        if isinstance(opencode_runtime.get("preflight_proof_summary"), dict)
+        else {}
+    )
+    opencode_enabled = int_or_zero(opencode_runtime.get("enabled_entrypoint_count")) > 0
+    preflight_status = preflight_summary.get("status") if opencode_enabled else "not-required"
+    if not isinstance(preflight_status, str) or not preflight_status:
+        preflight_status = "missing"
+    opencode_glm51_publishable = opencode_enabled and (
+        preflight_summary.get("status") == "passed"
+        and preflight_summary.get("opencode_command") == validator.COMPETITION_OPENCODE_COMMAND
+        and preflight_summary.get("opencode_model") == validator.COMPETITION_OPENCODE_MODEL
+        and preflight_summary.get("required_model") == validator.COMPETITION_OPENCODE_MODEL
+        and preflight_summary.get("model_listed") is True
+    )
     return {
-        "all_entrypoints_run_publishable": status == "passed" and all_entrypoints,
+        "status": "blocked"
+        if blocked
+        else "external_release_ready"
+        if competition_exact_publishable and opencode_glm51_publishable
+        else "internal_preview",
+        "scope": scope,
+        "publication_scope": scope,
+        "external_milestone_claim_ready": competition_exact_publishable and opencode_glm51_publishable,
+        "external_milestone": competition_exact_publishable and opencode_glm51_publishable,
+        "blocker_count": len(blockers),
+        "blockers": blockers,
+        "all_entrypoints_run_publishable": all_entrypoints_run_publishable,
         "focused_run": not all_entrypoints,
-        "competition_exact_publishable": bool(proof_classes.get("all_entrypoints_competition_exact")),
+        "competition_exact_publishable": competition_exact_publishable,
+        "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
+        "required_model": validator.COMPETITION_OPENCODE_MODEL,
+        "opencode_glm51_required": True,
+        "opencode_glm51_preflight_status": preflight_status,
+        "opencode_glm51_publishable": opencode_glm51_publishable,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
         "target_artifacts_regenerable": True,
         "committed_release_evidence_refs": "Use validation/evidence manifests and config/competition-env profiles as committed anchors.",
+        "boundary": (
+            "Publishability is a review-package readiness contract. Competition-facing agent evidence requires "
+            "OpenCode with GLM-5.1 and does not convert chat/session output into semantic acceptance."
+        ),
     }
 
 
