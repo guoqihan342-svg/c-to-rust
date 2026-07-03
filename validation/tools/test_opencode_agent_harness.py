@@ -4363,19 +4363,33 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["mode"], "deterministic")
             self.assertEqual(report["runner_kind"], "repo-local-c2rust-migrator")
-            artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, status from artifacts")
+            report_rel = repo_rel(report_path)
+            report_sha = harness.sha256_file(report_path)
+            artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, sha256, status, semantic_role from artifacts")
             self.assertEqual(
                 artifact_rows,
                 [
                     (
                         "competition-run-summary",
                         repo_rel(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
+                        harness.sha256_file(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
                         "passed",
+                        "run-summary",
+                    ),
+                    (
+                        "run-worker-report",
+                        report_rel,
+                        report_sha,
+                        "passed",
+                        "worker-execution-report",
                     )
                 ],
             )
-            event_rows = fetch_rows(db_path, "select event_type from events order by event_id")
-            self.assertIn(("worker_executed",), event_rows)
+            event_rows = fetch_rows(db_path, "select event_type, payload_json from events order by event_id")
+            self.assertIn("worker_executed", [row[0] for row in event_rows])
+            worker_event = json.loads(event_rows[-1][1])
+            self.assertEqual(worker_event["worker_report"], {"path": report_rel, "sha256": report_sha})
+            self.assertEqual(worker_event["report_path"], report_rel)
 
     def test_run_worker_fails_when_recorded_summary_final_gate_fails(self) -> None:
         with temp_repo_dir() as tmp:

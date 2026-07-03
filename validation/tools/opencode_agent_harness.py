@@ -5455,6 +5455,18 @@ def run_worker(
             "recorded": recorded is not None,
             "report_path": repo_relative(report_path, repo_root=repo_root),
         }
+        worker_report_ref = record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id=worker_id,
+            kind="run-worker-report",
+            path=report_path,
+            status=task_status,
+            semantic_role="worker-execution-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        event_payload["worker_report"] = worker_report_ref
         if retry_of:
             event_payload["retry_of"] = retry_of
         if rollback_evidence is not None:

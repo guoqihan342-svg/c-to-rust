@@ -1292,6 +1292,27 @@ def write_minimal_context_ledger(
                     "2026-07-01T00:00:00Z",
                 ),
             )
+            if isinstance(worker.get("report_path"), str):
+                report_path = REPO_ROOT / worker["report_path"]
+                if report_path.is_file():
+                    connection.execute(
+                        """
+                        insert into artifacts(
+                          run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            run_id,
+                            worker.get("worker_id"),
+                            "run-worker-report",
+                            worker["report_path"],
+                            validator.sha256_file(report_path),
+                            "passed",
+                            "worker-execution-report",
+                            "{}",
+                            "2026-07-01T00:00:00Z",
+                        ),
+                    )
         connection.commit()
 
 
@@ -5063,6 +5084,53 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         summary.write_text('{"status":"tampered"}\n', encoding="utf-8")
 
         with self.assertRaisesRegex(ValueError, "worker summary sha256 must match"):
+            validator.validate_context_ledger_contract(
+                context_payload,
+                agent_payload,
+                context_path_text=repo_relative(context_pack),
+                agent_path_text=repo_relative(agent_index),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_context_ledger_missing_worker_report_artifact_fails(self) -> None:
+        temp_config = write_temp_config(load_default_config())
+        temp_dir = temp_config.parent
+        context_pack = temp_dir / "out" / "harness" / "context-pack.json"
+        agent_index = temp_dir / "out" / "harness" / "agent-index.json"
+        ledger = temp_dir / "out" / "state" / "opencode-agent-harness.sqlite3"
+        summary = temp_dir / "out" / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
+        report = temp_dir / "out" / "workers" / "worker-001" / "harness" / "run-worker-report.json"
+        write_json(summary, {"status": "passed"})
+        write_json(report, {"report_kind": "run-worker-report", "worker_id": "worker-001"})
+        worker = {
+            "worker_id": "worker-001",
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+        }
+        context_payload = {
+            "context_management_contract": {
+                "resume_protocol": {
+                    "checkpoint_backend": "sqlite",
+                    "ledger_path": repo_relative(ledger),
+                },
+            },
+            "workers": [worker],
+        }
+        agent_payload = {"agents_by_worker_id": {"worker-001": worker}}
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        write_minimal_context_ledger(
+            ledger,
+            run_id="competition-flashdb-before-after-exhibit",
+            context_pack_path=context_pack,
+            context_pack_payload=context_payload,
+            agent_index_path=agent_index,
+        )
+        with closing(sqlite3.connect(ledger)) as connection:
+            connection.execute("delete from artifacts where kind='run-worker-report'")
+            connection.commit()
+
+        with self.assertRaisesRegex(ValueError, "missing artifacts row for worker report"):
             validator.validate_context_ledger_contract(
                 context_payload,
                 agent_payload,

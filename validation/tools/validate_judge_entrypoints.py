@@ -4138,6 +4138,29 @@ def validate_context_ledger_contract(
                     summary_path=summary_path,
                 ):
                     raise ValueError(f"context ledger worker summary row must be passed run-summary: {worker_id}")
+                report_path_text = agent_entry.get("report_path")
+                if isinstance(report_path_text, str):
+                    assert_repo_relative_posix(report_path_text)
+                    report_path = repo_path(report_path_text, repo_root=repo_root)
+                    if not report_path.is_file():
+                        raise ValueError(f"context ledger worker report does not exist: {worker_id}")
+                    report_sha = sha256_file(report_path)
+                    report_row = connection.execute(
+                        """
+                        select sha256, status, semantic_role, agent_id
+                        from artifacts
+                        where kind='run-worker-report' and repo_rel_path=?
+                        """,
+                        (report_path_text,),
+                    ).fetchone()
+                    if report_row is None:
+                        raise ValueError(f"context ledger missing artifacts row for worker report: {worker_id}")
+                    if report_row[0] != report_sha:
+                        raise ValueError(f"context ledger worker report sha256 must match file: {worker_id}")
+                    if report_row[1] not in {"passed", "failed", "blocked"} or report_row[2] != "worker-execution-report":
+                        raise ValueError(f"context ledger worker report row must be passed/failed/blocked worker-execution-report: {worker_id}")
+                    if report_row[3] != worker_id:
+                        raise ValueError(f"context ledger worker report agent_id must match worker_id: {worker_id}")
                 summary_count += 1
     except sqlite3.DatabaseError as error:
         raise ValueError(f"context ledger sqlite validation failed: {ledger_path_text}: {error}") from error

@@ -1872,6 +1872,94 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn("sha256", workflow_ref)
         self.assertEqual(report["workflow_metrics"]["rollup"]["source_count"], 1)
 
+    def test_bundle_blocks_validator_expected_artifact_hash_drift(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-validated-drift-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        index_path = temp_dir / "validated" / "harness" / "judge-evidence-index.json"
+        write_json(index_path, {"report_kind": "judge-evidence-index", "judge_headline": {"opencode_runtime": {"enabled": False}}})
+        validated_sha = bundle.validator.sha256_file(index_path)
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {},
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "judge_evidence_index": {
+                                    "path": repo_relative(index_path),
+                                    "sha256": validated_sha,
+                                    "status": "present",
+                                }
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "judge_headline": {
+                    "opencode_runtime": {
+                        "enabled": True,
+                        "worker_count": 1,
+                        "all_contracts_executed": True,
+                    }
+                },
+                "opencode_agent_runtime": {
+                    "runtime": "opencode",
+                    "worker_count": 1,
+                    "all_contracts_executed": True,
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        artifact_ref = report["entrypoints"][0]["artifacts"]["judge_evidence_index"]
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(artifact_ref["status"], "sha256_mismatch")
+        self.assertEqual(artifact_ref["expected_sha256"], validated_sha)
+        self.assertIn("validated_artifact_sha256_mismatch:before_after_judge_demo:judge_evidence_index", report["blockers"])
+        self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 0)
+
     def test_bundle_blocks_source_translation_coverage_or_generated_semantic_claims(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

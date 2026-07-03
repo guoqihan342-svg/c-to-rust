@@ -51,6 +51,10 @@ def build_judge_milestone_bundle(
     readiness = run_report.get("summary", {}).get("readiness", {}) if isinstance(run_report.get("summary"), dict) else {}
     claim_boundary = milestone_claim_boundary(run_report)
     validated_artifacts = validation_artifacts_by_entrypoint(run_report.get("validation"))
+    validated_artifact_contract_errors = validated_artifact_ref_blockers(
+        validated_artifacts,
+        repo_root=repo_root,
+    )
     run_report_contract = run_report_contract_blockers(run_report, entrypoints=entrypoints)
     proof_class_contract = validation_proof_class_contract(run_report)
     proof_class_contract_errors = proof_class_contract_blockers(
@@ -125,6 +129,7 @@ def build_judge_milestone_bundle(
         evidence_cost_retention=evidence_cost_retention,
         opencode_runtime=opencode_runtime,
     )
+    blockers.extend(validated_artifact_contract_errors)
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
     publishability = build_publishability(status=status, readiness=readiness, proof_classes=proof_classes)
@@ -292,6 +297,23 @@ def validation_artifacts_by_entrypoint(validation: object) -> dict[str, dict[str
         if isinstance(expected, dict):
             result[entry["id"]] = expected
     return result
+
+
+def validated_artifact_ref_blockers(validated_artifacts: dict[str, dict[str, Any]], *, repo_root: Path) -> list[str]:
+    blockers: list[str] = []
+    for entrypoint_id, artifacts in sorted(validated_artifacts.items()):
+        for artifact_name, raw_ref in sorted(artifacts.items()):
+            ref = artifact_ref_from_existing(raw_ref, repo_root=repo_root)
+            if ref is None:
+                continue
+            status = ref.get("status")
+            if status == "sha256_mismatch":
+                blockers.append(f"validated_artifact_sha256_mismatch:{entrypoint_id}:{artifact_name}")
+            elif status == "status_mismatch":
+                blockers.append(f"validated_artifact_status_mismatch:{entrypoint_id}:{artifact_name}")
+            elif status == "missing_expected_sha256":
+                blockers.append(f"validated_artifact_missing_sha256:{entrypoint_id}:{artifact_name}")
+    return blockers
 
 
 def milestone_claim_boundary(run_report: dict[str, Any]) -> dict[str, Any]:
@@ -1537,17 +1559,38 @@ def artifact_refs_from_key_artifacts(value: object, *, repo_root: Path) -> dict[
 
 def artifact_ref_from_existing(value: object, *, repo_root: Path) -> dict[str, Any] | None:
     path_text: str | None = None
+    expected_sha256: str | None = None
+    expected_status: str | None = None
     if isinstance(value, str):
         path_text = value
     elif isinstance(value, dict) and isinstance(value.get("path"), str):
         path_text = value["path"]
+        if isinstance(value.get("sha256"), str):
+            expected_sha256 = value["sha256"]
+        if isinstance(value.get("status"), str):
+            expected_status = value["status"]
     if path_text is None:
         return None
     try:
         path = resolve_input_path(Path(path_text), repo_root=repo_root)
     except (OSError, ValueError):
         return {"path": path_text, "status": "invalid"}
-    return artifact_ref(path, repo_root=repo_root)
+    ref = artifact_ref(path, repo_root=repo_root)
+    if expected_status == "present" and ref.get("status") != "present":
+        ref["status"] = "status_mismatch"
+        ref["expected_status"] = expected_status
+        ref["current_status"] = "missing"
+        return ref
+    if expected_status == "present" and expected_sha256 is None:
+        ref["status"] = "missing_expected_sha256"
+        return ref
+    if expected_sha256 is not None and ref.get("sha256") != expected_sha256:
+        ref["status"] = "sha256_mismatch"
+        ref["expected_sha256"] = expected_sha256
+        if isinstance(ref.get("sha256"), str):
+            ref["current_sha256"] = ref["sha256"]
+        return ref
+    return ref
 
 
 def workflow_source_from_artifact(
