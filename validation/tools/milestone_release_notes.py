@@ -62,6 +62,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "",
         *packet_index_lines(publication),
         "",
+        "## Readiness Blockers",
+        "",
+        *blocker_lines(bundle.get("blockers")),
+        "",
         "## What This Milestone Demonstrates",
         "",
         "- One-command judge entrypoints for competition environment smoke, before/after exhibit, multi-worker evaluate, and OpenCode multi-worker evaluate.",
@@ -133,6 +137,17 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
 def require_bundle_contract(bundle: dict[str, Any]) -> None:
     require(bundle.get("schema_version") == 1, "schema_version must be 1")
     require(bundle.get("report_kind") == "judge-milestone-bundle", "report_kind must be judge-milestone-bundle")
+    status = bundle.get("status")
+    require(status in {"passed", "blocked"}, "status must be passed or blocked")
+    blockers = bundle.get("blockers")
+    require(
+        isinstance(blockers, list) and all(isinstance(blocker, str) for blocker in blockers),
+        "blockers must be a string list",
+    )
+    if status == "passed":
+        require(not blockers, "blockers must be empty when status is passed")
+    if status == "blocked":
+        require(bool(blockers), "blockers must be present when status is blocked")
     require_false_field(bundle, "claim_boundary", "semantic_gate")
     require_false_field(bundle, "claim_boundary", "generated_draft_semantic_pass")
     require_zero_field(bundle, "claim_boundary", "translation_coverage_numerator")
@@ -403,6 +418,13 @@ def packet_index_row(label: str, ref: dict[str, Any]) -> str:
     sha_or_boundary = short_sha_or_boundary(ref)
     status = text(ref.get("status"), "unknown")
     return f"| {label} | {path} | {sha_or_boundary} | {status} |"
+
+
+def blocker_lines(blockers: Any) -> list[str]:
+    values = [blocker for blocker in blockers if isinstance(blocker, str)] if isinstance(blockers, list) else []
+    if not values:
+        return ["- none"]
+    return [f"- `{blocker}`" for blocker in values]
 
 
 def short_sha_or_boundary(ref: dict[str, Any]) -> str:

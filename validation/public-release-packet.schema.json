@@ -34,6 +34,8 @@
         "entrypoint_count",
         "publication_scope",
         "readiness",
+        "blockers",
+        "published_artifact_ref_status",
         "proof_class_rollup",
         "workflow_metrics",
         "progress_delta_ledger"
@@ -42,6 +44,29 @@
         "entrypoint_count": {"type": "integer", "minimum": 0},
         "publication_scope": {"type": "string"},
         "readiness": {"type": "object", "additionalProperties": true},
+        "blockers": {"type": "array", "items": {"type": "string"}},
+        "published_artifact_ref_status": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "total_count",
+            "status_counts",
+            "abnormal_ref_count",
+            "abnormal_refs",
+            "semantic_gate",
+            "translation_coverage_numerator",
+            "boundary"
+          ],
+          "properties": {
+            "total_count": {"type": "integer", "minimum": 0},
+            "status_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+            "abnormal_ref_count": {"type": "integer", "minimum": 0},
+            "abnormal_refs": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+            "semantic_gate": {"const": false},
+            "translation_coverage_numerator": {"const": 0},
+            "boundary": {"type": "string", "minLength": 1}
+          }
+        },
         "proof_class_rollup": {"type": "object", "additionalProperties": true},
         "workflow_metrics": {
           "type": "object",

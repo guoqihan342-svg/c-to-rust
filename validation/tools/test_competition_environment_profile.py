@@ -1458,6 +1458,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("worker-execution-report", skill)
         self.assertIn("validated_artifact_sha256_mismatch", skill)
         self.assertIn("validator-bound", skill)
+        self.assertIn("summary.blockers", skill)
+        self.assertIn("published_artifact_ref_status", skill)
+        self.assertIn("passed bundle cannot publish bad artifact ref status", skill)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())

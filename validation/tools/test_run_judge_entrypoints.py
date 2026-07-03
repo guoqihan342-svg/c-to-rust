@@ -314,6 +314,7 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(public_packet["claim_boundary"]["translation_coverage_numerator"], 0)
         self.assertEqual(public_packet["competition_config_archive"]["status"], "present")
         self.assertEqual(public_packet["summary"]["entrypoint_count"], 2)
+        self.assertEqual(public_packet["summary"]["blockers"], milestone_bundle["blockers"])
         self.assertEqual(public_packet["summary"]["workflow_metrics"]["repair_activity"], milestone_bundle["workflow_metrics"]["rollup"]["repair_activity"])
         self.assertFalse(public_packet["summary"]["workflow_metrics"]["semantic_gate"])
         self.assertEqual(public_packet["summary"]["workflow_metrics"]["translation_coverage_numerator"], 0)
@@ -330,6 +331,26 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertFalse(public_packet["before_after_repair_exhibit"]["semantic_gate"])
         self.assertEqual(public_packet["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
         published_refs = public_packet["publication_manifest"]["published_artifact_refs"]
+        ref_status = public_packet["summary"]["published_artifact_ref_status"]
+        self.assertEqual(ref_status["total_count"], len(published_refs))
+        expected_status_counts = {}
+        expected_abnormal_refs = []
+        for ref in published_refs:
+            status = ref.get("status", "unknown")
+            expected_status_counts[status] = expected_status_counts.get(status, 0) + 1
+            if status != "present":
+                expected_abnormal_refs.append(
+                    {
+                        "artifact_name": str(ref.get("artifact_name", "unknown")),
+                        "path": str(ref.get("path", "unknown")),
+                        "status": str(status),
+                    }
+                )
+        self.assertEqual(ref_status["abnormal_ref_count"], len(expected_abnormal_refs))
+        self.assertEqual(ref_status["abnormal_refs"], expected_abnormal_refs)
+        self.assertEqual(ref_status["status_counts"], dict(sorted(expected_status_counts.items())))
+        self.assertFalse(ref_status["semantic_gate"])
+        self.assertEqual(ref_status["translation_coverage_numerator"], 0)
         self.assertIn(
             "opencode_safety_transform_attempt",
             {ref["artifact_name"] for ref in published_refs},

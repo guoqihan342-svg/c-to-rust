@@ -345,6 +345,8 @@ def write_public_release_packet(
             "entrypoint_count": report.get("entrypoint_count", 0),
             "publication_scope": publication.get("publication_scope", "unknown"),
             "readiness": summary.get("readiness", {}),
+            "blockers": bundle.get("blockers", []),
+            "published_artifact_ref_status": public_packet_published_artifact_ref_status(publication),
             "proof_class_rollup": bundle.get("proof_class_rollup", bundle.get("proof_classes", {})),
             "workflow_metrics": public_packet_workflow_metrics_summary(bundle),
             "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
@@ -541,6 +543,36 @@ def public_packet_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, 
             "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
             "They are not a semantic gate and do not increase translation coverage."
         ),
+    }
+
+
+def public_packet_published_artifact_ref_status(publication: dict[str, Any]) -> dict[str, Any]:
+    refs = publication.get("published_artifact_refs", [])
+    status_counts: dict[str, int] = {}
+    abnormal_refs: list[dict[str, str]] = []
+    total_count = 0
+    for ref in refs if isinstance(refs, list) else []:
+        if not isinstance(ref, dict):
+            continue
+        total_count += 1
+        status = str(ref.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+        if status != "present":
+            abnormal_refs.append(
+                {
+                    "artifact_name": str(ref.get("artifact_name", "unknown")),
+                    "path": str(ref.get("path", "unknown")),
+                    "status": status,
+                }
+            )
+    return {
+        "total_count": total_count,
+        "status_counts": dict(sorted(status_counts.items())),
+        "abnormal_ref_count": len(abnormal_refs),
+        "abnormal_refs": abnormal_refs,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "Published artifact ref status is a review summary only, not semantic acceptance.",
     }
 
 

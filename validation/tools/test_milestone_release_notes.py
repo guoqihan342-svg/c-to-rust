@@ -14,6 +14,8 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
 
         self.assertIn("# FlashDB Harness MVP Release Notes", notes)
         self.assertIn("Status: `passed`", notes)
+        self.assertIn("## Readiness Blockers", notes)
+        self.assertIn("- none", notes)
         self.assertIn("Repository commit: `1234567890abcdef1234567890abcdef12345678`", notes)
         self.assertIn("Proof class rollup: `local-simulation`", notes)
         self.assertIn("Translation coverage numerator: `0`", notes)
@@ -59,6 +61,27 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("python -B -m validation.tools.run_judge_entrypoints", notes)
         self.assertIn("accepted_evidence_is_not_translator_generated_coverage", notes)
         self.assertIn("whole-project FlashDB migration", notes)
+
+    def test_release_notes_render_blockers_for_blocked_bundle(self) -> None:
+        payload = self._bundle()
+        blocker = "validated_artifact_sha256_mismatch:before_after_judge_demo:judge_evidence_index"
+        payload["status"] = "blocked"
+        payload["blockers"] = [blocker]
+
+        notes = milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("Status: `blocked`", notes)
+        self.assertIn("## Readiness Blockers", notes)
+        self.assertIn(f"- `{blocker}`", notes)
+
+    def test_release_notes_reject_passed_bundle_with_blockers(self) -> None:
+        payload = self._bundle()
+        payload["blockers"] = ["validated_artifact_sha256_mismatch:before_after_judge_demo:judge_evidence_index"]
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("blockers must be empty when status is passed", str(raised.exception))
 
     def test_release_notes_reject_expanded_semantic_claims(self) -> None:
         cases = [
@@ -201,6 +224,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "schema_version": 1,
             "report_kind": "judge-milestone-bundle",
             "status": "passed",
+            "blockers": [],
             "summary": {
                 "headline": "FlashDB harness MVP local-simulation milestone",
             },

@@ -421,6 +421,53 @@ def opencode_safety_transform_attempt_refs(publication: dict[str, Any]) -> list[
     ]
 
 
+def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], publication: dict[str, Any]) -> None:
+    if bundle.get("status") != "passed":
+        return
+    refs = publication.get("published_artifact_refs", [])
+    if not isinstance(refs, list):
+        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    bad_statuses = {"sha256_mismatch", "status_mismatch", "missing_expected_sha256"}
+    for ref in refs:
+        ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
+        status = ref_obj.get("status")
+        if status in bad_statuses:
+            artifact_name = ref_obj.get("artifact_name", "unknown")
+            raise ValueError(
+                f"passed bundle cannot publish bad artifact ref status: {artifact_name}:{status}"
+            )
+
+
+def expected_published_artifact_ref_status(publication: dict[str, Any]) -> dict[str, Any]:
+    refs = publication.get("published_artifact_refs", [])
+    status_counts: dict[str, int] = {}
+    abnormal_refs: list[dict[str, str]] = []
+    total_count = 0
+    for ref in refs if isinstance(refs, list) else []:
+        if not isinstance(ref, dict):
+            continue
+        total_count += 1
+        status = str(ref.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+        if status != "present":
+            abnormal_refs.append(
+                {
+                    "artifact_name": str(ref.get("artifact_name", "unknown")),
+                    "path": str(ref.get("path", "unknown")),
+                    "status": status,
+                }
+            )
+    return {
+        "total_count": total_count,
+        "status_counts": dict(sorted(status_counts.items())),
+        "abnormal_ref_count": len(abnormal_refs),
+        "abnormal_refs": abnormal_refs,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "Published artifact ref status is a review summary only, not semantic acceptance.",
+    }
+
+
 def opencode_attempt_retry_statuses(payload: dict[str, Any]) -> list[str]:
     hints: list[dict[str, Any]] = []
     top_level = payload.get("accepted_retry_hint")
@@ -668,6 +715,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     bundle = judge_validator.load_json(bundle_path)
     require_bound_bundle_identity_contract(packet, bundle)
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    require_passed_bundle_published_refs_are_healthy(bundle, publication)
     for field in ("judge_entrypoints_run_report", "readiness_report"):
         if packet.get(field) != bundle.get(field):
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
@@ -686,6 +734,13 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
 
     summary = require_object(packet.get("summary"), "summary")
+    if summary.get("blockers") != bundle.get("blockers", []):
+        raise ValueError("summary.blockers must match judge_milestone_bundle.blockers")
+    if summary.get("published_artifact_ref_status") != expected_published_artifact_ref_status(publication):
+        raise ValueError(
+            "summary.published_artifact_ref_status must match "
+            "judge_milestone_bundle.publication_manifest.published_artifact_refs"
+        )
     if summary.get("workflow_metrics") != expected_workflow_metrics_summary(bundle):
         raise ValueError(
             "summary.workflow_metrics must match judge_milestone_bundle.workflow_metrics.rollup.repair_activity"
@@ -723,9 +778,17 @@ def require_bound_bundle_identity_contract(packet: dict[str, Any], bundle: dict[
         raise ValueError("judge_milestone_bundle.schema_version must be 1")
     if bundle.get("report_kind") != "judge-milestone-bundle":
         raise ValueError("judge_milestone_bundle.report_kind must be judge-milestone-bundle")
-    if bundle.get("status") not in {"passed", "blocked"}:
+    status = bundle.get("status")
+    if status not in {"passed", "blocked"}:
         raise ValueError("judge_milestone_bundle.status must be passed or blocked")
-    if packet.get("status") != bundle.get("status"):
+    blockers = bundle.get("blockers")
+    if not isinstance(blockers, list) or not all(isinstance(blocker, str) for blocker in blockers):
+        raise ValueError("judge_milestone_bundle.blockers must be a string list")
+    if status == "passed" and blockers:
+        raise ValueError("judge_milestone_bundle.blockers must be empty when status is passed")
+    if status == "blocked" and not blockers:
+        raise ValueError("judge_milestone_bundle.blockers must be present when status is blocked")
+    if packet.get("status") != status:
         raise ValueError("public_release_packet.status must match judge_milestone_bundle.status")
 
 
