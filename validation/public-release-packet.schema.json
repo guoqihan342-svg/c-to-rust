@@ -581,6 +581,8 @@
         "chat_output_is_evidence",
         "semantic_gate",
         "translation_coverage_numerator",
+        "opencode_agent",
+        "opencode_variant",
         "opencode_run_argv_bound",
         "boundary"
       ],
@@ -590,7 +592,9 @@
         "preflight_report": {"$ref": "#/$defs/artifactRef"},
         "run_id": {"type": "string"},
         "opencode_command": {"type": "string"},
+        "opencode_agent": {"const": "c2rust-migrator"},
         "opencode_model": {"type": "string"},
+        "opencode_variant": {"const": "max"},
         "required_model": {"type": "string"},
         "model_availability_status": {"type": "string"},
         "model_listed": {"type": "boolean"},

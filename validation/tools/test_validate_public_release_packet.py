@@ -327,7 +327,9 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         },
         "run_id": run_id,
         "opencode_command": "opencode",
+        "opencode_agent": "c2rust-migrator",
         "opencode_model": "GLM-5.1",
+        "opencode_variant": "max",
         "required_model": "GLM-5.1",
         "model_availability_status": "available",
         "model_listed": True,
@@ -1361,6 +1363,11 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(tag_readiness["properties"]["report_kind"]["const"], "release-tag-readiness")
         self.assertEqual(tag_readiness["properties"]["semantic_gate"]["const"], False)
         self.assertEqual(tag_readiness["properties"]["translation_coverage_numerator"]["const"], 0)
+        preflight_summary = schema["$defs"]["opencodePreflightProofSummary"]
+        self.assertIn("opencode_agent", preflight_summary["required"])
+        self.assertIn("opencode_variant", preflight_summary["required"])
+        self.assertEqual(preflight_summary["properties"]["opencode_agent"]["const"], "c2rust-migrator")
+        self.assertEqual(preflight_summary["properties"]["opencode_variant"]["const"], "max")
 
     def test_validate_packet_rejects_harness_contract_matrix_missing_report_stage(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-harness-matrix-", dir=REPO_ROOT / "target"))
@@ -1437,6 +1444,38 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("required_model must be GLM-5.1" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_rejects_wrong_opencode_agent_in_preflight_proof(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-agent-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["opencode_agent"] = "general"
+        sync_packet_bound_bundle(packet, rebuild_release_notes=False)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("opencode_agent" in error and "c2rust-migrator" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_wrong_opencode_variant_in_preflight_proof(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-variant-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["opencode_variant"] = "small"
+        sync_packet_bound_bundle(packet, rebuild_release_notes=False)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("opencode_variant" in error and "max" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_validate_packet_allows_competition_exact_preflight_when_host_ready(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-exact-ready-", dir=REPO_ROOT / "target"))

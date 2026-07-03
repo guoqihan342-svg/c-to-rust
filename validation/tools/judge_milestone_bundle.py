@@ -2248,7 +2248,9 @@ def opencode_preflight_proof_summary_from_index(
         {
             "run_id": preflight_payload.get("run_id"),
             "opencode_command": availability.get("opencode_command"),
+            "opencode_agent": launch_policy.get("opencode_agent"),
             "opencode_model": launch_policy.get("opencode_model"),
+            "opencode_variant": launch_policy.get("opencode_variant"),
             "required_model": availability.get("required_model"),
             "model_availability_status": availability.get("status"),
             "model_listed": availability.get("model_listed"),
@@ -2325,7 +2327,11 @@ def opencode_preflight_summary_passed(
 ) -> bool:
     if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
         return False
+    if summary.get("opencode_agent") != validator.COMPETITION_OPENCODE_AGENT:
+        return False
     if summary.get("opencode_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("opencode_variant") != validator.COMPETITION_OPENCODE_VARIANT:
         return False
     if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
         return False

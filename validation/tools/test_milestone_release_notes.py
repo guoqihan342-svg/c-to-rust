@@ -43,6 +43,8 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("## OpenCode GLM Preflight", notes)
         self.assertIn("| Required model | GLM-5.1 |", notes)
         self.assertIn("| OpenCode command | opencode |", notes)
+        self.assertIn("| OpenCode agent | c2rust-migrator |", notes)
+        self.assertIn("| OpenCode variant | max |", notes)
         self.assertIn("| Model listed by `opencode models` | true |", notes)
         self.assertIn("| Preflight contract | executed |", notes)
         self.assertIn("| OpenCode run launched | true |", notes)
@@ -341,10 +343,24 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 ),
             ),
             (
+                "opencode_runtime.preflight_proof_summary.opencode_agent",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
+                    "opencode_agent",
+                    "general",
+                ),
+            ),
+            (
                 "opencode_runtime.preflight_proof_summary.opencode_model",
                 lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
                     "opencode_model",
                     "gpt-5.1",
+                ),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.opencode_variant",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
+                    "opencode_variant",
+                    "small",
                 ),
             ),
             (
@@ -802,7 +818,9 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     },
                     "run_id": "flashdb-opencode-explicit-workers",
                     "opencode_command": "opencode",
+                    "opencode_agent": "c2rust-migrator",
                     "opencode_model": "GLM-5.1",
+                    "opencode_variant": "max",
                     "required_model": "GLM-5.1",
                     "model_availability_status": "available",
                     "model_listed": True,

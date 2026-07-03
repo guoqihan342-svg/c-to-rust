@@ -515,6 +515,8 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         )
 
         self.assertEqual(summary["status"], "passed")
+        self.assertEqual(summary["opencode_agent"], "c2rust-migrator")
+        self.assertEqual(summary["opencode_variant"], "max")
         self.assertEqual(summary["opencode_runtime_env"], preflight_payload["opencode_runtime_env"])
         self.assertEqual(summary["opencode_runtime_env_sha256"], preflight_payload["opencode_runtime_env"]["env_sha256"])
 

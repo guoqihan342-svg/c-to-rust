@@ -753,8 +753,12 @@ def require_opencode_preflight_proof_summary_contract(
     require_zero(proof.get("translation_coverage_numerator"), f"{label}.translation_coverage_numerator")
     if proof.get("opencode_command") != judge_validator.COMPETITION_OPENCODE_COMMAND:
         raise ValueError(f"{label}.opencode_command must be {judge_validator.COMPETITION_OPENCODE_COMMAND}")
+    if proof.get("opencode_agent") != judge_validator.COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{label}.opencode_agent must be {judge_validator.COMPETITION_OPENCODE_AGENT}")
     if proof.get("opencode_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{label}.opencode_model must be {judge_validator.COMPETITION_OPENCODE_MODEL}")
+    if proof.get("opencode_variant") != judge_validator.COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{label}.opencode_variant must be {judge_validator.COMPETITION_OPENCODE_VARIANT}")
     if proof.get("required_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{label}.required_model must be {judge_validator.COMPETITION_OPENCODE_MODEL}")
     if proof.get("model_availability_status") != "available":
@@ -799,8 +803,12 @@ def require_opencode_preflight_proof_summary_contract(
     if preflight_payload.get("opencode_run_launched") is not True:
         raise ValueError(f"{label}.preflight_report file opencode_run_launched must be true")
     launch_policy = require_object(preflight_payload.get("launch_policy"), f"{label}.preflight_report.launch_policy")
+    if launch_policy.get("opencode_agent") != proof.get("opencode_agent"):
+        raise ValueError(f"{label}.opencode_agent must match preflight_report.launch_policy.opencode_agent")
     if launch_policy.get("opencode_model") != proof.get("opencode_model"):
         raise ValueError(f"{label}.opencode_model must match preflight_report.launch_policy.opencode_model")
+    if launch_policy.get("opencode_variant") != proof.get("opencode_variant"):
+        raise ValueError(f"{label}.opencode_variant must match preflight_report.launch_policy.opencode_variant")
     preflight_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
         preflight_payload.get("opencode_runtime_env"),
         f"{label}.preflight_report",

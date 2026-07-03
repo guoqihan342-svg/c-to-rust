@@ -22,7 +22,9 @@ BASELINE_LABELS = {
 }
 
 COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_VARIANT = "max"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -469,8 +471,16 @@ def require_opencode_preflight_proof_summary_contract(
         f"{label}.opencode_command must be {COMPETITION_OPENCODE_COMMAND}",
     )
     require(
+        summary.get("opencode_agent") == COMPETITION_OPENCODE_AGENT,
+        f"{label}.opencode_agent must be {COMPETITION_OPENCODE_AGENT}",
+    )
+    require(
         summary.get("opencode_model") == COMPETITION_OPENCODE_MODEL,
         f"{label}.opencode_model must be {COMPETITION_OPENCODE_MODEL}",
+    )
+    require(
+        summary.get("opencode_variant") == COMPETITION_OPENCODE_VARIANT,
+        f"{label}.opencode_variant must be {COMPETITION_OPENCODE_VARIANT}",
     )
     require(
         summary.get("required_model") == COMPETITION_OPENCODE_MODEL,
@@ -662,6 +672,8 @@ def opencode_preflight_lines(summary: dict[str, Any]) -> list[str]:
         "| --- | --- |",
         f"| Status | {text(summary.get('status'), 'unknown')} |",
         f"| OpenCode command | {text(summary.get('opencode_command'), 'unknown')} |",
+        f"| OpenCode agent | {text(summary.get('opencode_agent'), 'unknown')} |",
+        f"| OpenCode variant | {text(summary.get('opencode_variant'), 'unknown')} |",
         f"| Required model | {text(summary.get('required_model'), 'unknown')} |",
         f"| Runtime model | {text(summary.get('opencode_model'), 'unknown')} |",
         f"| Model availability | {text(summary.get('model_availability_status'), 'unknown')} |",
