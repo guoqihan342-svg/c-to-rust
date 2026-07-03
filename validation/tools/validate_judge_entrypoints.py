@@ -1298,6 +1298,43 @@ def validate_competition_exact_smoke_summary(payload: dict[str, Any]) -> None:
         if isinstance(deviation, dict) and deviation.get("severity") == "proof-class-limiting":
             fail("environment_deviations must not include proof-class-limiting entries")
 
+    availability_value = payload.get("opencode_model_availability")
+    if not isinstance(availability_value, dict):
+        fail("requires OpenCode GLM-5.1 model availability")
+    availability = require_object(
+        availability_value,
+        "competition_smoke_summary.opencode_model_availability",
+    )
+    if availability.get("status") != "available":
+        fail("requires OpenCode GLM-5.1 model availability")
+    if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        fail(f"opencode_model_availability.required_model must be {COMPETITION_OPENCODE_MODEL}")
+    if availability.get("model_listed") is not True:
+        fail("opencode_model_availability.model_listed must be true")
+    if availability.get("opencode_command") != COMPETITION_OPENCODE_COMMAND:
+        fail(f"opencode_model_availability.opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    if int(availability.get("process_returncode", -1)) != 0:
+        fail("opencode_model_availability.process_returncode must be 0")
+    if not opencode_models_argv_matches(
+        availability.get("argv"),
+        expected_command=COMPETITION_OPENCODE_COMMAND,
+    ):
+        fail("opencode_model_availability.argv must be opencode models")
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        raise ValueError("competition_smoke_summary steps must be a non-empty list")
+    probe_step = None
+    for step_value in steps:
+        if isinstance(step_value, dict) and step_value.get("step") == "opencode-glm-model-probe":
+            probe_step = step_value
+            break
+    if probe_step is None:
+        fail("opencode-glm-model-probe step must be present")
+    if probe_step.get("status") != "passed":
+        fail("opencode-glm-model-probe step.status must be passed")
+    if probe_step.get("returncode") != 0:
+        fail("opencode-glm-model-probe step.returncode must be 0")
+
 
 def assert_expected_smoke_path(
     container: Any,

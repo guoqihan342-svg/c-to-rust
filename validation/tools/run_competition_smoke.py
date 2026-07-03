@@ -81,6 +81,8 @@ LOCAL_HOST_PATH_IN_COMMAND = re.compile(
 CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 PROOF_CLASSES = ["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"]
 DEFAULT_STEP_TIMEOUT_SECONDS = 600
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 REQUIRED_TOOL_MISSING_PATTERNS = (
     "gcc is not installed",
     "g++ is not installed",
@@ -168,6 +170,7 @@ def run_competition_smoke(
         slice_id=slice_id,
         slice_spec=slice_spec,
     )
+    opencode_model_availability: dict[str, Any] | None = None
     for step, command in commands:
         result = run_logged_step(
             step,
@@ -180,6 +183,11 @@ def run_competition_smoke(
         )
         timed_out = bool(getattr(result, "timed_out", False))
         failure_class = getattr(result, "failure_class", None)
+        if step == "opencode-glm-model-probe":
+            opencode_model_availability = opencode_model_availability_from_probe_result(result)
+            if opencode_model_availability["status"] != "available":
+                failure_class = "opencode_model_unavailable"
+                setattr(result, "failure_class", failure_class)
         step_status_value = smoke_step_status(
             step,
             result.returncode,
@@ -254,15 +262,7 @@ def run_competition_smoke(
         "smoke_entrypoint": {
             "name": "competition-linux-wsl-ci-smoke",
             "script": "validation/tools/run_competition_smoke.py",
-            "scope": [
-                "environment-check",
-                "vendored-clang-verification",
-                "core-auto-evidence-validator",
-                "evidence-governance",
-                "translator-coverage-matrix",
-                "milestone-release-report",
-                "lightweight-unittest",
-            ],
+            "scope": [step for step, _command in commands],
             "semantic_acceptance_boundary": "does_not_translate_new_slices",
         },
         "claim_boundary": {
@@ -325,6 +325,8 @@ def run_competition_smoke(
             **({"reasons": final_gate_reasons} if final_gate_reasons else {}),
         },
     }
+    if opencode_model_availability is not None:
+        summary["opencode_model_availability"] = opencode_model_availability
     summary_path_value = summary_dir / "competition-smoke-summary.json"
     summary_path_value.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return CompetitionSmokeResult(
@@ -355,68 +357,82 @@ def smoke_commands(
     if proof_class == "competition-exact":
         vendored_clang_command.append("--require-clang")
 
-    return [
+    environment_check_script = "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"
+    if proof_class == "competition-exact":
+        environment_check_script = (
+            "source config/competition-env/env.sh; "
+            "REQUIRE_OPENCODE_GLM=1 bash config/competition-env/toolchain-check.sh"
+        )
+
+    commands = [
         (
             "environment-check",
-            ["bash", "-lc", "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"],
-        ),
-        ("vendored-clang-verification", vendored_clang_command),
-        (
-            "core-auto-evidence-validator",
-            [
-                sys.executable,
-                rel_path(AUTO_EVIDENCE_VALIDATOR, repo_root),
-                "--target-id",
-                target_id,
-                "--slice-id",
-                slice_id,
-                "--slice-spec",
-                slice_spec_arg,
-                "--require-semantic-pass",
-            ],
-        ),
-        (
-            "evidence-governance",
-            [
-                sys.executable,
-                rel_path(EVIDENCE_GOVERNANCE, repo_root),
-                "--policy-tier",
-                "ci",
-                "--output",
-                rel_path(out_root / "reports" / "evidence-governance.json", repo_root),
-            ],
-        ),
-        (
-            "translator-coverage-matrix",
-            [
-                sys.executable,
-                rel_path(TRANSLATOR_COVERAGE_MATRIX, repo_root),
-                "--output",
-                rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
-            ],
-        ),
-        (
-            "milestone-release-report",
-            [
-                sys.executable,
-                rel_path(MILESTONE_RELEASE_REPORT, repo_root),
-                "--coverage-report",
-                rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
-                "--output",
-                rel_path(out_root / "reports" / "milestone-release-report.json", repo_root),
-            ],
-        ),
-        (
-            "lightweight-unittest",
-            [
-                sys.executable,
-                "-m",
-                "unittest",
-                "validation.tools.test_competition_environment_profile",
-                "validation.tools.test_validate_competition_run_summary",
-            ],
+            ["bash", "-lc", environment_check_script],
         ),
     ]
+    if proof_class == "competition-exact":
+        commands.append(("opencode-glm-model-probe", [COMPETITION_OPENCODE_COMMAND, "models"]))
+    commands.extend(
+        [
+            ("vendored-clang-verification", vendored_clang_command),
+            (
+                "core-auto-evidence-validator",
+                [
+                    sys.executable,
+                    rel_path(AUTO_EVIDENCE_VALIDATOR, repo_root),
+                    "--target-id",
+                    target_id,
+                    "--slice-id",
+                    slice_id,
+                    "--slice-spec",
+                    slice_spec_arg,
+                    "--require-semantic-pass",
+                ],
+            ),
+            (
+                "evidence-governance",
+                [
+                    sys.executable,
+                    rel_path(EVIDENCE_GOVERNANCE, repo_root),
+                    "--policy-tier",
+                    "ci",
+                    "--output",
+                    rel_path(out_root / "reports" / "evidence-governance.json", repo_root),
+                ],
+            ),
+            (
+                "translator-coverage-matrix",
+                [
+                    sys.executable,
+                    rel_path(TRANSLATOR_COVERAGE_MATRIX, repo_root),
+                    "--output",
+                    rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
+                ],
+            ),
+            (
+                "milestone-release-report",
+                [
+                    sys.executable,
+                    rel_path(MILESTONE_RELEASE_REPORT, repo_root),
+                    "--coverage-report",
+                    rel_path(out_root / "reports" / "translator-coverage-matrix.json", repo_root),
+                    "--output",
+                    rel_path(out_root / "reports" / "milestone-release-report.json", repo_root),
+                ],
+            ),
+            (
+                "lightweight-unittest",
+                [
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "validation.tools.test_competition_environment_profile",
+                    "validation.tools.test_validate_competition_run_summary",
+                ],
+            ),
+        ]
+    )
+    return commands
 
 
 def smoke_step_status(
@@ -430,8 +446,10 @@ def smoke_step_status(
     if timed_out:
         return "failed"
     if returncode == 0:
+        if failure_class == "opencode_model_unavailable":
+            return "failed"
         return "passed"
-    if failure_class == "required_c_compiler_missing":
+    if failure_class in {"required_c_compiler_missing", "opencode_model_unavailable"}:
         return "failed"
     if step == "environment-check" and proof_class != "competition-exact":
         return "degraded"
@@ -493,6 +511,31 @@ def smoke_step_failure_class(step: str, result: subprocess.CompletedProcess[str]
     if any(pattern in output for pattern in REQUIRED_TOOL_MISSING_PATTERNS):
         return "required_c_compiler_missing"
     return None
+
+
+def opencode_model_listed(models_output: str, required_model: str) -> bool:
+    for token in re.split(r"\s+", models_output):
+        if token == required_model or token.rsplit("/", 1)[-1] == required_model:
+            return True
+    return False
+
+
+def opencode_model_availability_from_probe_result(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+    model_listed = result.returncode == 0 and opencode_model_listed(str(result.stdout or ""), COMPETITION_OPENCODE_MODEL)
+    if result.returncode != 0:
+        status = "probe_failed"
+    elif model_listed:
+        status = "available"
+    else:
+        status = "unavailable"
+    return {
+        "status": status,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "model_listed": model_listed,
+        "opencode_command": COMPETITION_OPENCODE_COMMAND,
+        "argv": [COMPETITION_OPENCODE_COMMAND, "models"],
+        "process_returncode": result.returncode,
+    }
 
 
 def timeout_output_text(value: str | bytes | None) -> str:

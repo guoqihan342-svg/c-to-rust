@@ -2300,6 +2300,52 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 entrypoint_proof_class="competition-exact",
             )
 
+    def test_competition_exact_smoke_summary_requires_opencode_glm_probe(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "competition-exact"
+        payload["execution_environment"]["competition_exact_host_attested"] = True
+        for step in payload["steps"]:
+            step["status"] = "passed"
+            step["returncode"] = 0
+            step.pop("proof_class_effect", None)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class=competition-exact requires exact host evidence",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="competition-exact",
+            )
+
+    def test_competition_exact_smoke_summary_requires_opencode_glm_probe_step(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["proof_class"] = "competition-exact"
+        payload["execution_environment"]["competition_exact_host_attested"] = True
+        payload["opencode_model_availability"] = {
+            "status": "available",
+            "required_model": "GLM-5.1",
+            "model_listed": True,
+            "opencode_command": "opencode",
+            "argv": ["opencode", "models"],
+            "process_returncode": 0,
+        }
+        for step in payload["steps"]:
+            step["status"] = "passed"
+            step["returncode"] = 0
+            step.pop("proof_class_effect", None)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary proof_class=competition-exact requires exact host evidence",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                entrypoint_proof_class="competition-exact",
+            )
+
     def test_ci_approximation_smoke_summary_rejects_non_ci_environment(self) -> None:
         payload = valid_competition_smoke_summary_payload()
         payload["proof_class"] = "ci-approximation"
