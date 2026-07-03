@@ -1345,6 +1345,19 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("#include <stdint.h>", toolchain_check)
         self.assertIn("#include <stddef.h>", toolchain_check)
 
+    def test_toolchain_check_matches_opencode_model_only_from_stdout(self) -> None:
+        toolchain_check = (PROFILE_DIR / "toolchain-check.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("opencode models 2>&1", toolchain_check)
+        self.assertIn('opencode models >"$models_stdout_path" 2>"$models_stderr_path"', toolchain_check)
+        self.assertIn('models_output="$(cat "$models_stdout_path")"', toolchain_check)
+        self.assertIn('models_error="$(cat "$models_stderr_path")"', toolchain_check)
+        self.assertNotIn("grep -Eq", toolchain_check)
+        self.assertIn('python3 - "$required_model" "$models_stdout_path"', toolchain_check)
+        self.assertIn("candidate = token.strip().strip", toolchain_check)
+        self.assertIn('candidate.rsplit("/", 1)[-1].casefold()', toolchain_check)
+        self.assertIn("required_model_not_listed", toolchain_check)
+
     def test_competition_smoke_shell_entrypoint_uses_profile_env_and_smoke_runner(self) -> None:
         smoke_script = (PROFILE_DIR / "smoke.sh").read_text(encoding="utf-8")
 
@@ -1440,6 +1453,11 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("opencode_model_availability", skill)
         self.assertIn("opencode_model_unavailable", skill)
         self.assertIn("local-simulation OpenCode pass does not close P0-H9", skill)
+        self.assertIn("run-worker-report.json", skill)
+        self.assertIn("worker_report", skill)
+        self.assertIn("worker-execution-report", skill)
+        self.assertIn("validated_artifact_sha256_mismatch", skill)
+        self.assertIn("validator-bound", skill)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())

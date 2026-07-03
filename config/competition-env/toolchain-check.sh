@@ -119,18 +119,45 @@ check_opencode_model_availability() {
     return
   fi
 
-  models_output="$(opencode models 2>&1)"
+  models_stdout_path="$(mktemp "${TMPDIR:-/tmp}/opencode-models-stdout.XXXXXX.log")"
+  models_stderr_path="$(mktemp "${TMPDIR:-/tmp}/opencode-models-stderr.XXXXXX.log")"
+  opencode models >"$models_stdout_path" 2>"$models_stderr_path"
   models_status_code="$?"
+  models_output="$(cat "$models_stdout_path")"
+  models_error="$(cat "$models_stderr_path")"
   if [ "$models_status_code" -ne 0 ]; then
+    rm -f "$models_stdout_path" "$models_stderr_path"
     if [ "$require_glm" = "1" ]; then
-      record_failure "opencode models failed; required for GLM-5.1 competition agent evidence: ${models_output}"
+      record_failure "opencode models failed; required for GLM-5.1 competition agent evidence: ${models_error}"
     else
       printf 'opencode status: model probe failed (required only for OpenCode GLM-5.1 competition agent evidence)\n'
     fi
     return
   fi
 
-  if printf '%s\n' "$models_output" | grep -Eq '(^|[^A-Za-z0-9_.-])([^[:space:]/]+/)*GLM-5\.1([^A-Za-z0-9_.-]|$)'; then
+  model_listed=0
+  if python3 - "$required_model" "$models_stdout_path" <<'PY'
+import sys
+
+required = sys.argv[1].casefold()
+path = sys.argv[2]
+
+with open(path, encoding="utf-8", errors="replace") as handle:
+    for line in handle:
+        for token in line.split():
+            candidate = token.strip().strip("`'\"*,")
+            if candidate.casefold() == required:
+                raise SystemExit(0)
+            if candidate.rsplit("/", 1)[-1].casefold() == required:
+                raise SystemExit(0)
+raise SystemExit(1)
+PY
+  then
+    model_listed=1
+  fi
+  rm -f "$models_stdout_path" "$models_stderr_path"
+
+  if [ "$model_listed" -eq 1 ]; then
     printf 'OK: opencode models lists %s\n' "$required_model"
   elif [ "$require_glm" = "1" ]; then
     record_failure "opencode models did not list ${required_model}; root_cause_key=opencode_model_unavailable reason=required_model_not_listed"

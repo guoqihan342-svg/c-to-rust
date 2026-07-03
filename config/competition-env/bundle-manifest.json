@@ -34,7 +34,7 @@
     {
       "path": ".codex/skills/c2rust-migration/SKILL.md",
       "role": "repo-owned-agent-skill",
-      "sha256": "deee8c42e10f08e36b4a841680eca9e9901d29dba6f2759d00707b18126124b0"
+      "sha256": "fa28edbd5eff6e2fc6279eec0f1bd10c7a2b0bb7309a6ee2c997e43b5940a58f"
     },
     {
       "path": ".opencode/agents/c2rust-migrator.md",
@@ -56,7 +56,7 @@
     {
       "path": "config/competition-env/toolchain-check.sh",
       "role": "toolchain-smoke",
-      "sha256": "09b8a73258094247acffdfc3dd9dc642bfd336020cf3fd600faedea94dad73b7"
+      "sha256": "b4485394dda86585c317cf4828ae85fbd67b2ead8aad8111baf15cc9cdec9623"
     },
     {
       "path": "config/competition-env/smoke.sh",
