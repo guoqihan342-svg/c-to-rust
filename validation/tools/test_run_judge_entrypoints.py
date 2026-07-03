@@ -683,6 +683,53 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["summary"]["competition_config_archive"]["file_count"], archive["file_count"])
         self.assertTrue(out_path.is_file())
 
+    def test_dry_run_does_not_reference_stale_logs(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-dry-stale-logs-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        log_dir = out_path.parent / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        (log_dir / "before_after_judge_demo.stdout.log").write_text("old stdout\n", encoding="utf-8")
+        (log_dir / "before_after_judge_demo.stderr.log").write_text("old stderr\n", encoding="utf-8")
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("dry-run must not execute commands")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                dry_run=True,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "planned")
+        stdout_ref = report["entrypoints"][0]["logs"]["stdout"]
+        stderr_ref = report["entrypoints"][0]["logs"]["stderr"]
+        self.assertEqual(stdout_ref["status"], "missing")
+        self.assertEqual(stderr_ref["status"], "missing")
+        self.assertNotIn("sha256", stdout_ref)
+        self.assertNotIn("sha256", stderr_ref)
+
     def test_dry_run_removes_stale_publishable_artifacts(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 

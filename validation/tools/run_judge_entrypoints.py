@@ -747,8 +747,8 @@ def run_entrypoint_command(
         },
         "exit_code": None if dry_run else 1,
         "logs": {
-            "stdout": artifact_ref(stdout_path, repo_root=repo_root),
-            "stderr": artifact_ref(stderr_path, repo_root=repo_root),
+            "stdout": missing_artifact_ref(stdout_path, repo_root=repo_root) if dry_run else artifact_ref(stdout_path, repo_root=repo_root),
+            "stderr": missing_artifact_ref(stderr_path, repo_root=repo_root) if dry_run else artifact_ref(stderr_path, repo_root=repo_root),
         },
     }
     if dry_run:
@@ -852,6 +852,13 @@ def artifact_ref(path: Path, *, repo_root: Path) -> dict[str, Any]:
     if path.is_file():
         ref["sha256"] = validator.sha256_file(path)
     return ref
+
+
+def missing_artifact_ref(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    return {
+        "path": validator.repo_relative(path, repo_root),
+        "status": "missing",
+    }
 
 
 def invalid_config_ref(path: Path, error: BaseException) -> dict[str, Any]:

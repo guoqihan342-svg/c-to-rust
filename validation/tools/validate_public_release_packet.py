@@ -692,6 +692,9 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         )
     if summary.get("progress_delta_ledger") != bundle.get("progress_delta_ledger"):
         raise ValueError("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger")
+    expected_proof_class_rollup = bundle.get("proof_class_rollup", bundle.get("proof_classes"))
+    if summary.get("proof_class_rollup") != expected_proof_class_rollup:
+        raise ValueError("summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup")
 
     runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
     expected_preflight = runtime.get("preflight_proof_summary")

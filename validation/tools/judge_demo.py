@@ -344,6 +344,11 @@ def sync_refreshed_indexes_to_ledger(
             )
             values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(context_pack_id) do update set
+              run_id=excluded.run_id,
+              target_id=excluded.target_id,
+              slice_id=excluded.slice_id,
+              depth=excluded.depth,
+              max_tokens=excluded.max_tokens,
               artifact_path=excluded.artifact_path,
               artifact_sha256=excluded.artifact_sha256,
               payload_json=excluded.payload_json

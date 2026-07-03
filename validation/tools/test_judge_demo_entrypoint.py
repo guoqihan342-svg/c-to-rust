@@ -343,6 +343,84 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
         self.assertEqual(report["artifacts"]["competition_summary"]["status"], "missing")
         self.assertFalse((out_root / "summary" / "competition-run-summary.json").exists())
 
+    def test_judge_demo_context_pack_conflict_refreshes_ledger_metadata(self) -> None:
+        from validation.tools import judge_demo
+        from validation.tools import opencode_agent_harness as harness
+
+        out_root = REPO_ROOT / "target" / "judge-demo-context-ledger-upsert"
+        if out_root.exists():
+            import shutil
+
+            shutil.rmtree(out_root)
+        harness_dir = out_root / "harness"
+        harness_dir.mkdir(parents=True, exist_ok=True)
+        db_path = harness_dir / "harness.sqlite3"
+        context_pack_path = harness_dir / "context-pack.json"
+        agent_index_path = harness_dir / "agent-index.json"
+
+        with harness.connect(db_path) as connection:
+            harness.ensure_schema(connection)
+            connection.execute(
+                """
+                insert into context_packs(
+                  context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+                  artifact_path, artifact_sha256, payload_json
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "ctx-shared",
+                    "run-old",
+                    "target-old",
+                    "slice-old",
+                    1,
+                    100,
+                    "target/old/context-pack.json",
+                    "0" * 64,
+                    json.dumps({"run_id": "run-old"}, sort_keys=True),
+                ),
+            )
+            connection.commit()
+
+        context_payload = {
+            "context_pack_id": "ctx-shared",
+            "run_id": "run-new",
+            "target_id": "target-new",
+            "budget": {"depth": 4, "max_tokens": 4096},
+        }
+        context_pack_path.write_text(json.dumps(context_payload, sort_keys=True) + "\n", encoding="utf-8")
+        agent_index_path.write_text(json.dumps({"run_id": "run-new"}, sort_keys=True) + "\n", encoding="utf-8")
+
+        judge_demo.sync_refreshed_indexes_to_ledger(
+            batch_report={
+                "db_path": harness.repo_relative(db_path),
+                "run_id": "run-new",
+                "status": "passed",
+            },
+            context_pack_path=context_pack_path,
+            agent_index_path=agent_index_path,
+            repo_root=REPO_ROOT,
+        )
+
+        with harness.connect(db_path) as connection:
+            row = connection.execute(
+                """
+                select run_id, target_id, slice_id, depth, max_tokens, artifact_path, artifact_sha256, payload_json
+                from context_packs
+                where context_pack_id=?
+                """,
+                ("ctx-shared",),
+            ).fetchone()
+
+        self.assertEqual(row[0], "run-new")
+        self.assertEqual(row[1], "target-new")
+        self.assertIsNone(row[2])
+        self.assertEqual(row[3], 4)
+        self.assertEqual(row[4], 4096)
+        self.assertEqual(row[5], harness.repo_relative(context_pack_path))
+        self.assertEqual(row[6], harness.sha256_file(context_pack_path))
+        self.assertEqual(json.loads(row[7]), context_payload)
+
     def test_judge_demo_accepts_bound_before_after_exhibit_without_translator_final_gate(self) -> None:
         from validation.tools import judge_demo
 

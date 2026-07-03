@@ -1405,6 +1405,15 @@ def validate_entrypoint_profile_contract(
         "observed_commits": sorted(observed_commits),
         "status": "passed",
     }
+    expected_artifacts = entry.get("expected_artifacts") if isinstance(entry.get("expected_artifacts"), dict) else {}
+    requires_opencode_profile = (
+        "opencode" in str(entry.get("id", ""))
+        or "opencode" in str(entry.get("purpose", ""))
+        or "opencode_preflight_report" in expected_artifacts
+        or "opencode_safety_transform_attempt" in expected_artifacts
+    )
+    if requires_opencode_profile and profile.get("mode") != "opencode":
+        raise ValueError(f"{entry.get('id')} opencode profile mode must be opencode")
     if profile.get("mode") == "opencode":
         result["opencode_launch_policy"] = validate_opencode_profile_launch_policy(profile, entry_id=str(entry.get("id")))
     return result

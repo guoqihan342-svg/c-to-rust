@@ -1666,6 +1666,39 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_opencode_entrypoint_requires_opencode_profile_mode(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["mode"] = "deterministic"
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-deterministic-mode.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "opencode-deterministic-mode-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile mode must be opencode",
+            result["errors"],
+        )
+
     def test_opencode_profile_requires_glm_51_model(self) -> None:
         policy = opencode_launch_policy()
         policy["opencode_model"] = "gpt-5.4"

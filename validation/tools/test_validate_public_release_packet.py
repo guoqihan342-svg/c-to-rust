@@ -698,6 +698,7 @@ def valid_packet(root: Path) -> dict:
         "must_not_claim": bundle_must_not_claim,
         "reproduction_commands": reproduction_commands,
     }
+    bundle_payload["proof_class_rollup"] = bundle_payload["proof_classes"]
     write_json(bundle_path, bundle_payload)
     notes = write_text_artifact(
         root / "summary" / "milestone-release-notes.md",
@@ -716,7 +717,7 @@ def valid_packet(root: Path) -> dict:
             "entrypoint_count": 4,
             "publication_scope": "all-entrypoints",
             "readiness": {"status": "passed"},
-            "proof_class_rollup": {"local-simulation": 4},
+            "proof_class_rollup": bundle_payload["proof_class_rollup"],
             "workflow_metrics": {
                 "repair_activity": bundle_payload["workflow_metrics"]["rollup"]["repair_activity"],
                 "semantic_gate": False,
@@ -1304,6 +1305,37 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_summary_proof_class_rollup_drift_from_bound_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-proof-class-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["summary"]["proof_class_rollup"] = {
+            "all": ["competition-exact"],
+            "highest_proof_class": "competition-exact",
+            "has_competition_exact": True,
+            "all_entrypoints_competition_exact": True,
+            "competition_exact_host_verified": True,
+            "entrypoints": [
+                {
+                    "id": "forged",
+                    "proof_class": "competition-exact",
+                    "run_id": "forged-run",
+                }
+            ],
+        }
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup" in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 
