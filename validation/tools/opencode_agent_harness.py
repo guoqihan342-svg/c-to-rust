@@ -99,6 +99,43 @@ LF_STABLE_TEXT_SUFFIXES = {
 }
 
 
+def opencode_h9_blocker(
+    *,
+    root_cause_key: str,
+    launch_policy: dict[str, Any],
+    opencode_run_launched: bool,
+    model_availability: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    blocker: dict[str, Any] = {
+        "status": "blocked",
+        "root_cause_key": root_cause_key,
+        "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "required_variant": COMPETITION_OPENCODE_VARIANT,
+        "required_proof_class": "competition-exact",
+        "actual_agent_tool": launch_policy.get("opencode_command", ""),
+        "actual_model": launch_policy.get("opencode_model", ""),
+        "actual_variant": launch_policy.get("opencode_variant", ""),
+        "opencode_run_launched": opencode_run_launched,
+        "local_simulation_closes_p0_h9": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "next_required_action": "rerun_on_real_opencode_glm51_max_host",
+        "boundary": (
+            "This blocker is a competition-host readiness signal only. "
+            "It cannot be resolved by local simulation, non-GLM models, or chat output."
+        ),
+    }
+    if model_availability is not None:
+        blocker["observed_model_availability"] = {
+            "status": model_availability.get("status"),
+            "required_model": model_availability.get("required_model"),
+            "model_listed": model_availability.get("model_listed"),
+            "failure_reason": model_availability.get("failure_reason"),
+        }
+    return blocker
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -5979,6 +6016,12 @@ def run_opencode_preflight(
             },
             "report_path": repo_relative(report_path, repo_root=repo_root),
             "root_cause_key": root_cause_key,
+            "h9_blocker": opencode_h9_blocker(
+                root_cause_key=root_cause_key,
+                launch_policy=launch_policy,
+                opencode_run_launched=False,
+                model_availability=model_availability,
+            ),
             "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
         }
         atomic_write_json(report_path, report)
@@ -6094,6 +6137,12 @@ def run_opencode_preflight(
         report["timeout_seconds"] = timeout_seconds
     if root_cause_key is not None:
         report["root_cause_key"] = root_cause_key
+        report["h9_blocker"] = opencode_h9_blocker(
+            root_cause_key=root_cause_key,
+            launch_policy=launch_policy,
+            opencode_run_launched=True,
+            model_availability=model_availability,
+        )
     atomic_write_json(report_path, report)
     return report
 

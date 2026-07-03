@@ -56,7 +56,7 @@
     {
       "path": "config/competition-env/toolchain-check.sh",
       "role": "toolchain-smoke",
-      "sha256": "b4485394dda86585c317cf4828ae85fbd67b2ead8aad8111baf15cc9cdec9623"
+      "sha256": "e2e8b17c2235d4e2dc6190c267a2f21f35546f39a1cd5b163d642c8834330235"
     },
     {
       "path": "config/competition-env/smoke.sh",

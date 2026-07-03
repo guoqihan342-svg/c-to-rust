@@ -1395,7 +1395,10 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertNotIn("grep -Eq", toolchain_check)
         self.assertIn('python3 - "$required_model" "$models_stdout_path"', toolchain_check)
         self.assertIn("candidate = token.strip().strip", toolchain_check)
-        self.assertIn('candidate.rsplit("/", 1)[-1].casefold()', toolchain_check)
+        self.assertNotIn("casefold()", toolchain_check)
+        self.assertIn("required = sys.argv[1]", toolchain_check)
+        self.assertIn("if candidate == required:", toolchain_check)
+        self.assertIn('if candidate.rsplit("/", 1)[-1] == required:', toolchain_check)
         self.assertIn("required_model_not_listed", toolchain_check)
 
     def test_competition_smoke_shell_entrypoint_uses_profile_env_and_smoke_runner(self) -> None:

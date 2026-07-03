@@ -139,16 +139,16 @@ check_opencode_model_availability() {
   if python3 - "$required_model" "$models_stdout_path" <<'PY'
 import sys
 
-required = sys.argv[1].casefold()
+required = sys.argv[1]
 path = sys.argv[2]
 
 with open(path, encoding="utf-8", errors="replace") as handle:
     for line in handle:
         for token in line.split():
             candidate = token.strip().strip("`'\"*,")
-            if candidate.casefold() == required:
+            if candidate == required:
                 raise SystemExit(0)
-            if candidate.rsplit("/", 1)[-1].casefold() == required:
+            if candidate.rsplit("/", 1)[-1] == required:
                 raise SystemExit(0)
 raise SystemExit(1)
 PY
