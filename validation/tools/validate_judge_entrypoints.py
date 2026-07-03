@@ -3083,6 +3083,14 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
             index=index,
             repo_root=repo_root,
         )
+        repair_history = unit.get("repair_history")
+        if repair_history is not None:
+            validate_opencode_repair_history_contract(
+                repair_history,
+                retry_hint,
+                index=index,
+                repo_root=repo_root,
+            )
 
     result: dict[str, Any] = {
         "status": "passed",
@@ -3265,6 +3273,42 @@ def validate_opencode_accepted_retry_hint_contract(
         if observed_sha != patch_events_sha256:
             raise ValueError(f"{prefix}.patch_events_sha256 does not match artifact")
     return len(rollback_refs)
+
+
+def validate_opencode_repair_history_contract(
+    repair_history_value: Any,
+    retry_hint: dict[str, Any],
+    *,
+    index: int,
+    repo_root: Path,
+) -> None:
+    prefix = f"opencode_safety_transform_attempt.safety_transform_units[{index}].repair_history"
+    repair_history = require_object(repair_history_value, prefix)
+    if retry_hint.get("status") != "revalidated_passed":
+        raise ValueError(f"{prefix} requires accepted_retry_hint.status revalidated_passed")
+    patch_events_path = require_string(repair_history.get("patch_events_path"), f"{prefix}.patch_events_path")
+    patch_events_sha256 = repair_history.get("patch_events_sha256")
+    validate_sha256_hex(patch_events_sha256, f"{prefix}.patch_events_sha256")
+    artifact_path = repo_path(patch_events_path, repo_root=repo_root)
+    if not artifact_path.exists():
+        raise ValueError(f"{prefix}.patch_events_path must exist")
+    observed_sha = sha256_file(artifact_path)
+    if observed_sha != patch_events_sha256:
+        raise ValueError(f"{prefix}.patch_events_sha256 does not match artifact")
+    if retry_hint.get("patch_events_path") != patch_events_path:
+        raise ValueError(f"{prefix}.patch_events_path must match accepted_retry_hint.patch_events_path")
+    if retry_hint.get("patch_events_sha256") != patch_events_sha256:
+        raise ValueError(f"{prefix}.patch_events_sha256 must match accepted_retry_hint.patch_events_sha256")
+    statuses = repair_history.get("statuses")
+    if not isinstance(statuses, list) or not all(isinstance(status, str) for status in statuses):
+        raise ValueError(f"{prefix}.statuses must be a string list")
+    if repair_history.get("verified") is not True:
+        raise ValueError(f"{prefix}.verified must be true")
+    rollback_ids = repair_history.get("rollback_ids")
+    if not isinstance(rollback_ids, list) or not all(isinstance(item, str) for item in rollback_ids):
+        raise ValueError(f"{prefix}.rollback_ids must be a string list")
+    if rollback_ids != retry_hint.get("rollback_ids"):
+        raise ValueError(f"{prefix}.rollback_ids must match accepted_retry_hint.rollback_ids")
 
 
 def validate_opencode_measured_unsafe_delta(delta: dict[str, Any], label: str) -> None:

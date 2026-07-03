@@ -4412,6 +4412,33 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"rounds\[0\].patch must match accepted_patch"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
+    def test_opencode_safety_transform_attempt_contract_rejects_unbound_repair_history(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        history_path = temp_dir / "attempt-evidence" / "retry-repair-history.jsonl"
+        history_path.write_text('{"status":"revalidated_passed"}\n', encoding="utf-8")
+        unit = payload["safety_transform_units"][0]
+        unit["accepted_retry_hint"]["patch_events_path"] = repo_relative(history_path)
+        unit["accepted_retry_hint"]["patch_events_sha256"] = validator.sha256_file(history_path)
+        unit["repair_history"] = {
+            "patch_events_path": repo_relative(history_path),
+            "patch_events_sha256": "0" * 64,
+            "statuses": ["revalidated_passed", "verified"],
+            "verified": True,
+            "rollback_ids": list(unit["accepted_retry_hint"]["rollback_ids"]),
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"repair_history\.patch_events_sha256 does not match artifact"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
     def test_harness_artifact_contracts_deep_validates_opencode_safety_transform_attempt(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
