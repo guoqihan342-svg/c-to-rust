@@ -6514,13 +6514,16 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "function": "demo_unit",
                     "out_root": repo_relative(worker_root),
                     "report_path": repo_relative(report),
+                    "require_source_commit": "abc123",
                     "request_path": repo_relative(request),
                     "slice_id": f"demo/{worker_id}",
+                    "slice_spec": "validation/slice-specs/demo.json",
                     "source_commit": "abc123",
                     "source_file": "src/demo.c",
                     "source_repo_root": "sources/Demo",
                     "source_sha256": "f" * 64,
                     "summary_path": repo_relative(summary),
+                    "target_id": "demo",
                     "worker_id": worker_id,
                 }
             )
@@ -6614,6 +6617,55 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "worker_plan.units worker ids must match entrypoint profile workers"):
+            validator.validate_harness_artifact_contracts(
+                {
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "worker_plan": repo_relative(worker_plan),
+                },
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+                entrypoint={
+                    "id": "multi_worker_evaluate_profile",
+                    "purpose": "harness-architecture-multi-worker-evaluate",
+                    "profile": {
+                        "path": repo_relative(profile_path),
+                        "sha256": validator.sha256_file(profile_path),
+                    },
+                },
+            )
+
+        write_json(
+            profile_path,
+            {
+                "profile_id": "stale-profile-worker-tuples",
+                "max_workers": 2,
+                "workers": [
+                    {
+                        "worker_id": artifact_workers[0]["worker_id"],
+                        "target_id": "demo",
+                        "source_repo_root": "sources/Demo",
+                        "source_file": "src/demo.c",
+                        "function": "demo_unit",
+                        "slice_id": "demo/stale-slice",
+                        "source_commit": "def456",
+                        "require_source_commit": "def456",
+                        "slice_spec": "validation/slice-specs/stale-demo.json",
+                    },
+                    {
+                        "worker_id": artifact_workers[1]["worker_id"],
+                        "target_id": "demo",
+                        "source_repo_root": "sources/Demo",
+                        "source_file": "src/demo.c",
+                        "function": "demo_unit",
+                        "slice_id": artifact_workers[1]["slice_id"],
+                        "source_commit": "abc123",
+                        "require_source_commit": "abc123",
+                    },
+                ],
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "worker_plan.units worker tuple must match entrypoint profile workers"):
             validator.validate_harness_artifact_contracts(
                 {
                     "context_pack": repo_relative(context_pack),

@@ -97,6 +97,16 @@ REQUIRED_HARNESS_FEATURES = (
 REQUIRED_AGENT_ROLES = ("planner", "worker", "repairer", "verifier", "reporter")
 REQUIRED_CONTEXT_STAGES = ("plan", "translate", "verify", "repair")
 REQUIRED_JUDGE_GRAPH_NODES = ("load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report")
+PROFILE_WORKER_PLAN_TUPLE_FIELDS = (
+    "target_id",
+    "slice_id",
+    "function",
+    "source_repo_root",
+    "source_file",
+    "source_commit",
+    "require_source_commit",
+    "slice_spec",
+)
 REQUIRED_COMPETITION_SMOKE_STEPS = (
     "environment-check",
     "vendored-clang-verification",
@@ -4936,7 +4946,7 @@ def validate_worker_plan_contract(
     }
 
 
-def entrypoint_profile_worker_ids(entrypoint: dict[str, Any], *, repo_root: Path) -> set[str] | None:
+def entrypoint_profile_workers_by_id(entrypoint: dict[str, Any], *, repo_root: Path) -> dict[str, dict[str, Any]] | None:
     if not entrypoint_requires_multi_worker(entrypoint):
         return None
     profile_ref = entrypoint.get("profile")
@@ -4950,7 +4960,14 @@ def entrypoint_profile_worker_ids(entrypoint: dict[str, Any], *, repo_root: Path
     )
     if len(profile_worker_ids) < 2:
         raise ValueError(f"{entrypoint.get('id')} multi-worker profile workers must contain at least 2 workers")
-    return profile_worker_ids
+    return entries_by_worker_id(profile.get("workers"), label=f"{entrypoint.get('id')}.profile.workers")
+
+
+def worker_profile_plan_tuple(worker: dict[str, Any], *, label: str) -> dict[str, str]:
+    return {
+        field: require_string(worker.get(field), f"{label}.{field}")
+        for field in PROFILE_WORKER_PLAN_TUPLE_FIELDS
+    }
 
 
 def validate_entrypoint_profile_worker_plan_contract(
@@ -4959,18 +4976,40 @@ def validate_entrypoint_profile_worker_plan_contract(
     *,
     repo_root: Path,
 ) -> dict[str, Any]:
-    profile_worker_ids = entrypoint_profile_worker_ids(entrypoint, repo_root=repo_root)
-    if profile_worker_ids is None:
+    profile_workers = entrypoint_profile_workers_by_id(entrypoint, repo_root=repo_root)
+    if profile_workers is None:
         return {"status": "skipped", "reason": "entrypoint is not profile-bound multi-worker"}
+    profile_worker_ids = set(profile_workers)
     plan_worker_ids = worker_ids_from_entries(worker_plan_payload.get("units"), label="worker_plan.units")
     if plan_worker_ids != profile_worker_ids:
         raise ValueError(
             "worker_plan.units worker ids must match entrypoint profile workers: "
             f"{sorted(plan_worker_ids)} != {sorted(profile_worker_ids)}"
         )
+    plan_workers = entries_by_worker_id(worker_plan_payload.get("units"), label="worker_plan.units")
+    for worker_id in sorted(plan_worker_ids):
+        profile_tuple = worker_profile_plan_tuple(
+            profile_workers[worker_id],
+            label=f"{entrypoint.get('id')}.profile.workers[{worker_id}]",
+        )
+        plan_tuple = worker_profile_plan_tuple(
+            plan_workers[worker_id],
+            label=f"worker_plan.units[{worker_id}]",
+        )
+        if plan_tuple != profile_tuple:
+            drifted_fields = sorted(
+                field
+                for field in PROFILE_WORKER_PLAN_TUPLE_FIELDS
+                if plan_tuple.get(field) != profile_tuple.get(field)
+            )
+            raise ValueError(
+                "worker_plan.units worker tuple must match entrypoint profile workers: "
+                f"{worker_id} drifted fields {drifted_fields}"
+            )
     return {
         "status": "passed",
         "worker_count": len(plan_worker_ids),
+        "tuple_fields": list(PROFILE_WORKER_PLAN_TUPLE_FIELDS),
     }
 
 
