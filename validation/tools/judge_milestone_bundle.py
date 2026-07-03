@@ -2291,6 +2291,8 @@ def opencode_preflight_absent_summary(*, required: bool, entrypoint_id: str | No
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
+        "opencode_agent": validator.COMPETITION_OPENCODE_AGENT,
+        "opencode_variant": validator.COMPETITION_OPENCODE_VARIANT,
         "opencode_run_argv_bound": False,
         "boundary": (
             "OpenCode preflight proof is absent; runtime output is not semantic evidence "

@@ -32,6 +32,7 @@ def main() -> int:
     parser.add_argument("--out-root", type=Path, default=Path("target/competition-out-flashdb-before-after-exhibit"))
     parser.add_argument("--milestone-output", type=Path)
     parser.add_argument("--review-checklist", type=Path, action="append", default=[])
+    parser.add_argument("--proof-class", choices=sorted(harness.ALLOWED_PROOF_CLASSES))
     args = parser.parse_args()
 
     report = run_judge_demo(
@@ -40,6 +41,7 @@ def main() -> int:
         out_root=args.out_root,
         milestone_output=args.milestone_output,
         review_checklist_paths=args.review_checklist,
+        proof_class_override=args.proof_class,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["status"] == "passed" else 1
@@ -52,6 +54,7 @@ def run_judge_demo(
     out_root: Path,
     milestone_output: Path | None = None,
     review_checklist_paths: list[Path] | None = None,
+    proof_class_override: str | None = None,
     repo_root: Path = REPO_ROOT,
     command_runner: CommandRunner = subprocess.run,
 ) -> dict[str, Any]:
@@ -86,22 +89,25 @@ def run_judge_demo(
     )
 
     commands: list[dict[str, Any]] = []
+    batch_argv = [
+        sys.executable,
+        "-B",
+        "-m",
+        "validation.tools.opencode_agent_harness",
+        "run-batch-profile",
+        "--profile",
+        harness.repo_relative(profile_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+        "--out-root",
+        harness.repo_relative(out_root, repo_root=repo_root),
+    ]
+    if proof_class_override is not None:
+        batch_argv.extend(["--proof-class", proof_class_override])
     commands.append(
         run_stage(
             stage="run_batch_profile",
-            argv=[
-                sys.executable,
-                "-B",
-                "-m",
-                "validation.tools.opencode_agent_harness",
-                "run-batch-profile",
-                "--profile",
-                harness.repo_relative(profile_path, repo_root=repo_root),
-                "--run-id",
-                run_id,
-                "--out-root",
-                harness.repo_relative(out_root, repo_root=repo_root),
-            ],
+            argv=batch_argv,
             log_dir=harness_dir,
             repo_root=repo_root,
             command_runner=command_runner,
@@ -173,6 +179,7 @@ def run_judge_demo(
         review_checklist_paths=review_checklist_paths,
         milestone_review_checklist_paths=milestone_review_checklist_paths,
         commands=commands,
+        proof_class_override=proof_class_override,
         repo_root=repo_root,
     )
     report_path = summary_dir / "judge-demo-report.json"
@@ -199,6 +206,7 @@ def run_judge_demo(
         milestone_review_checklist_paths=milestone_review_checklist_paths,
         run_id=run_id,
         out_root=out_root,
+        proof_class_override=proof_class_override,
         repo_root=repo_root,
     )
     return report
@@ -449,6 +457,7 @@ def write_judge_demo_evidence_index(
     milestone_review_checklist_paths: list[Path],
     run_id: str,
     out_root: Path,
+    proof_class_override: str | None,
     repo_root: Path,
 ) -> dict[str, Any]:
     profile = load_json_if_exists(profile_path)
@@ -497,14 +506,15 @@ def write_judge_demo_evidence_index(
         milestone_review_checklist_paths,
         repo_root=repo_root,
     )
+    proof_class_args = f" --proof-class {proof_class_override}" if proof_class_override is not None else ""
     reproduction_commands = {
         "judge_demo": (
             "python3 -B -m validation.tools.judge_demo "
-            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}{review_args}"
+            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}{review_args}{proof_class_args}"
         ),
         "run_batch_profile": (
             "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
-            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+            f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}{proof_class_args}"
         ),
         "milestone_release_report": (
             "python3 -B validation/tools/milestone_release_report.py "
@@ -635,6 +645,7 @@ def build_report(
     review_checklist_paths: list[Path],
     milestone_review_checklist_paths: list[Path],
     commands: list[dict[str, Any]],
+    proof_class_override: str | None = None,
     repo_root: Path,
 ) -> dict[str, Any]:
     profile = load_json_if_exists(profile_path)
@@ -739,6 +750,17 @@ def build_report(
         "proof_class": str(summary.get("proof_class", profile.get("proof_class", "unknown"))),
         "out_root": harness.repo_relative(out_root, repo_root=repo_root),
         "commands": commands,
+        **(
+            {
+                "proof_class_override": {
+                    "source": "cli-override",
+                    "effective_proof_class": proof_class_override,
+                    "override_requested": True,
+                }
+            }
+            if proof_class_override is not None
+            else {}
+        ),
         "artifacts": {
             "profile": artifact_ref(profile_path, repo_root=repo_root),
             "competition_summary": artifact_ref(summary_path, repo_root=repo_root),

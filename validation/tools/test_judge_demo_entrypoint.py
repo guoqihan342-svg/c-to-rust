@@ -259,6 +259,57 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
             judge_index["reproduction_commands"]["milestone_release_report"],
         )
 
+    def test_judge_demo_passes_proof_class_override_to_batch_profile(self) -> None:
+        from validation.tools import judge_demo
+
+        out_root = REPO_ROOT / "target" / "judge-demo-proof-class"
+        profile_path = REPO_ROOT / "config" / "competition-env" / "planned-batches" / "flashdb-fdb-utils-before-after.json"
+        if out_root.exists():
+            import shutil
+
+            shutil.rmtree(out_root)
+        seen_batch_argv: list[str] = []
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if "validation.tools.opencode_agent_harness" in argv:
+                seen_batch_argv.extend(argv)
+                write_judge_demo_fixture_outputs(out_root)
+                return subprocess.CompletedProcess(argv, 0, stdout="batch ok\n", stderr="")
+            if any(str(part).endswith("validate_competition_run_summary.py") for part in argv):
+                return subprocess.CompletedProcess(argv, 0, stdout='{"status":"passed"}\n', stderr="")
+            if any(str(part).endswith("milestone_release_report.py") for part in argv):
+                output_path = REPO_ROOT / argv[argv.index("--output") + 1]
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "report_kind": "milestone-release-metrics",
+                            "status": "internal_preview",
+                            "metrics": {"translation_coverage_numerator": 0},
+                            "review_gate": {"status": "passed", "review_count": 0},
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="milestone ok\n", stderr="")
+            raise AssertionError(f"unexpected argv: {argv}")
+
+        report = judge_demo.run_judge_demo(
+            profile_path=profile_path,
+            run_id="judge-demo-proof-class",
+            out_root=out_root,
+            proof_class_override="competition-exact",
+            command_runner=fake_runner,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "passed")
+        self.assertIn("--proof-class", seen_batch_argv)
+        self.assertEqual(seen_batch_argv[seen_batch_argv.index("--proof-class") + 1], "competition-exact")
+
     def test_repair_summary_falls_back_to_workflow_metrics(self) -> None:
         from validation.tools import judge_demo
 

@@ -27,11 +27,13 @@ CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 DEFAULT_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
 COMPETITION_CONFIG_ROOT = Path("config/competition-env")
+COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
 ENTRYPOINT_COMMAND_PARSE_EXIT_CODE = 2
 ENTRYPOINT_TIMEOUT_EXIT_CODE = 124
 DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS = 600 * 60
 PORTABLE_PYTHON_COMMAND = "python3"
 PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
+ALLOWED_PROOF_CLASSES = frozenset({"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"})
 _RESOLVED_PYTHON_COMMAND: list[str] | None = None
 DERIVED_ARTIFACT_FILENAMES = (
     "judge-entrypoints-readiness.json",
@@ -39,6 +41,7 @@ DERIVED_ARTIFACT_FILENAMES = (
     "milestone-release-notes.md",
     "public-release-packet.json",
     "selected-entrypoints-validation-config.json",
+    "proof-class-override-validation-config.json",
 )
 DERIVED_ARTIFACT_DIRNAMES = ("competition-config-archive",)
 
@@ -64,6 +67,14 @@ def main() -> int:
         default=DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS,
         help="Maximum seconds allowed for each judge entrypoint command.",
     )
+    parser.add_argument(
+        "--proof-class",
+        choices=sorted(ALLOWED_PROOF_CLASSES),
+        help=(
+            "Override every judge entrypoint proof_class for this run. "
+            "competition-exact requires COMPETITION_EXACT_HOST=1."
+        ),
+    )
     args = parser.parse_args()
 
     report = run_judge_entrypoints(
@@ -72,6 +83,7 @@ def main() -> int:
         out_path=args.out,
         dry_run=args.dry_run,
         timeout_seconds=args.timeout_seconds,
+        proof_class_override=args.proof_class,
         repo_root=REPO_ROOT,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
@@ -85,6 +97,7 @@ def run_judge_entrypoints(
     out_path: Path,
     dry_run: bool = False,
     timeout_seconds: int = DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS,
+    proof_class_override: str | None = None,
     repo_root: Path = REPO_ROOT,
     command_runner: CommandRunner = subprocess.run,
 ) -> dict[str, Any]:
@@ -117,7 +130,57 @@ def run_judge_entrypoints(
             preflight_validation={"status": "failed", "errors": [str(error)]},
             validation={"status": "skipped", "reason": "preflight_failed"},
             readiness_ref=None,
+            proof_class_override=None,
         )
+
+    proof_class_resolution, proof_class_error = resolve_judge_proof_class_override(
+        config,
+        proof_class_override=proof_class_override,
+    )
+    if proof_class_error is not None:
+        return write_run_report(
+            out_path=out_path,
+            status="failed",
+            dry_run=dry_run,
+            config_ref=config_ref,
+            configured_entrypoint_count=configured_entrypoint_count(config),
+            config_archive=config_archive,
+            command_results=[],
+            preflight_validation=proof_class_error,
+            validation={"status": "skipped", "reason": "proof_class_override_failed"},
+            readiness_ref=None,
+            proof_class_override=proof_class_resolution,
+        )
+    if proof_class_override is not None:
+        try:
+            config = effective_config_with_proof_class_override(
+                config,
+                proof_class_override=proof_class_override,
+            )
+        except ValueError as error:
+            return write_run_report(
+                out_path=out_path,
+                status="failed",
+                dry_run=dry_run,
+                config_ref=config_ref,
+                configured_entrypoint_count=configured_entrypoint_count(config),
+                config_archive=config_archive,
+                command_results=[],
+                preflight_validation={
+                    "status": "failed",
+                    "root_cause_key": "proof_class_override_command_invalid",
+                    "errors": [str(error)],
+                },
+                validation={"status": "skipped", "reason": "proof_class_override_failed"},
+                readiness_ref=None,
+                proof_class_override=proof_class_resolution,
+            )
+        effective_config_path = out_path.parent / "proof-class-override-validation-config.json"
+        atomic_write_json(effective_config_path, config)
+        proof_class_resolution["effective_config"] = artifact_ref(effective_config_path, repo_root=repo_root)
+        proof_class_resolution["source_config"] = config_ref
+        config_path = effective_config_path
+        config_ref = proof_class_resolution["effective_config"]
 
     preflight_validation = validator.validate_config(config_path, require_local_artifacts=False, repo_root=repo_root)
     if preflight_validation.get("status") != "passed":
@@ -132,6 +195,7 @@ def run_judge_entrypoints(
             preflight_validation=preflight_validation,
             validation={"status": "skipped", "reason": "preflight_failed"},
             readiness_ref=None,
+            proof_class_override=proof_class_resolution,
         )
 
     try:
@@ -148,6 +212,7 @@ def run_judge_entrypoints(
             preflight_validation=preflight_validation,
             validation={"status": "skipped", "reason": "entrypoint_selection_failed", "errors": [str(error)]},
             readiness_ref=None,
+            proof_class_override=proof_class_resolution,
         )
 
     command_results: list[dict[str, Any]] = []
@@ -204,6 +269,7 @@ def run_judge_entrypoints(
         preflight_validation=preflight_validation,
         validation=validation,
         readiness_ref=readiness_ref,
+        proof_class_override=proof_class_resolution,
     )
     if not dry_run and status == "passed":
         attach_milestone_bundle(report, out_path=out_path, repo_root=repo_root)
@@ -223,6 +289,92 @@ def remove_stale_derived_artifacts(out_path: Path) -> None:
             shutil.rmtree(artifact_path)
         elif artifact_path.exists() or artifact_path.is_symlink():
             artifact_path.unlink()
+
+
+def resolve_judge_proof_class_override(
+    config: dict[str, Any],
+    *,
+    proof_class_override: str | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if proof_class_override is None:
+        return None, None
+    allowed = config.get("allowed_proof_classes")
+    allowed_classes = [str(item) for item in allowed] if isinstance(allowed, list) else []
+    resolution: dict[str, Any] = {
+        "source": "cli-override",
+        "effective_proof_class": proof_class_override,
+        "override_proof_class": proof_class_override,
+        "override_requested": True,
+        "changed": True,
+        "host_attestation_env": COMPETITION_EXACT_HOST_ENV,
+    }
+    if proof_class_override not in ALLOWED_PROOF_CLASSES or proof_class_override not in allowed_classes:
+        return resolution, {
+            "status": "failed",
+            "root_cause_key": "unsupported_proof_class_override",
+            "errors": [f"proof_class override must be listed in allowed_proof_classes: {proof_class_override}"],
+        }
+    if proof_class_override == "competition-exact" and os.environ.get(COMPETITION_EXACT_HOST_ENV) != "1":
+        return resolution, {
+            "status": "failed",
+            "root_cause_key": "competition_exact_host_required",
+            "errors": [f"competition-exact proof_class override requires {COMPETITION_EXACT_HOST_ENV}=1"],
+        }
+    return resolution, None
+
+
+def effective_config_with_proof_class_override(
+    config: dict[str, Any],
+    *,
+    proof_class_override: str,
+) -> dict[str, Any]:
+    payload = json.loads(json.dumps(config))
+    for entry in payload.get("entrypoints", []) if isinstance(payload.get("entrypoints"), list) else []:
+        if not isinstance(entry, dict):
+            continue
+        entry["proof_class"] = proof_class_override
+        command = entry.get("command")
+        if isinstance(command, str):
+            entry["command"] = command_with_proof_class_override(
+                command,
+                proof_class_override=proof_class_override,
+                entry_id=str(entry.get("id", "unknown")),
+            )
+    payload["proof_class_override"] = {
+        "source": "cli-override",
+        "effective_proof_class": proof_class_override,
+        "override_requested": True,
+    }
+    return payload
+
+
+def command_with_proof_class_override(command: str, *, proof_class_override: str, entry_id: str) -> str:
+    argv = shlex.split(command, posix=True)
+    rewritten: list[str] = []
+    index = 0
+    replaced = False
+    while index < len(argv):
+        part = argv[index]
+        if part == "--proof-class":
+            if replaced:
+                raise ValueError(f"{entry_id} command must not repeat --proof-class")
+            if index + 1 >= len(argv):
+                raise ValueError(f"{entry_id} command --proof-class must include a value")
+            rewritten.extend(["--proof-class", proof_class_override])
+            replaced = True
+            index += 2
+            continue
+        rewritten.append(part)
+        index += 1
+    if not replaced:
+        rewritten.extend(["--proof-class", proof_class_override])
+    if (
+        entry_id == "competition_environment_smoke"
+        and proof_class_override == "competition-exact"
+        and "--confirm-competition-exact" not in rewritten
+    ):
+        rewritten.append("--confirm-competition-exact")
+    return shlex.join(rewritten)
 
 
 def post_run_validation_config_path(
@@ -261,6 +413,7 @@ def write_run_report(
     preflight_validation: dict[str, Any],
     validation: dict[str, Any],
     readiness_ref: dict[str, Any] | None,
+    proof_class_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     report = {
         "schema_version": 1,
@@ -274,6 +427,7 @@ def write_run_report(
         "preflight_validation": preflight_validation,
         "validation": validation,
         "readiness_report": readiness_ref,
+        **({"proof_class_override": proof_class_override} if proof_class_override is not None else {}),
         "claim_boundary": {
             "semantic_gate": False,
             "semantic_claim_source": "validator-owned-artifacts",
@@ -461,6 +615,8 @@ def public_packet_opencode_preflight_proof_summary(
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
+        "opencode_agent": "c2rust-migrator",
+        "opencode_variant": "max",
         "opencode_run_argv_bound": False,
         "boundary": (
             "OpenCode preflight proof is absent; runtime output is not semantic evidence "
