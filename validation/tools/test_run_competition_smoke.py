@@ -868,7 +868,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             result = module.run_competition_smoke(
                 out_root=out_root,
                 proof_class="local-simulation",
-                command_runner=FakeCommandRunner(),
+                command_runner=(fake_runner := FakeCommandRunner()),
                 repo_root=REPO_ROOT,
                 run_id="smoke-command-log-workdir-test",
             )
@@ -880,6 +880,8 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             ]
             self.assertTrue(command_entries)
             self.assertTrue(all(entry.get("workdir") == "." for entry in command_entries))
+            self.assertTrue(all("cwd" not in entry for entry in command_entries))
+            self.assertTrue(all(kwargs.get("cwd") == REPO_ROOT for kwargs in fake_runner.kwargs))
             assert_no_local_absolute_command_log_text(self, command_entries)
 
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:

@@ -151,6 +151,7 @@ def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
                     "returncode": step.get("returncode", 0),
                     "stdout": "",
                     "stderr": "",
+                    "workdir": ".",
                     **({"timed_out": True} if step.get("timed_out") is True else {}),
                     **({"timeout_seconds": step["timeout_seconds"]} if "timeout_seconds" in step else {}),
                     **({"failure_class": step["failure_class"]} if "failure_class" in step else {}),
@@ -4478,6 +4479,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "returncode": 1,
                         "stdout": "",
                         "stderr": "",
+                        "workdir": ".",
                     },
                     sort_keys=True,
                 )
@@ -4665,6 +4667,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                             "returncode": 0,
                             "stdout": stdout,
                             "stderr": "",
+                            "workdir": ".",
                         },
                         sort_keys=True,
                     )
@@ -7029,6 +7032,66 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "workdir must be repo-relative POSIX"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_requires_workdir(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["bash", "-lc", "echo ok"],
+                        "returncode": 0,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "workdir must be present"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_non_root_workdir(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["bash", "-lc", "echo ok"],
+                        "returncode": 0,
+                        "workdir": "validation/tools",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "workdir must be repo root"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_cwd_workdir_disagreement(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["bash", "-lc", "echo ok"],
+                        "returncode": 0,
+                        "cwd": "target/competition-smoke",
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "cwd must match workdir"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
     def test_competition_smoke_command_log_rejects_non_string_workdir(self) -> None:

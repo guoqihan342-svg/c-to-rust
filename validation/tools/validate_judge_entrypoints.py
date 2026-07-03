@@ -1096,6 +1096,7 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         "competition_smoke_command_log output contains forbidden local absolute path"
                     )
+            command_context: dict[str, str] = {}
             for field in ("cwd", "workdir"):
                 if field not in entry:
                     continue
@@ -1112,6 +1113,13 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         f"competition_smoke_command_log {field} must be repo-relative POSIX: {value}"
                     ) from error
+                command_context[field] = value
+            if "workdir" not in command_context:
+                raise ValueError("competition_smoke_command_log workdir must be present")
+            if command_context["workdir"] != ".":
+                raise ValueError("competition_smoke_command_log workdir must be repo root '.'")
+            if "cwd" in command_context and command_context["cwd"] != command_context["workdir"]:
+                raise ValueError("competition_smoke_command_log cwd must match workdir")
             if step == "opencode-glm-model-probe":
                 if entry.get("returncode") != 0:
                     raise ValueError("competition_smoke_command_log opencode-glm-model-probe returncode must be 0")
