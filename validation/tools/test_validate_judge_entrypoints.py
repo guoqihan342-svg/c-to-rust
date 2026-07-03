@@ -5245,6 +5245,149 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["planning_mode"], "source_file")
         self.assertEqual(result["worker_count"], 1)
 
+    def test_multi_worker_entrypoint_worker_plan_must_match_profile_workers(self) -> None:
+        temp_config = write_temp_config(load_default_config())
+        temp_dir = temp_config.parent
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        worker_plan = out_root / "harness" / "plans" / "workers.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        profile_path = temp_dir / "profile.json"
+        artifact_workers = []
+        for worker_id in ("artifact-worker-001", "artifact-worker-002"):
+            worker_root = out_root / "workers" / worker_id
+            assignment = out_root / "harness" / "assignments" / f"{worker_id}.json"
+            request = out_root / "harness" / "assignments" / f"{worker_id}-request.json"
+            summary = worker_root / "summary" / "competition-run-summary.json"
+            report = worker_root / "harness" / "run-worker-report.json"
+            for path in (assignment, request, summary, report):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}\n", encoding="utf-8")
+            artifact_workers.append(
+                {
+                    "assignment_path": repo_relative(assignment),
+                    "function": "demo_unit",
+                    "out_root": repo_relative(worker_root),
+                    "report_path": repo_relative(report),
+                    "request_path": repo_relative(request),
+                    "slice_id": f"demo/{worker_id}",
+                    "source_commit": "abc123",
+                    "source_file": "src/demo.c",
+                    "source_repo_root": "sources/Demo",
+                    "source_sha256": "f" * 64,
+                    "summary_path": repo_relative(summary),
+                    "worker_id": worker_id,
+                }
+            )
+        write_json(
+            profile_path,
+            {
+                "profile_id": "drifted-profile-workers",
+                "max_workers": 2,
+                "workers": [
+                    {"worker_id": "profile-worker-001"},
+                    {"worker_id": "profile-worker-002"},
+                ],
+            },
+        )
+        write_json(
+            context_pack,
+            {
+                "report_kind": "context-pack",
+                "context_management_contract": {
+                    "agent_index": repo_relative(agent_index),
+                    "chat_output_is_evidence": False,
+                    "context_pack": repo_relative(context_pack),
+                    "contract_kind": "context-management",
+                    "evidence_policy": "on-disk-artifacts-only",
+                    "pipeline": [
+                        {"stage": "plan", "role": "planner", "evidence": "entrypoints.worker_plan"},
+                        {"stage": "translate", "role": "worker", "fanout": True},
+                        {"stage": "verify", "role": "verifier", "reduce": "merge"},
+                        {"stage": "repair", "role": "repairer", "max_rounds": 5},
+                    ],
+                    "resume_protocol": {
+                        "checkpoint_backend": "sqlite",
+                        "ledger_path": repo_relative(ledger),
+                        "worker_state_source": "agent-index.agents_by_worker_id",
+                    },
+                    "schema_version": 1,
+                    "semantic_gate": False,
+                },
+                "entrypoints": {"worker_plan": repo_relative(worker_plan)},
+                "workers": artifact_workers,
+            },
+        )
+        write_json(
+            agent_index,
+            {
+                "report_kind": "agent-index",
+                "agent_coordination_contract": {
+                    "chat_output_is_evidence": False,
+                    "checkpoint_backend": "sqlite",
+                    "contract_kind": "agent-coordination",
+                    "roles": {
+                        "planner": {},
+                        "worker": {"isolation": "per-worker out_root"},
+                        "repairer": {"round_cap": 5},
+                        "verifier": {},
+                        "reporter": {},
+                    },
+                    "schema_version": 1,
+                    "semantic_gate": False,
+                    "worker_count": 2,
+                },
+                "agents": artifact_workers,
+                "agents_by_worker_id": {
+                    worker["worker_id"]: {**worker, "isolated_out_root": worker["out_root"]}
+                    for worker in artifact_workers
+                },
+                "planner": {
+                    "plan_path": repo_relative(worker_plan),
+                    "worker_count": 2,
+                },
+            },
+        )
+        write_json(
+            worker_plan,
+            {
+                "schema_version": 1,
+                "planning_mode": "explicit_workers",
+                "status": "planned",
+                "target_id": "demo",
+                "run_id": "profile-worker-drift",
+                "plan_path": repo_relative(worker_plan),
+                "units": artifact_workers,
+            },
+        )
+        write_minimal_context_ledger(
+            ledger,
+            run_id="profile-worker-drift",
+            context_pack_path=context_pack,
+            context_pack_payload=json.loads(context_pack.read_text(encoding="utf-8")),
+            agent_index_path=agent_index,
+        )
+
+        with self.assertRaisesRegex(ValueError, "worker_plan.units worker ids must match entrypoint profile workers"):
+            validator.validate_harness_artifact_contracts(
+                {
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "worker_plan": repo_relative(worker_plan),
+                },
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+                entrypoint={
+                    "id": "multi_worker_evaluate_profile",
+                    "purpose": "harness-architecture-multi-worker-evaluate",
+                    "profile": {
+                        "path": repo_relative(profile_path),
+                        "sha256": validator.sha256_file(profile_path),
+                    },
+                },
+            )
+
     def test_context_pack_ledger_path_must_exist(self) -> None:
         temp_config = write_temp_config(load_default_config())
         temp_dir = temp_config.parent

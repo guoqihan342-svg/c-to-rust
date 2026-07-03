@@ -4332,6 +4332,44 @@ def validate_worker_plan_contract(
     }
 
 
+def entrypoint_profile_worker_ids(entrypoint: dict[str, Any], *, repo_root: Path) -> set[str] | None:
+    if not entrypoint_requires_multi_worker(entrypoint):
+        return None
+    profile_ref = entrypoint.get("profile")
+    if not isinstance(profile_ref, dict):
+        return None
+    profile_binding = validate_ref(profile_ref, repo_root=repo_root)
+    profile = load_json(repo_path(profile_binding["path"], repo_root=repo_root))
+    profile_worker_ids = worker_ids_from_entries(
+        profile.get("workers"),
+        label=f"{entrypoint.get('id')}.profile.workers",
+    )
+    if len(profile_worker_ids) < 2:
+        raise ValueError(f"{entrypoint.get('id')} multi-worker profile workers must contain at least 2 workers")
+    return profile_worker_ids
+
+
+def validate_entrypoint_profile_worker_plan_contract(
+    entrypoint: dict[str, Any],
+    worker_plan_payload: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    profile_worker_ids = entrypoint_profile_worker_ids(entrypoint, repo_root=repo_root)
+    if profile_worker_ids is None:
+        return {"status": "skipped", "reason": "entrypoint is not profile-bound multi-worker"}
+    plan_worker_ids = worker_ids_from_entries(worker_plan_payload.get("units"), label="worker_plan.units")
+    if plan_worker_ids != profile_worker_ids:
+        raise ValueError(
+            "worker_plan.units worker ids must match entrypoint profile workers: "
+            f"{sorted(plan_worker_ids)} != {sorted(profile_worker_ids)}"
+        )
+    return {
+        "status": "passed",
+        "worker_count": len(plan_worker_ids),
+    }
+
+
 def validate_context_ledger_contract(
     context_payload: dict[str, Any],
     agent_payload: dict[str, Any],
@@ -4696,12 +4734,21 @@ def validate_harness_artifact_contracts(
         )
         if "worker_plan" in artifacts:
             worker_plan_path = repo_path(str(artifacts["worker_plan"]), repo_root=repo_root)
+            worker_plan_payload = load_json(worker_plan_path)
             result["worker_plan"] = validate_worker_plan_contract(
-                load_json(worker_plan_path),
+                worker_plan_payload,
                 context_payload,
                 agent_payload,
                 path_text=str(artifacts["worker_plan"]),
             )
+            if entrypoint is not None:
+                profile_worker_plan_contract = validate_entrypoint_profile_worker_plan_contract(
+                    entrypoint,
+                    worker_plan_payload,
+                    repo_root=repo_root,
+                )
+                if profile_worker_plan_contract.get("status") != "skipped":
+                    result["entrypoint_profile_worker_plan"] = profile_worker_plan_contract
         result["ledger_context_index"] = validate_context_ledger_contract(
             context_payload,
             agent_payload,
