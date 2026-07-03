@@ -4578,8 +4578,6 @@ def validate_resume_manifest_contract(
         raise ValueError("resume_manifest.ledger.checkpoint_backend must be sqlite")
     ledger_path = require_string(ledger.get("path"), "resume_manifest.ledger.path")
     assert_repo_relative_posix(ledger_path)
-    if not repo_path(ledger_path, repo_root=repo_root).is_file():
-        raise ValueError("resume_manifest.ledger.path must exist")
 
     context_binding = validate_artifact_binding_shape(
         payload.get("context_pack"),
