@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from pathlib import PurePosixPath
 import sys
 from typing import Any
 
@@ -201,6 +202,7 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
     checked_materialized_manifest = require_materialized_competition_config_archive_manifest(
         archive,
         repo_root=repo_root,
+        expected_path=expected_materialized_competition_config_archive_manifest_path(packet),
     )
 
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
@@ -315,6 +317,7 @@ def require_materialized_competition_config_archive_manifest(
     archive: dict[str, Any],
     *,
     repo_root: Path,
+    expected_path: str,
 ) -> dict[str, Any]:
     label = "competition_config_archive.materialized_manifest"
     ref = require_object(archive.get("materialized_manifest"), label)
@@ -322,6 +325,8 @@ def require_materialized_competition_config_archive_manifest(
         checked = judge_validator.validate_ref(ref, repo_root=repo_root)
     except ValueError as error:
         raise ValueError(f"{label}: {error}") from error
+    if checked["path"] != expected_path:
+        raise ValueError(f"{label}.path must be {expected_path}")
     manifest_path = judge_validator.repo_path(str(checked["path"]), repo_root=repo_root)
     try:
         manifest_payload = judge_validator.load_json(manifest_path)
@@ -335,6 +340,19 @@ def require_materialized_competition_config_archive_manifest(
             "competition_config_archive without materialized_manifest"
         )
     return checked
+
+
+def expected_materialized_competition_config_archive_manifest_path(packet: dict[str, Any]) -> str:
+    run_report_ref = require_object(packet.get("judge_entrypoints_run_report"), "judge_entrypoints_run_report")
+    path_text = judge_validator.require_string(
+        run_report_ref.get("path"),
+        "judge_entrypoints_run_report.path",
+    )
+    judge_validator.assert_repo_relative_posix(path_text)
+    run_report_path = PurePosixPath(path_text)
+    if run_report_path.parent.name != "summary":
+        raise ValueError("judge_entrypoints_run_report.path must be under a summary directory")
+    return (run_report_path.parent / "competition-config-archive" / "manifest.json").as_posix()
 
 
 def require_competition_config_archive_matches_bundle_manifest(
@@ -488,6 +506,9 @@ def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_roo
             proof,
             "opencode_patch_boundary.opencode_preflight_proof_summary",
             repo_root=repo_root,
+            allow_competition_exact=competition_host_readiness_allows_exact_preflight(
+                require_object(packet.get("competition_host_readiness"), "competition_host_readiness")
+            ),
         )
 
 
@@ -583,6 +604,18 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
             )
 
 
+def competition_host_readiness_allows_exact_preflight(readiness: dict[str, Any]) -> bool:
+    return (
+        readiness.get("status") == "ready"
+        and readiness.get("competition_exact_host_verified") is True
+        and readiness.get("required_agent_tool") == judge_validator.COMPETITION_OPENCODE_COMMAND
+        and readiness.get("required_agent") == judge_validator.COMPETITION_OPENCODE_AGENT
+        and readiness.get("required_model") == judge_validator.COMPETITION_OPENCODE_MODEL
+        and readiness.get("required_variant") == judge_validator.COMPETITION_OPENCODE_VARIANT
+        and readiness.get("required_proof_class") == "competition-exact"
+    )
+
+
 def require_publishability_publication_scope_contract(
     publishability: dict[str, Any],
     *,
@@ -601,6 +634,19 @@ def require_publishability_publication_scope_contract(
     )
     if publication_scope != expected_publication_scope:
         raise ValueError("publishability.publication_scope must match external readiness")
+    if publishability.get("required_agent_tool") != judge_validator.COMPETITION_OPENCODE_COMMAND:
+        raise ValueError("publishability.required_agent_tool must be opencode")
+    if publishability.get("required_agent") != judge_validator.COMPETITION_OPENCODE_AGENT:
+        raise ValueError("publishability.required_agent must be c2rust-migrator")
+    if publishability.get("required_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
+        raise ValueError("publishability.required_model must be GLM-5.1")
+    readiness = competition_host_readiness if isinstance(competition_host_readiness, dict) else {}
+    if readiness.get("required_agent_tool") != judge_validator.COMPETITION_OPENCODE_COMMAND:
+        raise ValueError("competition_host_readiness.required_agent_tool must be opencode")
+    if readiness.get("required_agent") != judge_validator.COMPETITION_OPENCODE_AGENT:
+        raise ValueError("competition_host_readiness.required_agent must be c2rust-migrator")
+    if readiness.get("required_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
+        raise ValueError("competition_host_readiness.required_model must be GLM-5.1")
     if publication_scope == "full" and publishability.get("external_milestone_claim_ready") is not True:
         raise ValueError("publishability.publication_scope=full requires external_milestone_claim_ready=true")
     if status == "external_release_ready":
@@ -612,7 +658,6 @@ def require_publishability_publication_scope_contract(
             raise ValueError("publishability.opencode_glm51_publishable must be true for external_release_ready")
         if publishability.get("focused_run") is not False:
             raise ValueError("publishability.focused_run must be false for external_release_ready")
-        readiness = competition_host_readiness if isinstance(competition_host_readiness, dict) else {}
         if readiness.get("status") != "ready":
             raise ValueError("competition_host_readiness.status must be ready for external_release_ready")
         if readiness.get("competition_exact_host_verified") is not True:
@@ -697,6 +742,7 @@ def require_opencode_preflight_proof_summary_contract(
     label: str,
     *,
     repo_root: Path,
+    allow_competition_exact: bool = False,
 ) -> None:
     if proof.get("status") != "passed":
         raise ValueError(f"{label}.status must be passed")
@@ -725,7 +771,7 @@ def require_opencode_preflight_proof_summary_contract(
         raise ValueError(f"{label}.opencode_run_launched must be true")
     if proof.get("opencode_run_argv_bound") is not True:
         raise ValueError(f"{label}.opencode_run_argv_bound must be true")
-    if proof.get("proof_class") == "competition-exact":
+    if proof.get("proof_class") == "competition-exact" and not allow_competition_exact:
         raise ValueError(f"{label}.proof_class must not claim competition-exact without host attestation")
     if not judge_validator.opencode_models_argv_matches(
         proof.get("model_probe_argv"),

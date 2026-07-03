@@ -282,6 +282,10 @@ def require_publishability_contract(bundle: dict[str, Any], *, blockers: list[st
     if "blockers" in publishability:
         require(publishability.get("blockers") == blockers, "publishability.blockers must match bundle blockers")
     require(publishability.get("required_agent_tool") == "opencode", "publishability.required_agent_tool must be opencode")
+    require(
+        publishability.get("required_agent") == "c2rust-migrator",
+        "publishability.required_agent must be c2rust-migrator",
+    )
     require(publishability.get("required_model") == "GLM-5.1", "publishability.required_model must be GLM-5.1")
     require_true_value(publishability.get("opencode_glm51_required"), "publishability.opencode_glm51_required")
     require(
@@ -363,6 +367,10 @@ def require_competition_host_readiness_contract(readiness: dict[str, Any]) -> No
     )
     require(readiness.get("status") in {"blocked", "ready"}, "competition_host_readiness.status must be blocked or ready")
     require(readiness.get("required_agent_tool") == "opencode", "competition_host_readiness.required_agent_tool must be opencode")
+    require(
+        readiness.get("required_agent") == "c2rust-migrator",
+        "competition_host_readiness.required_agent must be c2rust-migrator",
+    )
     require(readiness.get("required_model") == COMPETITION_OPENCODE_MODEL, "competition_host_readiness.required_model must be GLM-5.1")
     require(readiness.get("required_variant") == "max", "competition_host_readiness.required_variant must be max")
     require(
@@ -421,13 +429,32 @@ def require_opencode_runtime_contract(bundle: dict[str, Any]) -> None:
         "opencode_runtime.enabled_entrypoint_count must be a non-negative integer",
     )
     if enabled_entrypoint_count > 0:
+        readiness = object_or_empty(bundle.get("competition_host_readiness"))
         require_opencode_preflight_proof_summary_contract(
             runtime.get("preflight_proof_summary"),
             "opencode_runtime.preflight_proof_summary",
+            allow_competition_exact=competition_host_readiness_allows_exact_preflight(readiness),
         )
 
 
-def require_opencode_preflight_proof_summary_contract(summary: Any, label: str) -> None:
+def competition_host_readiness_allows_exact_preflight(readiness: dict[str, Any]) -> bool:
+    return (
+        readiness.get("status") == "ready"
+        and readiness.get("competition_exact_host_verified") is True
+        and readiness.get("required_agent_tool") == COMPETITION_OPENCODE_COMMAND
+        and readiness.get("required_agent") == "c2rust-migrator"
+        and readiness.get("required_model") == COMPETITION_OPENCODE_MODEL
+        and readiness.get("required_variant") == "max"
+        and readiness.get("required_proof_class") == "competition-exact"
+    )
+
+
+def require_opencode_preflight_proof_summary_contract(
+    summary: Any,
+    label: str,
+    *,
+    allow_competition_exact: bool = False,
+) -> None:
     require(isinstance(summary, dict), f"{label} must be an object")
     require(summary.get("status") == "passed", f"{label}.status must be passed")
     require_true_value(
@@ -457,10 +484,11 @@ def require_opencode_preflight_proof_summary_contract(summary: Any, label: str) 
     require_true_value(summary.get("marker_exists"), f"{label}.marker_exists")
     require_true_value(summary.get("opencode_run_launched"), f"{label}.opencode_run_launched")
     require_true_value(summary.get("opencode_run_argv_bound"), f"{label}.opencode_run_argv_bound")
-    require(
-        summary.get("proof_class") != "competition-exact",
-        f"{label}.proof_class must not claim competition-exact without host attestation",
-    )
+    if summary.get("proof_class") == "competition-exact":
+        require(
+            allow_competition_exact,
+            f"{label}.proof_class must not claim competition-exact without host attestation",
+        )
     require(isinstance(summary.get("preflight_report"), dict), f"{label}.preflight_report must be an object")
     logs = summary.get("model_probe_logs")
     require(isinstance(logs, dict), f"{label}.model_probe_logs must be an object")
@@ -760,6 +788,7 @@ def publishability_lines(publishability: dict[str, Any]) -> list[str]:
         f"| Status | {text(publishability.get('status'), 'unknown')} |",
         f"| Scope | {text(publishability.get('scope'), 'unknown')} |",
         f"| Required agent tool | {text(publishability.get('required_agent_tool'), 'unknown')} |",
+        f"| Required agent | {text(publishability.get('required_agent'), 'unknown')} |",
         f"| Required model | {text(publishability.get('required_model'), 'unknown')} |",
         f"| OpenCode GLM preflight status | {text(publishability.get('opencode_glm51_preflight_status'), 'unknown')} |",
         f"| OpenCode GLM publishable | {bool_text(publishability.get('opencode_glm51_publishable'))} |",
@@ -796,6 +825,7 @@ def competition_host_readiness_lines(readiness: dict[str, Any]) -> list[str]:
         "| --- | --- |",
         f"| Status | {text(readiness.get('status'), 'unknown')} |",
         f"| Required agent tool | {text(readiness.get('required_agent_tool'), 'unknown')} |",
+        f"| Required agent | {text(readiness.get('required_agent'), 'unknown')} |",
         f"| Required model | {text(readiness.get('required_model'), 'unknown')} |",
         f"| Required variant | {text(readiness.get('required_variant'), 'unknown')} |",
         f"| Required proof class | {text(readiness.get('required_proof_class'), 'unknown')} |",

@@ -1033,6 +1033,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["publishability"]["blockers"], [])
         self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
         self.assertFalse(report["publishability"]["external_milestone"])
+        self.assertEqual(report["publishability"]["required_agent"], "c2rust-migrator")
         self.assertTrue(report["publishability"]["opencode_glm51_required"])
         self.assertEqual(report["publishability"]["opencode_glm51_preflight_status"], "passed")
         self.assertTrue(report["publishability"]["opencode_glm51_publishable"])
@@ -1044,6 +1045,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(host_readiness["report_kind"], "competition-host-readiness")
         self.assertEqual(host_readiness["status"], "blocked")
         self.assertEqual(host_readiness["required_agent_tool"], "opencode")
+        self.assertEqual(host_readiness["required_agent"], "c2rust-migrator")
         self.assertEqual(host_readiness["required_model"], "GLM-5.1")
         self.assertEqual(host_readiness["required_variant"], "max")
         self.assertEqual(host_readiness["required_proof_class"], "competition-exact")
@@ -1348,6 +1350,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             {},
             run_report_contract=[],
             proof_class_contract_errors=[],
+            exact_host_revalidation_errors=[],
             opencode_policy={"enabled": False},
             core_translation_quality={
                 "generated_draft_semantic_pass": False,
@@ -1828,6 +1831,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(publishability["status"], "internal_preview")
         self.assertFalse(publishability["external_milestone_claim_ready"])
         self.assertFalse(publishability["external_milestone"])
+        self.assertEqual(publishability["required_agent"], "c2rust-migrator")
         self.assertFalse(publishability["opencode_glm51_publishable"])
 
     def test_proof_classes_do_not_verify_competition_host_from_proof_class_string_only(self) -> None:
@@ -1893,6 +1897,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(publishability["status"], "internal_preview")
         self.assertFalse(publishability["external_milestone_claim_ready"])
         self.assertFalse(publishability["competition_exact_publishable"])
+        self.assertEqual(publishability["required_agent"], "c2rust-migrator")
         self.assertTrue(publishability["opencode_glm51_publishable"])
 
     def test_known_gaps_keep_c2rust_baseline_gap_without_verified_baseline_exhibit(self) -> None:
@@ -2078,9 +2083,145 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["publishability"]["publication_scope"], "blocked")
         self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
         self.assertFalse(report["publishability"]["external_milestone"])
+        self.assertEqual(report["publishability"]["required_agent"], "c2rust-migrator")
         self.assertEqual(report["publishability"]["blocker_count"], len(report["blockers"]))
         self.assertEqual(report["publishability"]["blockers"], report["blockers"])
         self.assertFalse(report["publishability"]["competition_exact_publishable"])
+
+    def test_bundle_revalidates_exact_host_attestation_before_external_ready(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-forged-exact-host-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        fake_config_path = temp_dir / "missing-judge-entrypoints.json"
+        preflight_fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="forged-exact-host")
+        preflight_path = Path(preflight_fixture["preflight_path"])
+        preflight_ref = {
+            "path": repo_relative(preflight_path),
+            "sha256": bundle.validator.sha256_file(preflight_path),
+            "status": "present",
+        }
+        judge_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
+        write_json(
+            judge_index_path,
+            {
+                "judge_headline": {
+                    "worker_count": 1,
+                    "repair_round_cap": 5,
+                    "semantic_gate": False,
+                    "opencode_runtime": {
+                        "enabled": True,
+                        "worker_count": 1,
+                        "all_contracts_executed": True,
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                    },
+                },
+                "opencode_agent_runtime": {
+                    "runtime": "opencode",
+                    "worker_count": 1,
+                    "all_contracts_executed": True,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "opencode_preflight_report": preflight_ref,
+                },
+                "evidence_artifact_refs": {
+                    "opencode_preflight_report": preflight_ref,
+                },
+            },
+        )
+        smoke_path = temp_dir / "smoke" / "summary" / "competition-smoke-summary.json"
+        write_json(
+            smoke_path,
+            {
+                "proof_class": "competition-exact",
+                "run_id": "forged-exact-host",
+                "execution_environment": {
+                    "kind": "competition-host",
+                    "system": "Linux",
+                    "detected_ci": False,
+                    "detected_wsl": False,
+                    "competition_exact_host_attested": True,
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "dry_run": False,
+                "config": {
+                    "path": repo_relative(fake_config_path),
+                    "status": "present",
+                    "sha256": "0" * 64,
+                },
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "competition_environment_smoke",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "competition-exact",
+                        "run_id": "forged-exact-host",
+                        "key_artifacts": {},
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "proof_class_contract": {
+                        "status": "passed",
+                        "entrypoints": {"competition_environment_smoke": "competition-exact"},
+                    },
+                    "entrypoints": [
+                        {
+                            "id": "competition_environment_smoke",
+                            "expected_artifacts": {
+                                "judge_evidence_index": {
+                                    "path": repo_relative(judge_index_path),
+                                    "status": "present",
+                                    "sha256": bundle.validator.sha256_file(judge_index_path),
+                                },
+                                "competition_smoke_summary": {
+                                    "path": repo_relative(smoke_path),
+                                    "status": "present",
+                                    "sha256": bundle.validator.sha256_file(smoke_path),
+                                },
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("run_report_exact_host_revalidation_failed", report["blockers"])
+        self.assertFalse(report["claim_scope"]["competition_exact_ready"])
+        self.assertEqual(report["publishability"]["status"], "blocked")
+        self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
+        self.assertFalse(report["competition_host_readiness"]["competition_exact_host_verified"])
 
     def test_bundle_blocks_focused_run_from_external_milestone_claim(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

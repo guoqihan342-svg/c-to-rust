@@ -661,18 +661,22 @@ def rewrite_packet_preflight_session(packet: dict, session_payload: dict) -> Non
     )
 
 
-def sync_packet_bound_bundle(packet: dict) -> None:
+def sync_packet_bound_bundle(packet: dict, *, rebuild_release_notes: bool = True) -> None:
     bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
     bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
     bundle_payload["opencode_runtime"]["preflight_proof_summary"] = json.loads(
         json.dumps(packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"])
     )
+    for field in ("publishability", "competition_host_readiness"):
+        if field in packet:
+            bundle_payload[field] = json.loads(json.dumps(packet[field]))
     write_json(bundle_path, bundle_payload)
     packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
 
-    notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
-    notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
-    packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+    if rebuild_release_notes:
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
 
 
 def harness_contract_matrix_fixture() -> list[dict]:
@@ -982,6 +986,7 @@ def valid_packet(root: Path) -> dict:
             "focused_run": False,
             "competition_exact_publishable": False,
             "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
             "required_model": "GLM-5.1",
             "opencode_glm51_required": True,
             "opencode_glm51_preflight_status": "passed",
@@ -994,6 +999,7 @@ def valid_packet(root: Path) -> dict:
             "report_kind": "competition-host-readiness",
             "status": "blocked",
             "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
             "required_model": "GLM-5.1",
             "required_variant": "max",
             "required_proof_class": "competition-exact",
@@ -1263,8 +1269,10 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(packet["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
         self.assertEqual(packet["publishability"]["status"], "internal_preview")
         self.assertFalse(packet["publishability"]["competition_exact_publishable"])
+        self.assertEqual(packet["publishability"]["required_agent"], "c2rust-migrator")
         self.assertEqual(packet["publishability"]["required_model"], "GLM-5.1")
         self.assertEqual(packet["competition_host_readiness"]["status"], "blocked")
+        self.assertEqual(packet["competition_host_readiness"]["required_agent"], "c2rust-migrator")
         self.assertEqual(packet["competition_host_readiness"]["required_model"], "GLM-5.1")
         self.assertEqual(packet["competition_host_readiness"]["required_variant"], "max")
         self.assertEqual(packet["competition_host_readiness"]["required_proof_class"], "competition-exact")
@@ -1340,6 +1348,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         host_readiness = schema["$defs"]["competitionHostReadiness"]
         self.assertEqual(host_readiness["properties"]["report_kind"]["const"], "competition-host-readiness")
         self.assertEqual(host_readiness["properties"]["required_agent_tool"]["const"], "opencode")
+        self.assertEqual(host_readiness["properties"]["required_agent"]["const"], "c2rust-migrator")
         self.assertEqual(host_readiness["properties"]["required_model"]["const"], "GLM-5.1")
         self.assertEqual(host_readiness["properties"]["required_variant"]["const"], "max")
         self.assertEqual(host_readiness["properties"]["required_proof_class"]["const"], "competition-exact")
@@ -1428,6 +1437,54 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertTrue(any("required_model must be GLM-5.1" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_allows_competition_exact_preflight_when_host_ready(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-exact-ready-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["publishability"].update(
+            {
+                "status": "external_release_ready",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": True,
+                "external_milestone": True,
+                "competition_exact_publishable": True,
+                "focused_run": False,
+            }
+        )
+        packet["competition_host_readiness"].update(
+            {
+                "status": "ready",
+                "all_entrypoints_competition_exact": True,
+                "competition_exact_host_verified": True,
+                "external_milestone_claim_ready": True,
+                "missing_requirements": [],
+                "blocker_count": 0,
+            }
+        )
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["proof_class"] = "competition-exact"
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed", result["errors"])
+
+    def test_validate_packet_rejects_competition_exact_preflight_when_host_blocked(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-exact-blocked-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["proof_class"] = "competition-exact"
+        sync_packet_bound_bundle(packet, rebuild_release_notes=False)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("proof_class must not claim competition-exact without host attestation" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_validate_packet_rejects_preflight_runtime_env_sha_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-runtime-env-", dir=REPO_ROOT / "target"))
@@ -1889,6 +1946,46 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_materialized_archive_manifest_wrong_fixed_path(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-manifest-path-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        wrong_manifest_path = temp_dir / "not-summary" / "competition-config-archive" / "manifest.json"
+        manifest_payload = json.loads(json.dumps(packet["competition_config_archive"]))
+        manifest_payload.pop("materialized_manifest", None)
+        write_json(wrong_manifest_path, manifest_payload)
+        wrong_manifest_ref = {
+            "path": repo_relative(wrong_manifest_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(wrong_manifest_path),
+        }
+        packet["competition_config_archive"]["materialized_manifest"] = wrong_manifest_ref
+        packet["publication_manifest"]["competition_config_archive"]["materialized_manifest"] = wrong_manifest_ref
+        run_report_path = REPO_ROOT / packet["judge_entrypoints_run_report"]["path"]
+        run_report_payload = json.loads(run_report_path.read_text(encoding="utf-8"))
+        run_report_payload["competition_config_archive"] = json.loads(json.dumps(packet["competition_config_archive"]))
+        write_json(run_report_path, run_report_payload)
+        packet["judge_entrypoints_run_report"]["sha256"] = judge_validator.sha256_file(run_report_path)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["judge_entrypoints_run_report"] = json.loads(json.dumps(packet["judge_entrypoints_run_report"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "competition_config_archive.materialized_manifest.path must be "
+                f"{temp_dir.relative_to(REPO_ROOT).as_posix()}/summary/competition-config-archive/manifest.json"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_publication_manifest_drift_from_bundle(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-bundle-drift-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -2106,6 +2203,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "focused_run": False,
             "competition_exact_publishable": True,
             "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
             "required_model": "GLM-5.1",
             "opencode_glm51_required": True,
             "opencode_glm51_preflight_status": "passed",

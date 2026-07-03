@@ -20,6 +20,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("## Publication Readiness Contract", notes)
         self.assertIn("| Status | internal_preview |", notes)
         self.assertIn("| Required agent tool | opencode |", notes)
+        self.assertIn("| Required agent | c2rust-migrator |", notes)
         self.assertIn("| Required model | GLM-5.1 |", notes)
         self.assertIn("| OpenCode GLM preflight status | passed |", notes)
         self.assertIn("| OpenCode GLM publishable | true |", notes)
@@ -29,6 +30,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("| Translation coverage numerator | 0 |", notes)
         self.assertIn("## Competition Host Readiness", notes)
         self.assertIn("| Status | blocked |", notes)
+        self.assertIn("| Required agent | c2rust-migrator |", notes)
         self.assertIn("| Required model | GLM-5.1 |", notes)
         self.assertIn("| Required proof class | competition-exact |", notes)
         self.assertIn("| Actual highest proof class | local-simulation |", notes)
@@ -166,6 +168,44 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             milestone_release_notes.build_release_notes(payload)
 
         self.assertIn("competition_host_readiness.status must be ready", str(raised.exception))
+
+    def test_release_notes_allow_competition_exact_preflight_when_host_ready(self) -> None:
+        payload = self._bundle()
+        payload["publishability"].update(
+            {
+                "status": "external_release_ready",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": True,
+                "external_milestone": True,
+                "competition_exact_publishable": True,
+                "focused_run": False,
+            }
+        )
+        payload["competition_host_readiness"].update(
+            {
+                "status": "ready",
+                "all_entrypoints_competition_exact": True,
+                "competition_exact_host_verified": True,
+                "external_milestone_claim_ready": True,
+                "missing_requirements": [],
+                "blocker_count": 0,
+            }
+        )
+        payload["opencode_runtime"]["preflight_proof_summary"]["proof_class"] = "competition-exact"
+
+        notes = milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("Readiness: `external_release_ready`", notes)
+        self.assertIn("| Required proof class | competition-exact |", notes)
+
+    def test_release_notes_reject_competition_exact_preflight_when_host_blocked(self) -> None:
+        payload = self._bundle()
+        payload["opencode_runtime"]["preflight_proof_summary"]["proof_class"] = "competition-exact"
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("proof_class must not claim competition-exact without host attestation", str(raised.exception))
 
     def test_release_notes_reject_passed_bundle_with_blockers(self) -> None:
         payload = self._bundle()
@@ -404,6 +444,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "focused_run": False,
                 "competition_exact_publishable": False,
                 "required_agent_tool": "opencode",
+                "required_agent": "c2rust-migrator",
                 "required_model": "GLM-5.1",
                 "opencode_glm51_required": True,
                 "opencode_glm51_preflight_status": "passed",
@@ -416,6 +457,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "report_kind": "competition-host-readiness",
                 "status": "blocked",
                 "required_agent_tool": "opencode",
+                "required_agent": "c2rust-migrator",
                 "required_model": "GLM-5.1",
                 "required_variant": "max",
                 "required_proof_class": "competition-exact",

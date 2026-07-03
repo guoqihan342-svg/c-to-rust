@@ -1295,6 +1295,22 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(ref["status"], "missing")
         self.assertNotIn("sha256", ref)
 
+    def test_materialized_competition_config_archive_requires_summary_output(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-archive-fixed-path-", dir=REPO_ROOT / "target"))
+        out_path = temp_dir / "judge-entrypoints-run-report.json"
+
+        with self.assertRaises(ValueError) as raised:
+            runner.materialize_competition_config_archive(
+                {"report_kind": "competition-config-archive"},
+                out_path=out_path,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertIn("summary/competition-config-archive/manifest.json", str(raised.exception))
+        self.assertFalse((temp_dir / "competition-config-archive").exists())
+
     def test_core_validation_ci_runs_judge_entrypoint_runner_tests(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
         self.assertIn("validation.tools.test_run_judge_entrypoints", workflow)

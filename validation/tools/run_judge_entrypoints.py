@@ -766,12 +766,21 @@ def materialize_competition_config_archive(
     out_path: Path,
     repo_root: Path,
 ) -> dict[str, Any]:
-    manifest_path = out_path.parent / "competition-config-archive" / "manifest.json"
+    manifest_path = competition_config_archive_manifest_path(out_path)
     manifest_payload = json.loads(json.dumps(config_archive))
     atomic_write_json(manifest_path, manifest_payload)
     archive = json.loads(json.dumps(config_archive))
     archive["materialized_manifest"] = artifact_ref(manifest_path, repo_root=repo_root)
     return archive
+
+
+def competition_config_archive_manifest_path(out_path: Path) -> Path:
+    if out_path.parent.name != "summary":
+        raise ValueError(
+            "competition config archive materialized_manifest path must be "
+            "summary/competition-config-archive/manifest.json"
+        )
+    return out_path.parent / "competition-config-archive" / "manifest.json"
 
 
 def candidate_config_files(root: Path) -> list[Path]:

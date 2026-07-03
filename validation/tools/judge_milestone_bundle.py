@@ -100,6 +100,16 @@ def build_judge_milestone_bundle(
             evidence_cost_sources.append(evidence_cost_source)
 
     proof_classes = build_proof_classes(entrypoint_reports)
+    exact_host_revalidation = build_exact_host_revalidation(
+        run_report,
+        entrypoint_reports,
+        repo_root=repo_root,
+    )
+    exact_host_revalidation_errors = exact_host_revalidation_blockers(exact_host_revalidation)
+    proof_classes = proof_classes_after_exact_host_revalidation(
+        proof_classes,
+        exact_host_revalidation,
+    )
     workflow_metrics = build_workflow_metrics_rollup(workflow_sources)
     core_translation_quality = build_core_translation_quality_rollup(core_quality_sources)
     before_after_repair_exhibit = build_before_after_repair_exhibit_rollup(core_quality_sources)
@@ -122,6 +132,7 @@ def build_judge_milestone_bundle(
         claim_boundary,
         run_report_contract=run_report_contract,
         proof_class_contract_errors=proof_class_contract_errors,
+        exact_host_revalidation_errors=exact_host_revalidation_errors,
         opencode_policy=opencode_policy,
         core_translation_quality=core_translation_quality,
         before_after_repair_exhibit=before_after_repair_exhibit,
@@ -185,6 +196,7 @@ def build_judge_milestone_bundle(
         "claim_scope": claim_scope,
         "proof_classes": proof_classes,
         "proof_class_rollup": proof_classes,
+        "exact_host_revalidation": exact_host_revalidation,
         "publishability": publishability,
         "competition_host_readiness": competition_host_readiness,
         "semantic_evidence_rollup": semantic_evidence,
@@ -388,6 +400,7 @@ def milestone_blockers(
     *,
     run_report_contract: list[str],
     proof_class_contract_errors: list[str],
+    exact_host_revalidation_errors: list[str],
     opencode_policy: dict[str, Any],
     core_translation_quality: dict[str, Any],
     before_after_repair_exhibit: dict[str, Any],
@@ -396,7 +409,11 @@ def milestone_blockers(
     evidence_cost_retention: dict[str, Any],
     opencode_runtime: dict[str, Any],
 ) -> list[str]:
-    blockers: list[str] = list(run_report_contract) + list(proof_class_contract_errors)
+    blockers: list[str] = (
+        list(run_report_contract)
+        + list(proof_class_contract_errors)
+        + list(exact_host_revalidation_errors)
+    )
     if run_report.get("status") != "passed":
         blockers.append("judge_entrypoints_not_passed")
     if not readiness.get("all_entrypoints_executed"):
@@ -640,6 +657,98 @@ def build_proof_classes(entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_exact_host_revalidation(
+    run_report: dict[str, Any],
+    entrypoints: list[dict[str, Any]],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    claimed_entrypoint_ids = [
+        str(entry.get("id", "unknown"))
+        for entry in entrypoints
+        if entry.get("proof_class") == "competition-exact"
+        and entrypoint_competition_host_attested(entry)
+    ]
+    result: dict[str, Any] = {
+        "report_kind": "exact-host-revalidation",
+        "required": bool(claimed_entrypoint_ids),
+        "status": "skipped",
+        "entrypoint_ids": claimed_entrypoint_ids,
+        "require_local_artifacts": True,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Competition-exact host attestation from a run report is publishable only after "
+            "revalidating the bound judge config with local artifacts."
+        ),
+    }
+    if not claimed_entrypoint_ids:
+        result["reason"] = "no_competition_exact_host_attestation_claim"
+        return result
+
+    config_ref = run_report.get("config")
+    if not isinstance(config_ref, dict) or not isinstance(config_ref.get("path"), str):
+        result.update({"status": "failed", "errors": ["run_report.config.path missing"]})
+        return result
+
+    config_path = str(config_ref["path"])
+    try:
+        validation = validator.validate_config(
+            resolve_input_path(Path(config_path), repo_root=repo_root),
+            require_local_artifacts=True,
+            repo_root=repo_root,
+            entrypoint_ids=claimed_entrypoint_ids,
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        result.update({"status": "failed", "errors": [str(error)]})
+        return result
+
+    result["validation_status"] = validation.get("status")
+    result["validated_config"] = validation.get("config", {})
+    result["validator_errors"] = validation.get("errors", [])
+    proof_contract = validation.get("proof_class_contract") if isinstance(validation, dict) else {}
+    if isinstance(proof_contract, dict):
+        result["proof_class_contract_status"] = proof_contract.get("status")
+        contract_entrypoints = proof_contract.get("entrypoints")
+        if isinstance(contract_entrypoints, dict):
+            result["proof_class_entrypoints"] = {
+                entrypoint_id: contract_entrypoints.get(entrypoint_id)
+                for entrypoint_id in claimed_entrypoint_ids
+            }
+    all_claimed_still_exact = all(
+        result.get("proof_class_entrypoints", {}).get(entrypoint_id) == "competition-exact"
+        for entrypoint_id in claimed_entrypoint_ids
+    )
+    if validation.get("status") == "passed" and all_claimed_still_exact:
+        result["status"] = "passed"
+    else:
+        result["status"] = "failed"
+        errors = list(result.get("validator_errors", []))
+        if not all_claimed_still_exact:
+            errors.append("proof_class_contract did not revalidate all claimed competition-exact entrypoints")
+        result["errors"] = errors or ["exact host revalidation failed"]
+    return result
+
+
+def exact_host_revalidation_blockers(revalidation: dict[str, Any]) -> list[str]:
+    if revalidation.get("required") is True and revalidation.get("status") != "passed":
+        return ["run_report_exact_host_revalidation_failed"]
+    return []
+
+
+def proof_classes_after_exact_host_revalidation(
+    proof_classes: dict[str, Any],
+    revalidation: dict[str, Any],
+) -> dict[str, Any]:
+    if revalidation.get("required") is not True or revalidation.get("status") == "passed":
+        return proof_classes
+    adjusted = deepcopy(proof_classes)
+    adjusted["competition_exact_host_verified"] = False
+    adjusted["exact_host_revalidation_status"] = revalidation.get("status")
+    adjusted["exact_host_revalidation_failed_entrypoints"] = list(revalidation.get("entrypoint_ids", []))
+    return adjusted
+
+
 def entrypoint_competition_host_attested(entry: dict[str, Any]) -> bool:
     if entry.get("competition_exact_host_attested") is True:
         return True
@@ -722,6 +831,7 @@ def build_publishability(
         "focused_run": not all_entrypoints,
         "competition_exact_publishable": competition_exact_publishable,
         "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
+        "required_agent": validator.COMPETITION_OPENCODE_AGENT,
         "required_model": validator.COMPETITION_OPENCODE_MODEL,
         "opencode_glm51_required": True,
         "opencode_glm51_preflight_status": preflight_status,
@@ -762,6 +872,7 @@ def build_competition_host_readiness(
         "report_kind": "competition-host-readiness",
         "status": "ready" if not missing_requirements else "blocked",
         "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
+        "required_agent": validator.COMPETITION_OPENCODE_AGENT,
         "required_model": validator.COMPETITION_OPENCODE_MODEL,
         "required_variant": validator.COMPETITION_OPENCODE_VARIANT,
         "required_proof_class": "competition-exact",
@@ -777,7 +888,7 @@ def build_competition_host_readiness(
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
         "boundary": (
-            "Competition host readiness is the P0-H9 launch contract for OpenCode + GLM-5.1 + max. "
+            "Competition host readiness is the P0-H9 launch contract for OpenCode + GLM-5.1 + c2rust-migrator + max. "
             "It is not semantic acceptance and does not increase translator-generated coverage."
         ),
     }
