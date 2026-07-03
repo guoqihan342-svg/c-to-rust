@@ -23,7 +23,7 @@
     "mode": "baseline_repair_gate",
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "6c43d2dcdc652ec6b30ad39dc146521633947c9dee748c6dd0a35a383812f118"
+      "sha256": "18ce38180a25c0b409add23a2d8f6b9a865deb4a70a0221f5d6853954349c871"
     }
   },
   "claim_boundary": {
@@ -40,7 +40,7 @@
   },
   "competition_profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-    "sha256": "41565671ff62626f020ebbf00a6e4930ddd554acd11477e7bda7e267a83499b3"
+    "sha256": "e8b5cfadb8603e80db566ebd304f53b779edc15d08507963da29fbb1a85944bb"
   },
   "environment_profile": {
     "path": "config/competition-env/environment.json",
@@ -201,7 +201,7 @@
     },
     "oracle_evidence": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-      "sha256": "6a5fee96d6c5f703e7de7c16c9eb26cfe9b8d10fcbb8eb131b5626d42e89122a"
+      "sha256": "5747de2636f4dd4f108a8357fde9c16c1b5d250ae6927dd37bab843eee11c148"
     },
     "raw_unsafe_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
@@ -221,7 +221,7 @@
     },
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "6c43d2dcdc652ec6b30ad39dc146521633947c9dee748c6dd0a35a383812f118"
+      "sha256": "18ce38180a25c0b409add23a2d8f6b9a865deb4a70a0221f5d6853954349c871"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-before-after-unsafe-scan.json",

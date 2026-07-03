@@ -961,6 +961,59 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             )
         self.assertIn("correctness_role", str(raised.exception))
 
+    def test_committed_real_fdb_crc32_c2rust_baseline_contract_is_current(self) -> None:
+        module = load_validator_module()
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-calc-crc32"
+        )
+        prefix = "l3-real-fdb-calc-crc32"
+        slice_spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+
+        module.validate_route_baseline_profile_refs(evidence_dir, prefix, slice_spec_path)
+
+        baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+        baseline = module.load_json(baseline_path)
+        route = module.load_json(route_path)
+        profile = module.load_json(profile_path)
+
+        self.assertEqual(baseline["status"], "generated")
+        self.assertEqual(baseline["reason"], "generated_by_c2rust")
+        self.assertEqual(baseline["correctness_role"], "candidate_context_only")
+        self.assertEqual(
+            baseline["output"]["sha256"],
+            "7ea393d1d09f0f4f91127247599b4d91c3be3c350e70cc384902e1c8db34b316",
+        )
+        self.assertEqual(
+            self._sha256(REPO_ROOT / baseline["output"]["path"]),
+            baseline["output"]["sha256"],
+        )
+        self.assertEqual(baseline["compile"]["status"], "passed")
+        self.assertTrue(baseline["compile"]["attempted"])
+        self.assertIs(baseline["compile"]["semantic_pass"], False)
+        self.assertEqual(
+            baseline["compile"]["artifact"]["sha256"],
+            "4d0d490231ca443d76b759346557a2fc319f167092cdd37e6bde83705d7b73bf",
+        )
+        self.assertEqual(
+            self._sha256(REPO_ROOT / baseline["compile"]["artifact"]["path"]),
+            baseline["compile"]["artifact"]["sha256"],
+        )
+
+        route_candidate = route["candidate_generation"]["c2rust_baseline"]
+        profile_candidate = profile["candidate_generation"]["c2rust_baseline"]
+        self.assertEqual(route_candidate, profile_candidate)
+        self.assertEqual(route_candidate["baseline_manifest"]["sha256"], self._sha256(baseline_path))
+        self.assertEqual(route_candidate["output_ref"], module.c2rust_baseline_expected_output_ref(baseline))
+        self.assertIs(route_candidate["semantic_pass"], False)
+        self.assertIs(route_candidate["generated_draft_semantic_pass"], False)
+
     def test_rejects_c2rust_candidate_status_reason_drift_from_baseline_manifest(self) -> None:
         module = load_validator_module()
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

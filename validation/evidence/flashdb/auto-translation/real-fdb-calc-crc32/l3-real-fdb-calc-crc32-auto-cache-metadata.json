@@ -10,7 +10,7 @@
   },
   "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
   "c2rust_baseline_identity": {
-    "sha256": "cd67043f32053002080a86c687cbe6357d0644a5b75c01c5ac3fabbd6789bf06",
+    "sha256": "8229fcbaf6695fd2c4fd93442e4544aaed526227cce5edd8fab7881eecc3ab33",
     "status": "generated"
   },
   "c_oracle_harness_identity": {
@@ -51,24 +51,24 @@
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
+    "sha256": "6253b343373cc35a9c27eb02be75e521c88548180149aba079acc0a750de0958"
   },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
+      "sha256": "45e686a2ca35eb1f36e035f260c0110dd60b09de4dafd560a8cd75a597f1cab3",
       "status": "generated"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-      "sha256": "1e9218998f0afc66da01c97e84aed5c6c9dadf32f3640d52085e093943de6ab1",
+      "sha256": "1bde2ce0a68d1fac0acc79f8be918360e5727421c5814a2a74a84bee16ce703f",
       "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "2e9ea5827e8e603b29f14779c5ad3fad37b57b1e9e6510d2286a30448ec32058",
+      "sha256": "4ee2c070bf0dff6f166f377ed35c1fbc7be25b9e46c76289365d796b79ee9058",
       "status": "passed"
     }
   },
@@ -115,7 +115,7 @@
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "ada2503942136ca42ab5c3a862606acd4efe40ba20eafe4952601dcf6e0116b2",
+    "sha256": "e650e6c5bde546442e06a2b644732bfd471eb48921e1d6fd04f8bd95c7e2b1ae",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {
@@ -147,7 +147,7 @@
   "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "1f36dd94ed078a526b4cca816d8cd223576b505f38265d993fb73eef8a27e7d4",
+    "sha256": "0f2c1eb07c70a4837a0cc5d6915d3bd181776fbe0631d8df157fe8edeb13a1cb",
     "status": "passed"
   }
 }
