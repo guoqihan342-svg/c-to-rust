@@ -1872,10 +1872,19 @@ def validate_context_management_contract(
     pipeline = payload.get("context_management_contract", {}).get("pipeline")
     if not isinstance(pipeline, list) or not pipeline:
         raise ValueError("context_management_contract.pipeline must be a non-empty list")
-    stages = {item.get("stage") for item in pipeline if isinstance(item, dict)}
+    stage_names = []
+    for item in pipeline:
+        if not isinstance(item, dict) or not isinstance(item.get("stage"), str):
+            raise ValueError(
+                f"context_management_contract.pipeline stages must be {list(REQUIRED_CONTEXT_STAGES)}"
+            )
+        stage_names.append(item["stage"])
+    stages = set(stage_names)
     missing_stages = [stage for stage in REQUIRED_CONTEXT_STAGES if stage not in stages]
     if missing_stages:
         raise ValueError(f"context_management_contract.pipeline missing stages: {missing_stages}")
+    if stage_names != list(REQUIRED_CONTEXT_STAGES):
+        raise ValueError(f"context_management_contract.pipeline stages must be {list(REQUIRED_CONTEXT_STAGES)}")
     repair_stage = next(item for item in pipeline if isinstance(item, dict) and item.get("stage") == "repair")
     if repair_stage.get("max_rounds") != 5:
         raise ValueError("context_management_contract repair max_rounds must be 5")
@@ -1936,6 +1945,8 @@ def validate_agent_coordination_contract(
     missing_roles = [role for role in REQUIRED_AGENT_ROLES if role not in roles]
     if missing_roles:
         raise ValueError(f"agent_coordination_contract.roles missing roles: {missing_roles}")
+    if set(roles) != set(REQUIRED_AGENT_ROLES):
+        raise ValueError(f"agent_coordination_contract.roles must be {list(REQUIRED_AGENT_ROLES)}")
     repairer = require_object(roles.get("repairer"), "agent_coordination_contract.roles.repairer")
     if repairer.get("round_cap") != 5:
         raise ValueError("agent_coordination_contract.roles.repairer.round_cap must be 5")

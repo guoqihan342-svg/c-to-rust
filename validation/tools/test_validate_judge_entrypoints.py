@@ -1547,6 +1547,109 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_context_management_pipeline_must_match_canonical_stages(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="context-pack-pipeline-", dir=target_dir))
+        context_pack = temp_dir / "out" / "harness" / "context-pack.json"
+        agent_index = temp_dir / "out" / "harness" / "agent-index.json"
+        primary_report = temp_dir / "out" / "harness" / "evaluate-report.json"
+        ledger = temp_dir / "out" / "state" / "opencode-agent-harness.sqlite3"
+        payload = {
+            "report_kind": "context-pack",
+            "entrypoints": {
+                "primary_report": repo_relative(primary_report),
+                "evaluate_report": repo_relative(primary_report),
+            },
+            "context_management_contract": {
+                "contract_kind": "context-management",
+                "schema_version": 1,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+                "evidence_policy": "on-disk-artifacts-only",
+                "context_pack": repo_relative(context_pack),
+                "agent_index": repo_relative(agent_index),
+                "primary_report": repo_relative(primary_report),
+                "report_entrypoint": "evaluate_report",
+                "resume_protocol": {
+                    "checkpoint_backend": "sqlite",
+                    "ledger_path": repo_relative(ledger),
+                    "worker_state_source": "agent-index.agents_by_worker_id",
+                },
+                "pipeline": [
+                    {"stage": "plan"},
+                    {"stage": "translate", "fanout": True},
+                    {"stage": "audit"},
+                    {"stage": "verify"},
+                    {"stage": "repair", "max_rounds": 5},
+                ],
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "context_management_contract.pipeline stages must be \\['plan', 'translate', 'verify', 'repair'\\]",
+        ):
+            validator.validate_context_management_contract(
+                payload,
+                path_text=repo_relative(context_pack),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                },
+                repo_root=REPO_ROOT,
+            )
+
+    def test_agent_coordination_roles_must_match_canonical_set(self) -> None:
+        payload = {
+            "report_kind": "agent-index",
+            "agent_coordination_contract": {
+                "contract_kind": "agent-coordination",
+                "schema_version": 1,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+                "checkpoint_backend": "sqlite",
+                "worker_count": 1,
+                "roles": {
+                    "planner": {},
+                    "worker": {"isolation": "per-worker out_root"},
+                    "repairer": {"round_cap": 5},
+                    "verifier": {},
+                    "reporter": {},
+                    "observer": {},
+                },
+            },
+            "agents": [
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": "target/out/harness/assignments/worker-001.json",
+                    "request_path": "target/out/harness/assignments/worker-001-request.json",
+                    "summary_path": "target/out/workers/worker-001/summary/competition-run-summary.json",
+                    "report_path": "target/out/workers/worker-001/harness/run-worker-report.json",
+                    "isolated_out_root": "target/out/workers/worker-001",
+                }
+            ],
+            "agents_by_worker_id": {
+                "worker-001": {
+                    "worker_id": "worker-001",
+                    "assignment_path": "target/out/harness/assignments/worker-001.json",
+                    "request_path": "target/out/harness/assignments/worker-001-request.json",
+                    "summary_path": "target/out/workers/worker-001/summary/competition-run-summary.json",
+                    "report_path": "target/out/workers/worker-001/harness/run-worker-report.json",
+                    "isolated_out_root": "target/out/workers/worker-001",
+                }
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "agent_coordination_contract.roles must be \\['planner', 'worker', 'repairer', 'verifier', 'reporter'\\]",
+        ):
+            validator.validate_agent_coordination_contract(
+                payload,
+                path_text="target/out/harness/agent-index.json",
+            )
+
     def test_expected_artifacts_rejects_drive_prefix_with_artifact_name(self) -> None:
         with self.assertRaisesRegex(
             ValueError,
