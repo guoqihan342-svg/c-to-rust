@@ -1566,6 +1566,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             "config/competition-env/rust/rust-toolchain.toml",
             "config/competition-env/judge-entrypoints/flashdb-harness.json",
             "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+            "config/competition-env/review-checklists/opencode-glm-host-acceptance.json",
             "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         }
         self.assertTrue(required_paths.issubset(set(bundle["files"])))
@@ -1879,6 +1880,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         with mock.patch.object(validator, "load_json", side_effect=load_json_with_plugin):
             with self.assertRaisesRegex(ValueError, "opencode.json plugin must be empty"):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_competition_env_bundle_rejects_glm_host_acceptance_model_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+        original_load_json = validator.load_json
+
+        def load_json_with_model_drift(path: Path) -> dict:
+            payload = original_load_json(path)
+            if Path(path).as_posix().endswith(
+                "config/competition-env/review-checklists/opencode-glm-host-acceptance.json"
+            ):
+                payload["required_model"] = "GLM-5.10"
+            return payload
+
+        with mock.patch.object(validator, "load_json", side_effect=load_json_with_model_drift):
+            with self.assertRaisesRegex(ValueError, "opencode-glm-host-acceptance required_model must be GLM-5.1"):
                 validator.validate_competition_env_bundle_contract(
                     load_default_config(),
                     manifest_path=temp_manifest,

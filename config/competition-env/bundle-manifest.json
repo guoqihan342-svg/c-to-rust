@@ -124,6 +124,11 @@
       "sha256": "6d01d08d81c7edf333ee6a85cbc9d6d5c8b84ee4c59c52f726d8b11d5a585f7d"
     },
     {
+      "path": "config/competition-env/review-checklists/opencode-glm-host-acceptance.json",
+      "role": "opencode-glm-host-acceptance",
+      "sha256": "3a0c3d7144579450251bfd3afc2a8714c5dea3b141687c94a159e132e7330fa7"
+    },
+    {
       "path": "config/competition-env/opencode-single-interaction.md",
       "role": "opencode-runbook",
       "sha256": "53172cf2592b6cbf82a631b344d7a8dd26caa7ee39c2c1f1e0dac956dac4bb61"

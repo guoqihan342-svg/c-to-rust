@@ -1,0 +1,31 @@
+{
+  "acceptance_boundary": {
+    "all_entrypoints_required": true,
+    "chat_output_is_evidence": false,
+    "fresh_lf_clone_required": true,
+    "require_local_artifacts": true
+  },
+  "claim_boundary": {
+    "boundary": "This checklist declares the competition-host acceptance contract only. It does not claim semantic progress, generated Rust acceptance, or P0-H9 closure without a real OpenCode GLM-5.1 max run.",
+    "chat_output_is_evidence": false,
+    "generated_draft_semantic_pass": false,
+    "semantic_gate": false,
+    "translation_coverage_numerator": 0
+  },
+  "local_simulation_closes_p0_h9": false,
+  "missing_model_root_cause_key": "opencode_model_unavailable",
+  "report_kind": "opencode-glm-host-acceptance",
+  "required_agent_tool": "opencode",
+  "required_evidence": {
+    "host_attestation": true,
+    "opencode_model_probe": true,
+    "opencode_preflight_report": true,
+    "opencode_session_evidence": true,
+    "public_packet_competition_host_readiness": true
+  },
+  "required_model": "GLM-5.1",
+  "required_proof_class": "competition-exact",
+  "required_variant": "max",
+  "schema_version": 1,
+  "status": "blocked"
+}

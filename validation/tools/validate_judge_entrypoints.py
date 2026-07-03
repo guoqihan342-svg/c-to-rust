@@ -28,6 +28,7 @@ from validation.tools import milestone_release_report
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
 COMPETITION_ENV_ROOT = "config/competition-env"
 COMPETITION_ENV_BUNDLE_MANIFEST = Path("config") / "competition-env" / "bundle-manifest.json"
+OPENCODE_GLM_HOST_ACCEPTANCE_PATH = "config/competition-env/review-checklists/opencode-glm-host-acceptance.json"
 COMPETITION_ENV_BUNDLE_FILE_ROLES = {
     "config/competition-env/README.en.md": "competition-env-readme",
     "config/competition-env/README.md": "competition-env-readme",
@@ -46,6 +47,7 @@ COMPETITION_ENV_BUNDLE_FILE_ROLES = {
     "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json": "planned-batch-profile",
     "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json": "planned-batch-profile",
     "config/competition-env/review-checklists/flashdb-harness-internal-review.json": "review-gate",
+    OPENCODE_GLM_HOST_ACCEPTANCE_PATH: "opencode-glm-host-acceptance",
     "config/competition-env/rust/rust-toolchain.toml": "rust-toolchain",
     "config/competition-env/smoke.sh": "competition-smoke-entrypoint",
     "config/competition-env/toolchain-check.sh": "toolchain-smoke",
@@ -491,6 +493,72 @@ def validate_flashdb_bootstrap_source_pin(script_path: Path, source_pin: dict[st
             raise ValueError(f"bootstrap_flashdb_sources.sh {constant} must match environment.source_pins.flashdb")
 
 
+def validate_opencode_glm_host_acceptance_contract(
+    payload: dict[str, Any],
+    *,
+    label: str = "opencode-glm-host-acceptance",
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object")
+    if payload.get("schema_version") != 1:
+        raise ValueError(f"{label} schema_version must be 1")
+    if payload.get("report_kind") != "opencode-glm-host-acceptance":
+        raise ValueError(f"{label} report_kind must be opencode-glm-host-acceptance")
+    if payload.get("status") != "blocked":
+        raise ValueError(f"{label} status must be blocked until real competition host evidence exists")
+    if payload.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"{label} required_agent_tool must be {COMPETITION_OPENCODE_COMMAND}")
+    if payload.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{label} required_model must be {COMPETITION_OPENCODE_MODEL}")
+    if payload.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{label} required_variant must be {COMPETITION_OPENCODE_VARIANT}")
+    if payload.get("required_proof_class") != "competition-exact":
+        raise ValueError(f"{label} required_proof_class must be competition-exact")
+    if payload.get("local_simulation_closes_p0_h9") is not False:
+        raise ValueError(f"{label} local_simulation_closes_p0_h9 must be false")
+    if payload.get("missing_model_root_cause_key") != "opencode_model_unavailable":
+        raise ValueError(f"{label} missing_model_root_cause_key must be opencode_model_unavailable")
+
+    required_evidence = require_object(payload.get("required_evidence"), f"{label}.required_evidence")
+    for field in (
+        "host_attestation",
+        "opencode_model_probe",
+        "opencode_preflight_report",
+        "opencode_session_evidence",
+        "public_packet_competition_host_readiness",
+    ):
+        if required_evidence.get(field) is not True:
+            raise ValueError(f"{label}.required_evidence.{field} must be true")
+
+    acceptance_boundary = require_object(payload.get("acceptance_boundary"), f"{label}.acceptance_boundary")
+    for field in ("fresh_lf_clone_required", "all_entrypoints_required", "require_local_artifacts"):
+        if acceptance_boundary.get(field) is not True:
+            raise ValueError(f"{label}.acceptance_boundary.{field} must be true")
+    if acceptance_boundary.get("chat_output_is_evidence") is not False:
+        raise ValueError(f"{label}.acceptance_boundary.chat_output_is_evidence must be false")
+
+    claim_boundary = require_object(payload.get("claim_boundary"), f"{label}.claim_boundary")
+    if claim_boundary.get("semantic_gate") is not False:
+        raise ValueError(f"{label}.claim_boundary.semantic_gate must be false")
+    if claim_boundary.get("generated_draft_semantic_pass") is not False:
+        raise ValueError(f"{label}.claim_boundary.generated_draft_semantic_pass must be false")
+    if claim_boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError(f"{label}.claim_boundary.translation_coverage_numerator must be 0")
+    if claim_boundary.get("chat_output_is_evidence") is not False:
+        raise ValueError(f"{label}.claim_boundary.chat_output_is_evidence must be false")
+
+    return {
+        "status": "passed",
+        "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "required_variant": COMPETITION_OPENCODE_VARIANT,
+        "required_proof_class": "competition-exact",
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "local_simulation_closes_p0_h9": False,
+    }
+
+
 def validate_competition_env_bundle_contract(
     config: dict[str, Any],
     *,
@@ -561,6 +629,8 @@ def validate_competition_env_bundle_contract(
             "status": "present",
         }
         roles[path_text] = role
+        if path_text == OPENCODE_GLM_HOST_ACCEPTANCE_PATH:
+            validate_opencode_glm_host_acceptance_contract(load_json(path))
 
     required_paths = set(COMPETITION_ENV_BUNDLE_FILE_ROLES)
     missing_required = sorted(required_paths - set(result_files))
