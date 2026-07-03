@@ -5754,6 +5754,60 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_validate_opencode_preflight_report_rejects_report_argv_drift_from_handoff(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            payload["argv"] = [
+                "opencode",
+                "run",
+                "--dir",
+                ".",
+                "--format",
+                "json",
+                "--variant",
+                "max",
+                "--model",
+                "openai/gpt-5.1",
+                "Execute test preflight marker.",
+            ]
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight report argv must match handoff_contract.opencode_argv"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_validate_opencode_preflight_report_rejects_local_absolute_report_argv(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            handoff_path = REPO_ROOT / payload["handoff_contract"]["path"]
+            handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+            bad_argv = list(payload["argv"])
+            bad_argv[0] = "C:/Users/me/AppData/Roaming/npm/opencode.CMD"
+            payload["argv"] = bad_argv
+            handoff_payload["opencode_argv"] = bad_argv
+            handoff_payload["opencode_command_line"] = harness.shell_command_line(bad_argv)
+            handoff_path.write_text(json.dumps(handoff_payload, sort_keys=True) + "\n", encoding="utf-8")
+            payload["handoff_contract"]["sha256"] = harness.sha256_file(handoff_path)
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight report argv must be portable"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_validate_opencode_preflight_report_rejects_model_probe_log_hash_drift(self) -> None:
         with temp_repo_dir() as tmp:
             preflight_report = write_passing_opencode_preflight_report(
@@ -7776,6 +7830,20 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         "opencode_variant": "max",
         "opencode_skip_permissions": False,
     }
+    preflight_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        "max",
+        "--model",
+        "GLM-5.1",
+        "Execute test preflight marker.",
+    ]
+    preflight_command_line = harness.shell_command_line(preflight_argv)
     write_json(
         contract_path,
         {
@@ -7786,8 +7854,11 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
             "worker_command": marker_command,
             "worker_command_line": marker_command_line,
             "worker_command_sha256": harness.sha256_text(marker_command_line),
+            "opencode_argv": preflight_argv,
+            "opencode_command_line": preflight_command_line,
             "launch_policy": launch_policy,
             "launch_policy_sha256": harness.opencode_launch_policy_sha256(launch_policy),
+            "prompt": preflight_argv[-1],
         },
     )
     write_json(
@@ -7820,6 +7891,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
                 "status": "passed",
                 "exit_code": 0,
                 "process_returncode": 0,
+                "argv": preflight_argv,
                 "opencode_run_launched": True,
                 "marker_path": repo_rel(marker_path),
                 "marker_exists": True,

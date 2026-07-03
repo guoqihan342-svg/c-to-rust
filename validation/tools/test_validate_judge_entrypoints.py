@@ -723,6 +723,27 @@ def opencode_launch_policy_sha256(policy: dict) -> str:
     return hashlib.sha256(json.dumps(policy, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def opencode_preflight_argv(launch_policy: dict) -> list[str]:
+    argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        launch_policy["opencode_variant"],
+        "--model",
+        launch_policy["opencode_model"],
+    ]
+    if launch_policy.get("opencode_agent"):
+        argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy.get("opencode_skip_permissions"):
+        argv.append("--dangerously-skip-permissions")
+    argv.append("Execute test preflight marker.")
+    return argv
+
+
 def set_artifact_ref(ref: dict, path: Path, payload: dict | None = None) -> None:
     if payload is None:
         payload = {"report_kind": "test-artifact"}
@@ -752,6 +773,8 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
         run_id,
     ]
     marker_command_line = shlex.join(marker_command)
+    preflight_argv = opencode_preflight_argv(launch_policy)
+    preflight_command_line = shlex.join(preflight_argv)
     write_json(
         marker_path,
         {
@@ -771,8 +794,11 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
             "worker_command": marker_command,
             "worker_command_line": marker_command_line,
             "worker_command_sha256": validator.sha256_text(marker_command_line),
+            "opencode_argv": preflight_argv,
+            "opencode_command_line": preflight_command_line,
             "launch_policy": launch_policy,
             "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+            "prompt": preflight_argv[-1],
             "opencode_runtime_env": runtime_env,
         },
     )
@@ -809,6 +835,7 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
         "report_kind": "opencode-preflight-report",
         "status": "passed",
         "process_returncode": 0,
+        "argv": preflight_argv,
         "marker_exists": True,
         "marker_path": repo_relative(marker_path),
         "opencode_run_launched": True,
@@ -2764,6 +2791,44 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"]["sha256"] = new_sha
 
         with self.assertRaisesRegex(ValueError, "opencode_model_availability.argv must be opencode models"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_report_argv_drift_from_handoff(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-report-argv-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_payload["argv"] = [
+            "opencode",
+            "run",
+            "--dir",
+            ".",
+            "--format",
+            "json",
+            "--variant",
+            "max",
+            "--model",
+            "openai/gpt-5.1",
+            "Execute test preflight marker.",
+        ]
+        write_json(preflight_path, preflight_payload)
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
+
+        with self.assertRaisesRegex(ValueError, r"opencode_preflight_report.argv must match handoff_contract.opencode_argv"):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),

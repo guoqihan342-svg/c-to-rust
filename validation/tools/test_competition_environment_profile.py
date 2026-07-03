@@ -802,6 +802,21 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 "preflight-run",
             ]
             worker_command_line = judge_validator.shell_command_line(worker_command)
+            opencode_argv = [
+                "opencode",
+                "run",
+                "--dir",
+                ".",
+                "--format",
+                "json",
+                "--variant",
+                "max",
+                "--model",
+                "GLM-5.1",
+                "--dangerously-skip-permissions",
+                "Execute test preflight marker.",
+            ]
+            opencode_command_line = judge_validator.shell_command_line(opencode_argv)
             marker_path.write_text(
                 json.dumps(
                     {
@@ -825,8 +840,11 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "worker_command": worker_command,
                         "worker_command_line": worker_command_line,
                         "worker_command_sha256": judge_validator.sha256_text(worker_command_line),
+                        "opencode_argv": opencode_argv,
+                        "opencode_command_line": opencode_command_line,
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": launch_policy_sha,
+                        "prompt": opencode_argv[-1],
                         "opencode_runtime_env": runtime_env,
                     },
                     sort_keys=True,
@@ -869,6 +887,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "status": "passed",
                         "exit_code": 0,
                         "process_returncode": 0,
+                        "argv": opencode_argv,
                         "opencode_run_launched": True,
                         "marker_path": "target/harness/opencode-preflight-marker.json",
                         "marker_exists": True,

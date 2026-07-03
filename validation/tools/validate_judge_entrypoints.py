@@ -2174,6 +2174,75 @@ def opencode_models_argv_matches(value: Any, *, expected_command: str) -> bool:
     return value == [expected_command, "models"]
 
 
+def require_string_argv(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
+        raise ValueError(f"{label} must be a non-empty string list")
+    for argument in value:
+        assert_no_local_absolute_path(argument)
+    return value
+
+
+def validate_opencode_run_argv_binding(value: Any, label: str, *, launch_policy: dict[str, Any]) -> list[str]:
+    argv = require_string_argv(value, label)
+    if len(argv) < 3 or not opencode_command_argv_matches(argv[0], launch_policy["opencode_command"]) or argv[1] != "run":
+        raise ValueError(f"{label} must run opencode run")
+    flags: dict[str, str] = {}
+    bool_flags: set[str] = set()
+    prompt: list[str] = []
+    index = 2
+    while index < len(argv):
+        item = argv[index]
+        if not item.startswith("--"):
+            prompt = argv[index:]
+            break
+        if item == "--dangerously-skip-permissions":
+            if item in bool_flags:
+                raise ValueError(f"{label} duplicate {item}")
+            bool_flags.add(item)
+            index += 1
+            continue
+        if item in flags:
+            raise ValueError(f"{label} duplicate {item}")
+        if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+            raise ValueError(f"{label} {item} must have a value")
+        flags[item] = argv[index + 1]
+        index += 2
+    if len(prompt) != 1 or not prompt[0].strip():
+        raise ValueError(f"{label} prompt must be the final non-empty argv item")
+    required_flags = {
+        "--dir",
+        "--format",
+        "--variant",
+        "--model",
+    }
+    missing = sorted(required_flags - flags.keys())
+    if missing:
+        raise ValueError(f"{label} missing {' '.join(missing)}")
+    allowed_flags = set(required_flags)
+    if launch_policy.get("opencode_agent") is not None:
+        allowed_flags.add("--agent")
+    unexpected_flags = sorted(set(flags) - allowed_flags)
+    if unexpected_flags:
+        raise ValueError(f"{label} has unexpected flags: {' '.join(unexpected_flags)}")
+    if flags["--dir"] != ".":
+        raise ValueError(f"{label} --dir must be portable repo root .")
+    if flags["--format"] != "json":
+        raise ValueError(f"{label} --format must be json")
+    if flags["--variant"] != launch_policy["opencode_variant"]:
+        raise ValueError(f"{label} --variant must be {launch_policy['opencode_variant']}")
+    if flags["--model"] != launch_policy["opencode_model"]:
+        raise ValueError(f"{label} --model must be {launch_policy['opencode_model']}")
+    expected_agent = launch_policy.get("opencode_agent")
+    if expected_agent is None and "--agent" in flags:
+        raise ValueError(f"{label} --agent must be absent")
+    if expected_agent is not None and flags.get("--agent") != expected_agent:
+        raise ValueError(f"{label} --agent must be {expected_agent}")
+    skip_permissions_present = "--dangerously-skip-permissions" in bool_flags
+    if skip_permissions_present != bool(launch_policy.get("opencode_skip_permissions")):
+        raise ValueError(f"{label} --dangerously-skip-permissions must match launch_policy")
+    return argv
+
+
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
     candidate = model_id.strip().strip("`'\"*,")
     required = required_model.casefold()
@@ -2557,6 +2626,23 @@ def validate_opencode_preflight_binding(
         )
         if worker_command_sha256 != sha256_text(worker_command_line):
             raise ValueError(f"{label}.handoff_contract.worker_command_sha256 must match worker_command_line")
+        report_argv = require_string_argv(preflight_payload.get("argv"), f"{label}.argv")
+        handoff_argv = require_string_argv(
+            handoff_payload.get("opencode_argv"),
+            f"{label}.handoff_contract.opencode_argv",
+        )
+        if report_argv != handoff_argv:
+            raise ValueError(f"{label}.argv must match handoff_contract.opencode_argv")
+        validate_opencode_run_argv_binding(report_argv, f"{label}.argv", launch_policy=launch_policy)
+        handoff_command_line = require_string(
+            handoff_payload.get("opencode_command_line"),
+            f"{label}.handoff_contract.opencode_command_line",
+        )
+        if handoff_command_line != shell_command_line(handoff_argv):
+            raise ValueError(f"{label}.handoff_contract.opencode_command_line must match opencode_argv")
+        handoff_prompt = require_string(handoff_payload.get("prompt"), f"{label}.handoff_contract.prompt")
+        if handoff_prompt != handoff_argv[-1]:
+            raise ValueError(f"{label}.handoff_contract.prompt must match opencode_argv prompt")
         expected_marker_path = require_string(
             handoff_payload.get("expected_marker_path"),
             f"{label}.handoff_contract.expected_marker_path",

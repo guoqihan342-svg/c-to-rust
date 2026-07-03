@@ -6113,6 +6113,41 @@ def validate_opencode_preflight_session_contract(
             "opencode preflight handoff_contract.worker_command_sha256 mismatch: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
+    report_argv = require_opencode_string_argv(
+        report.get("argv"),
+        label="opencode preflight report argv",
+        report_path=report_path,
+        repo_root=repo_root,
+    )
+    handoff_argv = require_opencode_string_argv(
+        handoff.get("opencode_argv"),
+        label="opencode preflight handoff_contract.opencode_argv",
+        report_path=report_path,
+        repo_root=repo_root,
+    )
+    if report_argv != handoff_argv:
+        raise SystemExit(
+            "opencode preflight report argv must match handoff_contract.opencode_argv: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    validate_opencode_run_argv_binding(
+        report_argv,
+        label="opencode preflight report argv",
+        launch_policy=launch_policy,
+        report_path=report_path,
+        repo_root=repo_root,
+    )
+    handoff_command_line = handoff.get("opencode_command_line")
+    if handoff_command_line != shell_command_line(handoff_argv):
+        raise SystemExit(
+            "opencode preflight handoff_contract.opencode_command_line mismatch: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if handoff.get("prompt") != handoff_argv[-1]:
+        raise SystemExit(
+            "opencode preflight handoff_contract.prompt must match opencode_argv prompt: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
 
     session_path = validate_hash_bound_artifact_ref(
         report.get("opencode_session_evidence"),
@@ -7293,6 +7328,132 @@ def opencode_models_argv_matches(value: Any, *, expected_command: str) -> bool:
     if not isinstance(value, list) or len(value) != 2:
         return False
     return opencode_command_argv_matches(value[0], expected_command) and value[1] == "models"
+
+
+def require_opencode_string_argv(
+    value: Any,
+    *,
+    label: str,
+    report_path: Path,
+    repo_root: Path,
+) -> list[str]:
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
+        raise SystemExit(
+            f"{label} must be a non-empty string list: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    for argument in value:
+        if LOCAL_ABSOLUTE_PATH_TEXT.search(argument):
+            raise SystemExit(
+                f"{label} must be portable and must not contain local absolute paths: "
+                f"{repo_relative(report_path, repo_root=repo_root)}"
+            )
+    return value
+
+
+def validate_opencode_run_argv_binding(
+    value: Any,
+    *,
+    label: str,
+    launch_policy: dict[str, Any],
+    report_path: Path,
+    repo_root: Path,
+) -> list[str]:
+    argv = require_opencode_string_argv(value, label=label, report_path=report_path, repo_root=repo_root)
+    if len(argv) < 3 or not opencode_command_argv_matches(argv[0], launch_policy["opencode_command"]) or argv[1] != "run":
+        raise SystemExit(
+            f"{label} must run opencode run: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    flags: dict[str, str] = {}
+    bool_flags: set[str] = set()
+    prompt: list[str] = []
+    index = 2
+    while index < len(argv):
+        item = argv[index]
+        if not item.startswith("--"):
+            prompt = argv[index:]
+            break
+        if item == "--dangerously-skip-permissions":
+            if item in bool_flags:
+                raise SystemExit(
+                    f"{label} duplicate {item}: "
+                    f"{repo_relative(report_path, repo_root=repo_root)}"
+                )
+            bool_flags.add(item)
+            index += 1
+            continue
+        if item in flags:
+            raise SystemExit(
+                f"{label} duplicate {item}: "
+                f"{repo_relative(report_path, repo_root=repo_root)}"
+            )
+        if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
+            raise SystemExit(
+                f"{label} {item} must have a value: "
+                f"{repo_relative(report_path, repo_root=repo_root)}"
+            )
+        flags[item] = argv[index + 1]
+        index += 2
+    if len(prompt) != 1 or not prompt[0].strip():
+        raise SystemExit(
+            f"{label} prompt must be the final non-empty argv item: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    required_flags = {"--dir", "--format", "--variant", "--model"}
+    missing = sorted(required_flags - flags.keys())
+    if missing:
+        raise SystemExit(
+            f"{label} missing {' '.join(missing)}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    allowed_flags = set(required_flags)
+    if launch_policy.get("opencode_agent") is not None:
+        allowed_flags.add("--agent")
+    unexpected_flags = sorted(set(flags) - allowed_flags)
+    if unexpected_flags:
+        raise SystemExit(
+            f"{label} has unexpected flags: {' '.join(unexpected_flags)}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if flags["--dir"] != ".":
+        raise SystemExit(
+            f"{label} --dir must be portable repo root .: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if flags["--format"] != "json":
+        raise SystemExit(
+            f"{label} --format must be json: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if flags["--variant"] != launch_policy["opencode_variant"]:
+        raise SystemExit(
+            f"{label} --variant must be {launch_policy['opencode_variant']}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if flags["--model"] != launch_policy["opencode_model"]:
+        raise SystemExit(
+            f"{label} --model must be {launch_policy['opencode_model']}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    expected_agent = launch_policy.get("opencode_agent")
+    if expected_agent is None and "--agent" in flags:
+        raise SystemExit(
+            f"{label} --agent must be absent: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if expected_agent is not None and flags.get("--agent") != expected_agent:
+        raise SystemExit(
+            f"{label} --agent must be {expected_agent}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    skip_permissions_present = "--dangerously-skip-permissions" in bool_flags
+    if skip_permissions_present != bool(launch_policy.get("opencode_skip_permissions")):
+        raise SystemExit(
+            f"{label} --dangerously-skip-permissions must match launch_policy: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    return argv
 
 
 def validate_opencode_model_probe_log_hashes(
