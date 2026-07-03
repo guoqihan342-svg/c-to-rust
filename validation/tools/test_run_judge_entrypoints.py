@@ -1080,6 +1080,53 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertIn("python executable missing", stderr_log.read_text(encoding="utf-8"))
         self.assertEqual(report["entrypoints"][0]["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
 
+    def test_malformed_entrypoint_command_writes_failed_report(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-bad-command-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "bad_entrypoint",
+                            "command": 'python3 -B -m validation.tools.judge_demo "unterminated',
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("malformed command must not execute")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}) as validate_config:
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        validate_config.assert_called_once_with(config_path, require_local_artifacts=False, repo_root=REPO_ROOT)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"], {"status": "skipped", "reason": "failed_command"})
+        self.assertTrue(out_path.is_file())
+        self.assertEqual(report["entrypoints"][0]["id"], "bad_entrypoint")
+        self.assertEqual(report["entrypoints"][0]["status"], "failed")
+        self.assertEqual(report["entrypoints"][0]["exit_code"], 2)
+        self.assertEqual(report["entrypoints"][0]["root_cause_key"], "invalid_entrypoint_command")
+        self.assertEqual(report["entrypoints"][0]["error"]["type"], "ValueError")
+        self.assertIsNone(report["readiness_report"])
+        self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["status"], "missing")
+        self.assertEqual(report["entrypoints"][0]["logs"]["stderr"]["status"], "missing")
+
     def test_skipped_validation_status_is_not_success(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
 

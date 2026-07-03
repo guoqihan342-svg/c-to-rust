@@ -26,6 +26,7 @@ CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 DEFAULT_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
 COMPETITION_CONFIG_ROOT = Path("config/competition-env")
+ENTRYPOINT_COMMAND_PARSE_EXIT_CODE = 2
 ENTRYPOINT_TIMEOUT_EXIT_CODE = 124
 DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS = 600 * 60
 PORTABLE_PYTHON_COMMAND = "python3"
@@ -754,12 +755,42 @@ def run_entrypoint_command(
 ) -> dict[str, Any]:
     entry_id = str(entry.get("id", "unknown"))
     command = str(entry.get("command", ""))
-    if not command:
-        raise SystemExit(f"judge entrypoint missing command: {entry_id}")
-    argv = shlex.split(command)
-    effective_argv = argv if dry_run else resolve_local_entrypoint_argv(argv)
     stdout_path = log_dir / f"{safe_file_component(entry_id)}.stdout.log"
     stderr_path = log_dir / f"{safe_file_component(entry_id)}.stderr.log"
+    try:
+        if not command:
+            raise ValueError(f"judge entrypoint missing command: {entry_id}")
+        argv = shlex.split(command)
+    except ValueError as error:
+        return {
+            "id": entry_id,
+            "purpose": entry.get("purpose"),
+            "priority": entry.get("priority"),
+            "proof_class": entry.get("proof_class", "unknown"),
+            "run_id": entry.get("run_id", "unknown"),
+            "judge_focus": list(entry.get("judge_focus", [])) if isinstance(entry.get("judge_focus"), list) else [],
+            "key_artifacts": dict(entry.get("expected_artifacts", {}))
+            if isinstance(entry.get("expected_artifacts"), dict)
+            else {},
+            "command": command,
+            "argv": [],
+            "effective_argv": [],
+            "timeout_seconds": timeout_seconds,
+            "timeout_policy": {
+                "scope": "entrypoint_command",
+                "timeout_seconds": timeout_seconds,
+                "timeout_exit_code": ENTRYPOINT_TIMEOUT_EXIT_CODE,
+            },
+            "exit_code": ENTRYPOINT_COMMAND_PARSE_EXIT_CODE,
+            "logs": {
+                "stdout": missing_artifact_ref(stdout_path, repo_root=repo_root),
+                "stderr": missing_artifact_ref(stderr_path, repo_root=repo_root),
+            },
+            "status": "failed",
+            "root_cause_key": "invalid_entrypoint_command",
+            "error": {"type": type(error).__name__, "message": str(error)},
+        }
+    effective_argv = argv if dry_run else resolve_local_entrypoint_argv(argv)
     result = {
         "id": entry_id,
         "purpose": entry.get("purpose"),
