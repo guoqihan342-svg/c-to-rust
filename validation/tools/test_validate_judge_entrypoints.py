@@ -4483,6 +4483,67 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_resume_manifest_worker_consistency_rejects_context_out_root_drift(self) -> None:
+        canonical_root = "target/out/workers/worker-001"
+        stale_context_root = "target/out/stale-workers/worker-001"
+        common_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": "target/out/harness/assignments/worker-001.json",
+            "request_path": "target/out/harness/assignments/worker-001-request.json",
+            "summary_path": f"{canonical_root}/summary/competition-run-summary.json",
+            "report_path": f"{canonical_root}/harness/run-worker-report.json",
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        workers = [{**common_fields, "isolated_out_root": canonical_root}]
+        context_payload = {"workers": [{**common_fields, "out_root": stale_context_root}]}
+        agent_payload = {
+            "agents": [{**common_fields, "isolated_out_root": canonical_root}],
+            "agents_by_worker_id": {
+                "worker-001": {**common_fields, "isolated_out_root": canonical_root}
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "resume_manifest worker worker-001 out_root must match isolated_out_root",
+        ):
+            validator.validate_resume_manifest_worker_consistency(
+                workers,
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+            )
+
+    def test_context_agent_index_consistency_rejects_context_out_root_drift(self) -> None:
+        canonical_root = "target/out/workers/worker-001"
+        stale_context_root = "target/out/stale-workers/worker-001"
+        common_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": "target/out/harness/assignments/worker-001.json",
+            "request_path": "target/out/harness/assignments/worker-001-request.json",
+            "summary_path": f"{canonical_root}/summary/competition-run-summary.json",
+            "report_path": f"{canonical_root}/harness/run-worker-report.json",
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {"workers": [{**common_fields, "out_root": stale_context_root}]}
+        agent_payload = {
+            "agents": [{**common_fields, "isolated_out_root": canonical_root}],
+            "agents_by_worker_id": {
+                "worker-001": {**common_fields, "isolated_out_root": canonical_root}
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "worker worker-001 out_root must match isolated_out_root",
+        ):
+            validator.validate_context_agent_index_consistency(context_payload, agent_payload)
+
     def test_resume_manifest_rejects_failed_verified_unsafe_baseline_ref(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)

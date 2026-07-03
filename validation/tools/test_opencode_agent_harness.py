@@ -4114,6 +4114,126 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, semantic_role from artifacts")
             self.assertEqual(artifact_rows, [("competition-run-summary", repo_rel(summary_path), "run-summary")])
 
+    def test_record_artifact_conflict_refreshes_identity_metadata(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-old",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            artifact_path = out_root / "harness" / "shared.json"
+            write_json(artifact_path, {"version": 1})
+            connection = harness.connect(db_path)
+            try:
+                harness.record_artifact(
+                    connection,
+                    run_id="run-old",
+                    worker_id="worker-a",
+                    kind="old-kind",
+                    path=artifact_path,
+                    status="old",
+                    semantic_role="old-role",
+                    payload={"version": 1},
+                    repo_root=REPO_ROOT,
+                )
+                connection.commit()
+
+                write_json(artifact_path, {"version": 2})
+                harness.record_artifact(
+                    connection,
+                    run_id="run-new",
+                    worker_id="planner",
+                    kind="context-pack",
+                    path=artifact_path,
+                    status="completed",
+                    semantic_role="agent-context-pack",
+                    payload={"version": 2},
+                    repo_root=REPO_ROOT,
+                )
+                connection.commit()
+            finally:
+                connection.close()
+
+            artifact_rows = fetch_rows(
+                db_path,
+                """
+                select run_id, agent_id, kind, semantic_role, status
+                from artifacts
+                where repo_rel_path=?
+                """,
+                (repo_rel(artifact_path),),
+            )
+            self.assertEqual(
+                artifact_rows,
+                [("run-new", "planner", "context-pack", "agent-context-pack", "completed")],
+            )
+
+    def test_context_pack_conflict_refreshes_sqlite_metadata(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-context",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            primary_report = out_root / "harness" / "batch-profile-report.json"
+            primary_report.parent.mkdir(parents=True, exist_ok=True)
+            primary_report.write_text("{}\n", encoding="utf-8")
+            plan = {
+                "planning_mode": "source_file",
+                "plan_path": repo_rel(out_root / "harness" / "plans" / "workers.json"),
+                "units": [],
+            }
+            run_result = {
+                "status": "passed",
+                "workers": [],
+                "parallelism": {"max_workers": 0, "effective_workers": 0},
+                "graph": {"checkpoint_backend": "sqlite"},
+            }
+            harness.write_context_pack_and_agent_index(
+                db_path=db_path,
+                run_id="run-context",
+                target_id="old-target",
+                proof_class="local-simulation",
+                mode="deterministic",
+                out_root=out_root,
+                plan=plan,
+                run_result=run_result,
+                primary_report_path=primary_report,
+                report_entrypoint="batch_profile_report",
+                repo_root=REPO_ROOT,
+            )
+            context_ref = harness.write_context_pack_and_agent_index(
+                db_path=db_path,
+                run_id="run-context",
+                target_id="new-target",
+                proof_class="local-simulation",
+                mode="deterministic",
+                out_root=out_root,
+                plan=plan,
+                run_result=run_result,
+                primary_report_path=primary_report,
+                report_entrypoint="batch_profile_report",
+                repo_root=REPO_ROOT,
+            )["context_pack"]
+
+            context_rows = fetch_rows(
+                db_path,
+                """
+                select run_id, target_id, artifact_path, artifact_sha256
+                from context_packs
+                where context_pack_id=?
+                """,
+                ("run-context-context-pack",),
+            )
+            self.assertEqual(
+                context_rows,
+                [("run-context", "new-target", context_ref["path"], context_ref["sha256"])],
+            )
+
     def test_record_worker_summary_rejects_unassigned_summary_path(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

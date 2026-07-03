@@ -2095,6 +2095,11 @@ def update_evaluate_profile_context_refs(
             )
             values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(context_pack_id) do update set
+              run_id=excluded.run_id,
+              target_id=excluded.target_id,
+              slice_id=excluded.slice_id,
+              depth=excluded.depth,
+              max_tokens=excluded.max_tokens,
               artifact_path=excluded.artifact_path,
               artifact_sha256=excluded.artifact_sha256,
               payload_json=excluded.payload_json
@@ -3478,6 +3483,11 @@ def write_context_pack_and_agent_index(
             )
             values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(context_pack_id) do update set
+              run_id=excluded.run_id,
+              target_id=excluded.target_id,
+              slice_id=excluded.slice_id,
+              depth=excluded.depth,
+              max_tokens=excluded.max_tokens,
               artifact_path=excluded.artifact_path,
               artifact_sha256=excluded.artifact_sha256,
               payload_json=excluded.payload_json
@@ -4738,8 +4748,12 @@ def record_worker_summary(
             insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
             values (?, ?, ?, ?, ?, ?, ?, ?, ?)
             on conflict(repo_rel_path) do update set
+              run_id=excluded.run_id,
+              agent_id=excluded.agent_id,
+              kind=excluded.kind,
               sha256=excluded.sha256,
               status=excluded.status,
+              semantic_role=excluded.semantic_role,
               payload_json=excluded.payload_json
             """,
             (
@@ -4791,8 +4805,12 @@ def record_artifact(
         insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(repo_rel_path) do update set
+          run_id=excluded.run_id,
+          agent_id=excluded.agent_id,
+          kind=excluded.kind,
           sha256=excluded.sha256,
           status=excluded.status,
+          semantic_role=excluded.semantic_role,
           payload_json=excluded.payload_json
         """,
         (

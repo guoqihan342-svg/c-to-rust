@@ -3575,6 +3575,23 @@ def validate_context_agent_index_consistency(
             values = [payload.get(field) for payload in (context_worker, listed_agent, agent_entry) if field in payload]
             if values and any(value != values[0] for value in values[1:]):
                 raise ValueError(f"worker {worker_id} field {field} must match across context_pack and agent_index")
+        out_root_values = [
+            payload.get("out_root")
+            for payload in (context_worker, listed_agent, agent_entry)
+            if isinstance(payload.get("out_root"), str)
+        ]
+        isolated_values = [
+            payload.get("isolated_out_root")
+            for payload in (context_worker, listed_agent, agent_entry)
+            if isinstance(payload.get("isolated_out_root"), str)
+        ]
+        expected_isolated_out_root = isolated_values[0] if isolated_values else None
+        if isolated_values and any(value != expected_isolated_out_root for value in isolated_values[1:]):
+            raise ValueError(f"worker {worker_id} field isolated_out_root must match across context_pack and agent_index")
+        if expected_isolated_out_root is not None:
+            for out_root in out_root_values:
+                if out_root != expected_isolated_out_root:
+                    raise ValueError(f"worker {worker_id} out_root must match isolated_out_root")
 
     return {"status": "passed", "worker_count": len(context_worker_ids)}
 
@@ -3911,6 +3928,27 @@ def validate_resume_manifest_worker_consistency(
                 raise ValueError(
                     f"resume_manifest worker {worker_id} field {field} must match context_pack and agent_index"
                 )
+        out_root_values = [
+            payload.get("out_root")
+            for payload in payloads
+            if isinstance(payload.get("out_root"), str)
+        ]
+        isolated_values = [
+            payload.get("isolated_out_root")
+            for payload in payloads
+            if isinstance(payload.get("isolated_out_root"), str)
+        ]
+        expected_isolated_out_root = isolated_values[0] if isolated_values else None
+        if isolated_values and any(value != expected_isolated_out_root for value in isolated_values[1:]):
+            raise ValueError(
+                f"resume_manifest worker {worker_id} field isolated_out_root must match context_pack and agent_index"
+            )
+        if expected_isolated_out_root is not None:
+            for out_root in out_root_values:
+                if out_root != expected_isolated_out_root:
+                    raise ValueError(
+                        f"resume_manifest worker {worker_id} out_root must match isolated_out_root"
+                    )
 
     return {"status": "passed", "worker_count": len(resume_ids)}
 
