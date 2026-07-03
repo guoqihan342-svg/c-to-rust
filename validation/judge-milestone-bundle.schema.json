@@ -15,6 +15,7 @@
     "proof_classes",
     "proof_class_rollup",
     "publishability",
+    "competition_host_readiness",
     "semantic_evidence_rollup",
     "core_translation_quality",
     "before_after_repair_exhibit",
@@ -150,6 +151,9 @@
         "translation_coverage_numerator": {"const": 0},
         "target_artifacts_regenerable": {"type": "boolean"}
       }
+    },
+    "competition_host_readiness": {
+      "$ref": "#/definitions/competitionHostReadiness"
     },
     "semantic_evidence_rollup": {
       "type": "object",
@@ -1203,6 +1207,50 @@
         "remote_release_notes_status": {"const": "not_published"},
         "external_review_record_status": {"const": "not_recorded"},
         "external_milestone_claim_ready": {"const": false},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "competitionHostReadiness": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "status",
+        "required_agent_tool",
+        "required_model",
+        "required_variant",
+        "required_proof_class",
+        "actual_highest_proof_class",
+        "all_entrypoints_run_publishable",
+        "all_entrypoints_competition_exact",
+        "competition_exact_host_verified",
+        "opencode_glm51_preflight_status",
+        "opencode_glm51_publishable",
+        "external_milestone_claim_ready",
+        "missing_requirements",
+        "blocker_count",
+        "semantic_gate",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "competition-host-readiness"},
+        "status": {"enum": ["blocked", "ready"]},
+        "required_agent_tool": {"const": "opencode"},
+        "required_model": {"const": "GLM-5.1"},
+        "required_variant": {"const": "max"},
+        "required_proof_class": {"const": "competition-exact"},
+        "actual_highest_proof_class": {"type": "string", "minLength": 1},
+        "all_entrypoints_run_publishable": {"type": "boolean"},
+        "all_entrypoints_competition_exact": {"type": "boolean"},
+        "competition_exact_host_verified": {"type": "boolean"},
+        "opencode_glm51_preflight_status": {"type": "string", "minLength": 1},
+        "opencode_glm51_publishable": {"type": "boolean"},
+        "external_milestone_claim_ready": {"type": "boolean"},
+        "missing_requirements": {"type": "array", "items": {"type": "string"}},
+        "blocker_count": {"type": "integer", "minimum": 0},
         "semantic_gate": {"const": false},
         "translation_coverage_numerator": {"const": 0},
         "boundary": {"type": "string", "minLength": 1}

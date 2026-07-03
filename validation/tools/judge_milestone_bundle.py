@@ -140,6 +140,10 @@ def build_judge_milestone_bundle(
         blockers=blockers,
         opencode_runtime=opencode_runtime,
     )
+    competition_host_readiness = build_competition_host_readiness(
+        proof_classes=proof_classes,
+        publishability=publishability,
+    )
     reproduction_commands = build_reproduction_commands(
         run_report=run_report,
         run_report_path=run_report_path,
@@ -181,6 +185,7 @@ def build_judge_milestone_bundle(
         "proof_classes": proof_classes,
         "proof_class_rollup": proof_classes,
         "publishability": publishability,
+        "competition_host_readiness": competition_host_readiness,
         "semantic_evidence_rollup": semantic_evidence,
         "core_translation_quality": core_translation_quality,
         "before_after_repair_exhibit": before_after_repair_exhibit,
@@ -668,6 +673,52 @@ def build_publishability(
         "boundary": (
             "Publishability is a review-package readiness contract. Competition-facing agent evidence requires "
             "OpenCode with GLM-5.1 and does not convert chat/session output into semantic acceptance."
+        ),
+    }
+
+
+def build_competition_host_readiness(
+    *,
+    proof_classes: dict[str, Any],
+    publishability: dict[str, Any],
+) -> dict[str, Any]:
+    all_entrypoints_run_publishable = publishability.get("all_entrypoints_run_publishable") is True
+    all_entrypoints_competition_exact = proof_classes.get("all_entrypoints_competition_exact") is True
+    competition_exact_host_verified = proof_classes.get("competition_exact_host_verified") is True
+    opencode_glm51_publishable = publishability.get("opencode_glm51_publishable") is True
+    external_milestone_claim_ready = publishability.get("external_milestone_claim_ready") is True
+    missing_requirements = []
+    if not all_entrypoints_run_publishable:
+        missing_requirements.append("all_entrypoints_run_publishable")
+    if not all_entrypoints_competition_exact:
+        missing_requirements.append("all_entrypoints_competition_exact")
+    if not competition_exact_host_verified:
+        missing_requirements.append("competition_exact_host_verified")
+    if not opencode_glm51_publishable:
+        missing_requirements.append("opencode_glm51_publishable")
+    if not external_milestone_claim_ready:
+        missing_requirements.append("external_milestone_claim_ready")
+    return {
+        "report_kind": "competition-host-readiness",
+        "status": "ready" if not missing_requirements else "blocked",
+        "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
+        "required_model": validator.COMPETITION_OPENCODE_MODEL,
+        "required_variant": validator.COMPETITION_OPENCODE_VARIANT,
+        "required_proof_class": "competition-exact",
+        "actual_highest_proof_class": proof_classes.get("highest_proof_class", "unknown"),
+        "all_entrypoints_run_publishable": all_entrypoints_run_publishable,
+        "all_entrypoints_competition_exact": all_entrypoints_competition_exact,
+        "competition_exact_host_verified": competition_exact_host_verified,
+        "opencode_glm51_preflight_status": publishability.get("opencode_glm51_preflight_status", "unknown"),
+        "opencode_glm51_publishable": opencode_glm51_publishable,
+        "external_milestone_claim_ready": external_milestone_claim_ready,
+        "missing_requirements": missing_requirements,
+        "blocker_count": len(missing_requirements),
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Competition host readiness is the P0-H9 launch contract for OpenCode + GLM-5.1 + max. "
+            "It is not semantic acceptance and does not increase translator-generated coverage."
         ),
     }
 

@@ -71,6 +71,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "",
         *publishability_lines(object_or_empty(bundle.get("publishability"))),
         "",
+        "## Competition Host Readiness",
+        "",
+        *competition_host_readiness_lines(object_or_empty(bundle.get("competition_host_readiness"))),
+        "",
         "## Release Tag Readiness",
         "",
         *release_tag_readiness_lines(object_or_empty(publication.get("release_tag_readiness"))),
@@ -240,6 +244,7 @@ def require_bundle_contract(bundle: dict[str, Any]) -> None:
     require_zero_field(publication, "claim_boundary", "translation_coverage_numerator", prefix="publication_manifest")
     require_release_tag_readiness_contract(object_or_empty(publication.get("release_tag_readiness")))
     require_publishability_contract(bundle, blockers=blockers)
+    require_competition_host_readiness_contract(object_or_empty(bundle.get("competition_host_readiness")))
     require_opencode_runtime_contract(bundle)
     require_opencode_evidence_policy_contract(bundle)
     require_evidence_cost_retention_contract(bundle)
@@ -319,6 +324,60 @@ def require_release_tag_readiness_contract(readiness: dict[str, Any]) -> None:
     require(
         isinstance(readiness.get("boundary"), str) and bool(readiness.get("boundary")),
         "release_tag_readiness.boundary must be present",
+    )
+
+
+def require_competition_host_readiness_contract(readiness: dict[str, Any]) -> None:
+    require(
+        readiness.get("report_kind") == "competition-host-readiness",
+        "competition_host_readiness.report_kind must be competition-host-readiness",
+    )
+    require(readiness.get("status") in {"blocked", "ready"}, "competition_host_readiness.status must be blocked or ready")
+    require(readiness.get("required_agent_tool") == "opencode", "competition_host_readiness.required_agent_tool must be opencode")
+    require(readiness.get("required_model") == COMPETITION_OPENCODE_MODEL, "competition_host_readiness.required_model must be GLM-5.1")
+    require(readiness.get("required_variant") == "max", "competition_host_readiness.required_variant must be max")
+    require(
+        readiness.get("required_proof_class") == "competition-exact",
+        "competition_host_readiness.required_proof_class must be competition-exact",
+    )
+    missing = readiness.get("missing_requirements")
+    require(isinstance(missing, list) and all(isinstance(item, str) for item in missing), "competition_host_readiness.missing_requirements must be a string list")
+    require(
+        readiness.get("blocker_count") == len(missing),
+        "competition_host_readiness.blocker_count must match missing_requirements",
+    )
+    if readiness.get("status") == "ready":
+        require(not missing, "competition_host_readiness.ready must have no missing requirements")
+        require_true_value(
+            readiness.get("all_entrypoints_run_publishable"),
+            "competition_host_readiness.all_entrypoints_run_publishable",
+        )
+        require_true_value(
+            readiness.get("all_entrypoints_competition_exact"),
+            "competition_host_readiness.all_entrypoints_competition_exact",
+        )
+        require_true_value(
+            readiness.get("competition_exact_host_verified"),
+            "competition_host_readiness.competition_exact_host_verified",
+        )
+        require_true_value(
+            readiness.get("opencode_glm51_publishable"),
+            "competition_host_readiness.opencode_glm51_publishable",
+        )
+        require_true_value(
+            readiness.get("external_milestone_claim_ready"),
+            "competition_host_readiness.external_milestone_claim_ready",
+        )
+    else:
+        require(bool(missing), "competition_host_readiness.blocked must list missing requirements")
+    require_false_value(readiness.get("semantic_gate"), "competition_host_readiness.semantic_gate")
+    require_zero_value(
+        readiness.get("translation_coverage_numerator"),
+        "competition_host_readiness.translation_coverage_numerator",
+    )
+    require(
+        isinstance(readiness.get("boundary"), str) and bool(readiness.get("boundary")),
+        "competition_host_readiness.boundary must be present",
     )
 
 
@@ -702,6 +761,28 @@ def release_tag_readiness_lines(readiness: dict[str, Any]) -> list[str]:
     ]
 
 
+def competition_host_readiness_lines(readiness: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(readiness.get('status'), 'unknown')} |",
+        f"| Required agent tool | {text(readiness.get('required_agent_tool'), 'unknown')} |",
+        f"| Required model | {text(readiness.get('required_model'), 'unknown')} |",
+        f"| Required variant | {text(readiness.get('required_variant'), 'unknown')} |",
+        f"| Required proof class | {text(readiness.get('required_proof_class'), 'unknown')} |",
+        f"| Actual highest proof class | {text(readiness.get('actual_highest_proof_class'), 'unknown')} |",
+        f"| All entrypoints run publishable | {bool_text(readiness.get('all_entrypoints_run_publishable'))} |",
+        f"| All entrypoints competition-exact | {bool_text(readiness.get('all_entrypoints_competition_exact'))} |",
+        f"| Competition exact host verified | {bool_text(readiness.get('competition_exact_host_verified'))} |",
+        f"| OpenCode GLM preflight status | {text(readiness.get('opencode_glm51_preflight_status'), 'unknown')} |",
+        f"| OpenCode GLM publishable | {bool_text(readiness.get('opencode_glm51_publishable'))} |",
+        f"| External milestone claim ready | {bool_text(readiness.get('external_milestone_claim_ready'))} |",
+        f"| Missing requirements | {string_list_text(readiness.get('missing_requirements'))} |",
+        f"| Semantic gate | {bool_text(readiness.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(readiness.get('translation_coverage_numerator'))} |",
+    ]
+
+
 def blocker_lines(blockers: Any) -> list[str]:
     values = [blocker for blocker in blockers if isinstance(blocker, str)] if isinstance(blockers, list) else []
     if not values:
@@ -831,6 +912,12 @@ def command_text(value: Any) -> str:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return " ".join(value)
     return text(value, "unknown")
+
+
+def string_list_text(value: Any) -> str:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return ", ".join(value) if value else "none"
+    return "unknown"
 
 
 def int_text(value: Any) -> str:

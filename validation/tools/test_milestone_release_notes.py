@@ -27,6 +27,13 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("| External milestone claim ready | false |", notes)
         self.assertIn("| Semantic gate | false |", notes)
         self.assertIn("| Translation coverage numerator | 0 |", notes)
+        self.assertIn("## Competition Host Readiness", notes)
+        self.assertIn("| Status | blocked |", notes)
+        self.assertIn("| Required model | GLM-5.1 |", notes)
+        self.assertIn("| Required proof class | competition-exact |", notes)
+        self.assertIn("| Actual highest proof class | local-simulation |", notes)
+        self.assertIn("| Competition exact host verified | false |", notes)
+        self.assertIn("| Missing requirements | all_entrypoints_competition_exact, competition_exact_host_verified, external_milestone_claim_ready |", notes)
         self.assertIn("Repository commit: `1234567890abcdef1234567890abcdef12345678`", notes)
         self.assertIn("Proof class rollup: `local-simulation`", notes)
         self.assertIn("Translation coverage numerator: `0`", notes)
@@ -169,6 +176,15 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             milestone_release_notes.build_release_notes(payload)
 
         self.assertIn("release_tag_readiness", str(raised.exception))
+
+    def test_release_notes_reject_missing_competition_host_readiness(self) -> None:
+        payload = self._bundle()
+        payload.pop("competition_host_readiness", None)
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("competition_host_readiness", str(raised.exception))
 
     def test_release_notes_reject_missing_evidence_cost_retention(self) -> None:
         payload = self._bundle()
@@ -378,6 +394,30 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "semantic_gate": False,
                 "translation_coverage_numerator": 0,
                 "target_artifacts_regenerable": True,
+            },
+            "competition_host_readiness": {
+                "report_kind": "competition-host-readiness",
+                "status": "blocked",
+                "required_agent_tool": "opencode",
+                "required_model": "GLM-5.1",
+                "required_variant": "max",
+                "required_proof_class": "competition-exact",
+                "actual_highest_proof_class": "local-simulation",
+                "all_entrypoints_run_publishable": True,
+                "all_entrypoints_competition_exact": False,
+                "competition_exact_host_verified": False,
+                "opencode_glm51_preflight_status": "passed",
+                "opencode_glm51_publishable": True,
+                "external_milestone_claim_ready": False,
+                "missing_requirements": [
+                    "all_entrypoints_competition_exact",
+                    "competition_exact_host_verified",
+                    "external_milestone_claim_ready",
+                ],
+                "blocker_count": 3,
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+                "boundary": "Competition host readiness is an H9 launch contract, not semantic acceptance.",
             },
             "core_translation_quality": {
                 "translation_coverage_numerator": 0,

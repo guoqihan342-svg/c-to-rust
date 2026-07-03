@@ -970,6 +970,30 @@ def valid_packet(root: Path) -> dict:
             "translation_coverage_numerator": 0,
             "target_artifacts_regenerable": True,
         },
+        "competition_host_readiness": {
+            "report_kind": "competition-host-readiness",
+            "status": "blocked",
+            "required_agent_tool": "opencode",
+            "required_model": "GLM-5.1",
+            "required_variant": "max",
+            "required_proof_class": "competition-exact",
+            "actual_highest_proof_class": "local-simulation",
+            "all_entrypoints_run_publishable": True,
+            "all_entrypoints_competition_exact": False,
+            "competition_exact_host_verified": False,
+            "opencode_glm51_preflight_status": "passed",
+            "opencode_glm51_publishable": True,
+            "external_milestone_claim_ready": False,
+            "missing_requirements": [
+                "all_entrypoints_competition_exact",
+                "competition_exact_host_verified",
+                "external_milestone_claim_ready",
+            ],
+            "blocker_count": 3,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "Competition host readiness is an H9 launch contract, not semantic acceptance.",
+        },
         "proof_classes": {
             "rollup": {
                 "trusted_proof_classes": ["local-simulation"],
@@ -1173,6 +1197,7 @@ def valid_packet(root: Path) -> dict:
         "competition_config_archive": competition_config_archive,
         "publication_manifest": publication_manifest,
         "publishability": bundle_payload["publishability"],
+        "competition_host_readiness": bundle_payload["competition_host_readiness"],
         "harness_architecture_summary": bundle_payload["harness_architecture_summary"],
         "evidence_cost_retention": bundle_payload["evidence_cost_retention"],
         "before_after_repair_exhibit": before_after_repair_exhibit,
@@ -1219,6 +1244,15 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(packet["publishability"]["status"], "internal_preview")
         self.assertFalse(packet["publishability"]["competition_exact_publishable"])
         self.assertEqual(packet["publishability"]["required_model"], "GLM-5.1")
+        self.assertEqual(packet["competition_host_readiness"]["status"], "blocked")
+        self.assertEqual(packet["competition_host_readiness"]["required_model"], "GLM-5.1")
+        self.assertEqual(packet["competition_host_readiness"]["required_variant"], "max")
+        self.assertEqual(packet["competition_host_readiness"]["required_proof_class"], "competition-exact")
+        self.assertFalse(packet["competition_host_readiness"]["competition_exact_host_verified"])
+        self.assertIn(
+            "competition_exact_host_verified",
+            packet["competition_host_readiness"]["missing_requirements"],
+        )
         self.assertEqual(
             [entry["stage"] for entry in packet["harness_architecture_summary"]["contract_matrix"]],
             ["plan", "translate", "verify", "repair", "report"],
@@ -1239,6 +1273,17 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(ref_status["properties"]["translation_coverage_numerator"]["const"], 0)
         self.assertIn("harness_architecture_summary", schema["required"])
         self.assertIn("evidence_cost_retention", schema["required"])
+        self.assertIn("competition_host_readiness", schema["required"])
+        host_readiness = schema["properties"]["competition_host_readiness"]
+        self.assertEqual(host_readiness["$ref"], "#/$defs/competitionHostReadiness")
+        host_readiness = schema["$defs"]["competitionHostReadiness"]
+        self.assertEqual(host_readiness["properties"]["report_kind"]["const"], "competition-host-readiness")
+        self.assertEqual(host_readiness["properties"]["required_agent_tool"]["const"], "opencode")
+        self.assertEqual(host_readiness["properties"]["required_model"]["const"], "GLM-5.1")
+        self.assertEqual(host_readiness["properties"]["required_variant"]["const"], "max")
+        self.assertEqual(host_readiness["properties"]["required_proof_class"]["const"], "competition-exact")
+        self.assertEqual(host_readiness["properties"]["semantic_gate"]["const"], False)
+        self.assertEqual(host_readiness["properties"]["translation_coverage_numerator"]["const"], 0)
         self.assertIn("release_tag_readiness", schema["properties"]["publication_manifest"]["required"])
         tag_readiness = schema["properties"]["publication_manifest"]["properties"]["release_tag_readiness"]
         self.assertEqual(tag_readiness["$ref"], "#/$defs/releaseTagReadiness")
@@ -1985,6 +2030,30 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("publishability must match judge_milestone_bundle.publishability" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_competition_host_readiness_drift_from_bound_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-host-readiness-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["competition_host_readiness"] = {
+            **packet["competition_host_readiness"],
+            "status": "ready",
+            "competition_exact_host_verified": True,
+            "missing_requirements": [],
+            "blocker_count": 0,
+        }
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "competition_host_readiness must match judge_milestone_bundle.competition_host_readiness" in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 

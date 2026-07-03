@@ -383,6 +383,7 @@ def write_public_release_packet(
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
         "publishability": bundle.get("publishability", {}),
+        "competition_host_readiness": bundle.get("competition_host_readiness", {}),
         "harness_architecture_summary": bundle.get("harness_architecture_summary", {}),
         "evidence_cost_retention": bundle.get("evidence_cost_retention", {}),
         "before_after_repair_exhibit": bundle.get("before_after_repair_exhibit", {}),
