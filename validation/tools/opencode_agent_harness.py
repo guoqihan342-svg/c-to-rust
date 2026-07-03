@@ -7761,11 +7761,10 @@ def validate_opencode_model_probe_log_hashes(
 
 def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
     candidate = model_id.strip().strip("`'\"*,")
-    required = required_model.casefold()
-    if candidate.casefold() == required:
+    if candidate == required_model:
         return True
     if "/" in candidate:
-        return candidate.rsplit("/", 1)[1].casefold() == required
+        return candidate.rsplit("/", 1)[1] == required_model
     return False
 
 

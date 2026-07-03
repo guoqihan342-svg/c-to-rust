@@ -1836,6 +1836,71 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertFalse(publishability["external_milestone"])
         self.assertFalse(publishability["opencode_glm51_publishable"])
 
+    def test_proof_classes_do_not_verify_competition_host_from_proof_class_string_only(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        proof_classes = bundle.build_proof_classes(
+            [
+                {
+                    "id": "competition_environment_smoke",
+                    "proof_class": "competition-exact",
+                    "run_id": "smoke-without-host-attestation",
+                }
+            ]
+        )
+
+        self.assertTrue(proof_classes["all_entrypoints_competition_exact"])
+        self.assertFalse(proof_classes["competition_exact_host_verified"])
+        self.assertEqual(proof_classes["host_attestation_missing_entrypoints"], ["competition_environment_smoke"])
+
+    def test_publishability_requires_competition_host_attestation_not_only_exact_proof_string(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        proof_classes = bundle.build_proof_classes(
+            [
+                {
+                    "id": "competition_environment_smoke",
+                    "proof_class": "competition-exact",
+                    "run_id": "smoke-without-host-attestation",
+                }
+            ]
+        )
+        runtime_env = {"env_sha256": "runtime-env"}
+        publishability = bundle.build_publishability(
+            status="passed",
+            readiness={"all_entrypoints_executed": True},
+            proof_classes=proof_classes,
+            blockers=[],
+            opencode_runtime={
+                "enabled_entrypoint_count": 1,
+                "preflight_proof_summary": {
+                    "status": "passed",
+                    "required_when_opencode_runtime_enabled": True,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "translation_coverage_numerator": 0,
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "required_model": "GLM-5.1",
+                    "model_availability_status": "available",
+                    "model_listed": True,
+                    "process_returncode": 0,
+                    "contract_status": "executed",
+                    "marker_exists": True,
+                    "opencode_run_launched": True,
+                    "opencode_run_argv_bound": True,
+                    "model_probe_argv": ["opencode", "models"],
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_runtime_env_sha256": runtime_env["env_sha256"],
+                },
+            },
+        )
+
+        self.assertEqual(publishability["status"], "internal_preview")
+        self.assertFalse(publishability["external_milestone_claim_ready"])
+        self.assertFalse(publishability["competition_exact_publishable"])
+        self.assertTrue(publishability["opencode_glm51_publishable"])
+
     def test_known_gaps_keep_c2rust_baseline_gap_without_verified_baseline_exhibit(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

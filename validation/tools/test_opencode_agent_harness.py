@@ -6247,7 +6247,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertIn("openai/gpt-5.1", stdout)
 
     def test_opencode_model_probe_rejects_near_match_model_ids(self) -> None:
-        stdout = "zhipu/GLM-5.10\nopencode/not-GLM-5.1\n"
+        stdout = "zhipu/GLM-5.10\nopencode/not-GLM-5.1\nzhipu/glm-5.1\n"
         self.assertFalse(harness.opencode_models_output_mentions_required_model(stdout, "GLM-5.1"))
         self.assertTrue(harness.opencode_models_output_mentions_required_model("GLM-5.1\n", "GLM-5.1"))
         self.assertTrue(harness.opencode_models_output_mentions_required_model("zhipu/GLM-5.1\n", "GLM-5.1"))

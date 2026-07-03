@@ -276,6 +276,7 @@ def summarize_entrypoint(
         artifact=artifacts.get("evidence_governance_report"),
         repo_root=repo_root,
     )
+    host_attestation = competition_host_attestation_from_artifacts(artifacts, repo_root=repo_root)
     return (
         {
             "id": entry.get("id"),
@@ -285,6 +286,8 @@ def summarize_entrypoint(
             "proof_class": proof_class,
             "source_proof_class": entry.get("proof_class", "unknown"),
             "run_id": entry.get("run_id", "unknown"),
+            "competition_exact_host_attested": host_attestation.get("competition_exact_host_attested") is True,
+            "host_attestation": host_attestation,
             "judge_focus": entry.get("judge_focus", []) if isinstance(entry.get("judge_focus"), list) else [],
             "artifacts": artifacts,
             "logs": entry.get("logs", {}),
@@ -296,6 +299,32 @@ def summarize_entrypoint(
         route_governance_source,
         evidence_cost_source,
     )
+
+
+def competition_host_attestation_from_artifacts(artifacts: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    smoke_artifact = artifacts.get("competition_smoke_summary")
+    payload = load_present_json_artifact(smoke_artifact, repo_root=repo_root)
+    if payload is None:
+        return {
+            "status": "missing",
+            "competition_exact_host_attested": False,
+        }
+    environment = payload.get("execution_environment") if isinstance(payload.get("execution_environment"), dict) else {}
+    attested = environment.get("competition_exact_host_attested") is True
+    result = {
+        "status": "attested" if attested else "not_attested",
+        "competition_exact_host_attested": attested,
+        "proof_class": payload.get("proof_class", "unknown"),
+        "run_id": payload.get("run_id", "unknown"),
+        "execution_environment_kind": environment.get("kind", "unknown"),
+    }
+    if isinstance(smoke_artifact, dict):
+        result["source_artifact"] = {
+            key: smoke_artifact[key]
+            for key in ("path", "sha256", "status")
+            if key in smoke_artifact
+        }
+    return result
 
 
 def validation_artifacts_by_entrypoint(validation: object) -> dict[str, dict[str, Any]]:
@@ -572,6 +601,7 @@ def build_proof_classes(entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
             "id": entry.get("id"),
             "proof_class": entry.get("proof_class", "unknown"),
             "run_id": entry.get("run_id", "unknown"),
+            "competition_exact_host_attested": entrypoint_competition_host_attested(entry),
         }
         for entry in entrypoints
     ]
@@ -585,12 +615,19 @@ def build_proof_classes(entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
     rank = {"unknown": 0, "local-simulation": 1, "wsl-local-simulation": 2, "ci-approximation": 3, "competition-exact": 4}
     highest = max(proof_classes, key=lambda value: rank.get(value, 0), default="unknown")
     non_exact = [entry for entry in entrypoint_proofs if entry.get("proof_class") != "competition-exact"]
+    missing_host_attestation = [
+        str(entry.get("id", "unknown"))
+        for entry in entrypoint_proofs
+        if entry.get("proof_class") == "competition-exact"
+        and entry.get("competition_exact_host_attested") is not True
+    ]
     return {
         "all": proof_classes,
         "highest_proof_class": highest,
         "has_competition_exact": "competition-exact" in proof_classes,
         "all_entrypoints_competition_exact": bool(entrypoint_proofs) and not non_exact,
-        "competition_exact_host_verified": bool(entrypoint_proofs) and not non_exact,
+        "competition_exact_host_verified": bool(entrypoint_proofs) and not non_exact and not missing_host_attestation,
+        "host_attestation_missing_entrypoints": missing_host_attestation,
         "non_exact_entrypoints": non_exact,
         "entrypoints": entrypoint_proofs,
         "boundary": (
@@ -598,6 +635,16 @@ def build_proof_classes(entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
             "local-simulation, wsl-local-simulation, and ci-approximation must not be described as competition-exact."
         ),
     }
+
+
+def entrypoint_competition_host_attested(entry: dict[str, Any]) -> bool:
+    if entry.get("competition_exact_host_attested") is True:
+        return True
+    host_attestation = entry.get("host_attestation")
+    if isinstance(host_attestation, dict) and host_attestation.get("competition_exact_host_attested") is True:
+        return True
+    environment = entry.get("execution_environment")
+    return isinstance(environment, dict) and environment.get("competition_exact_host_attested") is True
 
 
 def build_claim_scope(
@@ -609,7 +656,7 @@ def build_claim_scope(
     return {
         "external_review_index_ready": status == "passed",
         "semantic_acceptance_ready": False,
-        "competition_exact_ready": bool(proof_classes.get("all_entrypoints_competition_exact")),
+        "competition_exact_ready": bool(proof_classes.get("competition_exact_host_verified")),
         "translator_generated_coverage_ready": int_or_zero(
             semantic_evidence.get("translation_coverage_numerator")
         )
@@ -634,6 +681,8 @@ def build_publishability(
     all_entrypoints_run_publishable = not blocked and all_entrypoints
     competition_exact_publishable = all_entrypoints_run_publishable and bool(
         proof_classes.get("all_entrypoints_competition_exact")
+    ) and bool(
+        proof_classes.get("competition_exact_host_verified")
     )
     scope = "full" if all_entrypoints_run_publishable else "partial" if status == "passed" else "blocked"
     preflight_summary = (

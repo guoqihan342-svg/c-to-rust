@@ -3621,7 +3621,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         )
         preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
         preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
-        stdout_text = "openai/gpt-5.1\nopencode/not-GLM-5.1\n"
+        stdout_text = "openai/gpt-5.1\nopencode/not-GLM-5.1\nzhipu/glm-5.1\n"
         stdout_path = REPO_ROOT / preflight_payload["opencode_model_availability"]["logs"]["stdout"]
         stdout_path.write_text(stdout_text, encoding="utf-8")
         preflight_payload["opencode_model_availability"]["stdout_sha256"] = validator.sha256_text(stdout_text)
