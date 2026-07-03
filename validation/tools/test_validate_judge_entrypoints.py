@@ -379,8 +379,12 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
         launch_policy["opencode_variant"],
         "--model",
         launch_policy["opencode_model"],
-        opencode_prompt,
     ]
+    if launch_policy.get("opencode_agent"):
+        opencode_argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy.get("opencode_skip_permissions"):
+        opencode_argv.append("--dangerously-skip-permissions")
+    opencode_argv.append(opencode_prompt)
     handoff_path = artifact_dir / "opencode-handoff-contract.json"
     handoff_payload = {
         "schema_version": 1,
@@ -878,7 +882,7 @@ def opencode_launch_policy() -> dict:
     return {
         "opencode_command": "opencode",
         "opencode_model": "GLM-5.1",
-        "opencode_agent": None,
+        "opencode_agent": "c2rust-migrator",
         "opencode_variant": "max",
         "opencode_skip_permissions": False,
     }
@@ -1559,7 +1563,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             {
                 "opencode_command": "opencode",
                 "opencode_model": "GLM-5.1",
-                "opencode_agent": None,
+                "opencode_agent": "c2rust-migrator",
                 "opencode_variant": "max",
                 "opencode_skip_permissions": True,
             },
@@ -2021,6 +2025,14 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
             profile_rel,
         )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "opencode-missing-policy-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
         temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
         result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
@@ -2030,6 +2042,49 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(opencode_entry["status"], "failed")
         self.assertIn(
             "opencode_multi_worker_evaluate_profile opencode profile opencode_skip_permissions must be a boolean",
+            result["errors"],
+        )
+
+    def test_opencode_profile_binds_repo_owned_agent_runbook(self) -> None:
+        result = validator.validate_config(validator.DEFAULT_CONFIG, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+        opencode_entry = entrypoint_by_id(result, "opencode_multi_worker_evaluate_profile")
+        self.assertEqual(
+            opencode_entry["profile_contract"]["opencode_launch_policy"]["opencode_agent"],
+            "c2rust-migrator",
+        )
+
+    def test_opencode_profile_rejects_wrong_agent_runbook(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["opencode_agent"] = "default"
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-wrong-agent.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "opencode-wrong-agent-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile opencode_agent must be c2rust-migrator",
             result["errors"],
         )
 
@@ -6014,6 +6069,95 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 context_payload=context_payload,
                 agent_payload=agent_payload,
                 repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_opencode_replay_rejects_shallow_preflight_binding(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-opencode-preflight-", dir=target_dir))
+        out_root = temp_dir / "out"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        preflight = out_root / "harness" / "opencode-preflight-report.json"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = out_root / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
+        report = out_root / "workers" / "worker-001" / "harness" / "run-worker-report.json"
+        runtime_env = opencode_runtime_env_contract(out_root, scope="preflight")
+        preflight_binding = {
+            "path": repo_relative(preflight),
+            "sha256": "a" * 64,
+            "status": "failed",
+            "contract_status": "executed",
+            "launch_policy": {
+                "opencode_command": "opencode",
+                "opencode_model": "GLM-5.1",
+                "opencode_agent": "c2rust-migrator",
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            },
+            "opencode_runtime_env": runtime_env,
+            "opencode_model_availability": {
+                "status": "available",
+                "opencode_command": "opencode",
+                "required_model": "GLM-5.1",
+                "process_returncode": 0,
+                "model_listed": True,
+            },
+        }
+        worker = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "isolated_out_root": repo_relative(out_root / "workers" / "worker-001"),
+            "opencode_preflight_report": preflight_binding,
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            repo_relative(ledger),
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-variant",
+            "max",
+            "--opencode-preflight-report",
+            repo_relative(preflight),
+        ]
+        command_payload = {
+            "argv": argv,
+            "command": shlex.join(argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(out_root / "workers" / "worker-001"),
+            "replay_safety": {
+                "status": "ready",
+                "reason": "opencode_preflight_contract_bound",
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "opencode_preflight_report.status must be passed"):
+            validator.validate_resume_manifest_replay_command(
+                command_payload,
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path=repo_relative(ledger),
+                require_hint=False,
             )
 
     def test_worker_plan_units_must_match_context_and_agent_index_workers(self) -> None:

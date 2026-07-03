@@ -106,7 +106,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
       "role": "planned-batch-profile",
-      "sha256": "b3a2c4fb0e20f3079374ad887b1ea3363f4d91ad65e306f89c923a06977cda4b"
+      "sha256": "1502657c70112e6a585c9f7c6edd8240a8cea8c4bd37d497f5f7a9e0ac1f735c"
     },
     {
       "path": "config/competition-env/planned-batches/demo-store-add-one-before-after.json",
@@ -116,7 +116,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "fdbf2ea9ee33464267bfbd34115ef077b11ec4eb86874d4f3cad34cc6d3d3239"
+      "sha256": "2db9253982e12850b33ca4f2cb565da62e94727198759034c82f2b3068709f42"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",

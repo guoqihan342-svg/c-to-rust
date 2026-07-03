@@ -114,7 +114,7 @@
   "profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
     "profile_id": "flashdb-fdb-utils-opencode-explicit-workers",
-    "sha256": "b3a2c4fb0e20f3079374ad887b1ea3363f4d91ad65e306f89c923a06977cda4b"
+    "sha256": "1502657c70112e6a585c9f7c6edd8240a8cea8c4bd37d497f5f7a9e0ac1f735c"
   },
   "proof_class": "local-simulation",
   "reproduction": {

@@ -989,6 +989,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "worker_id": "worker-001",
             "opencode_preflight_report": {
                 "path": "target/harness/opencode-preflight-report.json",
+                "sha256": "a" * 64,
+                "status": "passed",
+                "contract_status": "executed",
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": None,
@@ -1037,6 +1040,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "worker_id": "worker-001",
             "opencode_preflight_report": {
                 "path": "target/harness/opencode-preflight-report.json",
+                "sha256": "a" * 64,
+                "status": "passed",
+                "contract_status": "executed",
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": "GLM-5.1",

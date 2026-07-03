@@ -11,6 +11,7 @@
   "mode": "opencode",
   "opencode_command": "opencode",
   "opencode_model": "GLM-5.1",
+  "opencode_agent": "c2rust-migrator",
   "opencode_variant": "max",
   "opencode_skip_permissions": true,
   "execute_merge": true,

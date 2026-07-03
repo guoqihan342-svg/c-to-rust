@@ -142,6 +142,7 @@ PORTABLE_PYTHON_COMMAND = "python3"
 COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 OPENCODE_RUNTIME_ENV_KEYS = (
     "XDG_CONFIG_HOME",
     "XDG_DATA_HOME",
@@ -1805,8 +1806,8 @@ def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id
     if model != COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{entry_id} opencode profile opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     agent = profile.get("opencode_agent")
-    if agent is not None and not isinstance(agent, str):
-        raise ValueError(f"{entry_id} opencode profile opencode_agent must be a string or null")
+    if agent != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{entry_id} opencode profile opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
     skip_permissions = profile.get("opencode_skip_permissions")
     if not isinstance(skip_permissions, bool):
         raise ValueError(f"{entry_id} opencode profile opencode_skip_permissions must be a boolean")
@@ -4676,6 +4677,14 @@ def validate_resume_manifest_replay_command(
     if mode == "opencode":
         if not isinstance(preflight, dict) or not isinstance(preflight.get("path"), str):
             raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report is required")
+        if preflight.get("status") != "passed":
+            raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report.status must be passed")
+        if not is_sha256_hex(preflight.get("sha256")):
+            raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report.sha256 must be a sha256")
+        if preflight.get("contract_status") != "executed":
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} opencode_preflight_report.contract_status must be executed"
+            )
         if flags.get("--opencode-preflight-report") != preflight["path"]:
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} --opencode-preflight-report must match opencode_preflight_report.path"
@@ -4711,6 +4720,10 @@ def validate_resume_manifest_replay_command(
         if isinstance(value_text, str):
             assert_repo_relative_posix(value_text)
     return {"status": "passed", "subcommand": expected_subcommand, "mode": mode}
+
+
+def is_sha256_hex(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def argv_flags(argv: list[str], *, label: str) -> dict[str, str]:

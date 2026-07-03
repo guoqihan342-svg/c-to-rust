@@ -190,14 +190,14 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
         "profile_id": "flashdb-fdb-utils-opencode-explicit-workers",
-        "sha256": "b3a2c4fb0e20f3079374ad887b1ea3363f4d91ad65e306f89c923a06977cda4b"
+        "sha256": "1502657c70112e6a585c9f7c6edd8240a8cea8c4bd37d497f5f7a9e0ac1f735c"
       },
       "proof_class": "local-simulation",
       "purpose": "harness-architecture-opencode-multi-worker-evaluate",
       "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json",
-        "sha256": "24a8ef257ba1fac1b5778cfa3aab4e1332ca52bc780c2c692d508a11eb59e14e"
+        "sha256": "7bd1b2d3a8665c9cb3d368ee0b85762cc1f49c5678daab3cd4fe3252a03b76f8"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"

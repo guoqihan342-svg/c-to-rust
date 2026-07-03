@@ -2745,9 +2745,16 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
     if not isinstance(preflight, dict):
         missing.append("opencode_preflight_report")
         preflight = {}
+    if preflight.get("status") != "passed":
+        missing.append("opencode_preflight_report.status")
     preflight_path = preflight.get("path")
     if not isinstance(preflight_path, str) or not preflight_path:
         missing.append("opencode_preflight_report.path")
+    preflight_sha256 = preflight.get("sha256")
+    if not is_sha256_hex(preflight_sha256):
+        missing.append("opencode_preflight_report.sha256")
+    if preflight.get("contract_status") != "executed":
+        missing.append("opencode_preflight_report.contract_status")
     policy = preflight.get("launch_policy")
     if not isinstance(policy, dict):
         missing.append("opencode_preflight_report.launch_policy")
@@ -2802,6 +2809,9 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
         "status": "ready",
         "reason": "opencode_preflight_contract_bound",
         "preflight_report": preflight_path,
+        "preflight_report_sha256": preflight_sha256,
+        "preflight_status": "passed",
+        "contract_status": "executed",
         "launch_policy_sha256": preflight.get("launch_policy_sha256")
         or opencode_launch_policy_sha256(normalize_opencode_launch_policy(policy)),
         "opencode_runtime_env_sha256": runtime_env_sha256,
@@ -2813,6 +2823,10 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
             "model_listed": True,
         },
     }
+
+
+def is_sha256_hex(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> None:
