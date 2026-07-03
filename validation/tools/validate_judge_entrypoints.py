@@ -1147,9 +1147,16 @@ def validate_competition_smoke_step_contract(payload: dict[str, Any]) -> dict[st
     missing = [step for step in REQUIRED_COMPETITION_SMOKE_STEPS if step not in observed_steps]
     if missing:
         raise ValueError(f"competition_smoke_summary steps missing required gates: {missing}")
+    allowed_steps = set(REQUIRED_COMPETITION_SMOKE_STEPS)
+    if proof_class == "competition-exact":
+        allowed_steps.add("opencode-glm-model-probe")
+    unexpected_steps = sorted(set(observed_steps) - allowed_steps)
+    if unexpected_steps:
+        raise ValueError(f"competition_smoke_summary steps unexpected gates: {unexpected_steps}")
     return {
         "status": "passed",
         "required_steps": list(REQUIRED_COMPETITION_SMOKE_STEPS),
+        "allowed_steps": sorted(allowed_steps),
     }
 
 

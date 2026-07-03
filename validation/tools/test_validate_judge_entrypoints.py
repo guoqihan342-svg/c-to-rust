@@ -2268,6 +2268,26 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 expected_artifacts=competition_smoke_expected_artifacts(),
             )
 
+    def test_competition_smoke_summary_rejects_unexpected_gate_step(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["steps"].append(
+            {
+                "step": "unexpected-gate",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            }
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary steps unexpected gates: \\['unexpected-gate'\\]",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+            )
+
     def test_competition_exact_smoke_summary_rejects_local_wsl_or_ci_mislabel(self) -> None:
         cases = [
             ("windows-local", {"kind": "windows-local", "system": "Windows"}),
