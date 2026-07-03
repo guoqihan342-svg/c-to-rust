@@ -107,6 +107,38 @@ EOF
   fi
 }
 
+check_opencode_model_availability() {
+  required_model="GLM-5.1"
+  require_glm="${REQUIRE_OPENCODE_GLM:-0}"
+  if ! command -v opencode >/dev/null 2>&1; then
+    if [ "$require_glm" = "1" ]; then
+      record_failure "opencode is not installed; required for OpenCode GLM-5.1 competition agent evidence"
+    else
+      printf 'opencode status: unavailable (required only for OpenCode GLM-5.1 competition agent evidence)\n'
+    fi
+    return
+  fi
+
+  models_output="$(opencode models 2>&1)"
+  models_status_code="$?"
+  if [ "$models_status_code" -ne 0 ]; then
+    if [ "$require_glm" = "1" ]; then
+      record_failure "opencode models failed; required for GLM-5.1 competition agent evidence: ${models_output}"
+    else
+      printf 'opencode status: model probe failed (required only for OpenCode GLM-5.1 competition agent evidence)\n'
+    fi
+    return
+  fi
+
+  if printf '%s\n' "$models_output" | grep -Eq '(^|[^A-Za-z0-9_.-])([^[:space:]/]+/)*GLM-5\.1([^A-Za-z0-9_.-]|$)'; then
+    printf 'OK: opencode models lists %s\n' "$required_model"
+  elif [ "$require_glm" = "1" ]; then
+    record_failure "opencode models did not list ${required_model}; root_cause_key=opencode_model_unavailable reason=required_model_not_listed"
+  else
+    printf 'opencode status: %s not listed (required only for OpenCode competition agent evidence)\n' "$required_model"
+  fi
+}
+
 if [ -r /etc/os-release ]; then
   . /etc/os-release
   [ "${ID:-}" = "ubuntu" ] || record_failure "OS ID expected ubuntu, got ${ID:-unknown}"
@@ -155,6 +187,7 @@ expect_file_contains "Cargo registry profile" "${script_dir}/cargo/config.toml" 
 
 expect_absent go
 expect_absent cmake
+check_opencode_model_availability
 
 # clang is optional; note vendored or env-var status without failing
 clang_status="absent"

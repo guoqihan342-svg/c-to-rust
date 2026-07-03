@@ -16,14 +16,14 @@
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
         "semantic_claim_source": "verified_unsafe_baseline_gates",
         "semantic_pass": true,
-        "sha256": "2a8928a6b40a4b55747a3ca823cd90502bd0f40346e2eef5f30e9b5e0228a3b2",
+        "sha256": "bfbb029eab250002fecd4bac75b9247e39001d28081b430d5b96891c7d3758ed",
         "status": "passed"
       }
     },
     "mode": "baseline_repair_gate",
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "b845c08408c5b4769ceebfb3474dbd0922e6a6bb27d5bb5dbe626ad062b435bc"
+      "sha256": "2dff1e6d51c146900a0b6105a430fd51ccf21b34bb973934771b6283c29edfee"
     }
   },
   "claim_boundary": {
@@ -40,12 +40,12 @@
   },
   "competition_profile": {
     "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-    "sha256": "8cfd6da89ea2f139d5867141914783ba9ea80ca4d6aca02edc5f85332ebad0cd"
+    "sha256": "be266a90a35812b5ccb69ea43dd688da1fbeb60ad4926a2ba3ec4ee133dd9562"
   },
   "environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
+    "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
   },
   "function": "fdb_calc_crc32",
   "manifest_kind": "h4-baseline-repair-run",
@@ -201,7 +201,7 @@
     },
     "oracle_evidence": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-      "sha256": "d711fa6049670921fb1fd648fe2ddf710e73ce3fc5065f8e7b087e6a16929c16"
+      "sha256": "d37c2f48ad02cc753cbccccba2da16ee252b03270bc977eb80561f32b9e02d55"
     },
     "raw_unsafe_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-baseline-unsafe.rs",
@@ -213,7 +213,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "b0ceeba7a360c518418474450c6fcc84aaf30da8f18aeaca3086d61aa17590ac"
+      "sha256": "b7d5b3628426f5e0eeec30fddc3e9de5ddeaed2f1acdf951780d8a1d453677e8"
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
@@ -221,7 +221,7 @@
     },
     "translation_before_after": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translation-before-after.json",
-      "sha256": "b845c08408c5b4769ceebfb3474dbd0922e6a6bb27d5bb5dbe626ad062b435bc"
+      "sha256": "2dff1e6d51c146900a0b6105a430fd51ccf21b34bb973934771b6283c29edfee"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-before-after-unsafe-scan.json",
@@ -232,7 +232,7 @@
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
       "semantic_claim_source": "verified_unsafe_baseline_gates",
       "semantic_pass": true,
-      "sha256": "2a8928a6b40a4b55747a3ca823cd90502bd0f40346e2eef5f30e9b5e0228a3b2",
+      "sha256": "bfbb029eab250002fecd4bac75b9247e39001d28081b430d5b96891c7d3758ed",
       "status": "passed"
     }
   },

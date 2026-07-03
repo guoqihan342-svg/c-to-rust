@@ -110,6 +110,24 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         )
         self.assertEqual(profile["optional_tools"]["clang"]["missing_status"], "missing_clang_path")
 
+    def test_competition_profile_records_opencode_glm_runtime_contract(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        runtime = profile["opencode_runtime"]
+
+        self.assertEqual(runtime["status"], "required_for_competition_agent_evidence")
+        self.assertEqual(runtime["command"], "opencode")
+        self.assertEqual(runtime["required_model"], "GLM-5.1")
+        self.assertEqual(runtime["model_probe"]["command"], ["opencode", "models"])
+        self.assertEqual(runtime["model_probe"]["required_status"], "available")
+        self.assertTrue(runtime["model_probe"]["required_model_listed"])
+        self.assertEqual(runtime["model_probe"]["missing_model_root_cause_key"], "opencode_model_unavailable")
+        self.assertEqual(runtime["model_probe"]["missing_model_reason"], "required_model_not_listed")
+        self.assertIn("opencode-preflight", runtime["preflight_command_template"])
+        self.assertIn("--opencode-model GLM-5.1", runtime["preflight_command_template"])
+        self.assertEqual(runtime["claim_boundary"]["semantic_gate"], False)
+        self.assertEqual(runtime["claim_boundary"]["translation_coverage_numerator"], 0)
+        self.assertFalse(runtime["claim_boundary"]["local_simulation_closes_p0_h9"])
+
     def test_competition_environment_profile_records_clang_lane_identity(self) -> None:
         profile = load_json(PROFILE_DIR / "environment.json")
         lane = profile["optional_lanes"]["competition_clang"]
@@ -1092,6 +1110,10 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
 
         toolchain_check = (PROFILE_DIR / "toolchain-check.sh").read_text(encoding="utf-8")
         self.assertIn("check_optional_clang_smoke()", toolchain_check)
+        self.assertIn("check_opencode_model_availability()", toolchain_check)
+        self.assertIn("opencode models", toolchain_check)
+        self.assertIn("REQUIRE_OPENCODE_GLM", toolchain_check)
+        self.assertIn("GLM-5.1", toolchain_check)
         self.assertIn("-print-resource-dir", toolchain_check)
         self.assertIn("#include <stdint.h>", toolchain_check)
         self.assertIn("#include <stddef.h>", toolchain_check)

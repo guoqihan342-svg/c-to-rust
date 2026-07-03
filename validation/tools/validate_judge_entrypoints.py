@@ -28,6 +28,14 @@ from validation.tools import milestone_release_report
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
 COMPETITION_ENV_ROOT = "config/competition-env"
 COMPETITION_ENV_BUNDLE_MANIFEST = Path("config") / "competition-env" / "bundle-manifest.json"
+COMPETITION_ENV_EXTERNAL_REF_ROLES = {
+    "requirements.txt": "python-dependency-lock",
+    "opencode.json": "opencode-config",
+    "scripts/bootstrap_flashdb_sources.sh": "source-bootstrap-script",
+    ".github/workflows/core-translator-validation-ci.yml": "ci-validation-workflow",
+    ".codex/skills/c2rust-migration/SKILL.md": "repo-owned-agent-skill",
+    ".opencode/agents/c2rust-migrator.md": "opencode-agent-runbook",
+}
 ROUTE_GOVERNANCE_METRICS_SCHEMA = REPO_ROOT / "validation" / "route-governance-metrics.schema.json"
 LOCAL_ABSOLUTE_PATH = re.compile(
     r"(?:^|[^A-Za-z0-9_])(?:"
@@ -131,6 +139,7 @@ def write_readiness_report(result: dict[str, Any], out_path: Path, *, repo_root:
         ),
         "readiness_report_path": path_text,
         "claim_boundary": result.get("claim_boundary", {}),
+        "environment_profile_contract": result.get("environment_profile_contract", {}),
         "entrypoint_count": result.get("entrypoint_count", 0),
         "proof_class_contract": result.get("proof_class_contract", {}),
         "source_pin_contract": result.get("source_pin_contract", {}),
@@ -405,6 +414,54 @@ def validate_competition_env_bundle_contract(
     missing_required = sorted(required_paths - set(result_files))
     if missing_required:
         raise ValueError(f"competition env bundle missing required files: {missing_required}")
+    bundle_root = repo_path(COMPETITION_ENV_ROOT, repo_root=repo_root)
+    actual_config_files = {
+        repo_relative(path, repo_root)
+        for path in bundle_root.rglob("*")
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and repo_relative(path, repo_root) != COMPETITION_ENV_BUNDLE_MANIFEST.as_posix()
+    }
+    omitted_config_files = sorted(actual_config_files - set(result_files))
+    if omitted_config_files:
+        raise ValueError(f"competition env bundle manifest missing in-folder files: {omitted_config_files}")
+
+    external_refs = manifest.get("external_refs")
+    if not isinstance(external_refs, list) or not external_refs:
+        raise ValueError("competition env bundle external_refs must be a non-empty list")
+    result_external_refs: dict[str, dict[str, Any]] = {}
+    external_roles: dict[str, str] = {}
+    for ref_entry in external_refs:
+        entry = require_object(ref_entry, "competition env bundle external_refs[]")
+        path_text = require_string(entry.get("path"), "competition env bundle external_refs[].path")
+        role = require_string(entry.get("role"), f"competition env bundle external_ref {path_text}.role")
+        expected_sha = require_string(entry.get("sha256"), f"competition env bundle external_ref {path_text}.sha256")
+        assert_repo_relative_posix(path_text)
+        if path_text.startswith(f"{COMPETITION_ENV_ROOT}/"):
+            raise ValueError(f"competition env bundle external_ref must stay outside {COMPETITION_ENV_ROOT}: {path_text}")
+        if path_text in result_external_refs:
+            raise ValueError(f"competition env bundle duplicate external_ref: {path_text}")
+        expected_role = COMPETITION_ENV_EXTERNAL_REF_ROLES.get(path_text)
+        if expected_role is not None and role != expected_role:
+            raise ValueError(f"competition env bundle external_ref role mismatch for {path_text}: {role} != {expected_role}")
+        path = repo_path(path_text, repo_root=repo_root)
+        if not path.is_file():
+            raise ValueError(f"competition env bundle external_ref is missing: {path_text}")
+        actual_sha = sha256_file(path)
+        if expected_sha != actual_sha:
+            raise ValueError(
+                f"competition env bundle external_ref sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}"
+            )
+        result_external_refs[path_text] = {
+            "path": path_text,
+            "role": role,
+            "sha256": actual_sha,
+            "status": "present",
+        }
+        external_roles[path_text] = role
+    missing_external_refs = sorted(set(COMPETITION_ENV_EXTERNAL_REF_ROLES) - set(result_external_refs))
+    if missing_external_refs:
+        raise ValueError(f"competition env bundle external_refs missing required refs: {missing_external_refs}")
 
     return {
         "status": "passed",
@@ -423,6 +480,75 @@ def validate_competition_env_bundle_contract(
         "file_count": len(result_files),
         "files": sorted(result_files),
         "roles": roles,
+        "external_ref_count": len(result_external_refs),
+        "external_refs": sorted(result_external_refs),
+        "external_roles": external_roles,
+    }
+
+
+def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_root: Path) -> dict[str, Any]:
+    ref = validate_ref(require_object(profile_ref, "environment_profile"), repo_root=repo_root)
+    profile = load_json(repo_path(ref["path"], repo_root=repo_root))
+    runtime = require_object(profile.get("opencode_runtime"), "environment_profile.opencode_runtime")
+    if runtime.get("status") != "required_for_competition_agent_evidence":
+        raise ValueError(
+            "environment_profile.opencode_runtime.status must be required_for_competition_agent_evidence"
+        )
+    if runtime.get("command") != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"environment_profile.opencode_runtime.command must be {COMPETITION_OPENCODE_COMMAND}")
+    if runtime.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"environment_profile.opencode_runtime.required_model must be {COMPETITION_OPENCODE_MODEL}")
+    probe = require_object(runtime.get("model_probe"), "environment_profile.opencode_runtime.model_probe")
+    if probe.get("command") != [COMPETITION_OPENCODE_COMMAND, "models"]:
+        raise ValueError("environment_profile.opencode_runtime.model_probe.command must be opencode models")
+    if probe.get("required_status") != "available":
+        raise ValueError("environment_profile.opencode_runtime.model_probe.required_status must be available")
+    if probe.get("required_model_listed") is not True:
+        raise ValueError("environment_profile.opencode_runtime.model_probe.required_model_listed must be true")
+    if probe.get("missing_model_root_cause_key") != "opencode_model_unavailable":
+        raise ValueError(
+            "environment_profile.opencode_runtime.model_probe.missing_model_root_cause_key "
+            "must be opencode_model_unavailable"
+        )
+    if probe.get("missing_model_reason") != "required_model_not_listed":
+        raise ValueError(
+            "environment_profile.opencode_runtime.model_probe.missing_model_reason "
+            "must be required_model_not_listed"
+        )
+    preflight_template = require_string(
+        runtime.get("preflight_command_template"),
+        "environment_profile.opencode_runtime.preflight_command_template",
+    )
+    assert_no_local_absolute_path(preflight_template)
+    if "opencode-preflight" not in preflight_template:
+        raise ValueError("environment_profile.opencode_runtime.preflight_command_template must run opencode-preflight")
+    if f"--opencode-model {COMPETITION_OPENCODE_MODEL}" not in preflight_template:
+        raise ValueError(
+            "environment_profile.opencode_runtime.preflight_command_template "
+            f"must include --opencode-model {COMPETITION_OPENCODE_MODEL}"
+        )
+    boundary = require_object(runtime.get("claim_boundary"), "environment_profile.opencode_runtime.claim_boundary")
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError("environment_profile.opencode_runtime.claim_boundary.semantic_gate must be false")
+    if boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError(
+            "environment_profile.opencode_runtime.claim_boundary.translation_coverage_numerator must be 0"
+        )
+    if boundary.get("local_simulation_closes_p0_h9") is not False:
+        raise ValueError(
+            "environment_profile.opencode_runtime.claim_boundary.local_simulation_closes_p0_h9 must be false"
+        )
+    return {
+        "status": "passed",
+        "profile": ref,
+        "opencode_runtime": {
+            "command": COMPETITION_OPENCODE_COMMAND,
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "model_probe_command": [COMPETITION_OPENCODE_COMMAND, "models"],
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "local_simulation_closes_p0_h9": False,
+        },
     }
 
 
@@ -3883,6 +4009,7 @@ def validate_config(
     entrypoint_results: list[dict[str, Any]] = []
     claim_boundary: dict[str, Any] = {}
     competition_env_bundle_contract: dict[str, Any] = {}
+    environment_profile_contract: dict[str, Any] = {}
     source_pin_contract: dict[str, Any] = {}
 
     try:
@@ -3901,7 +4028,10 @@ def validate_config(
         errors.append(str(error))
 
     try:
-        validate_ref(config["environment_profile"], repo_root=repo_root)
+        environment_profile_contract = validate_competition_environment_profile_contract(
+            config["environment_profile"],
+            repo_root=repo_root,
+        )
         competition_env_bundle_contract = validate_competition_env_bundle_contract(config, repo_root=repo_root)
         assert_no_local_absolute_path(str(config.get("source_pin", {}).get("checkout_command", "")))
     except (KeyError, ValueError) as error:
@@ -3917,6 +4047,7 @@ def validate_config(
             "entrypoint_count": 0,
             "entrypoints": [],
             "claim_boundary": claim_boundary,
+            "environment_profile_contract": environment_profile_contract,
             "competition_env_bundle_contract": competition_env_bundle_contract,
             "proof_class_contract": {},
             "source_pin_contract": source_pin_contract,
@@ -4046,6 +4177,7 @@ def validate_config(
         "entrypoint_count": len(entrypoint_results),
         "entrypoints": entrypoint_results,
         "claim_boundary": claim_boundary,
+        "environment_profile_contract": environment_profile_contract,
         "competition_env_bundle_contract": competition_env_bundle_contract,
         "proof_class_contract": proof_class_contract,
         "source_pin_contract": source_pin_contract,

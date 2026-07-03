@@ -14,7 +14,7 @@
   "environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
+    "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
   },
   "evaluate_profile_artifacts": {
     "artifacts": {

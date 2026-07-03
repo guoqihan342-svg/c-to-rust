@@ -168,6 +168,22 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
             "publication_manifest.competition_config_archive.bundle_manifest must match "
             "competition_config_archive.files.config/competition-env/bundle-manifest.json"
         )
+    external_refs = require_object(archive.get("external_refs"), "competition_config_archive.external_refs")
+    missing_external_refs = sorted(set(judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES) - set(external_refs))
+    if missing_external_refs:
+        raise ValueError(f"competition_config_archive.external_refs missing required refs: {missing_external_refs}")
+    for path_text, expected_role in judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES.items():
+        ref = require_object(external_refs.get(path_text), f"competition_config_archive.external_refs.{path_text}")
+        role = judge_validator.require_string(
+            ref.get("role"),
+            f"competition_config_archive.external_refs.{path_text}.role",
+        )
+        if role != expected_role:
+            raise ValueError(f"competition_config_archive.external_refs.{path_text}.role must be {expected_role}")
+        try:
+            judge_validator.validate_ref(ref, repo_root=repo_root)
+        except ValueError as error:
+            raise ValueError(f"competition_config_archive.external_refs.{path_text}: {error}") from error
 
 
 def checked_artifact_refs(packet: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
@@ -191,11 +207,11 @@ def require_opencode_patch_boundary_contract(packet: dict[str, Any], *, repo_roo
         boundary.get("translation_coverage_numerator"),
         "opencode_patch_boundary.translation_coverage_numerator",
     )
-    if boundary.get("opencode_runtime_enabled") is True:
-        proof = require_object(
-            boundary.get("opencode_preflight_proof_summary"),
-            "opencode_patch_boundary.opencode_preflight_proof_summary",
-        )
+    proof = require_object(
+        boundary.get("opencode_preflight_proof_summary"),
+        "opencode_patch_boundary.opencode_preflight_proof_summary",
+    )
+    if boundary.get("opencode_runtime_enabled") is True or proof.get("status") == "passed":
         require_opencode_preflight_proof_summary_contract(
             proof,
             "opencode_patch_boundary.opencode_preflight_proof_summary",

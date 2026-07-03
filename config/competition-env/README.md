@@ -35,7 +35,7 @@
 ## 文件说明
 
 - `environment.json`：机器可读环境基线、镜像源和适配策略。
-- `bundle-manifest.json`：比赛配置目录的机器可读归档合同，hash 绑定环境 profile、镜像配置、shell 入口、planned batch profiles、judge entrypoint index、review checklist 和 OpenCode runbook；`validate_judge_entrypoints` 会校验它，但它不是 semantic gate。
+- `bundle-manifest.json`：比赛配置目录的机器可读归档合同，hash 绑定环境 profile、镜像配置、shell 入口、planned batch profiles、judge entrypoint index、review checklist 和 OpenCode runbook；同时通过 `external_refs` 绑定 `requirements.txt`、`opencode.json`、FlashDB bootstrap、核心 CI workflow、repo-owned skill 和 `.opencode/agents/c2rust-migrator.md`。`validate_judge_entrypoints` 会校验它，但它不是 semantic gate。
 - `apt/sources.list`：Ubuntu Noble APT 镜像配置。
 - `pip/pip.conf`：pip 镜像配置。
 - `npm/.npmrc`：npm registry 配置。
@@ -57,7 +57,7 @@
 - OpenCode 诊断脱敏：worker repair diagnostics 在写入 repair hint、agent index、resume manifest 和 judge evidence 前，会把 stdout/stderr/python traceback 中的 Windows、WSL、Linux 本机绝对路径替换为 `<local-absolute-path>`；路径治理失败会作为 harness 证据 fail-closed，而不是进入公开发布包。
 - `review-checklists/`：milestone/release review gate 输入目录；`flashdb-harness-internal-review.json` 记录 harness architecture、unsafe ledger、coverage matrix、真实切片证据、公开 claim boundary 和已知拒绝项的人工 review 覆盖。`milestone_release_report.py --review-checklist ...` 会把它作为 release readiness 输入；`judge_demo.py --review-checklist ...` 会在 out-root 下生成 `summary/milestone-review-checklist.json` 副本并由 `harness/judge-evidence-index.json` 绑定原始输入与副本；review checklist 不是 semantic gate。
 - `opencode-single-interaction.md` / `.en.md`：OpenCode 单次交互比赛流程指南，包含 prompt 模板、时间预估、Agent 行为约束和容错设计；OpenCode preflight report 必须同时匹配当前 `run_id` 和 launch policy，旧 run 的 preflight 不可复用。
-- Windows/OpenCode preflight 状态：早期 focused `opencode_multi_worker_evaluate_profile` 本机证据属于 GLM 模型可用性门禁加入前的历史记录。当前 OpenCode 证据必须先通过同一 repo-local runtime env 的 `opencode models` 证明 `GLM-5.1` 可用；如果模型列表缺 GLM，preflight 必须以 `opencode_model_unavailable` / `required_model_not_listed` fail-closed，记录 `opencode_run_launched=false` 且不写 marker。local-simulation OpenCode pass does not close P0-H9；必须在比赛 GLM/OpenCode host 或等价 provider 配置上重新生成 OpenCode artifacts，才能把 `--require-local-artifacts` 当作当前 OpenCode 证据。该事项仍只是 runtime/reproduction evidence，不是 semantic gate，也不改变 `translation_coverage_numerator`。
+- Windows/OpenCode preflight 状态：早期 focused `opencode_multi_worker_evaluate_profile` 本机证据属于 GLM 模型可用性门禁加入前的历史记录。当前 OpenCode 证据必须先通过同一 repo-local runtime env 的 `opencode models` 证明 `GLM-5.1` 可用；`environment.json` 的 `opencode_runtime` 是该要求的机器合同，`toolchain-check.sh` 默认只报告 OpenCode/GLM 状态，设置 `REQUIRE_OPENCODE_GLM=1` 时缺 OpenCode、模型探测失败或未列出 GLM 都会硬失败。如果模型列表缺 GLM，preflight 必须以 `opencode_model_unavailable` / `required_model_not_listed` fail-closed，记录 `opencode_run_launched=false` 且不写 marker。local-simulation OpenCode pass does not close P0-H9；必须在比赛 GLM/OpenCode host 或等价 provider 配置上重新生成 OpenCode artifacts，才能把 `--require-local-artifacts` 当作当前 OpenCode 证据。该事项仍只是 runtime/reproduction evidence，不是 semantic gate，也不改变 `translation_coverage_numerator`。
 
 ## Clang 策略：vendored 本地分发
 

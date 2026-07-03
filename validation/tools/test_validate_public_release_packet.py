@@ -261,6 +261,17 @@ def valid_packet(root: Path) -> dict:
                 "bytes": config_bundle_manifest.stat().st_size,
             }
         },
+        "external_ref_count": len(judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES),
+        "external_refs": {
+            path: {
+                "path": path,
+                "role": role,
+                "status": "present",
+                "sha256": judge_validator.sha256_file(REPO_ROOT / path),
+                "bytes": (REPO_ROOT / path).stat().st_size,
+            }
+            for path, role in judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES.items()
+        },
         "claim_boundary": {
             "semantic_gate": False,
             "archive_is_semantic_gate": False,
@@ -710,6 +721,23 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_deep_validates_preflight_even_when_runtime_flag_false(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-runtime-flag-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"]["opencode_runtime_enabled"] = False
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["preflight_report"]["sha256"] = "0" * 64
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("opencode-preflight-report" in error and "sha256 mismatch" in error for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_preflight_handoff_contract_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-handoff-drift-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -806,6 +834,21 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("competition_config_archive.files must include config/competition-env/bundle-manifest.json" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_requires_archive_external_reproduction_refs(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-refs-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["competition_config_archive"]["external_refs"] = {}
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("competition_config_archive.external_refs missing required refs" in error for error in result["errors"]),
             result["errors"],
         )
 

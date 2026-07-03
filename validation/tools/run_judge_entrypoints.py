@@ -644,6 +644,7 @@ def build_judge_run_summary(
 def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
     root = validator.repo_path(COMPETITION_CONFIG_ROOT.as_posix(), repo_root=repo_root)
     files: dict[str, dict[str, Any]] = {}
+    external_refs: dict[str, dict[str, Any]] = {}
     if not root.is_dir():
         return {
             "report_kind": "competition-config-archive",
@@ -651,6 +652,8 @@ def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
             "root": COMPETITION_CONFIG_ROOT.as_posix(),
             "file_count": 0,
             "files": files,
+            "external_ref_count": 0,
+            "external_refs": external_refs,
             "claim_boundary": {
                 "semantic_gate": False,
                 "archive_is_semantic_gate": False,
@@ -665,16 +668,37 @@ def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
             "sha256": validator.sha256_file(path),
             "bytes": path.stat().st_size,
         }
+    for rel, role in sorted(validator.COMPETITION_ENV_EXTERNAL_REF_ROLES.items()):
+        path = validator.repo_path(rel, repo_root=repo_root)
+        if path.is_file():
+            external_refs[rel] = {
+                "path": rel,
+                "role": role,
+                "status": "present",
+                "sha256": validator.sha256_file(path),
+                "bytes": path.stat().st_size,
+            }
+        else:
+            external_refs[rel] = {
+                "path": rel,
+                "role": role,
+                "status": "missing",
+            }
     return {
         "report_kind": "competition-config-archive",
         "status": "present",
         "root": COMPETITION_CONFIG_ROOT.as_posix(),
         "file_count": len(files),
         "files": files,
+        "external_ref_count": len(external_refs),
+        "external_refs": external_refs,
         "claim_boundary": {
             "semantic_gate": False,
             "archive_is_semantic_gate": False,
-            "boundary": "This archive binds repo-local competition configuration files for reproduction only.",
+            "boundary": (
+                "This archive binds repo-local competition configuration files and hash-bound external "
+                "reproduction inputs for review only."
+            ),
         },
     }
 

@@ -3,18 +3,50 @@
   "canonical_environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
+    "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
   },
   "claim_boundary": {
     "archive_is_semantic_gate": false,
     "boundary": "This manifest binds repo-local competition configuration files for reproduction and drift checks only. It does not claim semantic acceptance or translation coverage.",
     "semantic_gate": false
   },
+  "external_refs": [
+    {
+      "path": "requirements.txt",
+      "role": "python-dependency-lock",
+      "sha256": "756cc9e506ae4ee1a6f6c0507088b5cfc0dc8ba350fb2d2d46f1ffa72033adb6"
+    },
+    {
+      "path": "opencode.json",
+      "role": "opencode-config",
+      "sha256": "5e3f6e33720ca4d773a3edffa8d6dda7ef99b482be789087f9d2f945e15792d1"
+    },
+    {
+      "path": "scripts/bootstrap_flashdb_sources.sh",
+      "role": "source-bootstrap-script",
+      "sha256": "3fbdba24a915048b212fbd91ed6eb0a53e56ac531c8c37ab9263679a8f705aa6"
+    },
+    {
+      "path": ".github/workflows/core-translator-validation-ci.yml",
+      "role": "ci-validation-workflow",
+      "sha256": "b38d90ea85c77bdcbf419a089c8413380f4c4d062afc4289d1d2df23466fc739"
+    },
+    {
+      "path": ".codex/skills/c2rust-migration/SKILL.md",
+      "role": "repo-owned-agent-skill",
+      "sha256": "deee8c42e10f08e36b4a841680eca9e9901d29dba6f2759d00707b18126124b0"
+    },
+    {
+      "path": ".opencode/agents/c2rust-migrator.md",
+      "role": "opencode-agent-runbook",
+      "sha256": "328ba444b3d182928a8717fd390565e4e3886d5d284cacfcd0d1c307508b28e9"
+    }
+  ],
   "files": [
     {
       "path": "config/competition-env/environment.json",
       "role": "environment-profile",
-      "sha256": "e7bbbccabbd5758b53a74222ecdd8119446b0bb0d43224ac8bd56cc734f21c1f"
+      "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
     },
     {
       "path": "config/competition-env/env.sh",
@@ -24,7 +56,7 @@
     {
       "path": "config/competition-env/toolchain-check.sh",
       "role": "toolchain-smoke",
-      "sha256": "8f109062ff6a256cd393b2ff4e0a320ed04ec8ec79bc9a9909ef088e7b83bda7"
+      "sha256": "09b8a73258094247acffdfc3dd9dc642bfd336020cf3fd600faedea94dad73b7"
     },
     {
       "path": "config/competition-env/smoke.sh",
@@ -64,7 +96,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "8cfd6da89ea2f139d5867141914783ba9ea80ca4d6aca02edc5f85332ebad0cd"
+      "sha256": "be266a90a35812b5ccb69ea43dd688da1fbeb60ad4926a2ba3ec4ee133dd9562"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
@@ -84,7 +116,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "f6c1cb269d0bccf8866cff1adc1bf4ca5ae03eaf0fe7da70f140427e330fd771"
+      "sha256": "6e952ce9b1710b667b290f24d2b6f0b4df5ed3b623d8fd207eb0889e059770d7"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
@@ -100,6 +132,16 @@
       "path": "config/competition-env/opencode-single-interaction.en.md",
       "role": "opencode-runbook",
       "sha256": "ddd1b189a21857515adc36e31f0a46a46a1ef05ab241720c862ff59b0f4eb8aa"
+    },
+    {
+      "path": "config/competition-env/README.md",
+      "role": "competition-env-readme",
+      "sha256": "8166d6c5b5d038e24797526d12d01fb6d9165cbd6c4b83237c9362508fae535b"
+    },
+    {
+      "path": "config/competition-env/README.en.md",
+      "role": "competition-env-readme",
+      "sha256": "a7ad0581835f9f07198bd22505e0e789156635603b10d713728170d0b2f87b75"
     }
   ],
   "report_kind": "competition-env-bundle",

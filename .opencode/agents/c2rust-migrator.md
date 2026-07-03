@@ -74,9 +74,19 @@ python3 -B validation/tools/run_competition.py \
 ```bash
 source config/competition-env/env.sh
 bash config/competition-env/toolchain-check.sh
+python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
+  --run-id <run-id> \
+  --out-root target/opencode-preflight \
+  --opencode-model GLM-5.1 \
+  --opencode-variant max
 openspec status --change "design-c2rust-migration-agent" --json
 openspec instructions apply --change "design-c2rust-migration-agent" --json
 ```
+
+For competition agent evidence, `opencode-preflight` must prove the same repo-local
+runtime can run `opencode models` and list `GLM-5.1`. If the model is missing,
+the run remains local/blocked evidence only; do not mark P0-H9 or the OpenCode
+agent path as closed.
 
 ## Roles
 
@@ -92,6 +102,9 @@ openspec instructions apply --change "design-c2rust-migration-agent" --json
 - Use deterministic translator routes first.
 - Treat AI output as candidate only; P0 default path does not use LLM candidate generation.
 - Do not hand-write `c_source`; slice input must come from real source files.
+- Competition agent evidence must use OpenCode with `--opencode-model GLM-5.1`.
+- Local-simulation OpenCode evidence does not close P0-H9 without a fresh
+  GLM-5.1/OpenCode host preflight and validator pass.
 - Do not modify project source code during competition single-run mode.
 - Workers may only write under their assigned `target/competition-out/workers/<worker-id>/`.
 - SQLite is a ledger/cache/index. It is not semantic evidence.

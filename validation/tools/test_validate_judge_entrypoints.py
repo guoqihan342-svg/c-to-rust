@@ -1227,6 +1227,14 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "sha256": validator.sha256_file(REPO_ROOT / "config/competition-env/environment.json"),
             },
         )
+        required_external_refs = {
+            "requirements.txt",
+            "opencode.json",
+            "scripts/bootstrap_flashdb_sources.sh",
+            ".github/workflows/core-translator-validation-ci.yml",
+            ".codex/skills/c2rust-migration/SKILL.md",
+        }
+        self.assertTrue(required_external_refs.issubset(set(bundle["external_refs"])))
 
     def test_context_pack_entrypoints_must_be_repo_relative_when_declared(self) -> None:
         target_dir = REPO_ROOT / "target"
@@ -1326,6 +1334,27 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         write_json(temp_manifest, manifest)
 
         with self.assertRaisesRegex(ValueError, "competition env bundle file sha256 mismatch"):
+            validator.validate_competition_env_bundle_contract(
+                load_default_config(),
+                manifest_path=temp_manifest,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_competition_env_bundle_rejects_external_ref_hash_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        manifest["external_refs"] = [
+            {
+                "path": "requirements.txt",
+                "role": "python-dependency-lock",
+                "sha256": "0" * 64,
+            }
+        ]
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+
+        with self.assertRaisesRegex(ValueError, "competition env bundle external_ref sha256 mismatch"):
             validator.validate_competition_env_bundle_contract(
                 load_default_config(),
                 manifest_path=temp_manifest,
@@ -4723,6 +4752,29 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("profile uses commits outside source_pin_policy" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_environment_profile_requires_opencode_glm_runtime_contract(self) -> None:
+        config = load_default_config()
+        temp_config = write_temp_config(config)
+        temp_dir = temp_config.parent
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment.pop("opencode_runtime", None)
+        environment_path = temp_dir / "environment-without-opencode-runtime.json"
+        write_json(environment_path, environment)
+        config["environment_profile"] = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+        write_json(temp_config, config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("environment_profile.opencode_runtime must be an object" in error for error in result["errors"]),
             result["errors"],
         )
 

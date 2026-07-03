@@ -669,9 +669,17 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertIn("config/competition-env/judge-entrypoints/flashdb-harness.json", archive["files"])
         self.assertIn("config/competition-env/review-checklists/flashdb-harness-internal-review.json", archive["files"])
         self.assertIn("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json", archive["files"])
+        self.assertIn("requirements.txt", archive["external_refs"])
+        self.assertIn("opencode.json", archive["external_refs"])
+        self.assertIn("scripts/bootstrap_flashdb_sources.sh", archive["external_refs"])
+        self.assertIn(".github/workflows/core-translator-validation-ci.yml", archive["external_refs"])
+        self.assertIn(".codex/skills/c2rust-migration/SKILL.md", archive["external_refs"])
         for file_ref in archive["files"].values():
             self.assertEqual(file_ref["status"], "present")
             self.assertRegex(file_ref["sha256"], r"^[0-9a-f]{64}$")
+        for external_ref in archive["external_refs"].values():
+            self.assertEqual(external_ref["status"], "present")
+            self.assertRegex(external_ref["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(report["summary"]["competition_config_archive"]["file_count"], archive["file_count"])
         self.assertTrue(out_path.is_file())
 
