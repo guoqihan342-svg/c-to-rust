@@ -47,6 +47,10 @@ PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
 HARNESS_MODULE = "validation.tools.opencode_agent_harness"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+ALLOWED_PROOF_CLASSES = frozenset(
+    {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}
+)
 _RESOLVED_PYTHON_COMMAND: list[str] | None = None
 LOCAL_ABSOLUTE_PATH_TEXT = re.compile(
     r"(?<![A-Za-z0-9_])(?:"
@@ -497,6 +501,7 @@ def init_run(
     proof_class: str,
     repo_root: Path = REPO_ROOT,
 ) -> Path:
+    require_competition_exact_host_attestation(proof_class, context="init-run")
     out_root = repo_path(out_root, repo_root=repo_root)
     db_path = out_root / DB_REL_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1216,8 +1221,9 @@ def run_batch_profile(
         raise SystemExit(f"unsupported batch profile schema_version: {profile.get('schema_version')}")
     profile_id = profile_required_string(profile, "profile_id")
     proof_class = profile_required_string(profile, "proof_class")
-    if proof_class not in {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}:
+    if proof_class not in ALLOWED_PROOF_CLASSES:
         raise SystemExit(f"unsupported proof_class in batch profile: {proof_class}")
+    require_competition_exact_host_attestation(proof_class, context="run-batch-profile")
     mode = profile_string(profile, "mode", default="deterministic")
     if mode not in {"deterministic", "opencode"}:
         raise SystemExit(f"unsupported mode in batch profile: {mode}")
@@ -2633,8 +2639,9 @@ def evaluate(
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
-    if proof_class not in {"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"}:
+    if proof_class not in ALLOWED_PROOF_CLASSES:
         raise SystemExit(f"unsupported proof_class: {proof_class}")
+    require_competition_exact_host_attestation(proof_class, context="evaluate")
     if mode not in {"deterministic", "opencode"}:
         raise SystemExit(f"unsupported mode: {mode}")
     out_root = repo_path(out_root, repo_root=repo_root)
@@ -4201,6 +4208,17 @@ def route_governance_competition_summary_paths(out_root: Path) -> list[Path]:
         return []
     summary = load_json(summary_path)
     return [summary_path] if isinstance(summary.get("workflow_metrics"), dict) else []
+
+
+def require_competition_exact_host_attestation(proof_class: str, *, context: str) -> None:
+    if proof_class != "competition-exact":
+        return
+    if os.environ.get(COMPETITION_EXACT_HOST_ENV) == "1":
+        return
+    raise SystemExit(
+        f"{context} proof_class=competition-exact requires {COMPETITION_EXACT_HOST_ENV}=1 "
+        "from the real competition host"
+    )
 
 
 def profile_required_string(profile: dict[str, Any], field: str) -> str:

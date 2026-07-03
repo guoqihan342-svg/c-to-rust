@@ -1859,6 +1859,77 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 self.assertEqual(indexed["opencode_contract_verification"], contract_verification)
                 self.assertEqual(indexed["opencode_preflight_report"], preflight_binding)
 
+    def test_run_batch_profile_rejects_competition_exact_without_exact_host_before_preflight(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-competition-exact-overclaim",
+                        "proof_class": "competition-exact",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "mode": "opencode",
+                        "execute_merge": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"competition-exact overclaim should fail before launch: {argv}")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": ""}):
+                with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
+                    harness.run_batch_profile(
+                        profile_path=profile_path,
+                        run_id="run-profile-competition-exact-overclaim",
+                        out_root=out_root,
+                        command_runner=fail_if_called,
+                        repo_root=REPO_ROOT,
+                    )
+
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+
+    def test_evaluate_rejects_competition_exact_without_exact_host_before_init_run(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"competition-exact overclaim should fail before worker launch: {argv}")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": ""}):
+                with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
+                    harness.evaluate(
+                        run_id="run-evaluate-competition-exact-overclaim",
+                        target_id="demo",
+                        source_repo_root=source_root,
+                        source_file="src/demo.c",
+                        source_commit="abc123",
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        functions=["first_unit"],
+                        mode="deterministic",
+                        execute_merge=False,
+                        command_runner=fail_if_called,
+                        repo_root=REPO_ROOT,
+                    )
+
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+
     def test_run_batch_profile_opencode_auto_runs_preflight_when_profile_omits_report(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
