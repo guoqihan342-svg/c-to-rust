@@ -2038,14 +2038,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": "GLM-5.1",
-                    "opencode_agent": None,
+                    "opencode_agent": "c2rust-migrator",
                     "opencode_variant": "max",
                     "opencode_skip_permissions": False,
                 },
                 "launch_policy_sha256": harness.sha256_text(
                     json.dumps(
                         {
-                            "opencode_agent": None,
+                            "opencode_agent": "c2rust-migrator",
                             "opencode_command": "opencode",
                             "opencode_model": "GLM-5.1",
                             "opencode_skip_permissions": False,
@@ -2265,6 +2265,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(rehearsal["translation_coverage_numerator"], 0)
             self.assertEqual(rehearsal["h9_contract"]["status"], "blocked")
             self.assertEqual(rehearsal["h9_contract"]["required_agent_tool"], "opencode")
+            self.assertEqual(rehearsal["h9_contract"]["required_agent"], "c2rust-migrator")
             self.assertEqual(rehearsal["h9_contract"]["required_model"], "GLM-5.1")
             self.assertEqual(rehearsal["h9_contract"]["required_variant"], "max")
             self.assertEqual(rehearsal["opencode_preflight_report"], result["opencode_preflight_report"])
@@ -3282,7 +3283,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "--opencode-model",
             "GLM-5.1",
             "--opencode-agent",
-            "build",
+            "c2rust-migrator",
             "--opencode-variant",
             "max",
             "--opencode-skip-permissions",
@@ -3328,7 +3329,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(kwargs["mode"], "opencode")
         self.assertEqual(kwargs["opencode_command"], "opencode")
         self.assertEqual(kwargs["opencode_model"], "GLM-5.1")
-        self.assertEqual(kwargs["opencode_agent"], "build")
+        self.assertEqual(kwargs["opencode_agent"], "c2rust-migrator")
         self.assertEqual(kwargs["opencode_variant"], "max")
         self.assertTrue(kwargs["opencode_skip_permissions"])
         self.assertEqual(
@@ -3552,7 +3553,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "launch_policy": {
                         "opencode_command": "opencode",
                         "opencode_model": None,
-                        "opencode_agent": None,
+                        "opencode_agent": "default",
                         "opencode_variant": "max",
                         "opencode_skip_permissions": True,
                     },
@@ -3594,7 +3595,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": "GLM-5.1",
-                    "opencode_agent": None,
+                    "opencode_agent": "c2rust-migrator",
                     "opencode_variant": "max",
                     "opencode_skip_permissions": True,
                 },
@@ -3653,7 +3654,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "launch_policy": {
                         "opencode_command": "codex",
                         "opencode_model": "GLM-5.1",
-                        "opencode_agent": None,
+                        "opencode_agent": "c2rust-migrator",
                         "opencode_variant": "max",
                         "opencode_skip_permissions": True,
                     },
@@ -3704,7 +3705,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "launch_policy": {
                         "opencode_command": "opencode",
                         "opencode_model": "GLM-5.1",
-                        "opencode_agent": None,
+                        "opencode_agent": "default",
                         "opencode_variant": "max",
                         "opencode_skip_permissions": True,
                     },
@@ -3751,7 +3752,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "launch_policy": {
                         "opencode_command": "opencode",
                         "opencode_model": "GLM-5.1",
-                        "opencode_agent": None,
+                        "opencode_agent": "c2rust-migrator",
                         "opencode_variant": "lite",
                         "opencode_skip_permissions": True,
                     },
@@ -3799,7 +3800,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "launch_policy": {
                         "opencode_command": "opencode",
                         "opencode_model": "GLM-5.1",
-                        "opencode_agent": None,
+                        "opencode_agent": "c2rust-migrator",
                         "opencode_variant": "max",
                         "opencode_skip_permissions": True,
                     },
@@ -4467,7 +4468,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             "--opencode-model",
             "GLM-5.1",
             "--opencode-agent",
-            "c2rust-worker",
+            "c2rust-migrator",
             "--opencode-variant",
             "max",
             "--opencode-skip-permissions",
@@ -4498,7 +4499,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(runner.call_args.kwargs["proof_class"], "local-simulation")
         self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
         self.assertEqual(runner.call_args.kwargs["opencode_model"], "GLM-5.1")
-        self.assertEqual(runner.call_args.kwargs["opencode_agent"], "c2rust-worker")
+        self.assertEqual(runner.call_args.kwargs["opencode_agent"], "c2rust-migrator")
         self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
         self.assertTrue(runner.call_args.kwargs["execute_merge"])
         self.assertTrue(runner.call_args.kwargs["auto_retry"])
@@ -5892,7 +5893,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         argv = harness.build_opencode_run_argv(
             opencode_command="opencode",
             opencode_model=None,
-            opencode_agent=None,
+            opencode_agent="c2rust-migrator",
             opencode_variant="max",
             opencode_skip_permissions=True,
             worker_command=[
@@ -5935,7 +5936,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",
             opencode_model=None,
-            opencode_agent=None,
+            opencode_agent="c2rust-migrator",
             opencode_variant="max",
             opencode_skip_permissions=True,
             marker_command=marker_command,
@@ -6083,7 +6084,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         argv = harness.build_opencode_run_argv(
             opencode_command="opencode",
             opencode_model=None,
-            opencode_agent=None,
+            opencode_agent="c2rust-migrator",
             opencode_variant="max",
             opencode_skip_permissions=False,
             worker_command=worker_command,
@@ -6220,7 +6221,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 argv = harness.build_opencode_run_argv(
                     opencode_command="opencode",
                     opencode_model=None,
-                    opencode_agent=None,
+                    opencode_agent="c2rust-migrator",
                     opencode_variant="max",
                     opencode_skip_permissions=False,
                     worker_command=[
@@ -6245,7 +6246,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             harness.build_opencode_run_argv(
                 opencode_command="codex",
                 opencode_model="GLM-5.1",
-                opencode_agent=None,
+                opencode_agent="c2rust-migrator",
                 opencode_variant="max",
                 opencode_skip_permissions=False,
                 worker_command=[
@@ -6266,7 +6267,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             harness.build_opencode_run_argv(
                 opencode_command="opencode",
                 opencode_model="GLM-5.1",
-                opencode_agent=None,
+                opencode_agent="c2rust-migrator",
                 opencode_variant="lite",
                 opencode_skip_permissions=False,
                 worker_command=[
@@ -6311,7 +6312,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 out_root=out_root,
                 run_id="preflight-run",
                 opencode_model="GLM-5.1",
-                opencode_agent="c2rust-worker",
+                opencode_agent="c2rust-migrator",
                 opencode_skip_permissions=True,
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
@@ -6328,7 +6329,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             expected_policy = {
                 "opencode_command": "opencode",
                 "opencode_model": "GLM-5.1",
-                "opencode_agent": "c2rust-worker",
+                "opencode_agent": "c2rust-migrator",
                 "opencode_variant": "max",
                 "opencode_skip_permissions": True,
             }
@@ -6402,6 +6403,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     out_root=out_root,
                     run_id="preflight-run",
                     opencode_model="GLM-5.1",
+                    opencode_agent="c2rust-migrator",
                     command_runner=fake_runner,
                     repo_root=REPO_ROOT,
                 )
@@ -6416,6 +6418,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(blocker["status"], "blocked")
             self.assertEqual(blocker["root_cause_key"], "opencode_model_unavailable")
             self.assertEqual(blocker["required_agent_tool"], "opencode")
+            self.assertEqual(blocker["required_agent"], "c2rust-migrator")
             self.assertEqual(blocker["required_model"], "GLM-5.1")
             self.assertEqual(blocker["required_variant"], "max")
             self.assertEqual(blocker["required_proof_class"], "competition-exact")
@@ -6454,6 +6457,24 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertFalse(harness.opencode_models_output_mentions_required_model(stdout, "GLM-5.1"))
         self.assertTrue(harness.opencode_models_output_mentions_required_model("GLM-5.1\n", "GLM-5.1"))
         self.assertTrue(harness.opencode_models_output_mentions_required_model("zhipu/GLM-5.1\n", "GLM-5.1"))
+
+    def test_opencode_launch_policy_defaults_to_repo_owned_agent_and_rejects_wrong_agent(self) -> None:
+        policy = harness.opencode_launch_policy(
+            opencode_command="opencode",
+            opencode_model="GLM-5.1",
+            opencode_agent=None,
+            opencode_variant="max",
+            opencode_skip_permissions=False,
+        )
+        self.assertEqual(policy["opencode_agent"], "c2rust-migrator")
+        with self.assertRaisesRegex(SystemExit, "opencode_agent must be c2rust-migrator"):
+            harness.opencode_launch_policy(
+                opencode_command="opencode",
+                opencode_model="GLM-5.1",
+                opencode_agent="default",
+                opencode_variant="max",
+                opencode_skip_permissions=False,
+            )
 
     def test_validate_opencode_preflight_report_rejects_missing_model_availability(self) -> None:
         with temp_repo_dir() as tmp:
@@ -6670,7 +6691,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         argv = harness.build_opencode_preflight_argv(
             opencode_command="opencode",
             opencode_model=None,
-            opencode_agent=None,
+            opencode_agent="c2rust-migrator",
             opencode_variant="max",
             opencode_skip_permissions=False,
             marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
@@ -6681,13 +6702,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
         self.assertIn("--model", argv)
         self.assertEqual(argv[argv.index("--model") + 1], "GLM-5.1")
+        self.assertIn("--agent", argv)
+        self.assertEqual(argv[argv.index("--agent") + 1], "c2rust-migrator")
 
     def test_opencode_preflight_rejects_non_glm_model(self) -> None:
         with self.assertRaisesRegex(SystemExit, "opencode_model must be GLM-5.1"):
             harness.build_opencode_preflight_argv(
                 opencode_command="opencode",
                 opencode_model="gpt-5.4",
-                opencode_agent=None,
+                opencode_agent="c2rust-migrator",
                 opencode_variant="max",
                 opencode_skip_permissions=False,
                 marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
@@ -6701,7 +6724,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             harness.build_opencode_preflight_argv(
                 opencode_command="opencode",
                 opencode_model="GLM-5.1",
-                opencode_agent=None,
+                opencode_agent="c2rust-migrator",
                 opencode_variant="lite",
                 opencode_skip_permissions=False,
                 marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
@@ -6715,7 +6738,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             harness.build_opencode_preflight_argv(
                 opencode_command="codex",
                 opencode_model="GLM-5.1",
-                opencode_agent=None,
+                opencode_agent="c2rust-migrator",
                 opencode_variant="max",
                 opencode_skip_permissions=False,
                 marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
@@ -7306,7 +7329,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             launch_policy = {
                 "opencode_command": "opencode",
                 "opencode_model": "GLM-5.1",
-                "opencode_agent": None,
+                "opencode_agent": "c2rust-migrator",
                 "opencode_variant": "max",
                 "opencode_skip_permissions": False,
             }
@@ -8681,7 +8704,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
     launch_policy = {
         "opencode_command": "opencode",
         "opencode_model": "GLM-5.1",
-        "opencode_agent": None,
+        "opencode_agent": "c2rust-migrator",
         "opencode_variant": opencode_variant,
         "opencode_skip_permissions": False,
     }
@@ -8696,6 +8719,8 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         opencode_variant,
         "--model",
         "GLM-5.1",
+        "--agent",
+        "c2rust-migrator",
         "Execute test preflight marker.",
     ]
     preflight_command_line = harness.shell_command_line(preflight_argv)

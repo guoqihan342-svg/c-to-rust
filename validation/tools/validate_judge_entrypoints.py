@@ -3378,6 +3378,10 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
         raise ValueError("opencode_hostless_rehearsal_report.h9_contract.status must be blocked")
     if h9_contract.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
         raise ValueError("opencode_hostless_rehearsal_report.h9_contract.required_agent_tool must be opencode")
+    if h9_contract.get("required_agent") != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(
+            "opencode_hostless_rehearsal_report.h9_contract.required_agent must be c2rust-migrator"
+        )
     if h9_contract.get("required_model") != COMPETITION_OPENCODE_MODEL:
         raise ValueError("opencode_hostless_rehearsal_report.h9_contract.required_model must be GLM-5.1")
     if h9_contract.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
@@ -3437,6 +3441,10 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
         "report_kind": "opencode-hostless-rehearsal-report",
         "proof_class": "local-simulation",
         "closes_p0_h9": False,
+        "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_agent": COMPETITION_OPENCODE_AGENT,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "required_variant": COMPETITION_OPENCODE_VARIANT,
         "worker_count": worker_count,
         "worker_ids": worker_ids,
     }

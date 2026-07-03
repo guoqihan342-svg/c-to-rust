@@ -1671,6 +1671,7 @@ def write_opencode_hostless_rehearsal_report(
             "status": "blocked",
             "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
             "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+            "required_agent": COMPETITION_OPENCODE_AGENT,
             "required_model": COMPETITION_OPENCODE_MODEL,
             "required_variant": COMPETITION_OPENCODE_VARIANT,
             "required_proof_class": "competition-exact",
@@ -7654,6 +7655,10 @@ def opencode_launch_policy(
         opencode_model = COMPETITION_OPENCODE_MODEL
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
+    if opencode_agent is None:
+        opencode_agent = COMPETITION_OPENCODE_AGENT
+    if opencode_agent != COMPETITION_OPENCODE_AGENT:
+        raise SystemExit(f"opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
     if opencode_variant != COMPETITION_OPENCODE_VARIANT:
         raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
     return {
@@ -7676,10 +7681,12 @@ def normalize_opencode_launch_policy(policy: dict[str, Any]) -> dict[str, Any]:
     missing_fields = required_fields.difference(policy.keys())
     if missing_fields:
         raise SystemExit("opencode preflight launch policy is missing fields: " + ", ".join(sorted(missing_fields)))
+    if not isinstance(policy.get("opencode_agent"), str):
+        raise SystemExit(f"opencode preflight launch policy opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
     return opencode_launch_policy(
         opencode_command=str(policy.get("opencode_command", "")),
         opencode_model=policy.get("opencode_model") if isinstance(policy.get("opencode_model"), str) else None,
-        opencode_agent=policy.get("opencode_agent") if isinstance(policy.get("opencode_agent"), str) else None,
+        opencode_agent=policy.get("opencode_agent"),
         opencode_variant=str(policy.get("opencode_variant", "")),
         opencode_skip_permissions=policy.get("opencode_skip_permissions") is True,
     )
@@ -8127,14 +8134,13 @@ def build_opencode_run_argv(
     repo_root: Path,
     handoff_contract_path: Path | None = None,
 ) -> list[str]:
-    if opencode_command != COMPETITION_OPENCODE_COMMAND:
-        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
-    if opencode_model is None:
-        opencode_model = COMPETITION_OPENCODE_MODEL
-    if opencode_model != COMPETITION_OPENCODE_MODEL:
-        raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
-    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
-        raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
+    launch_policy = opencode_launch_policy(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+    )
     command_line = shell_command_line(worker_command)
     prompt_lines = [
         "Execute this assigned C-to-Rust worker exactly once.",
@@ -8161,7 +8167,7 @@ def build_opencode_run_argv(
             ]
         )
     prompt = build_opencode_prompt(prompt_lines)
-    resolved_opencode_command = resolve_subprocess_command(opencode_command)
+    resolved_opencode_command = resolve_subprocess_command(launch_policy["opencode_command"])
     argv = [
         resolved_opencode_command,
         "run",
@@ -8170,13 +8176,11 @@ def build_opencode_run_argv(
         "--format",
         "json",
         "--variant",
-        opencode_variant,
+        launch_policy["opencode_variant"],
     ]
-    if opencode_model:
-        argv.extend(["--model", opencode_model])
-    if opencode_agent:
-        argv.extend(["--agent", opencode_agent])
-    if opencode_skip_permissions:
+    argv.extend(["--model", launch_policy["opencode_model"]])
+    argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy["opencode_skip_permissions"]:
         argv.append("--dangerously-skip-permissions")
     argv.append(prompt)
     return argv
@@ -8194,14 +8198,13 @@ def build_opencode_preflight_argv(
     contract_path: Path,
     repo_root: Path,
 ) -> list[str]:
-    if opencode_command != COMPETITION_OPENCODE_COMMAND:
-        raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
-    if opencode_model is None:
-        opencode_model = COMPETITION_OPENCODE_MODEL
-    if opencode_model != COMPETITION_OPENCODE_MODEL:
-        raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
-    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
-        raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
+    launch_policy = opencode_launch_policy(
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+    )
     command_line = shell_command_line(marker_command)
     prompt = build_opencode_prompt(
         [
@@ -8219,7 +8222,7 @@ def build_opencode_preflight_argv(
             f"Handoff contract: {repo_relative(contract_path, repo_root=repo_root)}",
         ]
     )
-    resolved_opencode_command = resolve_subprocess_command(opencode_command)
+    resolved_opencode_command = resolve_subprocess_command(launch_policy["opencode_command"])
     argv = [
         resolved_opencode_command,
         "run",
@@ -8228,13 +8231,11 @@ def build_opencode_preflight_argv(
         "--format",
         "json",
         "--variant",
-        opencode_variant,
+        launch_policy["opencode_variant"],
     ]
-    if opencode_model:
-        argv.extend(["--model", opencode_model])
-    if opencode_agent:
-        argv.extend(["--agent", opencode_agent])
-    if opencode_skip_permissions:
+    argv.extend(["--model", launch_policy["opencode_model"]])
+    argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy["opencode_skip_permissions"]:
         argv.append("--dangerously-skip-permissions")
     argv.append(prompt)
     return argv

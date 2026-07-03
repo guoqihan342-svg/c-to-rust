@@ -5556,6 +5556,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "status": "blocked",
                 "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
                 "required_agent_tool": "opencode",
+                "required_agent": "c2rust-migrator",
                 "required_model": "GLM-5.1",
                 "required_variant": "max",
                 "required_proof_class": "competition-exact",
@@ -5601,6 +5602,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         )
 
         self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+        self.assertEqual(result["opencode_hostless_rehearsal_report"]["required_agent"], "c2rust-migrator")
         overclaim_cases = [
             ("proof_class", lambda draft: draft.__setitem__("proof_class", "competition-exact")),
             ("closes_p0_h9", lambda draft: draft.__setitem__("closes_p0_h9", True)),
@@ -5608,6 +5610,10 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             (
                 "h9_contract.local_simulation_closes_p0_h9",
                 lambda draft: draft["h9_contract"].__setitem__("local_simulation_closes_p0_h9", True),
+            ),
+            (
+                "h9_contract.required_agent",
+                lambda draft: draft["h9_contract"].__setitem__("required_agent", "default"),
             ),
         ]
         for expected_error, mutate in overclaim_cases:
