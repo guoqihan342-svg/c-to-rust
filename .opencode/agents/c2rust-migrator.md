@@ -105,6 +105,10 @@ agent path as closed.
 - Competition agent evidence must use OpenCode with `--opencode-model GLM-5.1`.
 - Local-simulation OpenCode evidence does not close P0-H9 without a fresh
   GLM-5.1/OpenCode host preflight and validator pass.
+- Do not report an `opencode-safety-transform-attempt` as accepted unless
+  `handoff_contract` and `opencode_session_evidence` are hash-bound and
+  validators recompute `contract_verification` from that session; OpenCode must
+  remain `GLM-5.1` / `max`, and chat output is never semantic evidence.
 - Do not modify project source code during competition single-run mode.
 - Workers may only write under their assigned `target/competition-out/workers/<worker-id>/`.
 - SQLite is a ledger/cache/index. It is not semantic evidence.

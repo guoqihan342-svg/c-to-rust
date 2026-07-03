@@ -3142,6 +3142,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 path_text="target/out/harness/judge-evidence-index.json",
             )
 
+    def test_judge_evidence_index_allows_review_checklist_artifact_refs_from_producer(self) -> None:
+        payload = valid_deterministic_judge_index_payload()
+        payload["evidence_artifact_refs"]["milestone_review_checklist"] = artifact_ref(
+            "target/out/summary/milestone-review-checklist.json",
+            "8",
+        )
+        payload["evidence_artifact_refs"]["internal_review_checklist"] = artifact_ref(
+            "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
+            "9",
+        )
+        payload["evidence_artifact_refs"]["internal_review_checklist_2"] = artifact_ref(
+            "config/competition-env/review-checklists/flashdb-harness-internal-review-2.json",
+            "a",
+        )
+
+        result = validator.validate_judge_evidence_index_contract(
+            payload,
+            path_text="target/out/harness/judge-evidence-index.json",
+        )
+
+        self.assertEqual(result["evidence_artifact_refs"]["status"], "passed")
+        self.assertIn("milestone_review_checklist", result["evidence_artifact_refs"]["refs"])
+        self.assertIn("internal_review_checklist", result["evidence_artifact_refs"]["refs"])
+        self.assertIn("internal_review_checklist_2", result["evidence_artifact_refs"]["refs"])
+
     def test_judge_evidence_index_requires_architecture_context_and_agent_refs_when_expected(self) -> None:
         payload = valid_deterministic_judge_index_payload()
         payload["evidence_artifact_refs"]["context_pack"] = artifact_ref("target/out/harness/context-pack.json", "6")

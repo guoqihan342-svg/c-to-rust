@@ -1462,6 +1462,27 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("published_artifact_ref_status", skill)
         self.assertIn("passed bundle cannot publish bad artifact ref status", skill)
         self.assertIn("judge_milestone_bundle.publishability", skill)
+        self.assertIn("opencode-safety-transform-attempt", skill)
+        self.assertIn("handoff_contract", skill)
+        self.assertIn("opencode_session_evidence", skill)
+        self.assertIn("contract_verification", skill)
+        self.assertIn("recompute", skill)
+
+    def test_opencode_runbooks_track_safety_attempt_session_recompute_contract(self) -> None:
+        docs = [
+            PROFILE_DIR / "opencode-single-interaction.md",
+            PROFILE_DIR / "opencode-single-interaction.en.md",
+            REPO_ROOT / ".opencode" / "agents" / "c2rust-migrator.md",
+        ]
+
+        for doc in docs:
+            text = doc.read_text(encoding="utf-8")
+            with self.subTest(doc=doc.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("opencode-safety-transform-attempt", text)
+                self.assertIn("handoff_contract", text)
+                self.assertIn("opencode_session_evidence", text)
+                self.assertIn("contract_verification", text)
+                self.assertIn("GLM-5.1", text)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())

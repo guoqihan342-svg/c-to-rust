@@ -103,6 +103,8 @@ BASE_JUDGE_EVIDENCE_REF_KEYS = (
     "agent_index",
     "competition_run_summary",
     "context_pack",
+    "internal_review_checklist",
+    "milestone_review_checklist",
     "opencode_preflight_report",
     "profile",
     "route_governance_metrics_report",
@@ -3174,6 +3176,12 @@ def artifact_ref_key_for_expected_artifact(name: str) -> str:
     return EXPECTED_ARTIFACT_REF_ALIASES.get(name, name)
 
 
+def judge_evidence_ref_key_allowed(name: str, allowed_ref_keys: set[str]) -> bool:
+    if name in allowed_ref_keys:
+        return True
+    return bool(re.fullmatch(r"internal_review_checklist_[2-9][0-9]*", name))
+
+
 def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     binding = validate_artifact_binding_shape(ref, "opencode_safety_transform_attempt", repo_root=repo_root)
     payload = load_json(repo_path(binding["path"], repo_root=repo_root))
@@ -3938,7 +3946,9 @@ def validate_judge_evidence_artifact_refs(
                 raise ValueError(f"judge_evidence_index.evidence_artifact_refs.{ref_name}.path must match expected_artifacts.{artifact_name}")
         if missing:
             raise ValueError(f"judge_evidence_index.evidence_artifact_refs missing expected artifacts: {missing}")
-    unexpected_refs = sorted(set(validated_refs) - allowed_ref_keys)
+    unexpected_refs = sorted(
+        name for name in set(validated_refs) if not judge_evidence_ref_key_allowed(name, allowed_ref_keys)
+    )
     if unexpected_refs:
         raise ValueError(f"judge_evidence_index.evidence_artifact_refs unexpected refs: {unexpected_refs}")
     if opencode_runtime_result is not None:
