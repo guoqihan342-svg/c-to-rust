@@ -3423,7 +3423,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     "launch_policy": {
                         "opencode_command": "opencode",
                         "opencode_model": "GLM-5.1",
-                        "opencode_agent": None,
+                        "opencode_agent": "c2rust-migrator",
                         "opencode_variant": "max",
                         "opencode_skip_permissions": True,
                     },
@@ -3502,6 +3502,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(run_worker["argv"][run_worker["argv"].index("--worker-id") + 1], "worker-001")
             self.assertEqual(run_worker["argv"][run_worker["argv"].index("--mode") + 1], "opencode")
             self.assertEqual(run_worker["argv"][run_worker["argv"].index("--opencode-model") + 1], "GLM-5.1")
+            self.assertEqual(
+                run_worker["argv"][run_worker["argv"].index("--opencode-agent") + 1],
+                "c2rust-migrator",
+            )
             self.assertIn("--opencode-skip-permissions", run_worker["argv"])
             self.assertEqual(
                 run_worker["argv"][run_worker["argv"].index("--opencode-preflight-report") + 1],
@@ -3525,6 +3529,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(
                 retry_worker["argv"][retry_worker["argv"].index("--hint-id") + 1],
                 "repair:run-resume:worker-001:process_timeout",
+            )
+            self.assertEqual(
+                retry_worker["argv"][retry_worker["argv"].index("--opencode-agent") + 1],
+                "c2rust-migrator",
             )
             self.assertEqual(retry_worker["command"], shlex.join(retry_worker["argv"]))
 
@@ -3674,6 +3682,56 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
             self.assertIn(
                 "opencode_preflight_report.launch_policy.opencode_command",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_agent_is_not_repo_owned(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "sha256": "a" * 64,
+                    "status": "passed",
+                    "contract_status": "executed",
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": None,
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "opencode",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.launch_policy.opencode_agent",
                 replay["replay_safety"]["missing_constraints"],
             )
 

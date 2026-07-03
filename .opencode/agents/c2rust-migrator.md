@@ -78,6 +78,7 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id <run-id> \
   --out-root target/opencode-preflight \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max
 openspec status --change "design-c2rust-migration-agent" --json
 openspec instructions apply --change "design-c2rust-migration-agent" --json
@@ -102,14 +103,15 @@ agent path as closed.
 - Use deterministic translator routes first.
 - Treat AI output as candidate only; P0 default path does not use LLM candidate generation.
 - Do not hand-write `c_source`; slice input must come from real source files.
-- Competition agent evidence must use OpenCode with `--opencode-model GLM-5.1`
-  and `--opencode-variant max`.
+- Competition agent evidence must use OpenCode with `--opencode-model GLM-5.1`,
+  `--opencode-agent c2rust-migrator`, and `--opencode-variant max`.
 - Local-simulation OpenCode evidence does not close P0-H9 without a fresh
   GLM-5.1/OpenCode host preflight and validator pass.
 - Do not report an `opencode-safety-transform-attempt` as accepted unless
   `handoff_contract` and `opencode_session_evidence` are hash-bound and
   validators recompute `contract_verification` from that session; OpenCode must
-  remain `GLM-5.1` / `max`, and chat output is never semantic evidence.
+  remain `GLM-5.1` / `c2rust-migrator` / `max`, and chat output is never
+  semantic evidence.
 - Do not modify project source code during competition single-run mode.
 - Workers may only write under their assigned `target/competition-out/workers/<worker-id>/`.
 - SQLite is a ledger/cache/index. It is not semantic evidence.

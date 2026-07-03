@@ -198,11 +198,13 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode-run"
         "max",
         "--model",
         "GLM-5.1",
+        "--agent",
+        "c2rust-migrator",
         opencode_prompt,
     ]
     opencode_command_line = shlex.join(opencode_argv)
     launch_policy = {
-        "opencode_agent": None,
+        "opencode_agent": "c2rust-migrator",
         "opencode_command": "opencode",
         "opencode_model": "GLM-5.1",
         "opencode_skip_permissions": False,
@@ -446,11 +448,13 @@ def write_opencode_safety_transform_attempt_fixture(
         "max",
         "--model",
         "GLM-5.1",
+        "--agent",
+        "c2rust-migrator",
         opencode_prompt,
     ]
     opencode_command_line = shlex.join(opencode_argv)
     launch_policy = {
-        "opencode_agent": None,
+        "opencode_agent": "c2rust-migrator",
         "opencode_command": "opencode",
         "opencode_model": "GLM-5.1",
         "opencode_skip_permissions": False,

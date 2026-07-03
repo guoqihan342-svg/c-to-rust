@@ -1935,6 +1935,33 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_competition_env_bundle_rejects_glm_host_acceptance_agent_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+        original_load_json = validator.load_json
+
+        def load_json_with_agent_drift(path: Path) -> dict:
+            payload = original_load_json(path)
+            if Path(path).as_posix().endswith(
+                "config/competition-env/review-checklists/opencode-glm-host-acceptance.json"
+            ):
+                payload["required_agent"] = "default"
+            return payload
+
+        with mock.patch.object(validator, "load_json", side_effect=load_json_with_agent_drift):
+            with self.assertRaisesRegex(
+                ValueError,
+                "opencode-glm-host-acceptance required_agent must be c2rust-migrator",
+            ):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
+
     def test_competition_env_bundle_rejects_bootstrap_source_pin_drift(self) -> None:
         source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
@@ -2219,6 +2246,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         policy_sha = opencode_launch_policy_sha256(policy)
 
         with self.assertRaisesRegex(ValueError, "launch_policy.opencode_variant must be max"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_opencode_launch_policy_binding_requires_repo_owned_agent(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_agent"] = None
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_agent must be c2rust-migrator"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_opencode_launch_policy_binding_rejects_wrong_agent(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_agent"] = "default"
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_agent must be c2rust-migrator"):
             validator.validate_opencode_launch_policy_binding(
                 policy,
                 policy_sha,
@@ -6129,6 +6180,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             "opencode",
             "--opencode-model",
             "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
             "--opencode-variant",
             "max",
             "--opencode-preflight-report",
@@ -6149,6 +6202,97 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "opencode_preflight_report.status must be passed"):
+            validator.validate_resume_manifest_replay_command(
+                command_payload,
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path=repo_relative(ledger),
+                require_hint=False,
+            )
+
+    def test_resume_manifest_opencode_replay_requires_repo_owned_preflight_agent(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-opencode-agent-", dir=target_dir))
+        out_root = temp_dir / "out"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        preflight = out_root / "harness" / "opencode-preflight-report.json"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = out_root / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
+        report = out_root / "workers" / "worker-001" / "harness" / "run-worker-report.json"
+        runtime_env = opencode_runtime_env_contract(out_root, scope="preflight")
+        preflight_binding = {
+            "path": repo_relative(preflight),
+            "sha256": "a" * 64,
+            "status": "passed",
+            "contract_status": "executed",
+            "launch_policy": {
+                "opencode_command": "opencode",
+                "opencode_model": "GLM-5.1",
+                "opencode_agent": None,
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            },
+            "opencode_runtime_env": runtime_env,
+            "opencode_model_availability": {
+                "status": "available",
+                "opencode_command": "opencode",
+                "required_model": "GLM-5.1",
+                "process_returncode": 0,
+                "model_listed": True,
+            },
+        }
+        worker = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "isolated_out_root": repo_relative(out_root / "workers" / "worker-001"),
+            "opencode_preflight_report": preflight_binding,
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            repo_relative(ledger),
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
+            "--opencode-variant",
+            "max",
+            "--opencode-preflight-report",
+            repo_relative(preflight),
+        ]
+        command_payload = {
+            "argv": argv,
+            "command": shlex.join(argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(out_root / "workers" / "worker-001"),
+            "replay_safety": {
+                "status": "ready",
+                "reason": "opencode_preflight_contract_bound",
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "opencode_preflight_report.launch_policy.opencode_agent"):
             validator.validate_resume_manifest_replay_command(
                 command_payload,
                 label="resume_manifest.workers[0].replay_commands.run_worker",
@@ -6951,6 +7095,42 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "--opencode-variant max"):
+            validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
+
+    def test_environment_profile_preflight_template_requires_repo_owned_agent(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="environment-opencode-agent-", dir=REPO_ROOT / "target"))
+        config = load_default_config()
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment["opencode_runtime"]["preflight_command_template"] = environment["opencode_runtime"][
+            "preflight_command_template"
+        ].replace(" --opencode-agent c2rust-migrator", "")
+        environment_path = temp_dir / "environment-without-opencode-agent.json"
+        write_json(environment_path, environment)
+        profile_ref = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+
+        with self.assertRaisesRegex(ValueError, "--opencode-agent c2rust-migrator"):
+            validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
+
+    def test_environment_profile_preflight_template_rejects_wrong_agent(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="environment-opencode-wrong-agent-", dir=REPO_ROOT / "target"))
+        config = load_default_config()
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment["opencode_runtime"]["preflight_command_template"] = environment["opencode_runtime"][
+            "preflight_command_template"
+        ].replace("--opencode-agent c2rust-migrator", "--opencode-agent default")
+        environment_path = temp_dir / "environment-with-wrong-opencode-agent.json"
+        write_json(environment_path, environment)
+        profile_ref = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+
+        with self.assertRaisesRegex(ValueError, "--opencode-agent c2rust-migrator"):
             validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
 
     def test_environment_profile_requires_structured_max_variant(self) -> None:

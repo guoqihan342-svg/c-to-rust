@@ -65,6 +65,7 @@
     "status": "required_for_competition_agent_evidence",
     "command": "opencode",
     "required_model": "GLM-5.1",
+    "required_agent": "c2rust-migrator",
     "required_variant": "max",
     "model_probe": {
       "command": [
@@ -76,7 +77,7 @@
       "missing_model_root_cause_key": "opencode_model_unavailable",
       "missing_model_reason": "required_model_not_listed"
     },
-    "preflight_command_template": "python3 -B -m validation.tools.opencode_agent_harness opencode-preflight --run-id <run-id> --out-root <out-root> --opencode-model GLM-5.1 --opencode-variant max",
+    "preflight_command_template": "python3 -B -m validation.tools.opencode_agent_harness opencode-preflight --run-id <run-id> --out-root <out-root> --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max",
     "claim_boundary": {
       "semantic_gate": false,
       "translation_coverage_numerator": 0,

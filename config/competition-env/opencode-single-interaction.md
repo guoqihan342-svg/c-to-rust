@@ -136,6 +136,7 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id <run-id> \
   --out-root target/opencode-preflight \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -146,13 +147,14 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --worker-id worker-a \
   --mode opencode \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max \
   --opencode-skip-permissions \
   --opencode-preflight-report target/opencode-preflight/harness/opencode-preflight-report.json
 
 `opencode-preflight` 只验证 OpenCode 能否把第一条 shell/bash/powershell/cmd tool call 精确执行为 harness 指定命令，并写出 marker/report；它不是语义验收。preflight report 会结构化记录 run id、launch policy（`opencode_command`、`opencode_model`、`opencode_agent`、`opencode_variant`、`opencode_skip_permissions`）及 hash；`run-worker --mode opencode` 和 `run-plan --mode opencode` 必须通过 `--opencode-preflight-report <report>` 绑定已通过、`run_id` 与当前 run 完全一致、且 launch policy 与当前启动参数完全一致的 preflight report，否则会在启动 OpenCode 前 fail-closed。`--mode opencode` 会在 worker 隔离目录写出 `harness/opencode-handoff-contract.json` 和 `logs/opencode-session-evidence.json`，并由 `harness/run-worker-report.json`、SQLite event、repair hint 和 artifact index 绑定。前者记录 exact deterministic worker command、request、expected summary、OpenCode prompt 和 launch policy；后者解析 OpenCode `--format json` 的 JSON/JSONL 输出，解析失败时也保留 raw fallback。如果 OpenCode 在第一条 shell command 前以 `database is locked` 退出，launcher 会做有限启动重试并记录 `opencode_process_retries`；接受 worker 前仍必须看到 contract executed 和 expected summary。二者只证明 agent 执行审计链路，不替代 `competition-run-summary.json`、final gate 或 validator。
 
-OpenCode safety-transform attempt artifact 只是审计证据。可发布的 `opencode-safety-transform-attempt` 必须绑定 hash-bound `handoff_contract`、hash-bound `opencode_session_evidence` 和 `contract_verification`；handoff launch policy 必须是 `opencode` + `GLM-5.1` + `max`，validator 必须从 session 重新计算 `contract_verification` 后才能接受该 attempt provenance。缺少 session evidence、hash drift、非 GLM 模型、命令漂移、runtime-env 漂移或 worker-summary 漂移都必须 fail-closed。chat output 永远不是 semantic evidence。
+OpenCode safety-transform attempt artifact 只是审计证据。可发布的 `opencode-safety-transform-attempt` 必须绑定 hash-bound `handoff_contract`、hash-bound `opencode_session_evidence` 和 `contract_verification`；handoff launch policy 必须是 `opencode` + `GLM-5.1` + `c2rust-migrator` + `max`，validator 必须从 session 重新计算 `contract_verification` 后才能接受该 attempt provenance。缺少 session evidence、hash drift、非 GLM 模型、错误 OpenCode agent、命令漂移、runtime-env 漂移或 worker-summary 漂移都必须 fail-closed。chat output 永远不是 semantic evidence。
 
 OpenCode preflight launcher 和 worker launcher 会使用 repo-local runtime env：`opencode-runtime/<scope>/{config,data,cache,tmp}`；公开 artifact 只记录 repo-relative 的 `opencode_runtime_env`、`env_sha256` 和隔离状态，不写入完整 inherited env。该字段只审计 runtime isolation，不是 semantic gate。
 
@@ -199,7 +201,7 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 
-9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、用 `max_workers` 执行 planned workers、运行 bounded `auto_retry=true` 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用同一个 `run_id` 运行 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-variant max --opencode-preflight-report <report>`。旧 run 的 preflight report 不可复用，worker summary 仍必须通过 final runner 和 common summary validator 收敛；最多 5 轮 repair retry 后仍缺少 planned worker summary 时最终 merge 会 fail-closed 跳过，OpenCode 启动数据库锁重试则单独记录为 `opencode_process_retries`。
+9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、用 `max_workers` 执行 planned workers、运行 bounded `auto_retry=true` 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用同一个 `run_id` 运行 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>`。旧 run 的 preflight report 不可复用，worker summary 仍必须通过 final runner 和 common summary validator 收敛；最多 5 轮 repair retry 后仍缺少 planned worker summary 时最终 merge 会 fail-closed 跳过，OpenCode 启动数据库锁重试则单独记录为 `opencode_process_retries`。
 
 若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。如存在 CONTEXT.md，只能把它作为 handoff-only 当前状态上下文读取。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。

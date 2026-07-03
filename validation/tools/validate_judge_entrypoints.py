@@ -405,7 +405,7 @@ def validate_opencode_preflight_template_command(command: Any, label: str) -> li
         raise ValueError(
             f"{label} must run python3 -B -m validation.tools.opencode_agent_harness opencode-preflight"
         )
-    allowed_flags = {"--run-id", "--out-root", "--opencode-model", "--opencode-variant"}
+    allowed_flags = {"--run-id", "--out-root", "--opencode-model", "--opencode-agent", "--opencode-variant"}
     flags: dict[str, str] = {}
     index = len(expected_prefix)
     while index < len(argv):
@@ -425,6 +425,8 @@ def validate_opencode_preflight_template_command(command: Any, label: str) -> li
             raise ValueError(f"{label} must include {required}")
     if flags.get("--opencode-model") != COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{label} must include --opencode-model {COMPETITION_OPENCODE_MODEL}")
+    if flags.get("--opencode-agent") != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{label} must include --opencode-agent {COMPETITION_OPENCODE_AGENT}")
     if flags.get("--opencode-variant") != COMPETITION_OPENCODE_VARIANT:
         raise ValueError(f"{label} must include --opencode-variant {COMPETITION_OPENCODE_VARIANT}")
     return argv
@@ -524,6 +526,8 @@ def validate_opencode_glm_host_acceptance_contract(
         raise ValueError(f"{label} status must be blocked until real competition host evidence exists")
     if payload.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
         raise ValueError(f"{label} required_agent_tool must be {COMPETITION_OPENCODE_COMMAND}")
+    if payload.get("required_agent") != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{label} required_agent must be {COMPETITION_OPENCODE_AGENT}")
     if payload.get("required_model") != COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{label} required_model must be {COMPETITION_OPENCODE_MODEL}")
     if payload.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
@@ -566,6 +570,7 @@ def validate_opencode_glm_host_acceptance_contract(
     return {
         "status": "passed",
         "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_agent": COMPETITION_OPENCODE_AGENT,
         "required_model": COMPETITION_OPENCODE_MODEL,
         "required_variant": COMPETITION_OPENCODE_VARIANT,
         "required_proof_class": "competition-exact",
@@ -744,6 +749,8 @@ def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_
         raise ValueError(f"environment_profile.opencode_runtime.command must be {COMPETITION_OPENCODE_COMMAND}")
     if runtime.get("required_model") != COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"environment_profile.opencode_runtime.required_model must be {COMPETITION_OPENCODE_MODEL}")
+    if runtime.get("required_agent") != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"environment_profile.opencode_runtime.required_agent must be {COMPETITION_OPENCODE_AGENT}")
     if runtime.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
         raise ValueError(f"environment_profile.opencode_runtime.required_variant must be {COMPETITION_OPENCODE_VARIANT}")
     probe = require_object(runtime.get("model_probe"), "environment_profile.opencode_runtime.model_probe")
@@ -789,6 +796,7 @@ def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_
         "opencode_runtime": {
             "command": COMPETITION_OPENCODE_COMMAND,
             "required_model": COMPETITION_OPENCODE_MODEL,
+            "required_agent": COMPETITION_OPENCODE_AGENT,
             "required_variant": COMPETITION_OPENCODE_VARIANT,
             "model_probe_command": [COMPETITION_OPENCODE_COMMAND, "models"],
             "semantic_gate": False,
@@ -2459,8 +2467,8 @@ def validate_opencode_launch_policy_binding(value: Any, sha_value: Any, label: s
     if model != COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"{label}.launch_policy.opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     agent = policy.get("opencode_agent")
-    if agent is not None and not isinstance(agent, str):
-        raise ValueError(f"{label}.launch_policy.opencode_agent must be a string or null")
+    if agent != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{label}.launch_policy.opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
     if not isinstance(policy.get("opencode_skip_permissions"), bool):
         raise ValueError(f"{label}.launch_policy.opencode_skip_permissions must be a boolean")
     normalized = {
@@ -4693,6 +4701,10 @@ def validate_resume_manifest_replay_command(
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} --opencode-model must be {COMPETITION_OPENCODE_MODEL}"
             )
+        if flags.get("--opencode-agent") != COMPETITION_OPENCODE_AGENT:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} --opencode-agent must be {COMPETITION_OPENCODE_AGENT}"
+            )
         if flags.get("--opencode-variant") != COMPETITION_OPENCODE_VARIANT:
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} --opencode-variant must be {COMPETITION_OPENCODE_VARIANT}"
@@ -4707,6 +4719,11 @@ def validate_resume_manifest_replay_command(
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} opencode_preflight_report.launch_policy.opencode_variant "
                 f"must be {COMPETITION_OPENCODE_VARIANT}"
+            )
+        if policy.get("opencode_agent") != COMPETITION_OPENCODE_AGENT:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} opencode_preflight_report.launch_policy.opencode_agent "
+                f"must be {COMPETITION_OPENCODE_AGENT}"
             )
     for field in ("assignment_path", "request_path", "summary_path", "report_path"):
         expected = worker.get(field)

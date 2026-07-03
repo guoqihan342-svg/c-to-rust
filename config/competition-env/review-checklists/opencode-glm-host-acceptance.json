@@ -15,6 +15,7 @@
   "local_simulation_closes_p0_h9": false,
   "missing_model_root_cause_key": "opencode_model_unavailable",
   "report_kind": "opencode-glm-host-acceptance",
+  "required_agent": "c2rust-migrator",
   "required_agent_tool": "opencode",
   "required_evidence": {
     "host_attestation": true,

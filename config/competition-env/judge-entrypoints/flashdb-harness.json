@@ -102,7 +102,7 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "e8b5cfadb8603e80db566ebd304f53b779edc15d08507963da29fbb1a85944bb"
+        "sha256": "03e67f4a967424f995107be2d30b2598c525a3ded692b254647bd51c9e7f9c7f"
       },
       "proof_class": "local-simulation",
       "purpose": "core-translation-before-after-exhibit",
@@ -114,7 +114,7 @@
       "run_id": "competition-flashdb-before-after-exhibit",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "514a02b7ebbadfa162191b0bb6c0a7879179e6b1158279edfbe1fb46df9602e7"
+        "sha256": "1daceb2d0bda88b58a74707d51e4c9976e0d9df26de0a7a2b39fb2a47c810c89"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json"
@@ -154,7 +154,7 @@
       "run_id": "harness-flashdb-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-explicit-workers-harness-run.json",
-        "sha256": "792b99fb1756bbe70e6347ab58f1f7ecf09e0fb1089d29235620374206e34422"
+        "sha256": "d58f2ee85aac85538bb14116faef0e33293dbd14766a49e05bcb4cfc6db0a294"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
@@ -197,7 +197,7 @@
       "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/harness/l3-flashdb-opencode-explicit-workers-harness-run.json",
-        "sha256": "7bd1b2d3a8665c9cb3d368ee0b85762cc1f49c5678daab3cd4fe3252a03b76f8"
+        "sha256": "bed144cf1b540bb327c135601d41e11c2e4d5dc94932a9ac10ffded9a676d454"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-opencode-explicit-workers-evaluate-profile-20260701/summary/competition-run-summary.json"
@@ -207,7 +207,7 @@
   "environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "6253b343373cc35a9c27eb02be75e521c88548180149aba079acc0a750de0958"
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
   },
   "harness_features_demonstrated": {
     "h1_evaluate_one_click": true,

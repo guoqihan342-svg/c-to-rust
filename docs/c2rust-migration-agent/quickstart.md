@@ -196,6 +196,7 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -205,6 +206,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --worker-id worker-a \
   --mode opencode \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```
@@ -269,6 +271,7 @@ python3 -B -m validation.tools.opencode_agent_harness opencode-preflight \
   --run-id run-demo-001-opencode-preflight \
   --out-root target/competition-out/opencode-preflight \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max \
   --opencode-skip-permissions
 
@@ -278,6 +281,7 @@ python3 -B -m validation.tools.opencode_agent_harness run-worker \
   --worker-id worker-a \
   --mode opencode \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max \
   --opencode-preflight-report target/competition-out/opencode-preflight/harness/opencode-preflight-report.json
 ```

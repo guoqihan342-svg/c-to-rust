@@ -142,6 +142,7 @@ python -m validation.tools.opencode_agent_harness run-worker \
   --worker-id worker-a \
   --mode opencode \
   --opencode-model GLM-5.1 \
+  --opencode-agent c2rust-migrator \
   --opencode-variant max
 ```
 

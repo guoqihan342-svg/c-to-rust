@@ -12,7 +12,7 @@
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
     "semantic_claim_source": "verified_unsafe_baseline_gates",
     "semantic_pass": true,
-    "sha256": "ab5ee1108ff932505a0be7cb2d1a887cf7c92b07175e13cea518bd8fe5248a6c",
+    "sha256": "2d29aee47e621353d743cd86a849d145b7affedfce31051fa108152f62873e9e",
     "status": "passed"
   },
   "claim_boundary": {
@@ -38,7 +38,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-    "sha256": "5747de2636f4dd4f108a8357fde9c16c1b5d250ae6927dd37bab843eee11c148"
+    "sha256": "3a85307440a721b2b35acec0a39b0996766ed7779e5160aee9cb0444a2f6c72b"
   },
   "patch_log": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",
@@ -52,7 +52,7 @@
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "738af6e6bc8a5e1d7a3640cef376437f42ff221934b1a2bdf3d1a7843803032e"
+      "sha256": "d2517dc9bb7c199068f573e816c768b182a92dc4cd33f7bc67e0262222d2cd89"
     }
   },
   "slice_id": "real-fdb-calc-crc32",

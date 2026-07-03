@@ -47,6 +47,7 @@ PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
 HARNESS_MODULE = "validation.tools.opencode_agent_harness"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_VARIANT = "max"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
 ALLOWED_PROOF_CLASSES = frozenset(
@@ -110,10 +111,12 @@ def opencode_h9_blocker(
         "status": "blocked",
         "root_cause_key": root_cause_key,
         "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_agent": COMPETITION_OPENCODE_AGENT,
         "required_model": COMPETITION_OPENCODE_MODEL,
         "required_variant": COMPETITION_OPENCODE_VARIANT,
         "required_proof_class": "competition-exact",
         "actual_agent_tool": launch_policy.get("opencode_command", ""),
+        "actual_agent": launch_policy.get("opencode_agent", ""),
         "actual_model": launch_policy.get("opencode_model", ""),
         "actual_variant": launch_policy.get("opencode_variant", ""),
         "opencode_run_launched": opencode_run_launched,
@@ -2765,6 +2768,9 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
     opencode_model = policy.get("opencode_model")
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         missing.append("opencode_preflight_report.launch_policy.opencode_model")
+    opencode_agent = policy.get("opencode_agent")
+    if opencode_agent != COMPETITION_OPENCODE_AGENT:
+        missing.append("opencode_preflight_report.launch_policy.opencode_agent")
     opencode_variant = policy.get("opencode_variant")
     if opencode_variant != COMPETITION_OPENCODE_VARIANT:
         missing.append("opencode_preflight_report.launch_policy.opencode_variant")
@@ -2819,6 +2825,7 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
             "status": "available",
             "opencode_command": COMPETITION_OPENCODE_COMMAND,
             "required_model": COMPETITION_OPENCODE_MODEL,
+            "required_agent": COMPETITION_OPENCODE_AGENT,
             "process_returncode": model_probe_returncode,
             "model_listed": True,
         },

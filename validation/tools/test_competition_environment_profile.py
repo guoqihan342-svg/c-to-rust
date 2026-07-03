@@ -117,6 +117,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(runtime["status"], "required_for_competition_agent_evidence")
         self.assertEqual(runtime["command"], "opencode")
         self.assertEqual(runtime["required_model"], "GLM-5.1")
+        self.assertEqual(runtime["required_agent"], "c2rust-migrator")
         self.assertEqual(runtime["required_variant"], "max")
         self.assertEqual(runtime["model_probe"]["command"], ["opencode", "models"])
         self.assertEqual(runtime["model_probe"]["required_status"], "available")
@@ -125,6 +126,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(runtime["model_probe"]["missing_model_reason"], "required_model_not_listed")
         self.assertIn("opencode-preflight", runtime["preflight_command_template"])
         self.assertIn("--opencode-model GLM-5.1", runtime["preflight_command_template"])
+        self.assertIn("--opencode-agent c2rust-migrator", runtime["preflight_command_template"])
         self.assertEqual(runtime["claim_boundary"]["semantic_gate"], False)
         self.assertEqual(runtime["claim_boundary"]["translation_coverage_numerator"], 0)
         self.assertFalse(runtime["claim_boundary"]["local_simulation_closes_p0_h9"])
@@ -267,11 +269,13 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 for block in re.findall(r"```bash\n(.*?)```", text, flags=re.DOTALL):
                     if "opencode-preflight" in block or "--mode opencode" in block:
                         self.assertIn("--opencode-model GLM-5.1", block)
+                        self.assertIn("--opencode-agent c2rust-migrator", block)
                         self.assertIn("--opencode-variant max", block)
                 if "run-plan --mode opencode" in text:
                     self.assertIn(
                         "run-plan --mode opencode --opencode-model GLM-5.1 "
-                        "--opencode-variant max --opencode-preflight-report <report>",
+                        "--opencode-agent c2rust-migrator --opencode-variant max "
+                        "--opencode-preflight-report <report>",
                         text,
                     )
 
@@ -791,7 +795,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             launch_policy = {
                 "opencode_command": "opencode",
                 "opencode_model": "GLM-5.1",
-                "opencode_agent": None,
+                "opencode_agent": "c2rust-migrator",
                 "opencode_variant": "max",
                 "opencode_skip_permissions": True,
             }
@@ -849,6 +853,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 "max",
                 "--model",
                 "GLM-5.1",
+                "--agent",
+                "c2rust-migrator",
                 "--dangerously-skip-permissions",
                 "Execute test preflight marker.",
             ]
@@ -995,7 +1001,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": None,
-                    "opencode_agent": None,
+                    "opencode_agent": "c2rust-migrator",
                     "opencode_variant": "max",
                     "opencode_skip_permissions": True,
                 },
@@ -1046,7 +1052,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": "GLM-5.1",
-                    "opencode_agent": None,
+                    "opencode_agent": "c2rust-migrator",
                     "opencode_variant": "max",
                     "opencode_skip_permissions": True,
                 },
@@ -1070,6 +1076,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "target/harness/opencode-preflight-report.json",
             "--opencode-model",
             "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
             "--opencode-variant",
             "default",
         ]
@@ -1098,7 +1106,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 "launch_policy": {
                     "opencode_command": "opencode",
                     "opencode_model": "GLM-5.1",
-                    "opencode_agent": None,
+                    "opencode_agent": "c2rust-migrator",
                     "opencode_variant": "max",
                     "opencode_skip_permissions": True,
                 },
@@ -1122,6 +1130,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "target/harness/opencode-preflight-report.json",
             "--opencode-model",
             "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
             "--opencode-variant",
             "default",
             "--opencode-variant",
@@ -1499,8 +1509,9 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("opencode-preflight", skill)
         self.assertIn("marker_exists=true", skill)
         self.assertIn("GLM-5.1", skill)
+        self.assertIn("--opencode-agent c2rust-migrator", skill)
         self.assertIn("--opencode-variant max", skill)
-        self.assertIn("opencode` + `GLM-5.1` + `max", skill)
+        self.assertIn("opencode` + `GLM-5.1` + `c2rust-migrator` + `max", skill)
         self.assertIn("opencode_model_availability", skill)
         self.assertIn("opencode_model_unavailable", skill)
         self.assertIn("local-simulation OpenCode pass does not close P0-H9", skill)
@@ -1537,6 +1548,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertIn("opencode_session_evidence", text)
                 self.assertIn("contract_verification", text)
                 self.assertIn("GLM-5.1", text)
+                self.assertIn("c2rust-migrator", text)
                 self.assertIn("max", text)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
