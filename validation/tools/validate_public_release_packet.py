@@ -104,6 +104,7 @@ def require_claim_boundary_contract(packet: dict[str, Any]) -> None:
     require_zero(boundary.get("translation_coverage_numerator"), "claim_boundary.translation_coverage_numerator")
 
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    require_publication_manifest_identity_contract(publication)
     publication_boundary = require_object(
         publication.get("claim_boundary"),
         "publication_manifest.claim_boundary",
@@ -131,6 +132,52 @@ def require_claim_boundary_contract(packet: dict[str, Any]) -> None:
             archive_boundary.get("archive_is_semantic_gate"),
             "competition_config_archive.claim_boundary.archive_is_semantic_gate",
         )
+
+
+def require_publication_manifest_identity_contract(publication: dict[str, Any]) -> None:
+    if publication.get("report_kind") != "publication-manifest":
+        raise ValueError("publication_manifest.report_kind must be publication-manifest")
+    if publication.get("bundle_version") != 1:
+        raise ValueError("publication_manifest.bundle_version must be 1")
+    source_commit = require_commit_ref(
+        publication.get("source_commit"),
+        "publication_manifest.source_commit",
+    )
+    repo_commit = require_commit_ref(
+        publication.get("repo_commit"),
+        "publication_manifest.repo_commit",
+    )
+    if repo_commit != source_commit:
+        raise ValueError("publication_manifest.repo_commit must match publication_manifest.source_commit")
+    require_target_source_pin_ref(
+        publication.get("target_source_pin"),
+        "publication_manifest.target_source_pin",
+    )
+
+
+def require_commit_ref(value: Any, label: str) -> str:
+    ref = require_object(value, label)
+    if ref.get("status") != "present":
+        raise ValueError(f"{label}.status must be present")
+    commit = ref.get("commit")
+    if not is_lower_hex_sha1(commit):
+        raise ValueError(f"{label}.commit must be a 40-character lowercase hex commit")
+    return str(commit)
+
+
+def require_target_source_pin_ref(value: Any, label: str) -> None:
+    ref = require_object(value, label)
+    if ref.get("status") != "passed":
+        raise ValueError(f"{label}.status must be passed")
+    for field in ("target_id", "repository", "branch"):
+        if not isinstance(ref.get(field), str) or not ref[field]:
+            raise ValueError(f"{label}.{field} must be a non-empty string")
+    if not is_lower_hex_sha1(ref.get("canonical_commit")):
+        raise ValueError(f"{label}.canonical_commit must be a 40-character lowercase hex commit")
+
+
+def is_lower_hex_sha1(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 40 and all(char in "0123456789abcdef" for char in value)
 
 
 def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_root: Path) -> None:
@@ -485,6 +532,26 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
             )
 
 
+def require_published_artifact_refs_are_hash_bound(publication: dict[str, Any], *, repo_root: Path) -> None:
+    refs = publication.get("published_artifact_refs", [])
+    if not isinstance(refs, list):
+        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    for ref in refs:
+        ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
+        if ref_obj.get("status") not in {"present", "passed"}:
+            continue
+        try:
+            judge_validator.validate_ref(ref_obj, repo_root=repo_root)
+        except ValueError as error:
+            message = str(error)
+            if "sha256 mismatch" in message:
+                raise ValueError(
+                    "publication_manifest.published_artifact_refs[].sha256 mismatch: "
+                    f"{message}"
+                ) from error
+            raise ValueError(f"publication_manifest.published_artifact_refs[] invalid: {message}") from error
+
+
 def expected_published_artifact_ref_status(publication: dict[str, Any]) -> dict[str, Any]:
     refs = publication.get("published_artifact_refs", [])
     status_counts: dict[str, int] = {}
@@ -762,6 +829,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     bundle = judge_validator.load_json(bundle_path)
     require_bound_bundle_identity_contract(packet, bundle)
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    require_published_artifact_refs_are_hash_bound(publication, repo_root=repo_root)
     require_passed_bundle_published_refs_are_healthy(bundle, publication)
     for field in ("judge_entrypoints_run_report", "readiness_report"):
         if packet.get(field) != bundle.get(field):

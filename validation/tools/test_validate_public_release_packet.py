@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import jsonschema
+
 from validation.tools import milestone_release_notes
 from validation.tools import validate_judge_entrypoints as judge_validator
 from validation.tools import validate_public_release_packet as packet_validator
@@ -578,8 +580,23 @@ def valid_packet(root: Path) -> dict:
         "path": repo_relative(bundle_path),
         "status": "self",
     }
+    repo_commit_ref = {
+        "status": "present",
+        "commit": "1" * 40,
+    }
     publication_manifest = {
+        "report_kind": "publication-manifest",
+        "bundle_version": 1,
         "publication_scope": "all-entrypoints",
+        "source_commit": repo_commit_ref,
+        "repo_commit": json.loads(json.dumps(repo_commit_ref)),
+        "target_source_pin": {
+            "status": "passed",
+            "target_id": "flashdb",
+            "repository": "https://gitcode.com/xwxf/FlashDB.git",
+            "branch": "competition",
+            "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        },
         "judge_entrypoints_run_report": run_report,
         "readiness_report": readiness,
         "judge_milestone_bundle": bundle_self_ref,
@@ -1390,6 +1407,40 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_publication_manifest_missing_identity_fields(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-manifest-identity-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        for field in ("report_kind", "bundle_version", "source_commit", "repo_commit", "target_source_pin"):
+            del packet["publication_manifest"][field]
+            del bundle_payload["publication_manifest"][field]
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("publication_manifest.report_kind must be publication-manifest" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_public_release_packet_schema_requires_publication_manifest_identity(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-schema-identity-", dir=REPO_ROOT / "target"))
+        packet = valid_packet(temp_dir)
+        for field in ("report_kind", "bundle_version", "source_commit", "repo_commit", "target_source_pin"):
+            del packet["publication_manifest"][field]
+        schema = judge_validator.load_json(packet_validator.PACKET_SCHEMA)
+
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(packet, schema)
+
     def test_validate_packet_rejects_status_drift_from_bound_bundle(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-status-drift-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -1599,6 +1650,38 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("passed bundle cannot publish bad artifact ref status" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_published_artifact_ref_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-published-ref-hash-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        artifact_ref = write_text_artifact(temp_dir / "harness" / "judge-evidence-index.json", "{}\n")
+        bad_ref = {
+            **artifact_ref,
+            "artifact_name": "judge_evidence_index",
+            "sha256": "0" * 64,
+        }
+        packet["publication_manifest"].setdefault("published_artifact_refs", []).append(bad_ref)
+        packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+            packet["publication_manifest"]
+        )
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("publication_manifest.published_artifact_refs[].sha256 mismatch" in error for error in result["errors"]),
             result["errors"],
         )
 

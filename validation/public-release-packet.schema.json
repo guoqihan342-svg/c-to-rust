@@ -108,7 +108,35 @@
     "judge_milestone_bundle": {"$ref": "#/$defs/artifactRef"},
     "milestone_release_notes": {"$ref": "#/$defs/artifactRef"},
     "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
-    "publication_manifest": {"type": "object", "additionalProperties": true},
+    "publication_manifest": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "bundle_version",
+        "source_commit",
+        "repo_commit",
+        "target_source_pin"
+      ],
+      "properties": {
+        "report_kind": {"const": "publication-manifest"},
+        "bundle_version": {"const": 1},
+        "source_commit": {"$ref": "#/$defs/commitRef"},
+        "repo_commit": {"$ref": "#/$defs/commitRef"},
+        "target_source_pin": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["status", "target_id", "repository", "branch", "canonical_commit"],
+          "properties": {
+            "status": {"const": "passed"},
+            "target_id": {"type": "string", "minLength": 1},
+            "repository": {"type": "string", "minLength": 1},
+            "branch": {"type": "string", "minLength": 1},
+            "canonical_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        }
+      }
+    },
     "publishability": {
       "type": "object",
       "additionalProperties": true,
@@ -223,6 +251,15 @@
         "path": {"type": "string"},
         "status": {"const": "present"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "commitRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "commit"],
+      "properties": {
+        "status": {"const": "present"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
       }
     },
     "progressDeltaLedger": {
