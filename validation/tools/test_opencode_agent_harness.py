@@ -5699,6 +5699,50 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertTrue(verification["first_shell_command_matches_worker_command"])
         self.assertEqual(verification["contract_failure_reason"], "")
 
+    def test_opencode_contract_rejects_extra_shell_command_after_expected_worker_command(self) -> None:
+        worker_command = [
+            "python3",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker-a/harness/worker-a-request-attempt-1.json",
+        ]
+        expected_command = harness.shell_command_line(worker_command)
+        extra_command = "python3 -B validation/tools/opencode_agent_harness.py init-run --run-id unexpected"
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "state": {"input": {"command": expected_command, "workdir": str(REPO_ROOT)}},
+                    },
+                },
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "state": {"input": {"command": extra_command, "workdir": str(REPO_ROOT)}},
+                    },
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertEqual(verification["executed_shell_command_count"], 2)
+        self.assertEqual(verification["executed_shell_commands"], [expected_command, extra_command])
+        self.assertEqual(verification["contract_failure_reason"], "extra_shell_command_after_contract")
+
     def test_opencode_contract_uses_posix_shell_join_for_prompt_and_verification(self) -> None:
         worker_command = [
             "python3",

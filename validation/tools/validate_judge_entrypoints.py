@@ -2610,7 +2610,12 @@ def recompute_opencode_contract_execution(
     if executed_shell_commands:
         status = (
             "executed"
-            if first_shell_command_matches_worker_command and workdir_matches_repo_root and not tools_before_first_shell
+            if (
+                first_shell_command_matches_worker_command
+                and workdir_matches_repo_root
+                and not tools_before_first_shell
+                and len(executed_shell_commands) == 1
+            )
             else "not-executed"
         )
     contract_failure_reason = ""
@@ -2621,6 +2626,8 @@ def recompute_opencode_contract_execution(
             contract_failure_reason = "tool_before_first_shell_command"
         elif not workdir_matches_repo_root:
             contract_failure_reason = "opencode_workdir_mismatch"
+        elif len(executed_shell_commands) > 1 and first_shell_command_matches_worker_command:
+            contract_failure_reason = "extra_shell_command_after_contract"
         else:
             contract_failure_reason = (
                 "first_shell_command_mismatch_worker_command_seen_later"
