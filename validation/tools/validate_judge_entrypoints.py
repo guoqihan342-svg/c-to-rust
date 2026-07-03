@@ -28,6 +28,28 @@ from validation.tools import milestone_release_report
 DEFAULT_CONFIG = REPO_ROOT / "config" / "competition-env" / "judge-entrypoints" / "flashdb-harness.json"
 COMPETITION_ENV_ROOT = "config/competition-env"
 COMPETITION_ENV_BUNDLE_MANIFEST = Path("config") / "competition-env" / "bundle-manifest.json"
+COMPETITION_ENV_BUNDLE_FILE_ROLES = {
+    "config/competition-env/README.en.md": "competition-env-readme",
+    "config/competition-env/README.md": "competition-env-readme",
+    "config/competition-env/apt/sources.list": "apt-mirror",
+    "config/competition-env/cargo/config.toml": "cargo-mirror",
+    "config/competition-env/env.sh": "environment-shell-entrypoint",
+    "config/competition-env/environment.json": "environment-profile",
+    "config/competition-env/judge-entrypoints/flashdb-harness.json": "judge-entrypoint-index",
+    "config/competition-env/npm/.npmrc": "npm-mirror",
+    "config/competition-env/opencode-single-interaction.en.md": "opencode-runbook",
+    "config/competition-env/opencode-single-interaction.md": "opencode-runbook",
+    "config/competition-env/pip/pip.conf": "pip-mirror",
+    "config/competition-env/planned-batches/demo-store-add-one-before-after.json": "planned-batch-profile",
+    "config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json": "planned-batch-profile",
+    "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json": "planned-batch-profile",
+    "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json": "planned-batch-profile",
+    "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json": "planned-batch-profile",
+    "config/competition-env/review-checklists/flashdb-harness-internal-review.json": "review-gate",
+    "config/competition-env/rust/rust-toolchain.toml": "rust-toolchain",
+    "config/competition-env/smoke.sh": "competition-smoke-entrypoint",
+    "config/competition-env/toolchain-check.sh": "toolchain-smoke",
+}
 COMPETITION_ENV_EXTERNAL_REF_ROLES = {
     "requirements.txt": "python-dependency-lock",
     "opencode.json": "opencode-config",
@@ -461,6 +483,11 @@ def validate_competition_env_bundle_contract(
             raise ValueError(f"competition env bundle file must stay under {COMPETITION_ENV_ROOT}: {path_text}")
         if path_text in result_files:
             raise ValueError(f"competition env bundle duplicate file: {path_text}")
+        expected_role = COMPETITION_ENV_BUNDLE_FILE_ROLES.get(path_text)
+        if expected_role is None:
+            raise ValueError(f"competition env bundle unexpected file: {path_text}")
+        if role != expected_role:
+            raise ValueError(f"competition env bundle file role mismatch for {path_text}: {role} != {expected_role}")
         path = repo_path(path_text, repo_root=repo_root)
         if not path.is_file():
             raise ValueError(f"competition env bundle file is missing: {path_text}")
@@ -475,20 +502,7 @@ def validate_competition_env_bundle_contract(
         }
         roles[path_text] = role
 
-    required_paths = {
-        "config/competition-env/environment.json",
-        "config/competition-env/env.sh",
-        "config/competition-env/toolchain-check.sh",
-        "config/competition-env/smoke.sh",
-        "config/competition-env/apt/sources.list",
-        "config/competition-env/pip/pip.conf",
-        "config/competition-env/npm/.npmrc",
-        "config/competition-env/cargo/config.toml",
-        "config/competition-env/rust/rust-toolchain.toml",
-        "config/competition-env/judge-entrypoints/flashdb-harness.json",
-        "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
-        "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
-    }
+    required_paths = set(COMPETITION_ENV_BUNDLE_FILE_ROLES)
     missing_required = sorted(required_paths - set(result_files))
     if missing_required:
         raise ValueError(f"competition env bundle missing required files: {missing_required}")

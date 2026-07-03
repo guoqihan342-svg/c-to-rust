@@ -1600,6 +1600,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_competition_env_bundle_rejects_unexpected_file_ref(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        unexpected_file = "config/competition-env/bundle-manifest.json"
+        manifest["files"].append(
+            {
+                "path": unexpected_file,
+                "role": "unexpected-config-input",
+                "sha256": validator.sha256_file(REPO_ROOT / unexpected_file),
+            }
+        )
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition env bundle unexpected file: config/competition-env/bundle-manifest.json",
+        ):
+            validator.validate_competition_env_bundle_contract(
+                load_default_config(),
+                manifest_path=temp_manifest,
+                repo_root=REPO_ROOT,
+            )
+
     def test_competition_env_bundle_rejects_external_ref_hash_drift(self) -> None:
         source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
