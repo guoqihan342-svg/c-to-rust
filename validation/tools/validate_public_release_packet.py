@@ -860,6 +860,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         "publication_manifest",
         "publishability",
         "harness_architecture_summary",
+        "evidence_cost_retention",
         "before_after_repair_exhibit",
         "known_gaps",
         "reproduction_commands",

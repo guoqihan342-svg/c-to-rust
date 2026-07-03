@@ -44,6 +44,7 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
     publication = object_or_empty(bundle.get("publication_manifest"))
     scorecard = object_or_empty(bundle.get("quantitative_evaluation"))
     architecture = object_or_empty(bundle.get("harness_architecture_summary"))
+    evidence_cost = object_or_empty(bundle.get("evidence_cost_retention"))
     workflow = object_or_empty(bundle.get("workflow_metrics"))
     core_quality = object_or_empty(bundle.get("core_translation_quality"))
     progress_delta = object_or_empty(bundle.get("progress_delta_ledger"))
@@ -86,6 +87,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "## Harness Architecture",
         "",
         *architecture_lines(architecture, workflow),
+        "",
+        "## Evidence Cost and Retention",
+        "",
+        *evidence_cost_retention_lines(evidence_cost),
         "",
         "## Quantitative Scorecard",
         "",
@@ -224,6 +229,7 @@ def require_bundle_contract(bundle: dict[str, Any]) -> None:
     require_publishability_contract(bundle, blockers=blockers)
     require_opencode_runtime_contract(bundle)
     require_opencode_evidence_policy_contract(bundle)
+    require_evidence_cost_retention_contract(bundle)
 
 
 def require_publishability_contract(bundle: dict[str, Any], *, blockers: list[str]) -> None:
@@ -344,6 +350,60 @@ def require_opencode_evidence_policy_contract(bundle: dict[str, Any]) -> None:
     require_false_value(policy.get("semantic_gate"), "opencode_evidence_policy.semantic_gate")
 
 
+def require_evidence_cost_retention_contract(bundle: dict[str, Any]) -> None:
+    evidence_cost = bundle.get("evidence_cost_retention")
+    require(isinstance(evidence_cost, dict), "evidence_cost_retention must be an object")
+    require(
+        evidence_cost.get("report_kind") == "evidence-cost-retention-rollup",
+        "evidence_cost_retention.report_kind must be evidence-cost-retention-rollup",
+    )
+    require(isinstance(evidence_cost.get("sources"), list), "evidence_cost_retention.sources must be an array")
+    require(
+        isinstance(evidence_cost.get("boundary"), str) and bool(evidence_cost.get("boundary")),
+        "evidence_cost_retention.boundary must be present",
+    )
+    rollup = evidence_cost.get("rollup")
+    require(isinstance(rollup, dict), "evidence_cost_retention.rollup must be an object")
+    for key in ["source_count", "artifact_count", "total_bytes", "pipeline_count", "portability_issue_count"]:
+        require_non_negative_int(rollup.get(key), f"evidence_cost_retention.rollup.{key}")
+    if "diagnostic_host_metadata_count" in rollup:
+        require_non_negative_int(
+            rollup.get("diagnostic_host_metadata_count"),
+            "evidence_cost_retention.rollup.diagnostic_host_metadata_count",
+        )
+    require(isinstance(rollup.get("all_sources_passed"), bool), "evidence_cost_retention.rollup.all_sources_passed must be boolean")
+
+    runtime = rollup.get("runtime_ms")
+    require(isinstance(runtime, dict), "evidence_cost_retention.rollup.runtime_ms must be an object")
+    for key in ["observation_count", "total", "max"]:
+        require_non_negative_int(runtime.get(key), f"evidence_cost_retention.rollup.runtime_ms.{key}")
+
+    retention_classes = rollup.get("retention_classes")
+    require(isinstance(retention_classes, dict), "evidence_cost_retention.rollup.retention_classes must be an object")
+    for name, retention_class in retention_classes.items():
+        require(isinstance(retention_class, dict), f"evidence_cost_retention.rollup.retention_classes.{name} must be an object")
+        require_non_negative_int(
+            retention_class.get("file_count"),
+            f"evidence_cost_retention.rollup.retention_classes.{name}.file_count",
+        )
+        require_non_negative_int(
+            retention_class.get("total_bytes"),
+            f"evidence_cost_retention.rollup.retention_classes.{name}.total_bytes",
+        )
+
+    policy = rollup.get("policy_compliance")
+    require(isinstance(policy, dict), "evidence_cost_retention.rollup.policy_compliance must be an object")
+    require(
+        isinstance(policy.get("all_sources_policy_passed"), bool),
+        "evidence_cost_retention.rollup.policy_compliance.all_sources_policy_passed must be boolean",
+    )
+    for key in ["tier_counts", "failed_gate_counts"]:
+        value = policy.get(key)
+        require(isinstance(value, dict), f"evidence_cost_retention.rollup.policy_compliance.{key} must be an object")
+        for name, count in value.items():
+            require_non_negative_int(count, f"evidence_cost_retention.rollup.policy_compliance.{key}.{name}")
+
+
 def require_false_field(
     payload: dict[str, Any],
     section: str,
@@ -394,6 +454,10 @@ def require_true_value(value: Any, field: str) -> None:
     require(value is True, f"{field} must be true")
 
 
+def require_non_negative_int(value: Any, field: str) -> None:
+    require(isinstance(value, int) and not isinstance(value, bool) and value >= 0, f"{field} must be a non-negative integer")
+
+
 def require(condition: Any, message: str) -> None:
     if not condition:
         raise SystemExit(message)
@@ -409,6 +473,30 @@ def architecture_lines(architecture: dict[str, Any], workflow: dict[str, Any]) -
         f"- Repair round cap: `{int_text(rollup.get('repair_round_cap'))}`",
         f"- Roles: `{', '.join(string_list(rollup.get('roles'))) or 'unknown'}`",
         f"- Repair histories: `{int_text(repair.get('repair_history_unit_count'))}`; auto-recovered units: `{int_text(repair.get('auto_recovered_unit_count'))}`",
+    ]
+
+
+def evidence_cost_retention_lines(evidence_cost: dict[str, Any]) -> list[str]:
+    rollup = object_or_empty(evidence_cost.get("rollup"))
+    runtime = object_or_empty(rollup.get("runtime_ms"))
+    policy = object_or_empty(rollup.get("policy_compliance"))
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Source count | {int_text(rollup.get('source_count'))} |",
+        f"| Artifact count | {int_text(rollup.get('artifact_count'))} |",
+        f"| Total bytes | {int_text(rollup.get('total_bytes'))} |",
+        f"| Pipeline count | {int_text(rollup.get('pipeline_count'))} |",
+        f"| Runtime observations | {int_text(runtime.get('observation_count'))} |",
+        f"| Runtime total ms | {int_text(runtime.get('total'))} |",
+        f"| Runtime max ms | {int_text(runtime.get('max'))} |",
+        f"| Retention classes | {retention_class_text(rollup.get('retention_classes'))} |",
+        f"| All sources passed | {bool_text(rollup.get('all_sources_passed'))} |",
+        f"| Policy compliant | {bool_text(policy.get('all_sources_policy_passed'))} |",
+        f"| Policy tiers | {count_map_text(policy.get('tier_counts'))} |",
+        f"| Policy failed gates | {count_map_text(policy.get('failed_gate_counts'))} |",
+        f"| Portability issues | {int_text(rollup.get('portability_issue_count'))} |",
+        f"| Diagnostic host metadata | {int_text(rollup.get('diagnostic_host_metadata_count'))} |",
     ]
 
 
@@ -666,6 +754,19 @@ def count_map_text(value: Any) -> str:
         else:
             count_text = "0"
         parts.append(f"`{key}`: {count_text}")
+    return ", ".join(parts)
+
+
+def retention_class_text(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none"
+    parts = []
+    for key in sorted(value):
+        retention_class = object_or_empty(value.get(key))
+        parts.append(
+            f"`{key}`: {int_text(retention_class.get('file_count'))} files / "
+            f"{int_text(retention_class.get('total_bytes'))} bytes"
+        )
     return ", ".join(parts)
 
 

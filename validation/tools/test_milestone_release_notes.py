@@ -58,6 +58,21 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("| Next actions | `bind_external_callee_semantics`: 1 |", notes)
         self.assertIn("| Sample next-action limit | 5 |", notes)
         self.assertIn("| Semantic gate | false |", notes)
+        self.assertIn("## Evidence Cost and Retention", notes)
+        self.assertIn("| Source count | 1 |", notes)
+        self.assertIn("| Artifact count | 3 |", notes)
+        self.assertIn("| Total bytes | 120 |", notes)
+        self.assertIn("| Pipeline count | 2 |", notes)
+        self.assertIn("| Runtime observations | 2 |", notes)
+        self.assertIn("| Runtime total ms | 45 |", notes)
+        self.assertIn("| Runtime max ms | 40 |", notes)
+        self.assertIn("| Retention classes | `ci_smoke`: 1 files / 40 bytes, `committed_release`: 2 files / 80 bytes |", notes)
+        self.assertIn("| All sources passed | true |", notes)
+        self.assertIn("| Policy compliant | true |", notes)
+        self.assertIn("| Policy tiers | `ci`: 1 |", notes)
+        self.assertIn("| Policy failed gates | none |", notes)
+        self.assertIn("| Portability issues | 0 |", notes)
+        self.assertIn("| Diagnostic host metadata | 0 |", notes)
         self.assertIn("## Progress Delta Ledger", notes)
         self.assertIn("| Capability delta count | 2 |", notes)
         self.assertIn("| Governance delta count | 3 |", notes)
@@ -114,6 +129,24 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             milestone_release_notes.build_release_notes(payload)
 
         self.assertIn("publishability.status", str(raised.exception))
+
+    def test_release_notes_reject_missing_evidence_cost_retention(self) -> None:
+        payload = self._bundle()
+        payload.pop("evidence_cost_retention")
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("evidence_cost_retention must be an object", str(raised.exception))
+
+    def test_release_notes_reject_invalid_evidence_cost_retention_kind(self) -> None:
+        payload = self._bundle()
+        payload["evidence_cost_retention"]["report_kind"] = "evidence-cost-summary"
+
+        with self.assertRaises(SystemExit) as raised:
+            milestone_release_notes.build_release_notes(payload)
+
+        self.assertIn("evidence_cost_retention.report_kind", str(raised.exception))
 
     def test_release_notes_reject_expanded_semantic_claims(self) -> None:
         cases = [
@@ -321,6 +354,57 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                     "graph_runtimes": ["langgraph-style"],
                     "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
                 }
+            },
+            "evidence_cost_retention": {
+                "report_kind": "evidence-cost-retention-rollup",
+                "sources": [
+                    {
+                        "source": "fixture-evidence-governance",
+                        "status": "passed",
+                        "artifact_count": 3,
+                        "total_bytes": 120,
+                        "pipeline_count": 2,
+                        "runtime_observation_count": 2,
+                        "runtime_total_duration_ms": 45,
+                        "runtime_max_duration_ms": 40,
+                        "retention_classes": {
+                            "committed_release": {"file_count": 2, "total_bytes": 80},
+                            "ci_smoke": {"file_count": 1, "total_bytes": 40},
+                        },
+                        "policy_compliance": {
+                            "policy_tier": "ci",
+                            "status": "passed",
+                            "failed_gates": [],
+                        },
+                        "claim_anchor_issue_count": 0,
+                        "profile_hash_issue_count": 0,
+                        "diagnostic_host_metadata_count": 0,
+                    }
+                ],
+                "rollup": {
+                    "source_count": 1,
+                    "artifact_count": 3,
+                    "total_bytes": 120,
+                    "pipeline_count": 2,
+                    "runtime_ms": {
+                        "observation_count": 2,
+                        "total": 45,
+                        "max": 40,
+                    },
+                    "retention_classes": {
+                        "committed_release": {"file_count": 2, "total_bytes": 80},
+                        "ci_smoke": {"file_count": 1, "total_bytes": 40},
+                    },
+                    "all_sources_passed": True,
+                    "policy_compliance": {
+                        "all_sources_policy_passed": True,
+                        "tier_counts": {"ci": 1},
+                        "failed_gate_counts": {},
+                    },
+                    "portability_issue_count": 0,
+                    "diagnostic_host_metadata_count": 0,
+                },
+                "boundary": "Evidence cost and retention metrics are review-only and not semantic acceptance.",
             },
             "workflow_metrics": {
                 "rollup": {

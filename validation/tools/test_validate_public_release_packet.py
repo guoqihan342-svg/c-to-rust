@@ -694,6 +694,60 @@ def harness_contract_matrix_fixture() -> list[dict]:
     ]
 
 
+def evidence_cost_retention_fixture() -> dict:
+    return {
+        "report_kind": "evidence-cost-retention-rollup",
+        "sources": [
+            {
+                "source": "fixture-evidence-governance",
+                "status": "passed",
+                "artifact_count": 3,
+                "total_bytes": 120,
+                "pipeline_count": 2,
+                "runtime_observation_count": 2,
+                "runtime_total_duration_ms": 45,
+                "runtime_max_duration_ms": 40,
+                "retention_classes": {
+                    "committed_release": {"file_count": 2, "total_bytes": 100},
+                    "diagnostic_only": {"file_count": 1, "total_bytes": 20},
+                },
+                "policy_compliance": {
+                    "policy_tier": "release",
+                    "status": "passed",
+                    "failed_gates": [],
+                },
+                "claim_anchor_issue_count": 0,
+                "profile_hash_issue_count": 0,
+                "diagnostic_host_metadata_count": 0,
+            }
+        ],
+        "rollup": {
+            "source_count": 1,
+            "artifact_count": 3,
+            "total_bytes": 120,
+            "pipeline_count": 2,
+            "runtime_ms": {
+                "observation_count": 2,
+                "total": 45,
+                "max": 40,
+            },
+            "retention_classes": {
+                "committed_release": {"file_count": 2, "total_bytes": 100},
+                "diagnostic_only": {"file_count": 1, "total_bytes": 20},
+            },
+            "all_sources_passed": True,
+            "policy_compliance": {
+                "all_sources_policy_passed": True,
+                "tier_counts": {"release": 1},
+                "failed_gate_counts": {},
+            },
+            "portability_issue_count": 0,
+            "diagnostic_host_metadata_count": 0,
+        },
+        "boundary": "Evidence cost and retention metrics are review-only and not semantic acceptance.",
+    }
+
+
 def valid_packet(root: Path) -> dict:
     run_report = write_text_artifact(root / "summary" / "judge-entrypoints-run-report.json", "{}\n")
     readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
@@ -923,6 +977,7 @@ def valid_packet(root: Path) -> dict:
                 "roles": ["planner", "worker", "verifier", "repairer", "reporter"],
             }
         },
+        "evidence_cost_retention": evidence_cost_retention_fixture(),
         "workflow_metrics": {
             "rollup": {
                 "repair_activity": {
@@ -1101,6 +1156,7 @@ def valid_packet(root: Path) -> dict:
         "publication_manifest": publication_manifest,
         "publishability": bundle_payload["publishability"],
         "harness_architecture_summary": bundle_payload["harness_architecture_summary"],
+        "evidence_cost_retention": bundle_payload["evidence_cost_retention"],
         "before_after_repair_exhibit": before_after_repair_exhibit,
         "opencode_patch_boundary": {
             "report_kind": "opencode-patch-boundary",
@@ -1150,6 +1206,8 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             ["plan", "translate", "verify", "repair", "report"],
         )
         self.assertFalse(packet["harness_architecture_summary"]["semantic_gate"])
+        self.assertEqual(packet["evidence_cost_retention"]["rollup"]["artifact_count"], 3)
+        self.assertEqual(packet["evidence_cost_retention"]["rollup"]["total_bytes"], 120)
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
 
@@ -1162,6 +1220,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(ref_status["properties"]["semantic_gate"]["const"], False)
         self.assertEqual(ref_status["properties"]["translation_coverage_numerator"]["const"], 0)
         self.assertIn("harness_architecture_summary", schema["required"])
+        self.assertIn("evidence_cost_retention", schema["required"])
 
     def test_validate_packet_rejects_harness_contract_matrix_missing_report_stage(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-harness-matrix-", dir=REPO_ROOT / "target"))
@@ -1179,6 +1238,24 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("harness_architecture_summary" in error and "contract_matrix" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_evidence_cost_retention_drift_from_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-evidence-cost-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["evidence_cost_retention"]["rollup"]["total_bytes"] += 1
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "evidence_cost_retention must match judge_milestone_bundle.evidence_cost_retention" in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 

@@ -17,6 +17,7 @@
     "publication_manifest",
     "publishability",
     "harness_architecture_summary",
+    "evidence_cost_retention",
     "before_after_repair_exhibit",
     "opencode_patch_boundary",
     "quantitative_evaluation",
@@ -184,6 +185,9 @@
     },
     "harness_architecture_summary": {
       "$ref": "#/$defs/harnessArchitectureSummary"
+    },
+    "evidence_cost_retention": {
+      "$ref": "#/$defs/evidenceCostRetention"
     },
     "before_after_repair_exhibit": {
       "type": "object",
@@ -356,6 +360,78 @@
         "semantic_gate": {"const": false},
         "chat_output_is_evidence": {"const": false},
         "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidenceCostRetention": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["report_kind", "sources", "rollup", "boundary"],
+      "properties": {
+        "report_kind": {"const": "evidence-cost-retention-rollup"},
+        "sources": {"type": "array", "items": {"type": "object"}},
+        "rollup": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "source_count",
+            "artifact_count",
+            "total_bytes",
+            "pipeline_count",
+            "runtime_ms",
+            "retention_classes",
+            "all_sources_passed",
+            "policy_compliance",
+            "portability_issue_count"
+          ],
+          "properties": {
+            "source_count": {"type": "integer", "minimum": 0},
+            "artifact_count": {"type": "integer", "minimum": 0},
+            "total_bytes": {"type": "integer", "minimum": 0},
+            "pipeline_count": {"type": "integer", "minimum": 0},
+            "runtime_ms": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["observation_count", "total", "max"],
+              "properties": {
+                "observation_count": {"type": "integer", "minimum": 0},
+                "total": {"type": "integer", "minimum": 0},
+                "max": {"type": "integer", "minimum": 0}
+              }
+            },
+            "retention_classes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["file_count", "total_bytes"],
+                "properties": {
+                  "file_count": {"type": "integer", "minimum": 0},
+                  "total_bytes": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
+            "all_sources_passed": {"type": "boolean"},
+            "policy_compliance": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["all_sources_policy_passed", "tier_counts", "failed_gate_counts"],
+              "properties": {
+                "all_sources_policy_passed": {"type": "boolean"},
+                "tier_counts": {
+                  "type": "object",
+                  "additionalProperties": {"type": "integer", "minimum": 0}
+                },
+                "failed_gate_counts": {
+                  "type": "object",
+                  "additionalProperties": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
+            "portability_issue_count": {"type": "integer", "minimum": 0},
+            "diagnostic_host_metadata_count": {"type": "integer", "minimum": 0}
+          }
+        },
         "boundary": {"type": "string", "minLength": 1}
       }
     },
