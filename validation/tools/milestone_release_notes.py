@@ -63,6 +63,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "",
         *packet_index_lines(publication),
         "",
+        "## Competition Config Archive",
+        "",
+        *competition_config_archive_lines(object_or_empty(publication.get("competition_config_archive"))),
+        "",
         "## Readiness Blockers",
         "",
         *blocker_lines(bundle.get("blockers")),
@@ -598,6 +602,31 @@ def packet_index_row(label: str, ref: dict[str, Any]) -> str:
     sha_or_boundary = short_sha_or_boundary(ref)
     status = text(ref.get("status"), "unknown")
     return f"| {label} | {path} | {sha_or_boundary} | {status} |"
+
+
+def competition_config_archive_lines(archive: dict[str, Any]) -> list[str]:
+    lines = [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(archive.get('status'), 'unknown')} |",
+        f"| Root | {text(archive.get('root'), 'unknown')} |",
+        f"| Config files | {int_text(archive.get('file_count'))} |",
+        f"| External refs | {int_text(archive.get('external_ref_count'))} |",
+        "",
+        "| Role | Path | SHA/status | Status |",
+        "| --- | --- | --- | --- |",
+    ]
+    external_refs = object_or_empty(archive.get("external_refs"))
+    if not external_refs:
+        lines.append("| none | none | missing | unknown |")
+        return lines
+    for path in sorted(external_refs):
+        ref = object_or_empty(external_refs.get(path))
+        lines.append(
+            f"| {text(ref.get('role'), 'unknown')} | {text(ref.get('path') or path, 'unknown')} | "
+            f"{short_sha_or_boundary(ref)} | {text(ref.get('status'), 'unknown')} |"
+        )
+    return lines
 
 
 def blocker_lines(blockers: Any) -> list[str]:

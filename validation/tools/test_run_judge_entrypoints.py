@@ -735,6 +735,15 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertIn("scripts/bootstrap_flashdb_sources.sh", archive["external_refs"])
         self.assertIn(".github/workflows/core-translator-validation-ci.yml", archive["external_refs"])
         self.assertIn(".codex/skills/c2rust-migration/SKILL.md", archive["external_refs"])
+        self.assertIn(".opencode/agents/c2rust-migrator.md", archive["external_refs"])
+        self.assertEqual(
+            archive["external_refs"][".codex/skills/c2rust-migration/SKILL.md"]["role"],
+            "repo-owned-agent-skill",
+        )
+        self.assertEqual(
+            archive["external_refs"][".opencode/agents/c2rust-migrator.md"]["role"],
+            "opencode-agent-runbook",
+        )
         for file_ref in archive["files"].values():
             self.assertEqual(file_ref["status"], "present")
             self.assertRegex(file_ref["sha256"], r"^[0-9a-f]{64}$")

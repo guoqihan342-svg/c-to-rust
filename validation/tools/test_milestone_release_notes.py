@@ -49,6 +49,17 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
             "| Judge milestone bundle | target/competition-out/summary/judge-milestone-bundle.json | self | self |",
             notes,
         )
+        self.assertIn("## Competition Config Archive", notes)
+        self.assertIn("| Config files | 21 |", notes)
+        self.assertIn("| External refs | 2 |", notes)
+        self.assertIn(
+            "| repo-owned-agent-skill | .codex/skills/c2rust-migration/SKILL.md | aaaaaaaaaaaa | present |",
+            notes,
+        )
+        self.assertIn(
+            "| opencode-agent-runbook | .opencode/agents/c2rust-migrator.md | bbbbbbbbbbbb | present |",
+            notes,
+        )
         self.assertIn("## Self-Heal Classification", notes)
         self.assertIn("| Blocked repairs | 1 |", notes)
         self.assertIn("| Human action required | 1 |", notes)
@@ -580,10 +591,27 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 },
                 "competition_config_archive": {
                     "status": "present",
+                    "root": "config/competition-env",
+                    "file_count": 21,
                     "bundle_manifest": {
                         "path": "config/competition-env/bundle-manifest.json",
                         "sha256": "1" * 64,
                         "status": "present",
+                    },
+                    "external_ref_count": 2,
+                    "external_refs": {
+                        ".codex/skills/c2rust-migration/SKILL.md": {
+                            "path": ".codex/skills/c2rust-migration/SKILL.md",
+                            "sha256": "a" * 64,
+                            "status": "present",
+                            "role": "repo-owned-agent-skill",
+                        },
+                        ".opencode/agents/c2rust-migrator.md": {
+                            "path": ".opencode/agents/c2rust-migrator.md",
+                            "sha256": "b" * 64,
+                            "status": "present",
+                            "role": "opencode-agent-runbook",
+                        },
                     },
                 },
                 "judge_entrypoints_run_report": {

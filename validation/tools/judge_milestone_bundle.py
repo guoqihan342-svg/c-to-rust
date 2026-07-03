@@ -1663,6 +1663,19 @@ def publication_archive_ref(archive: dict[str, Any] | None) -> dict[str, Any]:
             "sha256": materialized_manifest.get("sha256"),
             "status": materialized_manifest.get("status"),
         }
+    external_refs = archive.get("external_refs")
+    if isinstance(external_refs, dict):
+        ref["external_ref_count"] = len(external_refs)
+        ref["external_refs"] = {
+            path: {
+                "path": entry.get("path"),
+                "sha256": entry.get("sha256"),
+                "status": entry.get("status"),
+                "role": entry.get("role"),
+            }
+            for path, entry in sorted(external_refs.items())
+            if isinstance(entry, dict)
+        }
     return ref
 
 

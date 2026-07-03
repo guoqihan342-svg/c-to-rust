@@ -1218,9 +1218,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["compile_passed_count"], 0)
         self.assertFalse(raw_c2rust["c2rust_baseline_rollup"]["semantic_gate"])
         self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["translation_coverage_numerator"], 0)
-        self.assertFalse(
-            raw_c2rust["semantic_acceptance_claimed"]
-        )
+        self.assertFalse(raw_c2rust["semantic_acceptance_claimed"])
         self.assertEqual(
             quantitative_evaluation["baseline_comparison"]["typed_ir_route"]["tracked_route_decision_artifacts"],
             4,
@@ -1246,6 +1244,48 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
+
+    def test_publication_archive_ref_preserves_external_refs_for_release_notes(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        ref = bundle.publication_archive_ref(
+            {
+                "status": "present",
+                "root": "config/competition-env",
+                "report_kind": "competition-config-archive",
+                "files": {
+                    "config/competition-env/bundle-manifest.json": {
+                        "path": "config/competition-env/bundle-manifest.json",
+                        "sha256": "1" * 64,
+                        "status": "present",
+                    }
+                },
+                "external_refs": {
+                    ".codex/skills/c2rust-migration/SKILL.md": {
+                        "path": ".codex/skills/c2rust-migration/SKILL.md",
+                        "sha256": "2" * 64,
+                        "status": "present",
+                        "role": "repo-owned-agent-skill",
+                    },
+                    ".opencode/agents/c2rust-migrator.md": {
+                        "path": ".opencode/agents/c2rust-migrator.md",
+                        "sha256": "3" * 64,
+                        "status": "present",
+                        "role": "opencode-agent-runbook",
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(ref["external_ref_count"], 2)
+        self.assertEqual(
+            ref["external_refs"][".codex/skills/c2rust-migration/SKILL.md"]["role"],
+            "repo-owned-agent-skill",
+        )
+        self.assertEqual(
+            ref["external_refs"][".opencode/agents/c2rust-migrator.md"]["role"],
+            "opencode-agent-runbook",
+        )
 
     def test_evidence_policy_compliance_failure_blocks_milestone(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
