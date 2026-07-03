@@ -200,6 +200,54 @@ class EvidenceGovernanceTests(unittest.TestCase):
             self.assertIn("target/full-regression/run-1/summary.json", pipeline["report_artifacts"])
             self.assertIn("target/full-regression/run-1/events.jsonl", pipeline["report_artifacts"])
 
+    def test_ci_policy_tier_reports_machine_readable_compliance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
+            root = Path(tmp)
+            self._write_json(
+                root / "target/full-regression/run-1/summary.json",
+                {"status": "passed", "duration_ms": 17},
+            )
+            self._write(root / "target/full-regression/run-1/events.jsonl", '{"event":"step"}\n')
+
+            report = evidence_governance.build_report(
+                root,
+                evidence_root=Path("target/full-regression"),
+                policy_tier="ci",
+            )
+
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["policy_compliance"]["policy_tier"], "ci")
+            self.assertEqual(report["policy_compliance"]["status"], "passed")
+            self.assertEqual(report["policy_compliance"]["failed_gates"], [])
+            gate_names = {gate["name"] for gate in report["policy_compliance"]["gates"]}
+            self.assertIn("portability", gate_names)
+            self.assertIn("retention_metadata", gate_names)
+
+    def test_release_policy_tier_blocks_diagnostic_host_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
+            root = Path(tmp)
+            self._write_json(
+                root / "validation/evidence/l1-native-summary.json",
+                {
+                    "status": "historical",
+                    "worker_result_sources": {
+                        "network-event": {
+                            "path": "C:\\Users\\Administrator\\Documents\\c-to-rust-l1-work\\results.json",
+                        }
+                    },
+                },
+            )
+
+            report = evidence_governance.build_report(
+                root,
+                evidence_root=Path("validation/evidence"),
+                policy_tier="release",
+            )
+
+            self.assertEqual(report["policy_compliance"]["policy_tier"], "release")
+            self.assertEqual(report["policy_compliance"]["status"], "failed")
+            self.assertIn("diagnostic_host_metadata", report["policy_compliance"]["failed_gates"])
+
     def test_translator_artifact_paths_are_claim_anchor_paths(self) -> None:
         with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
             root = Path(tmp)
@@ -320,7 +368,7 @@ class EvidenceGovernanceTests(unittest.TestCase):
     def test_core_ci_runs_evidence_governance_tests(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
 
-        self.assertIn("python -m unittest validation.tools.test_evidence_governance", workflow)
+        self.assertIn("python3 -B -m unittest validation.tools.test_evidence_governance", workflow)
 
     def _write(self, path: Path, text: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

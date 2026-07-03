@@ -380,6 +380,8 @@ def smoke_commands(
             [
                 sys.executable,
                 rel_path(EVIDENCE_GOVERNANCE, repo_root),
+                "--policy-tier",
+                "ci",
                 "--output",
                 rel_path(out_root / "reports" / "evidence-governance.json", repo_root),
             ],

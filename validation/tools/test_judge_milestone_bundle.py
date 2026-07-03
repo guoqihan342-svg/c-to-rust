@@ -412,6 +412,15 @@ def evidence_governance_payload() -> dict:
         "status": "passed",
         "evidence_root": "validation/evidence",
         "failed_gates": [],
+        "policy_compliance": {
+            "policy_tier": "ci",
+            "status": "passed",
+            "failed_gates": [],
+            "gates": [
+                {"name": "portability", "status": "passed"},
+                {"name": "retention_metadata", "status": "passed"},
+            ],
+        },
         "portability": {
             "status": "passed",
             "claim_anchor_issue_count": 0,
@@ -936,6 +945,14 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         )
         self.assertTrue(report["evidence_cost_retention"]["rollup"]["all_sources_passed"])
         self.assertEqual(report["evidence_cost_retention"]["rollup"]["portability_issue_count"], 0)
+        evidence_cost_source = report["evidence_cost_retention"]["sources"][0]
+        self.assertEqual(evidence_cost_source["policy_compliance"]["policy_tier"], "ci")
+        self.assertEqual(evidence_cost_source["policy_compliance"]["status"], "passed")
+        self.assertEqual(evidence_cost_source["policy_compliance"]["failed_gates"], [])
+        policy_rollup = report["evidence_cost_retention"]["rollup"]["policy_compliance"]
+        self.assertTrue(policy_rollup["all_sources_policy_passed"])
+        self.assertEqual(policy_rollup["tier_counts"], {"ci": 1})
+        self.assertEqual(policy_rollup["failed_gate_counts"], {})
         self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 1)
         self.assertTrue(report["opencode_runtime"]["all_contracts_executed"])
         self.assertTrue(report["opencode_runtime"]["chat_output_is_evidence_false"])
@@ -1178,6 +1195,60 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
+
+    def test_evidence_policy_compliance_failure_blocks_milestone(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        evidence_cost_retention = bundle.build_evidence_cost_retention_rollup(
+            [
+                {
+                    "entrypoint_id": "competition_environment_smoke",
+                    "status": "passed",
+                    "policy_compliance": {
+                        "policy_tier": "release",
+                        "status": "failed",
+                        "failed_gates": ["diagnostic_host_metadata"],
+                    },
+                    "artifact_count": 1,
+                    "total_bytes": 10,
+                    "pipeline_count": 1,
+                    "runtime_observation_count": 0,
+                    "runtime_total_duration_ms": 0,
+                    "runtime_max_duration_ms": 0,
+                    "retention_classes": {},
+                    "claim_anchor_issue_count": 0,
+                    "profile_hash_issue_count": 0,
+                    "diagnostic_host_metadata_count": 1,
+                }
+            ]
+        )
+
+        self.assertFalse(
+            evidence_cost_retention["rollup"]["policy_compliance"]["all_sources_policy_passed"]
+        )
+        self.assertEqual(
+            evidence_cost_retention["rollup"]["policy_compliance"]["failed_gate_counts"],
+            {"diagnostic_host_metadata": 1},
+        )
+        blockers = bundle.milestone_blockers(
+            {"status": "passed", "summary": {"claim_boundary": {}}},
+            {"all_entrypoints_executed": True, "validation_status": "passed"},
+            {},
+            run_report_contract=[],
+            proof_class_contract_errors=[],
+            opencode_policy={"enabled": False},
+            core_translation_quality={
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            before_after_repair_exhibit={"rollup": {}},
+            blocked_repairs_rollup={"rollup": {"status_counts": {}}},
+            route_governance_metrics={"rollup": {}},
+            evidence_cost_retention=evidence_cost_retention,
+            opencode_runtime={"enabled_entrypoint_count": 0},
+        )
+
+        self.assertIn("evidence_policy_compliance_must_pass", blockers)
 
     def test_progress_delta_ledger_uses_before_after_repair_when_workflow_metrics_are_sparse(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

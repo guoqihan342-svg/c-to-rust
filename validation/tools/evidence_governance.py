@@ -19,6 +19,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE_ROOT = Path("validation/evidence")
+POLICY_TIERS = ("dev", "ci", "release")
 PATH_LIKE_KEYS = {
     "path",
     "fixture_path",
@@ -72,9 +73,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_EVIDENCE_ROOT)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--policy-tier",
+        choices=POLICY_TIERS,
+        default="dev",
+        help="Read-only evidence retention policy tier to evaluate: dev, ci, or release.",
+    )
     args = parser.parse_args(argv)
 
-    report = build_report(args.repo_root, evidence_root=args.evidence_root)
+    report = build_report(args.repo_root, evidence_root=args.evidence_root, policy_tier=args.policy_tier)
     text = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
         output = args.output if args.output.is_absolute() else args.repo_root / args.output
@@ -84,7 +91,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if report["status"] == "passed" else 1
 
 
-def build_report(repo_root: Path, *, evidence_root: Path = DEFAULT_EVIDENCE_ROOT) -> dict[str, Any]:
+def build_report(
+    repo_root: Path,
+    *,
+    evidence_root: Path = DEFAULT_EVIDENCE_ROOT,
+    policy_tier: str = "dev",
+) -> dict[str, Any]:
+    if policy_tier not in POLICY_TIERS:
+        raise ValueError(f"policy_tier must be one of {', '.join(POLICY_TIERS)}")
     repo_root = repo_root.resolve()
     evidence_dir = evidence_root if evidence_root.is_absolute() else repo_root / evidence_root
     inventory = build_inventory(repo_root, evidence_dir)
@@ -92,13 +106,76 @@ def build_report(repo_root: Path, *, evidence_root: Path = DEFAULT_EVIDENCE_ROOT
     failed_gates = []
     if portability["claim_anchor_issue_count"] or portability["profile_hash_issue_count"]:
         failed_gates.append("evidence_portability")
+    policy_compliance = build_policy_compliance(policy_tier, portability=portability, inventory=inventory)
+    if policy_compliance["status"] != "passed":
+        failed_gates.append("evidence_policy_compliance")
     return {
         "schema_version": 1,
         "status": "passed" if not failed_gates else "failed",
         "evidence_root": rel_or_posix(repo_root, evidence_dir),
         "failed_gates": failed_gates,
+        "policy_compliance": policy_compliance,
         "portability": portability,
         "inventory": inventory,
+    }
+
+
+def build_policy_compliance(
+    policy_tier: str,
+    *,
+    portability: dict[str, Any],
+    inventory: dict[str, Any],
+) -> dict[str, Any]:
+    gates: list[dict[str, Any]] = []
+
+    def add_gate(name: str, passed: bool, **details: Any) -> None:
+        gates.append(
+            {
+                "name": name,
+                "status": "passed" if passed else "failed",
+                **details,
+            }
+        )
+
+    add_gate(
+        "portability",
+        portability.get("status") == "passed",
+        claim_anchor_issue_count=int(portability.get("claim_anchor_issue_count", 0)),
+        profile_hash_issue_count=int(portability.get("profile_hash_issue_count", 0)),
+    )
+
+    if policy_tier in {"ci", "release"}:
+        pipelines = inventory.get("pipelines") if isinstance(inventory.get("pipelines"), list) else []
+        retention_policy = inventory.get("retention_policy") if isinstance(inventory.get("retention_policy"), dict) else {}
+        missing_metadata = [
+            str(pipeline.get("pipeline_id", "<unknown>"))
+            for pipeline in pipelines
+            if not pipeline.get("retention_class")
+            or not pipeline.get("compression_policy")
+            or not pipeline.get("prune_policy")
+        ]
+        add_gate(
+            "retention_metadata",
+            bool(retention_policy) and not missing_metadata,
+            pipeline_count=len(pipelines),
+            missing_pipeline_count=len(missing_metadata),
+            missing_pipelines=missing_metadata[:10],
+        )
+
+    if policy_tier == "release":
+        diagnostic_count = int(portability.get("diagnostic_host_metadata_count", 0))
+        add_gate(
+            "diagnostic_host_metadata",
+            diagnostic_count == 0,
+            diagnostic_host_metadata_count=diagnostic_count,
+        )
+
+    failed_gate_names = [gate["name"] for gate in gates if gate["status"] != "passed"]
+    return {
+        "policy_tier": policy_tier,
+        "status": "passed" if not failed_gate_names else "failed",
+        "failed_gates": failed_gate_names,
+        "gates": gates,
     }
 
 

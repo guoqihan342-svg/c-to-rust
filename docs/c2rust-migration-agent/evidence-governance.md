@@ -16,19 +16,25 @@
 ## 命令
 
 ```bash
-python validation/tools/evidence_governance.py
+python3 -B validation/tools/evidence_governance.py
 ```
 
 可指定输出文件：
 
 ```bash
-python validation/tools/evidence_governance.py --output validation/evidence-governance-report.json
+python3 -B validation/tools/evidence_governance.py --output validation/evidence-governance-report.json
+```
+
+可选择只读保留策略档位：
+
+```bash
+python3 -B validation/tools/evidence_governance.py --policy-tier ci --output target/competition-smoke/reports/evidence-governance.json
 ```
 
 单元测试：
 
 ```bash
-python -B -m unittest validation.tools.test_evidence_governance
+python3 -B -m unittest validation.tools.test_evidence_governance
 ```
 
 ## Portability 规则
@@ -60,6 +66,16 @@ python -B -m unittest validation.tools.test_evidence_governance
 
 `target/full-regression/<run-id>` 属于 `ci_smoke`，不是 committed release evidence。该目录下的 `summary.json`、`events.jsonl` 和日志只作为可重跑的开发/CI smoke 记录；其中的 `evidence_root`、`working_directory`、`log` 等本机绝对路径按 diagnostic metadata 处理，不作为 claim anchor。每条 pipeline 报告会列出 `artifact_count`、`total_bytes`、`runtime_ms`、`retention_class`、压缩/清理策略和 `report_artifacts`。
 
+## Policy Tier
+
+`--policy-tier` 是只读合规层，不删除或改写 evidence：
+
+- `dev`：默认档，暴露 portability 与 inventory，不额外阻断诊断元数据。
+- `ci`：要求 portability 通过，并要求每条 pipeline 有 retention class、compression policy 和 prune policy；competition smoke 使用该档。
+- `release`：在 `ci` 要求外，还会把 diagnostic host metadata 视为发布阻断。
+
+报告中的 `policy_compliance` 会记录 `policy_tier`、`status`、`failed_gates` 和逐 gate 结果。`judge-milestone-bundle.json` 会汇总该字段；如果绑定的 evidence governance report 出现 policy failure，milestone bundle 会产生 blocker。
+
 ## 当前边界
 
-当前工具是 report/validator 基础层，不是清理器。它会把历史 absolute path 暴露出来，但不会强制全仓库立即通过 portability gate。要把它提升为 release gate，必须先完成历史 evidence 分类、保留策略确认和 milestone evidence 刷新。
+当前工具是 report/validator 基础层，不是清理器。它会把历史 absolute path 暴露出来，但不会强制全仓库立即通过 release 档策略。真正的 release gate 仍需要历史 evidence 分类、保留策略确认、public packet/release notes 摘要和 milestone evidence 刷新。

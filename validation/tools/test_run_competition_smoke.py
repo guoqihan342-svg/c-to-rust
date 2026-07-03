@@ -100,6 +100,7 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertTrue(any("validate_auto_translation_evidence.py" in text for text in command_texts))
             self.assertTrue(any("verify_vendored_clang.py" in text for text in command_texts))
             self.assertTrue(any("evidence_governance.py" in text for text in command_texts))
+            self.assertTrue(any("evidence_governance.py" in text and "--policy-tier ci" in text for text in command_texts))
             self.assertTrue(any("translator_coverage_matrix.py" in text for text in command_texts))
             self.assertTrue(any("milestone_release_report.py" in text for text in command_texts))
             self.assertTrue(any("-m unittest" in text for text in command_texts))

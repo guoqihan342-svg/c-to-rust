@@ -412,6 +412,13 @@ def milestone_blockers(
     )
     if int_or_zero(evidence_rollup.get("source_count")) > 0 and not evidence_rollup.get("all_sources_passed"):
         blockers.append("evidence_cost_retention_sources_must_pass")
+    policy_rollup = (
+        evidence_rollup.get("policy_compliance", {})
+        if isinstance(evidence_rollup.get("policy_compliance"), dict)
+        else {}
+    )
+    if int_or_zero(evidence_rollup.get("source_count")) > 0 and not policy_rollup.get("all_sources_policy_passed"):
+        blockers.append("evidence_policy_compliance_must_pass")
     return blockers
 
 
@@ -1798,6 +1805,9 @@ def evidence_cost_retention_source_from_artifact(
         return None
     inventory = payload.get("inventory", {}) if isinstance(payload.get("inventory"), dict) else {}
     portability = payload.get("portability", {}) if isinstance(payload.get("portability"), dict) else {}
+    policy_compliance = (
+        payload.get("policy_compliance") if isinstance(payload.get("policy_compliance"), dict) else {}
+    )
     runtime = inventory.get("runtime", {}) if isinstance(inventory.get("runtime"), dict) else {}
     retention_classes = inventory.get("retention_classes", {})
     if not isinstance(retention_classes, dict):
@@ -1814,6 +1824,13 @@ def evidence_cost_retention_source_from_artifact(
         "status": payload.get("status", "unknown"),
         "evidence_root": payload.get("evidence_root") if isinstance(payload.get("evidence_root"), str) else None,
         "failed_gates": payload.get("failed_gates") if isinstance(payload.get("failed_gates"), list) else [],
+        "policy_compliance": {
+            "policy_tier": policy_compliance.get("policy_tier", "unknown"),
+            "status": policy_compliance.get("status", "unknown"),
+            "failed_gates": policy_compliance.get("failed_gates")
+            if isinstance(policy_compliance.get("failed_gates"), list)
+            else [],
+        },
         "artifact_count": int_or_zero(inventory.get("file_count")),
         "total_bytes": int_or_zero(inventory.get("total_bytes")),
         "retention_classes": normalize_retention_classes(retention_classes),
@@ -3122,6 +3139,16 @@ def build_evidence_cost_retention_rollup(sources: list[dict[str, Any]]) -> dict[
             target = retention_classes.setdefault(str(class_name), {"file_count": 0, "total_bytes": 0})
             target["file_count"] += int_or_zero(counts.get("file_count"))
             target["total_bytes"] += int_or_zero(counts.get("total_bytes"))
+    policy_tier_counts: dict[str, int] = {}
+    policy_failed_gate_counts: dict[str, int] = {}
+    for source in sources:
+        policy = source.get("policy_compliance") if isinstance(source.get("policy_compliance"), dict) else {}
+        tier = str(policy.get("policy_tier", "unknown"))
+        policy_tier_counts[tier] = policy_tier_counts.get(tier, 0) + 1
+        failed_gates = policy.get("failed_gates") if isinstance(policy.get("failed_gates"), list) else []
+        for gate in failed_gates:
+            gate_name = str(gate)
+            policy_failed_gate_counts[gate_name] = policy_failed_gate_counts.get(gate_name, 0) + 1
     return {
         "report_kind": "evidence-cost-retention-rollup",
         "sources": sources,
@@ -3142,6 +3169,19 @@ def build_evidence_cost_retention_rollup(sources: list[dict[str, Any]]) -> dict[
             },
             "retention_classes": retention_classes,
             "all_sources_passed": all(source.get("status") == "passed" for source in sources) if sources else True,
+            "policy_compliance": {
+                "all_sources_policy_passed": all(
+                    isinstance(source.get("policy_compliance"), dict)
+                    and source["policy_compliance"].get("status") == "passed"
+                    for source in sources
+                )
+                if sources
+                else True,
+                "tier_counts": {key: policy_tier_counts[key] for key in sorted(policy_tier_counts)},
+                "failed_gate_counts": {
+                    key: policy_failed_gate_counts[key] for key in sorted(policy_failed_gate_counts)
+                },
+            },
             "portability_issue_count": sum(
                 int_or_zero(source.get("claim_anchor_issue_count"))
                 + int_or_zero(source.get("profile_hash_issue_count"))

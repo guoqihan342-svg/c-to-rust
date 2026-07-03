@@ -501,6 +501,7 @@
             "runtime_ms",
             "retention_classes",
             "all_sources_passed",
+            "policy_compliance",
             "portability_issue_count"
           ],
           "properties": {
@@ -531,6 +532,22 @@
               }
             },
             "all_sources_passed": {"type": "boolean"},
+            "policy_compliance": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["all_sources_policy_passed", "tier_counts", "failed_gate_counts"],
+              "properties": {
+                "all_sources_policy_passed": {"type": "boolean"},
+                "tier_counts": {
+                  "type": "object",
+                  "additionalProperties": {"type": "integer", "minimum": 0}
+                },
+                "failed_gate_counts": {
+                  "type": "object",
+                  "additionalProperties": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
             "portability_issue_count": {"type": "integer", "minimum": 0},
             "diagnostic_host_metadata_count": {"type": "integer", "minimum": 0}
           }

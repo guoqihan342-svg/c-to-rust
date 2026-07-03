@@ -14,19 +14,25 @@ The report surfaces problems, but it does not delete, compress, or rewrite histo
 ## Commands
 
 ```bash
-python validation/tools/evidence_governance.py
+python3 -B validation/tools/evidence_governance.py
 ```
 
 Write the report to a file:
 
 ```bash
-python validation/tools/evidence_governance.py --output validation/evidence-governance-report.json
+python3 -B validation/tools/evidence_governance.py --output validation/evidence-governance-report.json
+```
+
+Select a read-only retention policy tier:
+
+```bash
+python3 -B validation/tools/evidence_governance.py --policy-tier ci --output target/competition-smoke/reports/evidence-governance.json
 ```
 
 Unit tests:
 
 ```bash
-python -B -m unittest validation.tools.test_evidence_governance
+python3 -B -m unittest validation.tools.test_evidence_governance
 ```
 
 ## Portability Rules
@@ -58,6 +64,16 @@ These fields may record host facts, but they must not become reproducible entryp
 
 `target/full-regression/<run-id>` is `ci_smoke`, not committed release evidence. Its `summary.json`, `events.jsonl`, and logs are reusable developer/CI smoke records; local absolute `evidence_root`, `working_directory`, and `log` fields are treated as diagnostic metadata rather than claim anchors. Each pipeline report lists `artifact_count`, `total_bytes`, `runtime_ms`, `retention_class`, compression/prune policy, and `report_artifacts`.
 
+## Policy Tier
+
+`--policy-tier` is a read-only compliance layer. It does not delete or rewrite evidence:
+
+- `dev`: default tier; reports portability and inventory without additional diagnostic-metadata blockers.
+- `ci`: requires portability to pass and every pipeline to carry retention class, compression policy, and prune policy. Competition smoke uses this tier.
+- `release`: includes the `ci` requirements and also treats diagnostic host metadata as a publication blocker.
+
+The report's `policy_compliance` records `policy_tier`, `status`, `failed_gates`, and per-gate results. `judge-milestone-bundle.json` rolls up this field; a bound evidence governance policy failure becomes a milestone bundle blocker.
+
 ## Current Boundary
 
-The tool is the report/validator foundation, not a cleanup tool. It exposes historical absolute paths but does not require the whole repository to pass a portability gate immediately. Promoting it to a release gate requires historical evidence classification, retention-policy confirmation, and refreshed milestone evidence first.
+The tool is the report/validator foundation, not a cleanup tool. It exposes historical absolute paths but does not require the whole repository to pass the release-tier policy immediately. A real release gate still requires historical evidence classification, retention-policy confirmation, public packet/release-notes summaries, and refreshed milestone evidence.
