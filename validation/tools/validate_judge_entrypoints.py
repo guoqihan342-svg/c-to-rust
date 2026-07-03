@@ -3052,6 +3052,11 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
         worker_workflow_metrics,
         "opencode_safety_transform_attempt.workflow_metrics must match worker summary workflow_metrics",
     )
+    workflow_metrics_payload = require_object(
+        load_json(repo_path(workflow_metrics["path"], repo_root=repo_root)),
+        "opencode_safety_transform_attempt.workflow_metrics file",
+    )
+    workflow_metric_units = opencode_workflow_metric_units_by_id(workflow_metrics_payload)
 
     contract = require_object(payload.get("attempt_contract"), "opencode_safety_transform_attempt.attempt_contract")
     if contract.get("single_patch_per_round") is not True:
@@ -3091,6 +3096,12 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
                 index=index,
                 repo_root=repo_root,
             )
+        validate_opencode_safety_transform_unit_matches_workflow_metrics(
+            unit,
+            workflow_metric_units,
+            index=index,
+            repo_root=repo_root,
+        )
 
     result: dict[str, Any] = {
         "status": "passed",
@@ -3105,6 +3116,114 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
     }
     result["workflow_metrics"] = workflow_metrics
     return result
+
+
+def opencode_workflow_metric_units_by_id(workflow_metrics_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    units = workflow_metrics_payload.get("per_unit_statuses")
+    if not isinstance(units, list):
+        raise ValueError("opencode_safety_transform_attempt.workflow_metrics.per_unit_statuses must be a list")
+    result: dict[str, dict[str, Any]] = {}
+    for index, unit_value in enumerate(units):
+        if not isinstance(unit_value, dict):
+            continue
+        unit_id = unit_value.get("unit_id")
+        if not isinstance(unit_id, str) or not unit_id:
+            continue
+        if unit_id in result:
+            raise ValueError("opencode_safety_transform_attempt.workflow_metrics.per_unit_statuses unit_id values must be unique")
+        result[unit_id] = unit_value
+    return result
+
+
+def validate_opencode_safety_transform_unit_matches_workflow_metrics(
+    unit: dict[str, Any],
+    workflow_metric_units: dict[str, dict[str, Any]],
+    *,
+    index: int,
+    repo_root: Path,
+) -> None:
+    prefix = f"opencode_safety_transform_attempt.safety_transform_units[{index}]"
+    unit_id = require_string(unit.get("unit_id"), f"{prefix}.unit_id")
+    workflow_unit = workflow_metric_units.get(unit_id)
+    if workflow_unit is None:
+        raise ValueError(f"{prefix}.unit_id must match workflow_metrics.per_unit_statuses")
+    if workflow_unit.get("status") != unit.get("status"):
+        raise ValueError(f"{prefix}.status must match workflow_metrics.per_unit_statuses")
+
+    workflow_evidence = require_object(
+        workflow_unit.get("translation_before_after"),
+        f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after",
+    )
+    patch_evidence = require_object(unit.get("patch_evidence"), f"{prefix}.patch_evidence")
+    for field in ("baseline", "final", "accepted_patch", "patch_log"):
+        compare_artifact_binding(
+            validate_artifact_binding_shape(
+                patch_evidence.get(field),
+                f"{prefix}.patch_evidence.{field}",
+                repo_root=repo_root,
+            ),
+            validate_artifact_binding_shape(
+                workflow_evidence.get(field),
+                f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after.{field}",
+                repo_root=repo_root,
+            ),
+            f"{prefix}.patch_evidence.{field} must match workflow_metrics.per_unit_statuses",
+        )
+
+    delta = require_object(unit.get("verification_delta"), f"{prefix}.verification_delta")
+    for unit_field, workflow_field in (
+        ("oracle_evidence", "oracle_evidence"),
+        ("unsafe_scan_evidence", "unsafe_scan_evidence"),
+    ):
+        compare_artifact_binding(
+            validate_artifact_binding_shape(
+                delta.get(unit_field),
+                f"{prefix}.verification_delta.{unit_field}",
+                repo_root=repo_root,
+            ),
+            validate_artifact_binding_shape(
+                workflow_evidence.get(workflow_field),
+                f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after.{workflow_field}",
+                repo_root=repo_root,
+            ),
+            f"{prefix}.verification_delta.{unit_field} must match workflow_metrics.per_unit_statuses",
+        )
+    semantic_evidence = require_object(delta.get("semantic_evidence"), f"{prefix}.verification_delta.semantic_evidence")
+    workflow_semantic = require_object(
+        workflow_evidence.get("semantic_evidence"),
+        f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after.semantic_evidence",
+    )
+    compare_artifact_binding(
+        validate_artifact_binding_shape(
+            semantic_evidence.get("schema_diff"),
+            f"{prefix}.verification_delta.semantic_evidence.schema_diff",
+            repo_root=repo_root,
+        ),
+        validate_artifact_binding_shape(
+            workflow_semantic.get("schema_diff"),
+            f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after.semantic_evidence.schema_diff",
+            repo_root=repo_root,
+        ),
+        f"{prefix}.verification_delta.semantic_evidence.schema_diff must match workflow_metrics.per_unit_statuses",
+    )
+    compare_opencode_measured_unsafe_delta(
+        require_object(delta.get("unsafe_reduction"), f"{prefix}.verification_delta.unsafe_reduction"),
+        require_object(
+            workflow_evidence.get("unsafe_reduction"),
+            f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after.unsafe_reduction",
+        ),
+        f"{prefix}.verification_delta.unsafe_reduction",
+    )
+
+    repair_history = unit.get("repair_history")
+    workflow_repair_history = workflow_unit.get("repair_history")
+    if repair_history is None and workflow_repair_history is None:
+        return
+    if not isinstance(repair_history, dict) or not isinstance(workflow_repair_history, dict):
+        raise ValueError(f"{prefix}.repair_history must match workflow_metrics.per_unit_statuses")
+    for field in ("patch_events_path", "patch_events_sha256", "statuses", "verified", "rollback_ids"):
+        if repair_history.get(field) != workflow_repair_history.get(field):
+            raise ValueError(f"{prefix}.repair_history.{field} must match workflow_metrics.per_unit_statuses")
 
 
 def validate_opencode_safety_transform_unit_contract(

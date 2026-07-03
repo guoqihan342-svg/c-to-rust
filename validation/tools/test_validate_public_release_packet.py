@@ -359,6 +359,46 @@ def write_opencode_safety_transform_attempt_fixture(
         "schema_diff": write_text_artifact(evidence_root / "schema-diff.json", '{"status":"passed"}\n'),
         "unsafe_scan": write_text_artifact(evidence_root / "unsafe-scan.json", '{"status":"passed"}\n'),
     }
+    workflow_metrics_path = REPO_ROOT / refs["workflow_metrics"]["path"]
+    workflow_metrics = json.loads(workflow_metrics_path.read_text(encoding="utf-8"))
+    workflow_metrics["unsafe_reduction"] = {
+        "status": "measured",
+        "baseline_total_unsafe": 2,
+        "current_total_unsafe": 0,
+        "reduced_by": 2,
+        "ratio": 0.0,
+    }
+    workflow_metrics["translation_before_after"] = {
+        "status": "bound",
+        "unit_count": 1,
+        "measured_unsafe_unit_count": 1,
+        "accepted_patch_unit_count": 1,
+        "units": [{"unit_id": "flashdb/real-fdb-calc-crc32", "status": "bound"}],
+    }
+    workflow_metrics["per_unit_statuses"][0]["translation_before_after"] = {
+        "status": "bound",
+        "baseline": refs["baseline"],
+        "final": refs["final"],
+        "accepted_patch": refs["accepted_patch"],
+        "patch_log": refs["patch_log"],
+        "oracle_evidence": refs["oracle"],
+        "semantic_evidence": {"schema_diff": refs["schema_diff"]},
+        "unsafe_scan_evidence": refs["unsafe_scan"],
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": 2,
+            "current_total_unsafe": 0,
+            "reduced_by": 2,
+            "ratio": 0.0,
+        },
+    }
+    write_json(workflow_metrics_path, workflow_metrics)
+    summary_path = REPO_ROOT / refs["summary"]["path"]
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary_payload["workflow_metrics"]["sha256"] = judge_validator.sha256_file(workflow_metrics_path)
+    write_json(summary_path, summary_payload)
+    refs["workflow_metrics"]["sha256"] = judge_validator.sha256_file(workflow_metrics_path)
+    refs["summary"]["sha256"] = judge_validator.sha256_file(summary_path)
     payload = {
         "schema_version": 1,
         "report_kind": "opencode-safety-transform-attempt",

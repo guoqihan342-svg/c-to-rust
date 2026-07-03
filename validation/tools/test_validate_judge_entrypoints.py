@@ -410,6 +410,58 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
         "evidence_boundary": "OpenCode chat/session output is audit provenance only.",
     }
     write_json(path, payload)
+    workflow_metrics_path = REPO_ROOT / refs["workflow-metrics"]["path"]
+    workflow_metrics = json.loads(workflow_metrics_path.read_text(encoding="utf-8"))
+    workflow_metrics["unsafe_reduction"] = {
+        "status": "measured",
+        "baseline_total_unsafe": 3,
+        "current_total_unsafe": 1,
+        "reduced_by": 2,
+        "ratio": 1 / 3,
+    }
+    workflow_metrics["translation_before_after"] = {
+        "status": "bound",
+        "unit_count": 1,
+        "measured_unsafe_unit_count": 1,
+        "accepted_patch_unit_count": 1,
+        "units": [{"unit_id": "demo/store-add-one", "status": "bound"}],
+    }
+    workflow_metrics["per_unit_statuses"] = [
+        {
+            "unit_id": "demo/store-add-one",
+            "source": "slice-spec",
+            "status": "converged",
+            "compiled": True,
+            "semantic_pass": True,
+            "refused": False,
+            "blocked": False,
+            "failed": False,
+            "translation_before_after": {
+                "status": "bound",
+                "baseline": refs["baseline-unsafe.rs"],
+                "final": refs["final-safe.rs"],
+                "accepted_patch": refs["accepted.patch"],
+                "patch_log": refs["patch-log.jsonl"],
+                "oracle_evidence": refs["oracle.json"],
+                "semantic_evidence": {"schema_diff": refs["schema-diff.json"]},
+                "unsafe_scan_evidence": refs["unsafe-scan.json"],
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 3,
+                    "current_total_unsafe": 1,
+                    "reduced_by": 2,
+                    "ratio": 1 / 3,
+                },
+            },
+        }
+    ]
+    write_json(workflow_metrics_path, workflow_metrics)
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary_payload["workflow_metrics"]["sha256"] = validator.sha256_file(workflow_metrics_path)
+    write_json(summary_path, summary_payload)
+    payload["summary"]["sha256"] = validator.sha256_file(summary_path)
+    payload["workflow_metrics"]["sha256"] = validator.sha256_file(workflow_metrics_path)
+    write_json(path, payload)
     return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
 
 
@@ -4437,6 +4489,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         attempt_ref["sha256"] = validator.sha256_file(attempt_path)
 
         with self.assertRaisesRegex(ValueError, r"repair_history\.patch_events_sha256 does not match artifact"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_unit_workflow_metrics_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        replacement_patch = temp_dir / "attempt-evidence" / "other-accepted.patch"
+        replacement_patch.write_text("other patch\n", encoding="utf-8")
+        replacement_ref = {
+            "path": repo_relative(replacement_patch),
+            "sha256": validator.sha256_file(replacement_patch),
+        }
+        unit = payload["safety_transform_units"][0]
+        unit["patch_evidence"]["accepted_patch"] = replacement_ref
+        unit["rounds"][-1]["patch"] = replacement_ref
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"must match workflow_metrics\.per_unit_statuses"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
     def test_harness_artifact_contracts_deep_validates_opencode_safety_transform_attempt(self) -> None:
