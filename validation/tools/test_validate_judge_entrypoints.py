@@ -1743,6 +1743,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_test_contract_required_harness_features_must_match_canonical_set(self) -> None:
+        config = load_default_config()
+        config["test_contract"]["required_harness_features"] = [
+            feature
+            for feature in config["test_contract"]["required_harness_features"]
+            if feature != "h6_judge_reports"
+        ]
+        temp_config = write_temp_config(config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "test_contract.required_harness_features must be "
+                "['h1_evaluate_one_click', 'h2_multi_worker_fanout', "
+                "'h3_precise_repair_self_heal', 'h4_before_after_exhibit', "
+                "'h5_context_management', 'h6_judge_reports']"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_opencode_profile_requires_explicit_launch_policy_fields(self) -> None:
         config = load_default_config()
         entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")

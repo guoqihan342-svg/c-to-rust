@@ -1745,6 +1745,8 @@ def validate_test_contract(
     required_features = contract.get("required_harness_features", list(REQUIRED_HARNESS_FEATURES))
     if not isinstance(required_features, list) or not required_features:
         raise ValueError("test_contract.required_harness_features must be a non-empty list")
+    if list(required_features) != list(REQUIRED_HARNESS_FEATURES):
+        raise ValueError(f"test_contract.required_harness_features must be {list(REQUIRED_HARNESS_FEATURES)}")
     missing_features = [feature for feature in required_features if features.get(feature) is not True]
     if missing_features:
         raise ValueError(f"harness_features_demonstrated missing true features: {missing_features}")
