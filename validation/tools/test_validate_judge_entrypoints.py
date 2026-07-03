@@ -1621,6 +1621,31 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_competition_env_bundle_rejects_unexpected_external_ref(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        unexpected_ref = "docs/c2rust-migration-agent/future-vision-and-mvp.en.md"
+        manifest["external_refs"].append(
+            {
+                "path": unexpected_ref,
+                "role": "unexpected-review-input",
+                "sha256": validator.sha256_file(REPO_ROOT / unexpected_ref),
+            }
+        )
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition env bundle unexpected external_ref: docs/c2rust-migration-agent/future-vision-and-mvp.en.md",
+        ):
+            validator.validate_competition_env_bundle_contract(
+                load_default_config(),
+                manifest_path=temp_manifest,
+                repo_root=REPO_ROOT,
+            )
+
     def test_competition_env_bundle_rejects_opencode_config_plugins(self) -> None:
         source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
         manifest = json.loads(source_manifest.read_text(encoding="utf-8"))

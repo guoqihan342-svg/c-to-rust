@@ -520,7 +520,9 @@ def validate_competition_env_bundle_contract(
         if path_text in result_external_refs:
             raise ValueError(f"competition env bundle duplicate external_ref: {path_text}")
         expected_role = COMPETITION_ENV_EXTERNAL_REF_ROLES.get(path_text)
-        if expected_role is not None and role != expected_role:
+        if expected_role is None:
+            raise ValueError(f"competition env bundle unexpected external_ref: {path_text}")
+        if role != expected_role:
             raise ValueError(f"competition env bundle external_ref role mismatch for {path_text}: {role} != {expected_role}")
         path = repo_path(path_text, repo_root=repo_root)
         if not path.is_file():
