@@ -6267,6 +6267,25 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     repo_root=REPO_ROOT,
                 )
 
+    def test_validate_opencode_preflight_report_rejects_marker_hash_drift(self) -> None:
+        with temp_repo_dir() as tmp:
+            preflight_report = write_passing_opencode_preflight_report(
+                Path(tmp) / "opencode-preflight" / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            marker_path = REPO_ROOT / payload["marker_path"]
+            marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker_payload["tampered_after_preflight_report"] = True
+            marker_path.write_text(json.dumps(marker_payload, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, r"opencode preflight marker.sha256 mismatch"):
+                harness.validate_opencode_preflight_report(
+                    preflight_report,
+                    expected_run_id="run-test",
+                    repo_root=REPO_ROOT,
+                )
+
     def test_validate_opencode_preflight_report_rejects_invalid_marker_payload(self) -> None:
         with temp_repo_dir() as tmp:
             preflight_report = write_passing_opencode_preflight_report(
@@ -6278,6 +6297,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
             marker_payload["report_kind"] = "not-opencode-preflight-marker"
             marker_path.write_text(json.dumps(marker_payload, sort_keys=True) + "\n", encoding="utf-8")
+            payload["marker"]["sha256"] = harness.sha256_file(marker_path)
+            preflight_report.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
             with self.assertRaisesRegex(SystemExit, "opencode preflight marker payload invalid"):
                 harness.validate_opencode_preflight_report(
@@ -7008,7 +7029,54 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 calls.append(argv)
                 return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
-            with self.assertRaisesRegex(SystemExit, "opencode preflight launch policy mismatch"):
+            with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    opencode_variant="lite",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_worker_opencode_rejects_self_consistent_non_max_variant_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+                opencode_variant="lite",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
                 harness.run_worker(
                     db_path=db_path,
                     run_id="run-test",
@@ -7098,7 +7166,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
 
             with patch.object(harness, "run_worker") as runner:
-                with self.assertRaisesRegex(SystemExit, "opencode preflight launch policy mismatch"):
+                with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
                     harness.run_plan(
                         db_path=db_path,
                         run_id="run-test",
@@ -8196,7 +8264,7 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "preflight-run") -> Path:
+def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "preflight-run", opencode_variant: str = "max") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     base_root = path.parent.parent if path.parent.name == "harness" else path.parent
     harness_dir = base_root / "harness"
@@ -8241,7 +8309,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         "opencode_command": "opencode",
         "opencode_model": "GLM-5.1",
         "opencode_agent": None,
-        "opencode_variant": "max",
+        "opencode_variant": opencode_variant,
         "opencode_skip_permissions": False,
     }
     preflight_argv = [
@@ -8252,7 +8320,7 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
         "--format",
         "json",
         "--variant",
-        "max",
+        opencode_variant,
         "--model",
         "GLM-5.1",
         "Execute test preflight marker.",
@@ -8309,6 +8377,10 @@ def write_passing_opencode_preflight_report(path: Path, *, run_id: str = "prefli
                 "opencode_run_launched": True,
                 "marker_path": repo_rel(marker_path),
                 "marker_exists": True,
+                "marker": {
+                    "path": repo_rel(marker_path),
+                    "sha256": harness.sha256_file(marker_path),
+                },
                 "handoff_contract": {
                     "path": repo_rel(contract_path),
                     "sha256": harness.sha256_file(contract_path),

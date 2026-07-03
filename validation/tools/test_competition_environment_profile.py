@@ -891,6 +891,10 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "opencode_run_launched": True,
                         "marker_path": "target/harness/opencode-preflight-marker.json",
                         "marker_exists": True,
+                        "marker": {
+                            "path": "target/harness/opencode-preflight-marker.json",
+                            "sha256": sha256_file(marker_path),
+                        },
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": launch_policy_sha,
                         "opencode_runtime_env": runtime_env,
@@ -1450,9 +1454,14 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("opencode-preflight", skill)
         self.assertIn("marker_exists=true", skill)
         self.assertIn("GLM-5.1", skill)
+        self.assertIn("--opencode-variant max", skill)
+        self.assertIn("opencode` + `GLM-5.1` + `max", skill)
         self.assertIn("opencode_model_availability", skill)
         self.assertIn("opencode_model_unavailable", skill)
         self.assertIn("local-simulation OpenCode pass does not close P0-H9", skill)
+        self.assertIn("summary/competition-config-archive/manifest.json", skill)
+        self.assertIn("materialized_manifest", skill)
+        self.assertIn("validate_public_release_packet", skill)
         self.assertIn("run-worker-report.json", skill)
         self.assertIn("worker_report", skill)
         self.assertIn("worker-execution-report", skill)
@@ -1483,6 +1492,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertIn("opencode_session_evidence", text)
                 self.assertIn("contract_verification", text)
                 self.assertIn("GLM-5.1", text)
+                self.assertIn("max", text)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())

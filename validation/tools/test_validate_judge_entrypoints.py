@@ -982,6 +982,10 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
         "argv": preflight_argv,
         "marker_exists": True,
         "marker_path": repo_relative(marker_path),
+        "marker": {
+            "path": repo_relative(marker_path),
+            "sha256": validator.sha256_file(marker_path),
+        },
         "opencode_run_launched": True,
         "run_id": run_id,
         "launch_policy": launch_policy,
@@ -3380,8 +3384,38 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
         marker_payload["run_id"] = "different-run"
         write_json(marker_path, marker_payload)
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_payload["marker"]["sha256"] = validator.sha256_file(marker_path)
+        write_json(preflight_path, preflight_payload)
+        refresh_all_opencode_preflight_ref_hashes(payload, preflight_path)
 
         with self.assertRaisesRegex(ValueError, "marker.run_id must match preflight run_id"):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_judge_evidence_index_rejects_preflight_marker_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-marker-hash-drift-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+            },
+        )
+        preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+        marker_path = preflight_marker_path(preflight_path)
+        marker_payload = json.loads(marker_path.read_text(encoding="utf-8"))
+        marker_payload["tampered_after_preflight_report"] = True
+        write_json(marker_path, marker_payload)
+
+        with self.assertRaisesRegex(ValueError, r"opencode_preflight_report.marker sha256 mismatch"):
             validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
@@ -5019,6 +5053,30 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         attempt_ref["sha256"] = validator.sha256_file(attempt_path)
 
         with self.assertRaisesRegex(ValueError, "opencode_model must be GLM-5.1"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_requires_max_handoff_variant(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["launch_policy"]["opencode_variant"] = "lite"
+        handoff_payload["launch_policy_sha256"] = opencode_launch_policy_sha256(handoff_payload["launch_policy"])
+        variant_index = handoff_payload["opencode_argv"].index("--variant") + 1
+        handoff_payload["opencode_argv"][variant_index] = "lite"
+        handoff_payload["opencode_command_line"] = shlex.join(handoff_payload["opencode_argv"])
+        write_json(handoff_path, handoff_payload)
+        payload["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_variant must be max"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
     def test_opencode_safety_transform_attempt_rejects_summary_final_gate_drift(self) -> None:

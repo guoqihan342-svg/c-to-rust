@@ -2892,6 +2892,13 @@ def validate_opencode_preflight_binding(
         marker_path = repo_path(marker_path_text, repo_root=repo_root)
         if not marker_path.is_file():
             raise ValueError(f"{label}.marker_path must exist")
+        marker_binding = validate_hash_bound_artifact_binding(
+            preflight_payload.get("marker"),
+            f"{label}.marker",
+            repo_root=repo_root,
+        )
+        if marker_binding["path"] != marker_path_text:
+            raise ValueError(f"{label}.marker.path must match marker_path")
         marker_payload = require_object(load_json(marker_path), f"{label}.marker file")
         if marker_payload.get("report_kind") != "opencode-preflight-marker":
             raise ValueError(f"{label}.marker.report_kind must be opencode-preflight-marker")

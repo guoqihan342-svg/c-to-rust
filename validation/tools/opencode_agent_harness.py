@@ -5895,6 +5895,10 @@ def run_opencode_preflight(
         run_id=run_id,
         repo_root=repo_root,
     ) if marker_exists else {"status": "missing", "reason": "marker file is absent"}
+    marker_binding = {
+        "path": repo_relative(marker_path, repo_root=repo_root),
+        "sha256": sha256_file(marker_path),
+    } if marker_exists else None
     preflight_passed = (
         int(completed.returncode) == 0
         and contract_verification.get("status") == "executed"
@@ -5925,6 +5929,7 @@ def run_opencode_preflight(
         "argv": report_argv,
         "marker_path": repo_relative(marker_path, repo_root=repo_root),
         "marker_exists": marker_exists,
+        "marker": marker_binding,
         "opencode_run_launched": True,
         "launch_policy": launch_policy,
         "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
@@ -6115,6 +6120,17 @@ def validate_opencode_preflight_session_contract(
     if not marker_path.is_file():
         raise SystemExit(
             "opencode preflight marker_path does not exist: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    marker_ref_path = validate_hash_bound_artifact_ref(
+        report.get("marker"),
+        label="opencode preflight marker",
+        report_path=report_path,
+        repo_root=repo_root,
+    )
+    if marker_ref_path.resolve() != marker_path.resolve():
+        raise SystemExit(
+            "opencode preflight marker.path must match marker_path: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
     marker_validation = validate_opencode_preflight_marker_payload(
@@ -7360,6 +7376,8 @@ def opencode_launch_policy(
         opencode_model = COMPETITION_OPENCODE_MODEL
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
+    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
+        raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
     return {
         "opencode_command": opencode_command,
         "opencode_model": opencode_model,

@@ -34,7 +34,7 @@
     {
       "path": ".codex/skills/c2rust-migration/SKILL.md",
       "role": "repo-owned-agent-skill",
-      "sha256": "2d39559430a1d68e15e0f7b94308a9d0a8be139e03f8747c9f6925002b5ef1f7"
+      "sha256": "34f0ab4c42397847420ea2df8ad0c9f02be6c1f54a8dc1a0ef90d0c00f1c3416"
     },
     {
       "path": ".opencode/agents/c2rust-migrator.md",
