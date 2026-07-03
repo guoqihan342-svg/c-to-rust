@@ -204,7 +204,12 @@ def run_competition_smoke(
         timed_out = bool(getattr(result, "timed_out", False))
         failure_class = getattr(result, "failure_class", None)
         if step == "opencode-glm-model-probe":
-            opencode_model_availability = opencode_model_availability_from_probe_result(result)
+            opencode_model_availability = opencode_model_availability_from_probe_result(
+                result,
+                logs_dir=logs_dir,
+                repo_root=repo_root,
+                out_root=out_root,
+            )
             if opencode_model_availability["status"] != "available":
                 failure_class = "opencode_model_unavailable"
                 setattr(result, "failure_class", failure_class)
@@ -541,7 +546,17 @@ def opencode_model_listed(models_output: str, required_model: str) -> bool:
     return False
 
 
-def opencode_model_availability_from_probe_result(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+def opencode_model_availability_from_probe_result(
+    result: subprocess.CompletedProcess[str],
+    *,
+    logs_dir: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Any]:
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    stdout_path.write_text(str(result.stdout or ""), encoding="utf-8", newline="\n")
+    stderr_path.write_text(str(result.stderr or ""), encoding="utf-8", newline="\n")
     model_listed = result.returncode == 0 and opencode_model_listed(str(result.stdout or ""), COMPETITION_OPENCODE_MODEL)
     if result.returncode != 0:
         status = "probe_failed"
@@ -556,6 +571,12 @@ def opencode_model_availability_from_probe_result(result: subprocess.CompletedPr
         "opencode_command": COMPETITION_OPENCODE_COMMAND,
         "argv": [COMPETITION_OPENCODE_COMMAND, "models"],
         "process_returncode": result.returncode,
+        "logs": {
+            "stdout": summary_path(stdout_path, repo_root=repo_root, out_root=out_root),
+            "stderr": summary_path(stderr_path, repo_root=repo_root, out_root=out_root),
+        },
+        "stdout_sha256": sha256(stdout_path),
+        "stderr_sha256": sha256(stderr_path),
     }
 
 

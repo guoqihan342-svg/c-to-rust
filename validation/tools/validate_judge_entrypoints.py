@@ -1044,7 +1044,7 @@ def validate_competition_smoke_summary_contract(
     if final_gate.get("status") != "passed":
         raise ValueError("competition_smoke_summary final_gate.status must be passed")
     validate_competition_smoke_proof_class_environment(payload)
-    validate_competition_exact_smoke_summary(payload)
+    validate_competition_exact_smoke_summary(payload, repo_root=repo_root)
     validate_competition_smoke_step_contract(payload)
     validate_competition_smoke_artifact_roots(payload)
 
@@ -1575,7 +1575,7 @@ def validate_competition_summary_entrypoint_contract(
     return result
 
 
-def validate_competition_exact_smoke_summary(payload: dict[str, Any]) -> None:
+def validate_competition_exact_smoke_summary(payload: dict[str, Any], *, repo_root: Path) -> None:
     if payload.get("proof_class") != "competition-exact":
         return
 
@@ -1642,6 +1642,10 @@ def validate_competition_exact_smoke_summary(payload: dict[str, Any]) -> None:
         expected_command=COMPETITION_OPENCODE_COMMAND,
     ):
         fail("opencode_model_availability.argv must be opencode models")
+    try:
+        validate_opencode_model_probe_log_hashes(availability, "competition_smoke_summary", repo_root=repo_root)
+    except ValueError as error:
+        fail(str(error))
     steps = payload.get("steps")
     if not isinstance(steps, list):
         raise ValueError("competition_smoke_summary steps must be a non-empty list")

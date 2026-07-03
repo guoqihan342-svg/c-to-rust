@@ -505,6 +505,9 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                 )
                 self.assertEqual(result.exit_code, 0)
                 summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+                availability = summary["opencode_model_availability"]
+                stdout_text = (out_root / availability["logs"]["stdout"]).read_text(encoding="utf-8")
+                stderr_text = (out_root / availability["logs"]["stderr"]).read_text(encoding="utf-8")
         finally:
             module.detect_execution_environment = original_detect
 
@@ -514,6 +517,17 @@ class RunCompetitionSmokeTests(unittest.TestCase):
         self.assertEqual(availability["required_model"], "GLM-5.1")
         self.assertTrue(availability["model_listed"])
         self.assertEqual(availability["argv"], ["opencode", "models"])
+        self.assertEqual(
+            availability["logs"],
+            {
+                "stdout": "logs/opencode-models.stdout.log",
+                "stderr": "logs/opencode-models.stderr.log",
+            },
+        )
+        self.assertEqual(stdout_text, "provider/GLM-5.1\n")
+        self.assertEqual(stderr_text, "")
+        self.assertEqual(availability["stdout_sha256"], hashlib.sha256(b"provider/GLM-5.1\n").hexdigest())
+        self.assertEqual(availability["stderr_sha256"], hashlib.sha256(b"").hexdigest())
 
     def test_competition_exact_requires_vendored_clang_verification(self) -> None:
         module = load_smoke_module()

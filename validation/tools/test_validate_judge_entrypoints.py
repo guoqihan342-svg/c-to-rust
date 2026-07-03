@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
+from typing import Any
 
 from validation.tools import validate_judge_entrypoints as validator
 
@@ -158,6 +159,28 @@ def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
         encoding="utf-8",
     )
     return validator.sha256_file(path)
+
+
+def write_opencode_model_probe_logs(
+    root: Path,
+    *,
+    stdout: str = "provider/GLM-5.1\n",
+    stderr: str = "",
+) -> dict[str, Any]:
+    logs_dir = root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    stdout_path.write_text(stdout, encoding="utf-8", newline="\n")
+    stderr_path.write_text(stderr, encoding="utf-8", newline="\n")
+    return {
+        "logs": {
+            "stdout": repo_relative(stdout_path),
+            "stderr": repo_relative(stderr_path),
+        },
+        "stdout_sha256": validator.sha256_file(stdout_path),
+        "stderr_sha256": validator.sha256_file(stderr_path),
+    }
 
 
 def valid_competition_smoke_step_command(step: str) -> list[str]:
@@ -767,6 +790,116 @@ def valid_vendored_clang_verification_payload() -> dict:
         "command_logs": [],
         "final_gate": {"status": "passed"},
     }
+
+
+def write_exact_competition_smoke_fixture(
+    root: Path,
+    *,
+    run_id: str,
+    availability_stdout: str = "provider/GLM-5.1\n",
+    command_log_stdout: str = "provider/GLM-5.1\n",
+) -> tuple[dict[str, str], dict[str, Any]]:
+    summary_path = root / "summary" / "competition-smoke-summary.json"
+    vendored_path = root / "summary" / "vendored-clang-verification.json"
+    evidence_governance = root / "reports" / "evidence-governance.json"
+    coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+    milestone = root / "reports" / "milestone-release-report.json"
+    command_log = root / "logs" / "commands.jsonl"
+    artifacts = {
+        "competition_smoke_summary": repo_relative(summary_path),
+        "vendored_clang_verification": repo_relative(vendored_path),
+        "evidence_governance_report": repo_relative(evidence_governance),
+        "translator_coverage_matrix": repo_relative(coverage_matrix),
+        "milestone_release_report": repo_relative(milestone),
+        "command_log": repo_relative(command_log),
+    }
+    payload = valid_competition_smoke_summary_payload()
+    payload["proof_class"] = "competition-exact"
+    payload["run_id"] = run_id
+    payload["execution_environment"].update(
+        {
+            "competition_exact_host_attested": True,
+            "detected_ci": False,
+            "detected_wsl": False,
+            "kind": "competition-host",
+            "system": "Linux",
+        }
+    )
+    payload["competition_profile_match"].update(
+        {
+            "cargo_mirror_config_present": True,
+            "clang_lane_verified": True,
+            "kernel_match": True,
+            "os_name_match": True,
+            "python_version_match": True,
+        }
+    )
+    payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+    payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+    payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+    payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+    payload["command_log"]["path"] = artifacts["command_log"]
+    for step in payload["steps"]:
+        step["status"] = "passed"
+        step["returncode"] = 0
+        step["log_path"] = artifacts["command_log"]
+        step.pop("proof_class_effect", None)
+    payload["steps"].append(
+        {
+            "step": "opencode-glm-model-probe",
+            "status": "passed",
+            "returncode": 0,
+            "log_path": artifacts["command_log"],
+        }
+    )
+    payload["opencode_model_availability"] = {
+        "status": "available",
+        "required_model": "GLM-5.1",
+        "model_listed": True,
+        "opencode_command": "opencode",
+        "argv": ["opencode", "models"],
+        "process_returncode": 0,
+        **write_opencode_model_probe_logs(root, stdout=availability_stdout),
+    }
+
+    write_json(summary_path, payload)
+    write_json(
+        vendored_path,
+        {
+            **valid_vendored_clang_verification_payload(),
+            "proof_class": "competition-exact",
+            "clang_required": True,
+        },
+    )
+    write_json(evidence_governance, {})
+    write_json(coverage_matrix, {})
+    write_json(milestone, {})
+    command_log.parent.mkdir(parents=True, exist_ok=True)
+    command_log.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "step": step["step"],
+                    "command": (
+                        ["opencode", "models"]
+                        if step["step"] == "opencode-glm-model-probe"
+                        else valid_competition_smoke_step_command(step["step"])
+                    ),
+                    "returncode": 0,
+                    "stdout": command_log_stdout if step["step"] == "opencode-glm-model-probe" else "",
+                    "stderr": "",
+                    "workdir": ".",
+                },
+                sort_keys=True,
+            )
+            + "\n"
+            for step in payload["steps"]
+        ),
+        encoding="utf-8",
+    )
+    payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+    write_json(summary_path, payload)
+    return artifacts, payload
 
 
 def valid_competition_run_summary_payload(
@@ -4817,6 +4950,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "opencode_command": "opencode",
                 "argv": ["opencode", "models"],
                 "process_returncode": 0,
+                **write_opencode_model_probe_logs(root),
             }
 
             write_json(summary_path, payload)
@@ -4873,6 +5007,184 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     smoke_contract={
                         "proof_class": "competition-exact",
                         "run_id": "smoke-exact-glm-command-log-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_exact_glm_probe_missing_hash_bound_logs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["proof_class"] = "competition-exact"
+            payload["run_id"] = "smoke-exact-glm-missing-hash-logs-test"
+            payload["execution_environment"].update(
+                {
+                    "competition_exact_host_attested": True,
+                    "detected_ci": False,
+                    "detected_wsl": False,
+                    "kind": "competition-host",
+                    "system": "Linux",
+                }
+            )
+            payload["competition_profile_match"].update(
+                {
+                    "cargo_mirror_config_present": True,
+                    "clang_lane_verified": True,
+                    "kernel_match": True,
+                    "os_name_match": True,
+                    "python_version_match": True,
+                }
+            )
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["status"] = "passed"
+                step["returncode"] = 0
+                step["log_path"] = artifacts["command_log"]
+                step.pop("proof_class_effect", None)
+            payload["steps"].append(
+                {
+                    "step": "opencode-glm-model-probe",
+                    "status": "passed",
+                    "returncode": 0,
+                    "log_path": artifacts["command_log"],
+                }
+            )
+            payload["opencode_model_availability"] = {
+                "status": "available",
+                "required_model": "GLM-5.1",
+                "model_listed": True,
+                "opencode_command": "opencode",
+                "argv": ["opencode", "models"],
+                "process_returncode": 0,
+            }
+
+            write_json(summary_path, payload)
+            write_json(
+                vendored_path,
+                {
+                    **valid_vendored_clang_verification_payload(),
+                    "proof_class": "competition-exact",
+                    "clang_required": True,
+                },
+            )
+            write_json(evidence_governance, {})
+            write_json(coverage_matrix, {})
+            write_json(milestone, {})
+            command_log.parent.mkdir(parents=True, exist_ok=True)
+            command_log.write_text(
+                "".join(
+                    json.dumps(
+                        {
+                            "step": step["step"],
+                            "command": (
+                                ["opencode", "models"]
+                                if step["step"] == "opencode-glm-model-probe"
+                                else valid_competition_smoke_step_command(step["step"])
+                            ),
+                            "returncode": 0,
+                            "stdout": "provider/GLM-5.1\n" if step["step"] == "opencode-glm-model-probe" else "",
+                            "stderr": "",
+                            "workdir": ".",
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                    for step in payload["steps"]
+                ),
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_summary.opencode_model_availability.logs",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-exact-glm-missing-hash-logs-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_exact_glm_probe_log_sha256_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            artifacts, payload = write_exact_competition_smoke_fixture(
+                root,
+                run_id="smoke-exact-glm-log-sha-drift-test",
+            )
+            stdout_path = REPO_ROOT / payload["opencode_model_availability"]["logs"]["stdout"]
+            stdout_path.write_text("provider/GLM-5.1\ntampered\n", encoding="utf-8", newline="\n")
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_summary.opencode_model_availability.logs.stdout sha256 mismatch",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-exact-glm-log-sha-drift-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_exact_glm_probe_hash_bound_stdout_without_required_model(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            artifacts, _payload = write_exact_competition_smoke_fixture(
+                root,
+                run_id="smoke-exact-glm-hash-bound-stdout-test",
+                availability_stdout="provider/GLM-5.10\nopencode/not-GLM-5.1\nglm-5.1\n",
+                command_log_stdout="provider/GLM-5.1\n",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_summary.opencode_model_availability.logs.stdout must list GLM-5.1",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-exact-glm-hash-bound-stdout-test",
                     },
                 )
 
