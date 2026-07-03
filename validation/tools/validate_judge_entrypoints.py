@@ -99,6 +99,17 @@ REQUIRED_COMPETITION_SMOKE_STEPS = (
 EXPECTED_ARTIFACT_REF_ALIASES = {
     "competition_summary": "competition_run_summary",
 }
+BASE_JUDGE_EVIDENCE_REF_KEYS = (
+    "agent_index",
+    "competition_run_summary",
+    "context_pack",
+    "opencode_preflight_report",
+    "profile",
+    "route_governance_metrics_report",
+    "verified_unsafe_baseline",
+    "worker_plan",
+    "workflow_metrics",
+)
 VERIFIED_UNSAFE_BASELINE_SAME_OUTPUT_GATES = (
     "c_oracle",
     "rust_replay",
@@ -3712,7 +3723,13 @@ def validate_judge_evidence_artifact_refs(
         name: validate_artifact_binding_shape(ref, f"judge_evidence_index.evidence_artifact_refs.{name}", repo_root=repo_root)
         for name, ref in sorted(refs_payload.items())
     }
+    allowed_ref_keys = set(BASE_JUDGE_EVIDENCE_REF_KEYS)
     if expected_artifacts is not None:
+        allowed_ref_keys.update(
+            artifact_ref_key_for_expected_artifact(artifact_name)
+            for artifact_name in expected_artifacts
+            if artifact_name != "judge_evidence_index"
+        )
         missing: list[str] = []
         for artifact_name in sorted(expected_artifacts):
             if artifact_name == "judge_evidence_index":
@@ -3730,6 +3747,9 @@ def validate_judge_evidence_artifact_refs(
                 raise ValueError(f"judge_evidence_index.evidence_artifact_refs.{ref_name}.path must match expected_artifacts.{artifact_name}")
         if missing:
             raise ValueError(f"judge_evidence_index.evidence_artifact_refs missing expected artifacts: {missing}")
+    unexpected_refs = sorted(set(validated_refs) - allowed_ref_keys)
+    if unexpected_refs:
+        raise ValueError(f"judge_evidence_index.evidence_artifact_refs unexpected refs: {unexpected_refs}")
     if opencode_runtime_result is not None:
         if "opencode_preflight_report" not in validated_refs:
             raise ValueError("judge_evidence_index.evidence_artifact_refs missing required OpenCode ref: opencode_preflight_report")

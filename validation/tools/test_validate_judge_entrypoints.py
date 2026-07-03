@@ -3040,6 +3040,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 expected_artifacts=expected_artifacts,
             )
 
+    def test_judge_evidence_index_rejects_unexpected_artifact_refs(self) -> None:
+        payload = valid_opencode_judge_index_payload()
+        payload["evidence_artifact_refs"]["demo_claim"] = artifact_ref(
+            "target/out/summary/demo-claim.json",
+            "8",
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "judge_evidence_index.evidence_artifact_refs unexpected refs: \\['demo_claim'\\]",
+        ):
+            validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text="target/out/harness/judge-evidence-index.json",
+            )
+
     def test_judge_evidence_index_requires_architecture_context_and_agent_refs_when_expected(self) -> None:
         payload = valid_deterministic_judge_index_payload()
         payload["evidence_artifact_refs"]["context_pack"] = artifact_ref("target/out/harness/context-pack.json", "6")
