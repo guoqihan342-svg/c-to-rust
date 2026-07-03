@@ -67,6 +67,10 @@ def build_release_notes(bundle: dict[str, Any]) -> str:
         "",
         *competition_config_archive_lines(object_or_empty(publication.get("competition_config_archive"))),
         "",
+        "## Publication Readiness Contract",
+        "",
+        *publishability_lines(object_or_empty(bundle.get("publishability"))),
+        "",
         "## Readiness Blockers",
         "",
         *blocker_lines(bundle.get("blockers")),
@@ -627,6 +631,26 @@ def competition_config_archive_lines(archive: dict[str, Any]) -> list[str]:
             f"{short_sha_or_boundary(ref)} | {text(ref.get('status'), 'unknown')} |"
         )
     return lines
+
+
+def publishability_lines(publishability: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(publishability.get('status'), 'unknown')} |",
+        f"| Scope | {text(publishability.get('scope'), 'unknown')} |",
+        f"| Required agent tool | {text(publishability.get('required_agent_tool'), 'unknown')} |",
+        f"| Required model | {text(publishability.get('required_model'), 'unknown')} |",
+        f"| OpenCode GLM preflight status | {text(publishability.get('opencode_glm51_preflight_status'), 'unknown')} |",
+        f"| OpenCode GLM publishable | {bool_text(publishability.get('opencode_glm51_publishable'))} |",
+        f"| All entrypoints run publishable | {bool_text(publishability.get('all_entrypoints_run_publishable'))} |",
+        f"| Competition-exact publishable | {bool_text(publishability.get('competition_exact_publishable'))} |",
+        f"| External milestone claim ready | {bool_text(publishability.get('external_milestone_claim_ready'))} |",
+        f"| External milestone | {bool_text(publishability.get('external_milestone'))} |",
+        f"| Target artifacts regenerable | {bool_text(publishability.get('target_artifacts_regenerable'))} |",
+        f"| Semantic gate | {bool_text(publishability.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(publishability.get('translation_coverage_numerator'))} |",
+    ]
 
 
 def blocker_lines(blockers: Any) -> list[str]:

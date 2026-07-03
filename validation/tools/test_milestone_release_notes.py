@@ -17,6 +17,16 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
         self.assertIn("Readiness: `internal_preview`", notes)
         self.assertIn("## Readiness Blockers", notes)
         self.assertIn("- none", notes)
+        self.assertIn("## Publication Readiness Contract", notes)
+        self.assertIn("| Status | internal_preview |", notes)
+        self.assertIn("| Required agent tool | opencode |", notes)
+        self.assertIn("| Required model | GLM-5.1 |", notes)
+        self.assertIn("| OpenCode GLM preflight status | passed |", notes)
+        self.assertIn("| OpenCode GLM publishable | true |", notes)
+        self.assertIn("| Competition-exact publishable | false |", notes)
+        self.assertIn("| External milestone claim ready | false |", notes)
+        self.assertIn("| Semantic gate | false |", notes)
+        self.assertIn("| Translation coverage numerator | 0 |", notes)
         self.assertIn("Repository commit: `1234567890abcdef1234567890abcdef12345678`", notes)
         self.assertIn("Proof class rollup: `local-simulation`", notes)
         self.assertIn("Translation coverage numerator: `0`", notes)
@@ -338,6 +348,9 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "external_milestone": False,
                 "blocker_count": 0,
                 "blockers": [],
+                "all_entrypoints_run_publishable": True,
+                "focused_run": False,
+                "competition_exact_publishable": False,
                 "required_agent_tool": "opencode",
                 "required_model": "GLM-5.1",
                 "opencode_glm51_required": True,
@@ -345,6 +358,7 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 "opencode_glm51_publishable": True,
                 "semantic_gate": False,
                 "translation_coverage_numerator": 0,
+                "target_artifacts_regenerable": True,
             },
             "core_translation_quality": {
                 "translation_coverage_numerator": 0,
