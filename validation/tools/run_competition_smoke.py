@@ -497,6 +497,7 @@ def run_logged_step(
         "stdout": output_text_for_log(result.stdout),
         "stderr": output_text_for_log(result.stderr),
         "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+        "workdir": summary_path(repo_root, repo_root=repo_root, out_root=out_root),
         **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
         **({"failure_class": failure_class} if failure_class else {}),
     }

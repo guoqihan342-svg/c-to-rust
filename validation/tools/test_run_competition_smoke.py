@@ -40,7 +40,7 @@ def assert_no_local_absolute_command_arguments(testcase: unittest.TestCase, comm
 
 def assert_no_local_absolute_command_log_text(testcase: unittest.TestCase, command_entries: list[dict]) -> None:
     for entry in command_entries:
-        for field in ("stdout", "stderr"):
+        for field in ("stdout", "stderr", "cwd", "workdir"):
             value = entry.get(field, "")
             if isinstance(value, str):
                 testcase.assertNotRegex(value, LOCAL_ABSOLUTE_PATH)
@@ -819,6 +819,28 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertIn("fdb.c", joined_output)
             self.assertNotIn("//wsl$", joined_output)
             self.assertIn("out.json", joined_output)
+
+    def test_command_log_records_repo_relative_workdir(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-workdir-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertTrue(command_entries)
+            self.assertTrue(all(entry.get("workdir") == "." for entry in command_entries))
+            assert_no_local_absolute_command_log_text(self, command_entries)
 
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
         module = load_smoke_module()
