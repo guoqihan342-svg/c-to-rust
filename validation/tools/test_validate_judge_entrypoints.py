@@ -5384,6 +5384,96 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["opencode_safety_transform_attempt"]["status"], "passed")
         self.assertEqual(result["opencode_safety_transform_attempt"]["round_count"], 1)
 
+    def test_opencode_hostless_rehearsal_contract_cannot_close_h9(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
+        rehearsal_path = temp_dir / "harness" / "opencode-hostless-rehearsal-report.json"
+        payload = {
+            "schema_version": 1,
+            "report_kind": "opencode-hostless-rehearsal-report",
+            "status": "completed",
+            "exit_code": 0,
+            "run_id": "hostless-rehearsal",
+            "profile_id": "demo-hostless",
+            "proof_class": "local-simulation",
+            "mode": "opencode",
+            "rehearsal_runner": "fake/fixture",
+            "closes_p0_h9": False,
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "h9_contract": {
+                "status": "blocked",
+                "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
+                "required_agent_tool": "opencode",
+                "required_model": "GLM-5.1",
+                "required_variant": "max",
+                "required_proof_class": "competition-exact",
+                "local_simulation_closes_p0_h9": False,
+            },
+            "opencode_runtime": {
+                "runtime": "opencode",
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+                "worker_count": 1,
+                "contract_status_counts": {"executed": 1},
+                "all_contracts_executed": True,
+                "failed_or_missing_contract_workers": [],
+                "workers": [
+                    {
+                        "worker_id": "worker-001",
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                        "opencode_contract_verification": {"status": "executed"},
+                    }
+                ],
+            },
+            "workers": [
+                {
+                    "worker_id": "worker-001",
+                    "summary_status": "passed",
+                    "exit_code": 0,
+                    "recorded": True,
+                    "semantic_gate": False,
+                    "opencode_contract_verification": {"status": "executed"},
+                    "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+                }
+            ],
+            "worker_count": 1,
+            "boundary": "hostless rehearsal only",
+        }
+        write_json(rehearsal_path, payload)
+
+        result = validator.validate_harness_artifact_contracts(
+            {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+            require_local_artifacts=True,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+        overclaim_cases = [
+            ("proof_class", lambda draft: draft.__setitem__("proof_class", "competition-exact")),
+            ("closes_p0_h9", lambda draft: draft.__setitem__("closes_p0_h9", True)),
+            ("semantic_gate", lambda draft: draft.__setitem__("semantic_gate", True)),
+            (
+                "h9_contract.local_simulation_closes_p0_h9",
+                lambda draft: draft["h9_contract"].__setitem__("local_simulation_closes_p0_h9", True),
+            ),
+        ]
+        for expected_error, mutate in overclaim_cases:
+            with self.subTest(expected_error=expected_error):
+                draft = json.loads(json.dumps(payload))
+                mutate(draft)
+                write_json(rehearsal_path, draft)
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_harness_artifact_contracts(
+                        {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                        require_local_artifacts=True,
+                        repo_root=REPO_ROOT,
+                    )
+
     def test_multi_worker_entrypoint_requires_multi_worker_judge_graph(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)

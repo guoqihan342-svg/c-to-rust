@@ -11,10 +11,12 @@ The competition evaluation model: OpenCode reads this repository and completes t
 Complete within one OpenCode session:
 
 ```
-Input: repository + CONTEXT.md
+Input: repository
   ↓ OpenCode single interaction
 Output: real C source function → Rust translation + L3 semantic-pass evidence
 ```
+
+CONTEXT.md is handoff-only and is not a judge input, release document, evidence source, or entrypoint.
 
 Output requirements:
 - At least one real C source function with a complete evidence chain: typed IR → Rust draft → C oracle → Rust replay → diff → negative diff → final verification
@@ -197,7 +199,7 @@ Run the environment check first, then process real C slices. Independent slices 
 
 9. For multi-agent parallelism, prefer recording reusable inputs under `config/competition-env/planned-batches/*.json`, then use `run-batch-profile` to create the ledger, generate ordered assignments, execute planned workers with `max_workers`, run bounded `auto_retry=true`, and run the final worker-summary aggregation in one audited command. For debugging, expand it into `init-run`, `plan-source-file`, and `run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`. When the profile sets `emit_route_governance_metrics_report=true`, the batch also writes and binds `summary/route-governance-metrics-report.json`. Manual `assign-slice` plus repeated `run-worker --mode deterministic` plus `write-merge-plan` remains the lower-level expanded form. Run `opencode-preflight` first with the same `run_id` to prove OpenCode follows the exact-command contract; use `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-variant max --opencode-preflight-report <report>` or `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-variant max --opencode-preflight-report <report>` only after preflight passes and only when OpenCode wraps assigned requests. Preflight reports from older runs cannot be reused. Worker summaries still converge through the final runner and common summary validator; missing planned worker summaries after up to 5 repair retries skip final merge fail-closed, while OpenCode startup database-lock retries are separately recorded as `opencode_process_retries`.
 
-If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. Before running, use the read tool to review CONTEXT.md for current state.
+If the evaluator sets a 600-minute cap, treat it as an external budget; if no cap exists, still do not loosen evidence gates. If CONTEXT.md is present, it may be read only as handoff-only current-state context.
 Only use the Bash/Shell tool to execute commands. Do not use Write/Edit tools to modify project source code.
 If a command fails outside the harness retry path, record the reason and do not enter a manual or unbounded repair loop.
 ```

@@ -1228,6 +1228,12 @@ def run_batch_profile(
     mode = profile_string(profile, "mode", default="deterministic")
     if mode not in {"deterministic", "opencode"}:
         raise SystemExit(f"unsupported mode in batch profile: {mode}")
+    hostless_rehearsal_enabled = profile_bool(profile, "opencode_hostless_rehearsal", default=False)
+    if hostless_rehearsal_enabled:
+        if mode != "opencode":
+            raise SystemExit("opencode_hostless_rehearsal requires mode=opencode")
+        if proof_class != "local-simulation":
+            raise SystemExit("opencode_hostless_rehearsal must use proof_class=local-simulation")
     opencode_preflight_report_text = profile_string(profile, "opencode_preflight_report")
     opencode_preflight_report = (
         Path(opencode_preflight_report_text) if opencode_preflight_report_text is not None else None
@@ -1412,6 +1418,20 @@ def run_batch_profile(
         before_after_exhibit_artifact=before_after_exhibit_artifact,
         repo_root=repo_root,
     )
+    hostless_rehearsal_artifact = None
+    if hostless_rehearsal_enabled:
+        hostless_rehearsal_artifact = write_opencode_hostless_rehearsal_report(
+            profile=profile,
+            run_id=run_id,
+            proof_class=proof_class,
+            mode=mode,
+            run_result=run_result,
+            context_refs=context_refs,
+            batch_profile_report_path=report_path,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
+        result["opencode_hostless_rehearsal_report"] = hostless_rehearsal_artifact["binding"]
     report_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(report_path, result)
     with closing(connect(db_path)) as connection:
@@ -1453,9 +1473,132 @@ def run_batch_profile(
                 payload=before_after_exhibit_artifact["payload"],
                 repo_root=repo_root,
             )
+        if hostless_rehearsal_artifact is not None:
+            binding = hostless_rehearsal_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="opencode-hostless-rehearsal-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="opencode-hostless-rehearsal",
+                payload=hostless_rehearsal_artifact["payload"],
+                repo_root=repo_root,
+            )
         record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
         connection.commit()
     return result
+
+
+def write_opencode_hostless_rehearsal_report(
+    *,
+    profile: dict[str, Any],
+    run_id: str,
+    proof_class: str,
+    mode: str,
+    run_result: dict[str, Any],
+    context_refs: dict[str, dict[str, str]],
+    batch_profile_report_path: Path,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if mode != "opencode":
+        raise SystemExit("hostless OpenCode rehearsal requires mode=opencode")
+    if proof_class != "local-simulation":
+        raise SystemExit("hostless OpenCode rehearsal cannot close P0-H9")
+    out_root = repo_path(out_root, repo_root=repo_root)
+    report_path = out_root / "harness" / "opencode-hostless-rehearsal-report.json"
+    rehearsal_runner = profile_string(profile, "opencode_hostless_rehearsal_runner", default="fake/fixture")
+    rehearsal_runner = rehearsal_runner or "fake/fixture"
+    preflight = artifact_binding_from_value(run_result.get("opencode_preflight_report"), repo_root=repo_root)
+    runtime = opencode_agent_runtime_evidence(run_result, repo_root=repo_root)
+    workers = []
+    for worker in run_result.get("workers") if isinstance(run_result.get("workers"), list) else []:
+        if not isinstance(worker, dict):
+            continue
+        entry: dict[str, Any] = {
+            "worker_id": str(worker.get("worker_id", "")),
+            "slice_id": worker.get("slice_id"),
+            "function": worker.get("function"),
+            "summary_status": worker.get("summary_status"),
+            "exit_code": int(worker.get("exit_code", 1)),
+            "recorded": bool(worker.get("recorded")),
+            "semantic_gate": False,
+        }
+        for field in ("summary_path", "report_path"):
+            binding = path_ref_from_text(worker.get(field), repo_root=repo_root)
+            if binding is not None:
+                entry[field.removesuffix("_path")] = binding
+        for field in (
+            "handoff_contract",
+            "opencode_session_evidence",
+            "opencode_safety_transform_attempt",
+            "opencode_preflight_report",
+        ):
+            binding = artifact_binding_from_value(worker.get(field), repo_root=repo_root)
+            if binding is not None:
+                entry[field] = binding
+        if isinstance(worker.get("opencode_contract_verification"), dict):
+            entry["opencode_contract_verification"] = json.loads(json.dumps(worker["opencode_contract_verification"]))
+        if isinstance(worker.get("opencode_runtime_env"), dict):
+            entry["opencode_runtime_env"] = json.loads(json.dumps(worker["opencode_runtime_env"]))
+        if isinstance(worker.get("final_decision"), dict):
+            entry["final_decision"] = json.loads(json.dumps(worker["final_decision"]))
+        workers.append(entry)
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "opencode-hostless-rehearsal-report",
+        "status": str(run_result.get("status", "unknown")),
+        "exit_code": int(run_result.get("exit_code", 1)),
+        "run_id": run_id,
+        "profile_id": profile.get("profile_id"),
+        "proof_class": proof_class,
+        "mode": mode,
+        "rehearsal_runner": rehearsal_runner,
+        "closes_p0_h9": False,
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "h9_contract": {
+            "status": "blocked",
+            "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
+            "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "required_variant": COMPETITION_OPENCODE_VARIANT,
+            "required_proof_class": "competition-exact",
+            "local_simulation_closes_p0_h9": False,
+        },
+        "batch_profile_report": {
+            "path": repo_relative(batch_profile_report_path, repo_root=repo_root),
+            "sha256": sha256_file(batch_profile_report_path) if batch_profile_report_path.is_file() else "",
+        },
+        "run_plan_report": path_ref_from_text(run_result.get("report_path"), repo_root=repo_root),
+        "context_pack": context_refs.get("context_pack"),
+        "agent_index": context_refs.get("agent_index"),
+        "opencode_preflight_report": preflight,
+        "opencode_runtime": runtime,
+        "workers": workers,
+        "worker_count": len(workers),
+        "boundary": (
+            "This report is a local hostless rehearsal of the OpenCode harness path. "
+            "It can catch wiring regressions but cannot close P0-H9 or replace a real "
+            "OpenCode + GLM-5.1 + max competition-host run."
+        ),
+    }
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, payload)
+    binding = artifact_ref(report_path, repo_root=repo_root)
+    binding.update(
+        {
+            "status": str(payload["status"]),
+            "report_kind": "opencode-hostless-rehearsal-report",
+            "closes_p0_h9": False,
+        }
+    )
+    return {"binding": binding, "payload": payload}
 
 
 def write_evaluate_profile_report(

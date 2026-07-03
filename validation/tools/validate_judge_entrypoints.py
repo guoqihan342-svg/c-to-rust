@@ -3229,6 +3229,96 @@ def validate_opencode_agent_runtime_contract(
     }
 
 
+def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    binding = validate_artifact_binding_shape(ref, "opencode_hostless_rehearsal_report", repo_root=repo_root)
+    payload = load_json(repo_path(binding["path"], repo_root=repo_root))
+    if payload.get("report_kind") != "opencode-hostless-rehearsal-report":
+        raise ValueError("opencode_hostless_rehearsal_report.report_kind must be opencode-hostless-rehearsal-report")
+    if payload.get("proof_class") != "local-simulation":
+        raise ValueError("opencode_hostless_rehearsal_report.proof_class must be local-simulation")
+    if payload.get("mode") != "opencode":
+        raise ValueError("opencode_hostless_rehearsal_report.mode must be opencode")
+    if payload.get("closes_p0_h9") is not False:
+        raise ValueError("opencode_hostless_rehearsal_report.closes_p0_h9 must be false")
+    if payload.get("semantic_gate") is not False:
+        raise ValueError("opencode_hostless_rehearsal_report.semantic_gate must be false")
+    if payload.get("chat_output_is_evidence") is not False:
+        raise ValueError("opencode_hostless_rehearsal_report.chat_output_is_evidence must be false")
+    if payload.get("generated_draft_semantic_pass") is not False:
+        raise ValueError("opencode_hostless_rehearsal_report.generated_draft_semantic_pass must be false")
+    if payload.get("translation_coverage_numerator") != 0:
+        raise ValueError("opencode_hostless_rehearsal_report.translation_coverage_numerator must be 0")
+    require_string(payload.get("rehearsal_runner"), "opencode_hostless_rehearsal_report.rehearsal_runner")
+
+    h9_contract = require_object(payload.get("h9_contract"), "opencode_hostless_rehearsal_report.h9_contract")
+    if h9_contract.get("status") != "blocked":
+        raise ValueError("opencode_hostless_rehearsal_report.h9_contract.status must be blocked")
+    if h9_contract.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError("opencode_hostless_rehearsal_report.h9_contract.required_agent_tool must be opencode")
+    if h9_contract.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise ValueError("opencode_hostless_rehearsal_report.h9_contract.required_model must be GLM-5.1")
+    if h9_contract.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError("opencode_hostless_rehearsal_report.h9_contract.required_variant must be max")
+    if h9_contract.get("required_proof_class") != "competition-exact":
+        raise ValueError("opencode_hostless_rehearsal_report.h9_contract.required_proof_class must be competition-exact")
+    if h9_contract.get("local_simulation_closes_p0_h9") is not False:
+        raise ValueError(
+            "opencode_hostless_rehearsal_report.h9_contract.local_simulation_closes_p0_h9 must be false"
+        )
+
+    runtime = require_object(payload.get("opencode_runtime"), "opencode_hostless_rehearsal_report.opencode_runtime")
+    if runtime.get("runtime") != "opencode":
+        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.runtime must be opencode")
+    if runtime.get("semantic_gate") is not False:
+        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.semantic_gate must be false")
+    if runtime.get("chat_output_is_evidence") is not False:
+        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.chat_output_is_evidence must be false")
+    worker_count = runtime.get("worker_count")
+    if not isinstance(worker_count, int) or isinstance(worker_count, bool) or worker_count < 1:
+        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.worker_count must be positive")
+    if runtime.get("all_contracts_executed") is not True:
+        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.all_contracts_executed must be true")
+    if runtime.get("failed_or_missing_contract_workers") != []:
+        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.failed_or_missing_contract_workers must be []")
+    counts = require_object(
+        runtime.get("contract_status_counts"),
+        "opencode_hostless_rehearsal_report.opencode_runtime.contract_status_counts",
+    )
+    if counts != {"executed": worker_count}:
+        raise ValueError(
+            "opencode_hostless_rehearsal_report.opencode_runtime.contract_status_counts must equal {'executed': worker_count}"
+        )
+
+    workers = payload.get("workers")
+    if not isinstance(workers, list) or len(workers) != worker_count:
+        raise ValueError("opencode_hostless_rehearsal_report.workers length must match worker_count")
+    worker_ids = []
+    for index, worker_value in enumerate(workers):
+        worker = require_object(worker_value, f"opencode_hostless_rehearsal_report.workers[{index}]")
+        worker_id = require_string(worker.get("worker_id"), f"opencode_hostless_rehearsal_report.workers[{index}].worker_id")
+        worker_ids.append(worker_id)
+        if worker.get("semantic_gate") is not False:
+            raise ValueError(f"opencode_hostless_rehearsal_report.workers[{index}].semantic_gate must be false")
+        verification = require_object(
+            worker.get("opencode_contract_verification"),
+            f"opencode_hostless_rehearsal_report.workers[{index}].opencode_contract_verification",
+        )
+        if verification.get("status") != "executed":
+            raise ValueError(
+                f"opencode_hostless_rehearsal_report.workers[{index}].opencode_contract_verification.status must be executed"
+            )
+    if len(set(worker_ids)) != len(worker_ids):
+        raise ValueError("opencode_hostless_rehearsal_report.workers worker_id values must be unique")
+    return {
+        "status": "passed",
+        "report_kind": "opencode-hostless-rehearsal-report",
+        "proof_class": "local-simulation",
+        "closes_p0_h9": False,
+        "worker_count": worker_count,
+        "worker_ids": worker_ids,
+    }
+
+
 def artifact_ref_key_for_expected_artifact(name: str) -> str:
     return EXPECTED_ARTIFACT_REF_ALIASES.get(name, name)
 
@@ -5148,6 +5238,16 @@ def validate_harness_artifact_contracts(
         attempt_path = repo_path(attempt_path_text, repo_root=repo_root)
         result["opencode_safety_transform_attempt"] = validate_opencode_safety_transform_attempt_contract(
             {"path": attempt_path_text, "sha256": sha256_file(attempt_path)},
+            repo_root=repo_root,
+        )
+    if "opencode_hostless_rehearsal_report" in artifacts:
+        rehearsal_path_text = require_string(
+            artifacts.get("opencode_hostless_rehearsal_report"),
+            "expected_artifacts.opencode_hostless_rehearsal_report",
+        )
+        rehearsal_path = repo_path(rehearsal_path_text, repo_root=repo_root)
+        result["opencode_hostless_rehearsal_report"] = validate_opencode_hostless_rehearsal_contract(
+            {"path": rehearsal_path_text, "sha256": sha256_file(rehearsal_path)},
             repo_root=repo_root,
         )
     if "judge_evidence_index" in artifacts:

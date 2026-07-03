@@ -126,22 +126,22 @@
     {
       "path": "config/competition-env/opencode-single-interaction.md",
       "role": "opencode-runbook",
-      "sha256": "de9c2615f1ccee7fedaac7cf99dfcfa8791f3bf3c49fcad0627a4939d8f140c6"
+      "sha256": "53172cf2592b6cbf82a631b344d7a8dd26caa7ee39c2c1f1e0dac956dac4bb61"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.en.md",
       "role": "opencode-runbook",
-      "sha256": "5cd61c1564f15ba0e9ae903c65232a359cdf5a4cf1e372d9f734741a76c043e4"
+      "sha256": "40afa057c398f36529ce1cc439c616361c85e34c131b18707812c03164e63889"
     },
     {
       "path": "config/competition-env/README.md",
       "role": "competition-env-readme",
-      "sha256": "8166d6c5b5d038e24797526d12d01fb6d9165cbd6c4b83237c9362508fae535b"
+      "sha256": "4aad25a39e1111705a36848e28ec65c208b08d87c437bba177bed6f1b7f17ff4"
     },
     {
       "path": "config/competition-env/README.en.md",
       "role": "competition-env-readme",
-      "sha256": "a7ad0581835f9f07198bd22505e0e789156635603b10d713728170d0b2f87b75"
+      "sha256": "1e61b1f394c79522d90f939ba095895dc99ecdc547ab0fb2984d8e5ba42cfe3c"
     }
   ],
   "report_kind": "competition-env-bundle",

@@ -2083,6 +2083,141 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
             self.assertEqual(agent_index["reports"]["opencode_preflight_report"], expected_preflight_binding)
 
+    def test_run_batch_profile_opencode_hostless_rehearsal_executes_auto_preflight_and_worker_contracts(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-hostless-rehearsal",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": False,
+                        "opencode_hostless_rehearsal": True,
+                        "opencode_hostless_rehearsal_runner": "fake/fixture",
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "max_workers": 1,
+                        "timeout_seconds": 13,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            calls: list[list[str]] = []
+
+            def fake_opencode_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                if len(calls) == 2:
+                    contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                    marker_path = REPO_ROOT / contract["expected_marker_path"]
+                    write_valid_preflight_marker(marker_path, run_id="run-profile-opencode-hostless")
+                    stdout = json.dumps(
+                        {
+                            "type": "tool_use",
+                            "part": {
+                                "tool": "bash",
+                                "state": {
+                                    "input": {
+                                        "command": contract["worker_command_line"],
+                                        "workdir": str(REPO_ROOT),
+                                    },
+                                    "status": "completed",
+                                },
+                            },
+                        }
+                    )
+                    return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+                handoff_paths = list(out_root.glob("workers/*/harness/opencode-handoff-contract.json"))
+                self.assertEqual(len(handoff_paths), 1)
+                contract = json.loads(handoff_paths[0].read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / contract["expected_summary_path"]
+                write_worker_summary(summary_path, "run-profile-opencode-hostless", status="passed", failed=0, semantic_pass=1)
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {
+                                    "command": contract["worker_command_line"],
+                                    "workdir": str(REPO_ROOT),
+                                },
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-profile-opencode-hostless",
+                out_root=out_root,
+                command_runner=fake_opencode_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual([call[1] for call in calls], ["models", "run", "run"])
+            rehearsal_ref = result["opencode_hostless_rehearsal_report"]
+            rehearsal_path = REPO_ROOT / rehearsal_ref["path"]
+            self.assertEqual(rehearsal_ref["sha256"], harness.sha256_file(rehearsal_path))
+            rehearsal = json.loads(rehearsal_path.read_text(encoding="utf-8"))
+            self.assertEqual(rehearsal["report_kind"], "opencode-hostless-rehearsal-report")
+            self.assertEqual(rehearsal["proof_class"], "local-simulation")
+            self.assertEqual(rehearsal["rehearsal_runner"], "fake/fixture")
+            self.assertFalse(rehearsal["closes_p0_h9"])
+            self.assertFalse(rehearsal["semantic_gate"])
+            self.assertFalse(rehearsal["chat_output_is_evidence"])
+            self.assertFalse(rehearsal["generated_draft_semantic_pass"])
+            self.assertEqual(rehearsal["translation_coverage_numerator"], 0)
+            self.assertEqual(rehearsal["h9_contract"]["status"], "blocked")
+            self.assertEqual(rehearsal["h9_contract"]["required_agent_tool"], "opencode")
+            self.assertEqual(rehearsal["h9_contract"]["required_model"], "GLM-5.1")
+            self.assertEqual(rehearsal["h9_contract"]["required_variant"], "max")
+            self.assertEqual(rehearsal["opencode_preflight_report"], result["opencode_preflight_report"])
+            self.assertEqual(rehearsal["context_pack"], result["context_pack"])
+            self.assertEqual(rehearsal["agent_index"], result["agent_index"])
+            self.assertEqual(rehearsal["run_plan_report"]["path"], result["run_plan"]["report_path"])
+            self.assertTrue(rehearsal["opencode_runtime"]["all_contracts_executed"])
+            self.assertEqual(rehearsal["opencode_runtime"]["contract_status_counts"], {"executed": 1})
+            self.assertEqual(rehearsal["workers"][0]["opencode_contract_verification"]["status"], "executed")
+            self.assertEqual(rehearsal["workers"][0]["final_decision"], {"status": "accepted", "reason": "worker_summary_passed"})
+            artifact_rows = fetch_rows(
+                REPO_ROOT / result["db_path"],
+                "select kind, repo_rel_path, semantic_role from artifacts",
+            )
+            self.assertIn(
+                (
+                    "opencode-hostless-rehearsal-report",
+                    rehearsal_ref["path"],
+                    "opencode-hostless-rehearsal",
+                ),
+                artifact_rows,
+            )
+
     def test_opencode_preflight_uses_repo_local_runtime_env_contract(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "opencode-preflight"

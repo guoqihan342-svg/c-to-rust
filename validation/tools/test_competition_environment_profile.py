@@ -275,6 +275,22 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         text,
                     )
 
+    def test_opencode_single_interaction_context_md_is_handoff_only(self) -> None:
+        docs = [
+            PROFILE_DIR / "opencode-single-interaction.md",
+            PROFILE_DIR / "opencode-single-interaction.en.md",
+        ]
+
+        for doc in docs:
+            text = doc.read_text(encoding="utf-8")
+            with self.subTest(doc=doc.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn("Input: repository + CONTEXT.md", text)
+                self.assertNotIn("review CONTEXT.md for current state", text)
+                self.assertIn(
+                    "CONTEXT.md is handoff-only and is not a judge input, release document, evidence source, or entrypoint.",
+                    text,
+                )
+
     def test_competition_readme_records_glm_preflight_availability_boundary(self) -> None:
         stale_status_phrases = [
             "now passes the runner and `--require-local-artifacts` deep validation under local `local-simulation`",
@@ -738,6 +754,18 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(opencode_profile["max_workers"], 2)
         opencode_config = load_json(REPO_ROOT / "opencode.json")
         self.assertEqual(opencode_config.get("plugin"), [])
+
+        for readme_path in [PROFILE_DIR / "README.md", PROFILE_DIR / "README.en.md"]:
+            text = readme_path.read_text(encoding="utf-8")
+            with self.subTest(readme=readme_path.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn("auto_retry=false", text)
+                self.assertIn("OpenCode evaluate", text)
+                self.assertIn("auto_retry=true", text)
+                self.assertIn("max_workers=2", text)
+                if readme_path.name.endswith(".en.md"):
+                    self.assertIn("five-round cap", text)
+                else:
+                    self.assertIn("5", text)
 
         for entry in config["entrypoints"]:
             self.assertEqual(entry["proof_class"], "local-simulation")
