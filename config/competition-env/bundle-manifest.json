@@ -3,7 +3,7 @@
   "canonical_environment_profile": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
+    "sha256": "6253b343373cc35a9c27eb02be75e521c88548180149aba079acc0a750de0958"
   },
   "claim_boundary": {
     "archive_is_semantic_gate": false,
@@ -39,14 +39,14 @@
     {
       "path": ".opencode/agents/c2rust-migrator.md",
       "role": "opencode-agent-runbook",
-      "sha256": "858143f8d5198b35408c542e256c7e388ffbf185e052f3d2683b7b8d74a5faa8"
+      "sha256": "a204f02c41346ca537c1316f7f2469cf4f31ba69cbf4c4013a3a1c7b5b031c3b"
     }
   ],
   "files": [
     {
       "path": "config/competition-env/environment.json",
       "role": "environment-profile",
-      "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
+      "sha256": "6253b343373cc35a9c27eb02be75e521c88548180149aba079acc0a750de0958"
     },
     {
       "path": "config/competition-env/env.sh",
@@ -96,7 +96,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "480ecbd603b89884574114dea7799ed2e1fcf3fbf7fe444de1f9186e80009d14"
+      "sha256": "41565671ff62626f020ebbf00a6e4930ddd554acd11477e7bda7e267a83499b3"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
@@ -116,7 +116,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "c25f1a9e7a405b2bbd22252b3834ba1f9b49f3c254b21ffb6ed42a27f4c6b8e5"
+      "sha256": "09a8c74aceaf6e4efcbcc5f0f59b037c241c383a0dfa67fee6ef7d476ac4373a"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
@@ -126,12 +126,12 @@
     {
       "path": "config/competition-env/opencode-single-interaction.md",
       "role": "opencode-runbook",
-      "sha256": "738621a937f20fffb9185c4e94dfe4dc69365f8fa24fa893743bee1f48015b53"
+      "sha256": "de9c2615f1ccee7fedaac7cf99dfcfa8791f3bf3c49fcad0627a4939d8f140c6"
     },
     {
       "path": "config/competition-env/opencode-single-interaction.en.md",
       "role": "opencode-runbook",
-      "sha256": "950fde0024772ba866a7af507316753752a18cfccc6be4ce54244ca8ab352905"
+      "sha256": "5cd61c1564f15ba0e9ae903c65232a359cdf5a4cf1e372d9f734741a76c043e4"
     },
     {
       "path": "config/competition-env/README.md",

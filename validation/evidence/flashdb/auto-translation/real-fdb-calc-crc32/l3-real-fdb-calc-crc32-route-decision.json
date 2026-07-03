@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
+        "sha256": "45e686a2ca35eb1f36e035f260c0110dd60b09de4dafd560a8cd75a597f1cab3",
         "status": "generated"
       },
       "candidate_id": "c2rust-baseline",
@@ -41,7 +41,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
+          "sha256": "45e686a2ca35eb1f36e035f260c0110dd60b09de4dafd560a8cd75a597f1cab3",
           "status": "generated"
         },
         "candidate_id": "c2rust-baseline",
@@ -218,7 +218,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "ded2482b1286ed3c1b3db04b2d98f8d9db744adf66d248417298a21bc1c629aa",
+        "sha256": "94aeb8835a774c49d6b72e0bcb68f6c800c486fec96ed4e5e414aee7b5b41715",
         "status": "lowered"
       },
       "status": "generated",
@@ -278,7 +278,7 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
+      "sha256": "45e686a2ca35eb1f36e035f260c0110dd60b09de4dafd560a8cd75a597f1cab3",
       "status": "generated"
     },
     "cfg": {
@@ -288,7 +288,7 @@
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-      "sha256": "ded2482b1286ed3c1b3db04b2d98f8d9db744adf66d248417298a21bc1c629aa",
+      "sha256": "94aeb8835a774c49d6b72e0bcb68f6c800c486fec96ed4e5e414aee7b5b41715",
       "status": "lowered"
     },
     "pointer_graph": {

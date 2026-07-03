@@ -65,6 +65,7 @@
     "status": "required_for_competition_agent_evidence",
     "command": "opencode",
     "required_model": "GLM-5.1",
+    "required_variant": "max",
     "model_probe": {
       "command": [
         "opencode",

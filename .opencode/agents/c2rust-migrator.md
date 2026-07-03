@@ -102,7 +102,8 @@ agent path as closed.
 - Use deterministic translator routes first.
 - Treat AI output as candidate only; P0 default path does not use LLM candidate generation.
 - Do not hand-write `c_source`; slice input must come from real source files.
-- Competition agent evidence must use OpenCode with `--opencode-model GLM-5.1`.
+- Competition agent evidence must use OpenCode with `--opencode-model GLM-5.1`
+  and `--opencode-variant max`.
 - Local-simulation OpenCode evidence does not close P0-H9 without a fresh
   GLM-5.1/OpenCode host preflight and validator pass.
 - Do not report an `opencode-safety-transform-attempt` as accepted unless

@@ -2172,6 +2172,43 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertIn("competition environment", smoke_focus)
         self.assertIn("smoke", smoke_focus)
 
+    def test_readiness_summary_classifies_stale_opencode_worker_report_artifact(self) -> None:
+        summary = validator.build_readiness_summary(
+            {
+                "status": "failed",
+                "entrypoint_count": 4,
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                        "status": "failed",
+                        "proof_class": "local-simulation",
+                        "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+                    }
+                ],
+                "claim_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "errors": [
+                    "context ledger missing artifacts row for worker report: "
+                    "flashdb-opencode-worker-001-fdb-calc-crc32"
+                ],
+            }
+        )
+
+        self.assertEqual(summary["readiness"]["blocker_count"], 1)
+        self.assertEqual(
+            summary["readiness"]["blocker_root_cause_counts"],
+            {"opencode_artifacts_require_regeneration": 1},
+        )
+        self.assertEqual(
+            summary["blockers"][0]["recommended_action"],
+            "regenerate OpenCode artifacts on a real GLM-5.1/OpenCode host; do not hand-edit target artifacts",
+        )
+        self.assertEqual(summary["blockers"][0]["proof_class_effect"], "h9_release_blocker")
+
     def test_validate_config_can_focus_selected_entrypoints(self) -> None:
         result = validator.validate_config(
             validator.DEFAULT_CONFIG,
@@ -6221,7 +6258,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             connection.execute("delete from artifacts where kind='run-worker-report'")
             connection.commit()
 
-        with self.assertRaisesRegex(ValueError, "missing artifacts row for worker report"):
+        with self.assertRaisesRegex(ValueError, "missing artifacts row for worker report") as captured:
             validator.validate_context_ledger_contract(
                 context_payload,
                 agent_payload,
@@ -6229,6 +6266,12 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 agent_path_text=repo_relative(agent_index),
                 repo_root=REPO_ROOT,
             )
+        message = str(captured.exception)
+        self.assertIn("worker_id=worker-001", message)
+        self.assertIn(f"repo_rel_path={repo_relative(report)}", message)
+        self.assertIn(f"ledger_path={repo_relative(ledger)}", message)
+        self.assertIn("expected kind=run-worker-report", message)
+        self.assertIn("regenerate OpenCode artifacts", message)
 
     def test_context_pack_workers_must_match_agent_index_workers(self) -> None:
         config = load_default_config()
@@ -6567,6 +6610,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         }
 
         with self.assertRaisesRegex(ValueError, "--opencode-variant max"):
+            validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
+
+    def test_environment_profile_requires_structured_max_variant(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="environment-opencode-required-variant-", dir=REPO_ROOT / "target"))
+        config = load_default_config()
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment["opencode_runtime"]["required_variant"] = "lite"
+        environment_path = temp_dir / "environment-with-lite-required-variant.json"
+        write_json(environment_path, environment)
+        profile_ref = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+
+        with self.assertRaisesRegex(ValueError, "required_variant must be max"):
             validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
 
     def test_environment_profile_preflight_template_rejects_duplicate_opencode_variant_override(self) -> None:

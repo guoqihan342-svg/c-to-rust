@@ -117,6 +117,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertEqual(runtime["status"], "required_for_competition_agent_evidence")
         self.assertEqual(runtime["command"], "opencode")
         self.assertEqual(runtime["required_model"], "GLM-5.1")
+        self.assertEqual(runtime["required_variant"], "max")
         self.assertEqual(runtime["model_probe"]["command"], ["opencode", "models"])
         self.assertEqual(runtime["model_probe"]["required_status"], "available")
         self.assertTrue(runtime["model_probe"]["required_model_listed"])
@@ -266,6 +267,13 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 for block in re.findall(r"```bash\n(.*?)```", text, flags=re.DOTALL):
                     if "opencode-preflight" in block or "--mode opencode" in block:
                         self.assertIn("--opencode-model GLM-5.1", block)
+                        self.assertIn("--opencode-variant max", block)
+                if "run-plan --mode opencode" in text:
+                    self.assertIn(
+                        "run-plan --mode opencode --opencode-model GLM-5.1 "
+                        "--opencode-variant max --opencode-preflight-report <report>",
+                        text,
+                    )
 
     def test_competition_readme_records_glm_preflight_availability_boundary(self) -> None:
         stale_status_phrases = [

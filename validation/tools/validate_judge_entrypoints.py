@@ -208,6 +208,12 @@ def build_readiness_summary(result: dict[str, Any]) -> dict[str, Any]:
     configured_count = int(result.get("entrypoint_count", len(entrypoints)) or 0)
     status = str(result.get("status", "unknown"))
     claim_boundary = result.get("claim_boundary") if isinstance(result.get("claim_boundary"), dict) else {}
+    errors = [str(error) for error in result.get("errors", []) if str(error)]
+    blockers = [classify_readiness_error(error) for error in errors]
+    blocker_root_cause_counts: dict[str, int] = {}
+    for blocker in blockers:
+        root_cause = str(blocker["root_cause_key"])
+        blocker_root_cause_counts[root_cause] = blocker_root_cause_counts.get(root_cause, 0) + 1
     entrypoint_summaries = []
     for entry in entrypoints:
         if not isinstance(entry, dict):
@@ -229,6 +235,8 @@ def build_readiness_summary(result: dict[str, Any]) -> dict[str, Any]:
             "status": status,
             "configured_count": configured_count,
             "validation_status": status,
+            "blocker_count": len(blockers),
+            "blocker_root_cause_counts": blocker_root_cause_counts,
         },
         "claim_boundary": {
             "semantic_gate": False,
@@ -236,7 +244,41 @@ def build_readiness_summary(result: dict[str, Any]) -> dict[str, Any]:
             "generated_draft_semantic_pass": claim_boundary.get("generated_draft_semantic_pass", False),
             "translation_coverage_numerator": claim_boundary.get("translation_coverage_numerator", 0),
         },
+        "blockers": blockers,
         "entrypoints": entrypoint_summaries,
+    }
+
+
+def classify_readiness_error(message: str) -> dict[str, str]:
+    if "context ledger missing artifacts row for worker report" in message:
+        return {
+            "root_cause_key": "opencode_artifacts_require_regeneration",
+            "message": message,
+            "proof_class_effect": "h9_release_blocker",
+            "recommended_action": (
+                "regenerate OpenCode artifacts on a real GLM-5.1/OpenCode host; "
+                "do not hand-edit target artifacts"
+            ),
+        }
+    if "opencode_model_unavailable" in message or ("GLM-5.1" in message and "model" in message.lower()):
+        return {
+            "root_cause_key": "opencode_model_unavailable",
+            "message": message,
+            "proof_class_effect": "h9_release_blocker",
+            "recommended_action": "rerun on an OpenCode runtime whose model list exposes GLM-5.1",
+        }
+    if "opencode preflight" in message or "opencode_preflight" in message:
+        return {
+            "root_cause_key": "opencode_preflight_contract_invalid",
+            "message": message,
+            "proof_class_effect": "h9_release_blocker",
+            "recommended_action": "regenerate the OpenCode preflight report and bound artifacts through the harness",
+        }
+    return {
+        "root_cause_key": "judge_entrypoint_validation_error",
+        "message": message,
+        "proof_class_effect": "validation_blocker",
+        "recommended_action": "inspect the validator error and regenerate the affected harness artifact",
     }
 
 
@@ -611,6 +653,8 @@ def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_
         raise ValueError(f"environment_profile.opencode_runtime.command must be {COMPETITION_OPENCODE_COMMAND}")
     if runtime.get("required_model") != COMPETITION_OPENCODE_MODEL:
         raise ValueError(f"environment_profile.opencode_runtime.required_model must be {COMPETITION_OPENCODE_MODEL}")
+    if runtime.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"environment_profile.opencode_runtime.required_variant must be {COMPETITION_OPENCODE_VARIANT}")
     probe = require_object(runtime.get("model_probe"), "environment_profile.opencode_runtime.model_probe")
     if probe.get("command") != [COMPETITION_OPENCODE_COMMAND, "models"]:
         raise ValueError("environment_profile.opencode_runtime.model_probe.command must be opencode models")
@@ -654,6 +698,7 @@ def validate_competition_environment_profile_contract(profile_ref: Any, *, repo_
         "opencode_runtime": {
             "command": COMPETITION_OPENCODE_COMMAND,
             "required_model": COMPETITION_OPENCODE_MODEL,
+            "required_variant": COMPETITION_OPENCODE_VARIANT,
             "model_probe_command": [COMPETITION_OPENCODE_COMMAND, "models"],
             "semantic_gate": False,
             "translation_coverage_numerator": 0,
@@ -4781,7 +4826,15 @@ def validate_context_ledger_contract(
                         (report_path_text,),
                     ).fetchone()
                     if report_row is None:
-                        raise ValueError(f"context ledger missing artifacts row for worker report: {worker_id}")
+                        raise ValueError(
+                            "context ledger missing artifacts row for worker report: "
+                            f"worker_id={worker_id}; "
+                            f"repo_rel_path={report_path_text}; "
+                            f"ledger_path={ledger_path_text}; "
+                            "expected kind=run-worker-report; "
+                            "regenerate OpenCode artifacts on a real GLM-5.1/OpenCode host; "
+                            "do not hand-edit target artifacts"
+                        )
                     if report_row[0] != report_sha:
                         raise ValueError(f"context ledger worker report sha256 must match file: {worker_id}")
                     if report_row[1] not in {"passed", "failed", "blocked"} or report_row[2] != "worker-execution-report":

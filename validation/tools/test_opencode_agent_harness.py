@@ -5935,6 +5935,27 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_opencode_worker_argv_rejects_non_max_variant(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+            harness.build_opencode_run_argv(
+                opencode_command="opencode",
+                opencode_model="GLM-5.1",
+                opencode_agent=None,
+                opencode_variant="lite",
+                opencode_skip_permissions=False,
+                worker_command=[
+                    sys.executable,
+                    "scripts/c2rust-migrator.py",
+                    "--phase",
+                    "migrate",
+                    "--input",
+                    "target/out/harness/assignments/worker-a-request.json",
+                ],
+                request_path=REPO_ROOT / "target/out/harness/assignments/worker-a-request.json",
+                summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+                repo_root=REPO_ROOT,
+            )
+
     def test_opencode_preflight_requires_exact_first_shell_command_and_marker(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "opencode-preflight"
@@ -6330,6 +6351,20 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 opencode_model="gpt-5.4",
                 opencode_agent=None,
                 opencode_variant="max",
+                opencode_skip_permissions=False,
+                marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
+                marker_path=Path("target/opencode-preflight/harness/opencode-preflight-marker.json"),
+                contract_path=Path("target/opencode-preflight/harness/opencode-preflight-contract.json"),
+                repo_root=REPO_ROOT,
+            )
+
+    def test_opencode_preflight_rejects_non_max_variant(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+            harness.build_opencode_preflight_argv(
+                opencode_command="opencode",
+                opencode_model="GLM-5.1",
+                opencode_agent=None,
+                opencode_variant="lite",
                 opencode_skip_permissions=False,
                 marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
                 marker_path=Path("target/opencode-preflight/harness/opencode-preflight-marker.json"),

@@ -7856,6 +7856,8 @@ def build_opencode_run_argv(
         opencode_model = COMPETITION_OPENCODE_MODEL
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
+    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
+        raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
     command_line = shell_command_line(worker_command)
     prompt_lines = [
         "Execute this assigned C-to-Rust worker exactly once.",
@@ -7921,6 +7923,8 @@ def build_opencode_preflight_argv(
         opencode_model = COMPETITION_OPENCODE_MODEL
     if opencode_model != COMPETITION_OPENCODE_MODEL:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
+    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
+        raise SystemExit(f"opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
     command_line = shell_command_line(marker_command)
     prompt = build_opencode_prompt(
         [
