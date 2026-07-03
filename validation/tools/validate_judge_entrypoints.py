@@ -2886,28 +2886,41 @@ def validate_opencode_safety_transform_unit_contract(
     patch_evidence = require_object(unit.get("patch_evidence"), f"{prefix}.patch_evidence")
     validate_artifact_binding_shape(patch_evidence.get("baseline"), f"{prefix}.patch_evidence.baseline", repo_root=repo_root)
     validate_artifact_binding_shape(patch_evidence.get("final"), f"{prefix}.patch_evidence.final", repo_root=repo_root)
-    validate_artifact_binding_shape(patch_evidence.get("accepted_patch"), f"{prefix}.patch_evidence.accepted_patch", repo_root=repo_root)
-    validate_artifact_binding_shape(patch_evidence.get("patch_log"), f"{prefix}.patch_evidence.patch_log", repo_root=repo_root)
+    accepted_patch = validate_artifact_binding_shape(
+        patch_evidence.get("accepted_patch"),
+        f"{prefix}.patch_evidence.accepted_patch",
+        repo_root=repo_root,
+    )
+    accepted_patch_log = validate_artifact_binding_shape(
+        patch_evidence.get("patch_log"),
+        f"{prefix}.patch_evidence.patch_log",
+        repo_root=repo_root,
+    )
 
     delta = require_object(unit.get("verification_delta"), f"{prefix}.verification_delta")
     if delta.get("compiled") is not True:
         raise ValueError(f"{prefix}.verification_delta.compiled must be true")
-    validate_artifact_binding_shape(delta.get("oracle_evidence"), f"{prefix}.verification_delta.oracle_evidence", repo_root=repo_root)
-    validate_artifact_binding_shape(
+    accepted_oracle = validate_artifact_binding_shape(
+        delta.get("oracle_evidence"),
+        f"{prefix}.verification_delta.oracle_evidence",
+        repo_root=repo_root,
+    )
+    accepted_unsafe_scan = validate_artifact_binding_shape(
         delta.get("unsafe_scan_evidence"),
         f"{prefix}.verification_delta.unsafe_scan_evidence",
         repo_root=repo_root,
     )
     semantic_evidence = require_object(delta.get("semantic_evidence"), f"{prefix}.verification_delta.semantic_evidence")
-    validate_artifact_binding_shape(
+    accepted_schema_diff = validate_artifact_binding_shape(
         semantic_evidence.get("schema_diff"),
         f"{prefix}.verification_delta.semantic_evidence.schema_diff",
         repo_root=repo_root,
     )
-    validate_opencode_measured_unsafe_delta(
-        require_object(delta.get("unsafe_reduction"), f"{prefix}.verification_delta.unsafe_reduction"),
+    accepted_unsafe_reduction = require_object(
+        delta.get("unsafe_reduction"),
         f"{prefix}.verification_delta.unsafe_reduction",
     )
+    validate_opencode_measured_unsafe_delta(accepted_unsafe_reduction, f"{prefix}.verification_delta.unsafe_reduction")
 
     rounds = unit.get("rounds")
     if not isinstance(rounds, list) or not rounds:
@@ -2918,27 +2931,64 @@ def validate_opencode_safety_transform_unit_contract(
         round_payload = require_object(round_value, f"{prefix}.rounds[{round_index}]")
         if round_payload.get("single_patch_per_round") is not True:
             raise ValueError(f"{prefix}.rounds[{round_index}].single_patch_per_round must be true")
-        validate_artifact_binding_shape(round_payload.get("patch"), f"{prefix}.rounds[{round_index}].patch", repo_root=repo_root)
-        validate_artifact_binding_shape(round_payload.get("patch_log"), f"{prefix}.rounds[{round_index}].patch_log", repo_root=repo_root)
-        validate_artifact_binding_shape(
+        round_patch = validate_artifact_binding_shape(
+            round_payload.get("patch"),
+            f"{prefix}.rounds[{round_index}].patch",
+            repo_root=repo_root,
+        )
+        round_patch_log = validate_artifact_binding_shape(
+            round_payload.get("patch_log"),
+            f"{prefix}.rounds[{round_index}].patch_log",
+            repo_root=repo_root,
+        )
+        round_oracle = validate_artifact_binding_shape(
             round_payload.get("oracle_evidence"),
             f"{prefix}.rounds[{round_index}].oracle_evidence",
             repo_root=repo_root,
         )
-        validate_artifact_binding_shape(
+        round_schema_diff = validate_artifact_binding_shape(
             round_payload.get("schema_diff"),
             f"{prefix}.rounds[{round_index}].schema_diff",
             repo_root=repo_root,
         )
-        validate_artifact_binding_shape(
+        round_unsafe_scan = validate_artifact_binding_shape(
             round_payload.get("unsafe_scan_evidence"),
             f"{prefix}.rounds[{round_index}].unsafe_scan_evidence",
             repo_root=repo_root,
         )
-        validate_opencode_measured_unsafe_delta(
-            require_object(round_payload.get("unsafe_delta"), f"{prefix}.rounds[{round_index}].unsafe_delta"),
-            f"{prefix}.rounds[{round_index}].unsafe_delta",
-        )
+        round_unsafe_delta = require_object(round_payload.get("unsafe_delta"), f"{prefix}.rounds[{round_index}].unsafe_delta")
+        validate_opencode_measured_unsafe_delta(round_unsafe_delta, f"{prefix}.rounds[{round_index}].unsafe_delta")
+        if round_index == len(rounds) - 1:
+            compare_artifact_binding(
+                round_patch,
+                accepted_patch,
+                f"{prefix}.rounds[{round_index}].patch must match accepted_patch",
+            )
+            compare_artifact_binding(
+                round_patch_log,
+                accepted_patch_log,
+                f"{prefix}.rounds[{round_index}].patch_log must match patch_evidence.patch_log",
+            )
+            compare_artifact_binding(
+                round_oracle,
+                accepted_oracle,
+                f"{prefix}.rounds[{round_index}].oracle_evidence must match verification_delta.oracle_evidence",
+            )
+            compare_artifact_binding(
+                round_schema_diff,
+                accepted_schema_diff,
+                f"{prefix}.rounds[{round_index}].schema_diff must match verification_delta.semantic_evidence.schema_diff",
+            )
+            compare_artifact_binding(
+                round_unsafe_scan,
+                accepted_unsafe_scan,
+                f"{prefix}.rounds[{round_index}].unsafe_scan_evidence must match verification_delta.unsafe_scan_evidence",
+            )
+            compare_opencode_measured_unsafe_delta(
+                round_unsafe_delta,
+                accepted_unsafe_reduction,
+                f"{prefix}.rounds[{round_index}].unsafe_delta",
+            )
     return len(rounds)
 
 
@@ -2968,6 +3018,19 @@ def validate_opencode_accepted_retry_hint_contract(
             f"{prefix}.rollback_evidence[{rollback_index}]",
             repo_root=repo_root,
         )
+    patch_events_path = retry_hint.get("patch_events_path")
+    patch_events_sha256 = retry_hint.get("patch_events_sha256")
+    if (patch_events_path is None) != (patch_events_sha256 is None):
+        raise ValueError(f"{prefix}.patch_events_path and patch_events_sha256 must be provided together")
+    if patch_events_path is not None:
+        path_text = require_string(patch_events_path, f"{prefix}.patch_events_path")
+        validate_sha256_hex(patch_events_sha256, f"{prefix}.patch_events_sha256")
+        artifact_path = repo_path(path_text, repo_root=repo_root)
+        if not artifact_path.exists():
+            raise ValueError(f"{prefix}.patch_events_path must exist")
+        observed_sha = sha256_file(artifact_path)
+        if observed_sha != patch_events_sha256:
+            raise ValueError(f"{prefix}.patch_events_sha256 does not match artifact")
     return len(rollback_refs)
 
 
@@ -2975,14 +3038,36 @@ def validate_opencode_measured_unsafe_delta(delta: dict[str, Any], label: str) -
     if delta.get("status") != "measured":
         raise ValueError(f"{label}.status must be measured")
     reduced_by = delta.get("reduced_by")
-    if not isinstance(reduced_by, int) or reduced_by <= 0:
-        raise ValueError(f"{label}.reduced_by must be > 0")
     baseline = delta.get("baseline_total_unsafe")
     current = delta.get("current_total_unsafe")
     if not isinstance(baseline, int) or not isinstance(current, int):
         raise ValueError(f"{label}.baseline_total_unsafe and current_total_unsafe must be integers")
+    if baseline < 0 or current < 0:
+        raise ValueError(f"{label}.baseline_total_unsafe and current_total_unsafe must be non-negative")
+    if baseline == 0:
+        raise ValueError(f"{label}.baseline_total_unsafe must be > 0")
+    if not isinstance(reduced_by, int) or reduced_by <= 0:
+        raise ValueError(f"{label}.reduced_by must be > 0")
     if reduced_by != baseline - current:
         raise ValueError(f"{label}.reduced_by must equal baseline_total_unsafe - current_total_unsafe")
+    ratio = delta.get("ratio")
+    if isinstance(ratio, bool) or not isinstance(ratio, (int, float)):
+        raise ValueError(f"{label}.ratio must be numeric")
+    expected_ratio = current / baseline
+    if abs(float(ratio) - expected_ratio) > 1e-9:
+        raise ValueError(f"{label}.ratio must equal current_total_unsafe / baseline_total_unsafe")
+
+
+def compare_opencode_measured_unsafe_delta(actual: dict[str, Any], expected: dict[str, Any], label: str) -> None:
+    for field in (
+        "status",
+        "baseline_total_unsafe",
+        "current_total_unsafe",
+        "reduced_by",
+        "ratio",
+    ):
+        if actual.get(field) != expected.get(field):
+            raise ValueError(f"{label} must match verification_delta.unsafe_reduction")
 
 
 def compare_artifact_binding(actual: dict[str, Any], expected: dict[str, Any], label: str) -> None:
@@ -3581,11 +3666,20 @@ def validate_resume_manifest_replay_command(
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} --opencode-model must be {COMPETITION_OPENCODE_MODEL}"
             )
+        if flags.get("--opencode-variant") != COMPETITION_OPENCODE_VARIANT:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} --opencode-variant must be {COMPETITION_OPENCODE_VARIANT}"
+            )
         policy = preflight.get("launch_policy")
         if not isinstance(policy, dict) or policy.get("opencode_model") != COMPETITION_OPENCODE_MODEL:
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} opencode_preflight_report.launch_policy.opencode_model "
                 f"must be {COMPETITION_OPENCODE_MODEL}"
+            )
+        if policy.get("opencode_variant") != COMPETITION_OPENCODE_VARIANT:
+            raise ValueError(
+                f"resume_manifest worker {worker_id} {label} opencode_preflight_report.launch_policy.opencode_variant "
+                f"must be {COMPETITION_OPENCODE_VARIANT}"
             )
     for field in ("assignment_path", "request_path", "summary_path", "report_path"):
         expected = worker.get(field)

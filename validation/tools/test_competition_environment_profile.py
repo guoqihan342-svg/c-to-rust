@@ -764,6 +764,33 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             handoff_path = repo_root / "target" / "harness" / "opencode-preflight-contract.json"
             session_path = repo_root / "target" / "logs" / "opencode-preflight-session-evidence.json"
             session_path.parent.mkdir(parents=True, exist_ok=True)
+            runtime_env_paths = {
+                "XDG_CONFIG_HOME": "target/opencode-runtime/preflight/config",
+                "XDG_DATA_HOME": "target/opencode-runtime/preflight/data",
+                "XDG_CACHE_HOME": "target/opencode-runtime/preflight/cache",
+                "TMPDIR": "target/opencode-runtime/preflight/tmp",
+                "TEMP": "target/opencode-runtime/preflight/tmp",
+                "TMP": "target/opencode-runtime/preflight/tmp",
+            }
+            runtime_env = {
+                "schema_version": 1,
+                "status": "isolated",
+                "scope": "preflight",
+                "runtime_root": "target/opencode-runtime/preflight",
+                "env": runtime_env_paths,
+                "env_sha256": judge_validator.sha256_text(
+                    json.dumps(
+                        {
+                            "scope": "preflight",
+                            "runtime_root": "target/opencode-runtime/preflight",
+                            "env": runtime_env_paths,
+                        },
+                        sort_keys=True,
+                    )
+                ),
+                "semantic_gate": False,
+                "evidence_boundary": "runtime env isolation is audit evidence only",
+            }
             worker_command = [
                 "python3",
                 "-B",
@@ -800,6 +827,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "worker_command_sha256": judge_validator.sha256_text(worker_command_line),
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": launch_policy_sha,
+                        "opencode_runtime_env": runtime_env,
                     },
                     sort_keys=True,
                 )
@@ -813,6 +841,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "process_returncode": 0,
                         "parsed": True,
                         "format": "jsonl",
+                        "opencode_runtime_env": runtime_env,
                         "session_events": [
                             {
                                 "part": {
@@ -845,6 +874,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "marker_exists": True,
                         "launch_policy": launch_policy,
                         "launch_policy_sha256": launch_policy_sha,
+                        "opencode_runtime_env": runtime_env,
                         "handoff_contract": {
                             "path": "target/harness/opencode-preflight-contract.json",
                             "sha256": sha256_file(handoff_path),
@@ -928,6 +958,58 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         ]
 
         with self.assertRaisesRegex(ValueError, "--opencode-model must be GLM-5.1"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_judge_validator_rejects_resume_replay_with_non_max_opencode_variant(self) -> None:
+        worker = {
+            "worker_id": "worker-001",
+            "opencode_preflight_report": {
+                "path": "target/harness/opencode-preflight-report.json",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "opencode_agent": None,
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": True,
+                },
+            },
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-preflight-report",
+            "target/harness/opencode-preflight-report.json",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-variant",
+            "default",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "--opencode-variant must be max"):
             judge_validator.validate_resume_manifest_replay_command(
                 {
                     "argv": argv,

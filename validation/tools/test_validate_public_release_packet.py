@@ -884,6 +884,38 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_opencode_safety_attempt_retry_patch_event_hash_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-events-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir)
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        evidence_root = attempt_path.parent / "attempt-evidence"
+        rollback = write_text_artifact(evidence_root / "rollback.json", '{"status":"rolled_back"}\n')
+        patch_events = write_text_artifact(evidence_root / "patch-events.jsonl", '{"event":"repair"}\n')
+        payload["safety_transform_units"][0]["accepted_retry_hint"] = {
+            "status": "revalidated_passed",
+            "repair_rounds": 1,
+            "auto_recovered": True,
+            "rollback_evidence": [rollback],
+            "patch_events_path": patch_events["path"],
+            "patch_events_sha256": "0" * 64,
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = judge_validator.sha256_file(attempt_path)
+        attach_opencode_safety_attempt(packet, attempt_ref)
+        attempt_summary = packet["opencode_patch_boundary"]["opencode_safety_transform_attempt"]
+        attempt_summary["accepted_retry_hint_status"] = "revalidated_passed"
+        attempt_summary["accepted_retry_hint_statuses"] = ["revalidated_passed"]
+        attempt_summary["rollback_ref_count"] = 1
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any("patch_events_sha256" in error for error in result["errors"]), result["errors"])
+
     def test_validate_packet_rejects_preflight_session_without_shell_call(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-no-shell-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"

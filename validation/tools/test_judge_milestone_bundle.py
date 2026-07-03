@@ -1641,6 +1641,54 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn("run_report_kind_must_be_judge_entrypoints_run_report", report["blockers"])
         self.assertIn("run_report_entrypoint_count_mismatch", report["blockers"])
 
+    def test_bundle_blocks_missing_run_report_validation_even_if_readiness_claims_passed(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-missing-validation-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("run_report_validation_missing", report["blockers"])
+
     def test_bundle_blocks_proof_class_escalation_without_validation_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
@@ -1924,6 +1972,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
                     }
                 ],
+                "validation": {"status": "passed"},
             },
         )
 
@@ -1985,6 +2034,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"route_governance_metrics_report": repo_relative(route_metrics_path)},
                     }
                 ],
+                "validation": {"status": "passed"},
             },
         )
 
@@ -2186,6 +2236,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
                     }
                 ],
+                "validation": {"status": "passed"},
             },
         )
 
@@ -2271,6 +2322,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
                     }
                 ],
+                "validation": {"status": "passed"},
             },
         )
 

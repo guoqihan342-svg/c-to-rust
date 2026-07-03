@@ -4100,6 +4100,72 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "patch_evidence.baseline"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
+    def test_opencode_safety_transform_attempt_contract_rejects_negative_unsafe_delta(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        unsafe_reduction = payload["safety_transform_units"][0]["verification_delta"]["unsafe_reduction"]
+        unsafe_reduction["baseline_total_unsafe"] = 1
+        unsafe_reduction["current_total_unsafe"] = -1
+        unsafe_reduction["reduced_by"] = 2
+        unsafe_reduction["ratio"] = 2.0
+        payload["safety_transform_units"][0]["rounds"][0]["unsafe_delta"] = dict(unsafe_reduction)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "baseline_total_unsafe and current_total_unsafe must be non-negative",
+        ):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_zero_unsafe_baseline(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        unsafe_reduction = payload["safety_transform_units"][0]["verification_delta"]["unsafe_reduction"]
+        unsafe_reduction["baseline_total_unsafe"] = 0
+        unsafe_reduction["current_total_unsafe"] = 0
+        unsafe_reduction["reduced_by"] = 0
+        unsafe_reduction["ratio"] = 0.0
+        payload["safety_transform_units"][0]["rounds"][0]["unsafe_delta"] = dict(unsafe_reduction)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "baseline_total_unsafe must be > 0"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_final_round_patch_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        drift_patch = temp_dir / "attempt-evidence" / "drift.patch"
+        drift_patch.write_text("drift patch\n", encoding="utf-8")
+        payload["safety_transform_units"][0]["rounds"][0]["patch"] = {
+            "path": repo_relative(drift_patch),
+            "sha256": validator.sha256_file(drift_patch),
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"rounds\[0\].patch must match accepted_patch"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
     def test_harness_artifact_contracts_deep_validates_opencode_safety_transform_attempt(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)

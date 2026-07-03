@@ -430,7 +430,9 @@ def run_report_contract_blockers(run_report: dict[str, Any], *, entrypoints: lis
     if isinstance(entrypoint_count, int) and entrypoint_count != len(entrypoints):
         blockers.append("run_report_entrypoint_count_mismatch")
     validation = run_report.get("validation")
-    if isinstance(validation, dict) and validation.get("status") not in {None, "passed"}:
+    if not isinstance(validation, dict):
+        blockers.append("run_report_validation_missing")
+    elif validation.get("status") != "passed":
         blockers.append("run_report_validation_not_passed")
     return blockers
 
