@@ -868,9 +868,15 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         raise ValueError("summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup")
 
     runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
+    boundary = require_object(packet.get("opencode_patch_boundary"), "opencode_patch_boundary")
+    expected_runtime_enabled = int(runtime.get("enabled_entrypoint_count", 0) or 0) > 0
+    if boundary.get("opencode_runtime_enabled") is not expected_runtime_enabled:
+        raise ValueError(
+            "opencode_patch_boundary.opencode_runtime_enabled must match "
+            "judge_milestone_bundle.opencode_runtime.enabled_entrypoint_count"
+        )
     expected_preflight = runtime.get("preflight_proof_summary")
     if isinstance(expected_preflight, dict):
-        boundary = require_object(packet.get("opencode_patch_boundary"), "opencode_patch_boundary")
         if boundary.get("opencode_preflight_proof_summary") != expected_preflight:
             raise ValueError(
                 "opencode_patch_boundary.opencode_preflight_proof_summary must match "

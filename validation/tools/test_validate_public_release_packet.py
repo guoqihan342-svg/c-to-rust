@@ -1243,6 +1243,27 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_opencode_runtime_enabled_drift_from_bound_bundle(self) -> None:
+        temp_dir = Path(
+            tempfile.mkdtemp(prefix="public-release-packet-opencode-runtime-enabled-drift-", dir=REPO_ROOT / "target")
+        )
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["opencode_patch_boundary"]["opencode_runtime_enabled"] = False
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "opencode_patch_boundary.opencode_runtime_enabled must match "
+                "judge_milestone_bundle.opencode_runtime.enabled_entrypoint_count" in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_preflight_handoff_contract_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-handoff-drift-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"

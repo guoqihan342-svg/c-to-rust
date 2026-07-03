@@ -5845,6 +5845,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate --opencode-variant"):
             validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
 
+    def test_environment_profile_preflight_template_rejects_opencode_command_override(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="environment-opencode-command-override-", dir=REPO_ROOT / "target"))
+        config = load_default_config()
+        environment = json.loads((REPO_ROOT / config["environment_profile"]["path"]).read_text(encoding="utf-8"))
+        environment["opencode_runtime"]["preflight_command_template"] += " --opencode-command codex"
+        environment_path = temp_dir / "environment-with-opencode-command-override.json"
+        write_json(environment_path, environment)
+        profile_ref = {
+            "path": repo_relative(environment_path),
+            "profile_id": environment["profile_id"],
+            "sha256": validator.sha256_file(environment_path),
+        }
+
+        with self.assertRaisesRegex(ValueError, "unexpected --opencode-command"):
+            validator.validate_competition_environment_profile_contract(profile_ref, repo_root=REPO_ROOT)
+
     def test_tracked_manifest_reproduction_command_must_match_entrypoint_command(self) -> None:
         config = load_default_config()
         temp_config = write_temp_config(config)

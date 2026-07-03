@@ -210,6 +210,7 @@
       "additionalProperties": true,
       "required": [
         "report_kind",
+        "opencode_runtime_enabled",
         "opencode_preflight_proof_summary",
         "chat_output_is_evidence",
         "semantic_gate",
@@ -218,6 +219,7 @@
       ],
       "properties": {
         "report_kind": {"const": "opencode-patch-boundary"},
+        "opencode_runtime_enabled": {"type": "boolean"},
         "opencode_preflight_proof_summary": {"$ref": "#/$defs/opencodePreflightProofSummary"},
         "chat_output_is_evidence": {"const": false},
         "semantic_gate": {"const": false},

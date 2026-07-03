@@ -305,12 +305,15 @@ def validate_opencode_preflight_template_command(command: Any, label: str) -> li
         raise ValueError(
             f"{label} must run python3 -B -m validation.tools.opencode_agent_harness opencode-preflight"
         )
+    allowed_flags = {"--run-id", "--out-root", "--opencode-model", "--opencode-variant"}
     flags: dict[str, str] = {}
     index = len(expected_prefix)
     while index < len(argv):
         flag = argv[index]
         if not flag.startswith("--"):
             raise ValueError(f"{label} has unexpected positional argument: {flag}")
+        if flag not in allowed_flags:
+            raise ValueError(f"{label} has unexpected {flag}")
         if flag in flags:
             raise ValueError(f"{label} duplicate {flag}")
         if index + 1 >= len(argv) or argv[index + 1].startswith("--"):
