@@ -1440,6 +1440,72 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(report["failure_path"]["baseline_role"], "handwritten_or_accepted_evidence_baseline")
             self.assertEqual(report["failure_path"]["next_repair_hint"]["root_cause_key"], "competition_summary_missing")
 
+    def test_before_after_reproduction_command_preserves_proof_class_override(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            profile_path = Path(tmp) / "planned-batch.json"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path.write_text("{}\n", encoding="utf-8")
+
+            commands = harness.before_after_reproduction_commands(
+                profile_path=profile_path,
+                run_id="run-exact",
+                out_root=out_root,
+                summary_path=summary_path,
+                proof_class_resolution={
+                    "source": "cli-override",
+                    "profile_proof_class": "local-simulation",
+                    "effective_proof_class": "competition-exact",
+                    "override_requested": True,
+                    "changed": True,
+                    "override_proof_class": "competition-exact",
+                },
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertIn("--proof-class competition-exact", commands["run_command"])
+
+    def test_judge_evidence_index_reproduction_commands_preserve_proof_class_override(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            profile_path = Path(tmp) / "planned-batch.json"
+            evaluate_report_path = out_root / "harness" / "evaluate-report.json"
+            profile_path.write_text(
+                json.dumps({"schema_version": 1, "profile_id": "demo", "proof_class": "local-simulation"}),
+                encoding="utf-8",
+            )
+            evaluate_report_path.parent.mkdir(parents=True, exist_ok=True)
+            evaluate_report_path.write_text("{}\n", encoding="utf-8")
+
+            artifact = harness.write_judge_evidence_index(
+                evaluate_report={
+                    "status": "blocked",
+                    "exit_code": 1,
+                    "profile_id": "demo",
+                    "proof_class": "competition-exact",
+                    "mode": "opencode",
+                    "proof_class_resolution": {
+                        "source": "cli-override",
+                        "profile_proof_class": "local-simulation",
+                        "effective_proof_class": "competition-exact",
+                        "override_requested": True,
+                        "changed": True,
+                        "override_proof_class": "competition-exact",
+                    },
+                    "judge_summary": {},
+                },
+                evaluate_report_path=evaluate_report_path,
+                batch_result={"status": "blocked", "exit_code": 1},
+                profile_path=profile_path,
+                run_id="run-exact",
+                out_root=out_root,
+                repo_root=REPO_ROOT,
+            )
+
+            commands = artifact["payload"]["reproduction_commands"]
+            self.assertIn("--proof-class competition-exact", commands["evaluate_profile"])
+            self.assertIn("--proof-class competition-exact", commands["run_batch_profile"])
+
     def test_before_after_exhibit_labels_unbound_baseline_as_harness_exhibit(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -1919,6 +1985,124 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
 
             self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
 
+    def test_run_batch_profile_rejects_cli_competition_exact_override_without_exact_host(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-cli-exact-override",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "mode": "opencode",
+                        "execute_merge": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"competition-exact override should fail before launch: {argv}")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": ""}):
+                with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
+                    harness.run_batch_profile(
+                        profile_path=profile_path,
+                        run_id="run-profile-cli-exact-override",
+                        out_root=out_root,
+                        proof_class_override="competition-exact",
+                        command_runner=fail_if_called,
+                        repo_root=REPO_ROOT,
+                    )
+
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+
+    def test_run_batch_profile_records_cli_proof_class_override(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-cli-exact-override",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo",
+                        "worker_prefix": "worker",
+                        "mode": "deterministic",
+                        "execute_merge": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" not in argv:
+                    raise AssertionError(f"unexpected command for no-merge profile: {argv}")
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": "1"}):
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile-cli-exact-override",
+                    out_root=out_root,
+                    proof_class_override="competition-exact",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["profile_proof_class"], "local-simulation")
+            self.assertEqual(result["proof_class"], "competition-exact")
+            self.assertEqual(
+                result["proof_class_resolution"],
+                {
+                    "source": "cli-override",
+                    "profile_proof_class": "local-simulation",
+                    "effective_proof_class": "competition-exact",
+                    "override_requested": True,
+                    "changed": True,
+                    "override_proof_class": "competition-exact",
+                },
+            )
+            rows = fetch_rows(
+                Path(REPO_ROOT / result["db_path"]),
+                "select proof_class from runs where run_id=?",
+                ("run-profile-cli-exact-override",),
+            )
+            self.assertEqual(rows, [("competition-exact",)])
+            report = json.loads((out_root / "harness" / "batch-profile-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["profile_proof_class"], "local-simulation")
+            self.assertEqual(report["proof_class"], "competition-exact")
+            self.assertEqual(report["proof_class_resolution"], result["proof_class_resolution"])
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["proof_class_resolution"], result["proof_class_resolution"])
+            self.assertEqual(agent_index["proof_class_resolution"], result["proof_class_resolution"])
+
     def test_evaluate_rejects_competition_exact_without_exact_host_before_init_run(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
@@ -2133,6 +2317,18 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["exit_code"], 1)
             self.assertEqual(result["blocked_phase"], "opencode-preflight")
             self.assertEqual(result["root_cause_key"], "opencode_model_unavailable")
+            self.assertEqual(result["profile_proof_class"], "local-simulation")
+            self.assertEqual(result["proof_class"], "local-simulation")
+            self.assertEqual(
+                result["proof_class_resolution"],
+                {
+                    "source": "profile",
+                    "profile_proof_class": "local-simulation",
+                    "effective_proof_class": "local-simulation",
+                    "override_requested": False,
+                    "changed": False,
+                },
+            )
             self.assertFalse(result["semantic_gate"])
             self.assertEqual(result["translation_coverage_numerator"], 0)
             self.assertFalse(result["local_simulation_closes_p0_h9"])
@@ -3375,11 +3571,74 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         )
         self.assertEqual(batch_runner.call_args.kwargs["run_id"], "run-evaluate-profile")
         self.assertEqual(batch_runner.call_args.kwargs["out_root"], Path("target/competition-out-evaluate-profile"))
+        self.assertIsNone(batch_runner.call_args.kwargs["proof_class_override"])
         self.assertEqual(evaluate_profile_report.call_args.kwargs["batch_result"], {"status": "completed", "exit_code": 0})
         self.assertEqual(
             evaluate_profile_report.call_args.kwargs["profile_path"],
             Path("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json"),
         )
+
+    def test_evaluate_cli_profile_dispatches_proof_class_override(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "evaluate",
+            "--profile",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            "--run-id",
+            "run-evaluate-profile-exact",
+            "--out-root",
+            "target/competition-out-evaluate-profile-exact",
+            "--proof-class",
+            "competition-exact",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_batch_profile",
+            return_value={"status": "blocked", "exit_code": 1},
+        ) as batch_runner, patch.object(
+            harness,
+            "write_evaluate_profile_report",
+            return_value={"status": "blocked", "exit_code": 1, "report_kind": "evaluate-report"},
+        ) as evaluate_profile_report:
+            self.assertEqual(harness.main(), 1)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(payload["report_kind"], "evaluate-report")
+        self.assertEqual(batch_runner.call_args.kwargs["proof_class_override"], "competition-exact")
+        self.assertEqual(
+            batch_runner.call_args.kwargs["profile_path"],
+            Path("config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json"),
+        )
+        evaluate_profile_report.assert_called_once()
+
+    def test_run_batch_profile_cli_dispatches_proof_class_override(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "run-batch-profile",
+            "--profile",
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            "--run-id",
+            "run-batch-profile-exact",
+            "--out-root",
+            "target/competition-out-batch-profile-exact",
+            "--proof-class",
+            "competition-exact",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_batch_profile",
+            return_value={"status": "blocked", "exit_code": 1},
+        ) as batch_runner:
+            self.assertEqual(harness.main(), 1)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "blocked")
+        self.assertEqual(batch_runner.call_args.kwargs["proof_class_override"], "competition-exact")
+        self.assertEqual(batch_runner.call_args.kwargs["run_id"], "run-batch-profile-exact")
+        self.assertEqual(batch_runner.call_args.kwargs["out_root"], Path("target/competition-out-batch-profile-exact"))
 
     def test_build_resume_manifest_records_worker_replay_commands(self) -> None:
         with temp_repo_dir() as tmp:

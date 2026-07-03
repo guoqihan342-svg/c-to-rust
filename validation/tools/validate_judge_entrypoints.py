@@ -907,6 +907,8 @@ def parsed_command_flags(command: str) -> dict[str, str]:
     while index < len(parts):
         part = parts[index]
         if part.startswith("--") and index + 1 < len(parts) and not parts[index + 1].startswith("--"):
+            if part in flags:
+                raise ValueError(f"command must not repeat {part}")
             flags[part] = parts[index + 1]
             index += 2
             continue
@@ -1728,11 +1730,17 @@ def validate_entrypoint_profile_contract(
     profile = load_json(repo_path(profile_path, repo_root=repo_root))
     if profile_ref.get("profile_id") != profile.get("profile_id"):
         raise ValueError(f"{entry.get('id')} profile_id must match profile payload")
-    if entry.get("proof_class") != profile.get("proof_class"):
-        raise ValueError(f"{entry.get('id')} proof_class must match profile proof_class")
+    command = require_string(entry.get("command"), f"{entry.get('id')}.command")
+    flags = parsed_command_flags(command)
+    command_proof_class = flags.get("--proof-class")
+    profile_proof_class = profile.get("proof_class")
+    effective_proof_class = command_proof_class or profile_proof_class
+    if command_proof_class is not None and command_proof_class != entry.get("proof_class"):
+        raise ValueError(f"{entry.get('id')} command --proof-class must match entrypoint proof_class")
+    if effective_proof_class != entry.get("proof_class"):
+        raise ValueError(f"{entry.get('id')} effective proof_class must match entrypoint proof_class")
     if profile.get("target_id") != config.get("target_id"):
         raise ValueError(f"{entry.get('id')} profile target_id must match judge target_id")
-    command = require_string(entry.get("command"), f"{entry.get('id')}.command")
     run_id = require_string(entry.get("run_id"), f"{entry.get('id')}.run_id")
     if f"--profile {profile_path}" not in command:
         raise ValueError(f"{entry.get('id')} command must reference its profile path")
@@ -1788,7 +1796,16 @@ def validate_entrypoint_profile_contract(
         raise ValueError(f"{entry.get('id')} profile uses commits outside source_pin_policy: {disallowed}")
     result = {
         "profile_id": profile.get("profile_id"),
-        "proof_class": profile.get("proof_class"),
+        "profile_proof_class": profile_proof_class,
+        "proof_class": effective_proof_class,
+        "proof_class_resolution": {
+            "source": "cli-override" if command_proof_class is not None else "profile",
+            "profile_proof_class": profile_proof_class,
+            "effective_proof_class": effective_proof_class,
+            "override_requested": command_proof_class is not None,
+            "changed": command_proof_class is not None and command_proof_class != profile_proof_class,
+            **({"override_proof_class": command_proof_class} if command_proof_class is not None else {}),
+        },
         "observed_commits": sorted(observed_commits),
         "status": "passed",
     }

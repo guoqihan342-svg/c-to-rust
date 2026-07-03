@@ -7029,6 +7029,93 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_profile_contract_accepts_command_proof_class_override(self) -> None:
+        temp_config = write_temp_config(load_default_config())
+        profile_path = temp_config.parent / "profile.json"
+        write_json(
+            profile_path,
+            {
+                "profile_id": "demo-profile",
+                "proof_class": "local-simulation",
+                "target_id": "demo",
+                "source_repository": "https://example.com/FlashDB.git",
+                "source_branch": "competition",
+                "source_commit": "abc123",
+                "mode": "deterministic",
+            },
+        )
+        entry = {
+            "id": "demo_exact_profile",
+            "profile": {"path": repo_relative(profile_path), "profile_id": "demo-profile"},
+            "proof_class": "competition-exact",
+            "run_id": "run-demo-exact",
+            "command": (
+                "python3 -B -m validation.tools.opencode_agent_harness evaluate "
+                f"--profile {repo_relative(profile_path)} --run-id run-demo-exact "
+                "--out-root target/demo-exact --proof-class competition-exact"
+            ),
+        }
+
+        result = validator.validate_entrypoint_profile_contract(
+            entry,
+            config={"target_id": "demo"},
+            source_pin_contract={
+                "repository": "https://example.com/FlashDB.git",
+                "branch": "competition",
+                "allowed_commits": ["abc123"],
+            },
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(result["profile_proof_class"], "local-simulation")
+        self.assertEqual(result["proof_class"], "competition-exact")
+        self.assertEqual(result["proof_class_resolution"]["source"], "cli-override")
+        self.assertTrue(result["proof_class_resolution"]["changed"])
+
+    def test_profile_contract_rejects_command_proof_class_mismatch(self) -> None:
+        temp_config = write_temp_config(load_default_config())
+        profile_path = temp_config.parent / "profile.json"
+        write_json(
+            profile_path,
+            {
+                "profile_id": "demo-profile",
+                "proof_class": "local-simulation",
+                "target_id": "demo",
+                "source_commit": "abc123",
+            },
+        )
+        entry = {
+            "id": "demo_exact_profile",
+            "profile": {"path": repo_relative(profile_path), "profile_id": "demo-profile"},
+            "proof_class": "competition-exact",
+            "run_id": "run-demo-exact",
+            "command": (
+                "python3 -B -m validation.tools.opencode_agent_harness evaluate "
+                f"--profile {repo_relative(profile_path)} --run-id run-demo-exact "
+                "--out-root target/demo-exact --proof-class local-simulation"
+            ),
+        }
+
+        with self.assertRaisesRegex(ValueError, "command --proof-class must match entrypoint proof_class"):
+            validator.validate_entrypoint_profile_contract(
+                entry,
+                config={"target_id": "demo"},
+                source_pin_contract={
+                    "repository": "https://example.com/FlashDB.git",
+                    "branch": "competition",
+                    "allowed_commits": ["abc123"],
+                },
+                repo_root=REPO_ROOT,
+            )
+
+    def test_command_flags_reject_duplicate_proof_class(self) -> None:
+        with self.assertRaisesRegex(ValueError, "command must not repeat --proof-class"):
+            validator.parsed_command_flags(
+                "python3 -B -m validation.tools.opencode_agent_harness evaluate "
+                "--profile config/demo.json --run-id run --out-root target/out "
+                "--proof-class local-simulation --proof-class competition-exact"
+            )
+
     def test_default_entrypoint_commands_use_portable_python3_b_contract(self) -> None:
         config = load_default_config()
 

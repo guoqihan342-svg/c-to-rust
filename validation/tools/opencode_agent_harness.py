@@ -223,6 +223,10 @@ def main() -> int:
     batch_profile_parser.add_argument("--profile", type=Path, required=True)
     batch_profile_parser.add_argument("--run-id", required=True)
     batch_profile_parser.add_argument("--out-root", type=Path, required=True)
+    batch_profile_parser.add_argument(
+        "--proof-class",
+        choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
+    )
     batch_profile_parser.add_argument("--timeout-seconds", type=int)
 
     evaluate_parser = subcommands.add_parser("evaluate")
@@ -400,6 +404,7 @@ def main() -> int:
             profile_path=args.profile,
             run_id=args.run_id,
             out_root=args.out_root,
+            proof_class_override=args.proof_class,
             timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "evaluate":
@@ -408,6 +413,7 @@ def main() -> int:
                 profile_path=args.profile,
                 run_id=args.run_id,
                 out_root=args.out_root,
+                proof_class_override=args.proof_class,
                 timeout_seconds=args.timeout_seconds,
             )
             result = write_evaluate_profile_report(
@@ -1246,7 +1252,9 @@ def write_blocked_batch_preflight_report(
     profile_path: Path,
     run_id: str,
     out_root: Path,
+    profile_proof_class: str,
     proof_class: str,
+    proof_class_resolution: dict[str, Any],
     mode: str,
     preflight_result: dict[str, Any],
     repo_root: Path = REPO_ROOT,
@@ -1278,7 +1286,9 @@ def write_blocked_batch_preflight_report(
         "profile_sha256": sha256_file(profile_path),
         "run_id": run_id,
         "out_root": repo_relative(out_root, repo_root=repo_root),
+        "profile_proof_class": profile_proof_class,
         "proof_class": proof_class,
+        "proof_class_resolution": proof_class_resolution,
         "mode": mode,
         "worker_count": 0,
         "opencode_preflight_report": preflight_binding,
@@ -1299,11 +1309,50 @@ def write_blocked_batch_preflight_report(
     return result
 
 
+def resolve_batch_profile_proof_class(
+    profile: dict[str, Any],
+    *,
+    proof_class_override: str | None,
+) -> tuple[str, str, dict[str, Any]]:
+    profile_proof_class = profile_required_string(profile, "proof_class")
+    if profile_proof_class not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"unsupported proof_class in batch profile: {profile_proof_class}")
+    if proof_class_override is not None and proof_class_override not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"unsupported proof_class override: {proof_class_override}")
+    effective_proof_class = proof_class_override or profile_proof_class
+    resolution: dict[str, Any] = {
+        "source": "cli-override" if proof_class_override is not None else "profile",
+        "profile_proof_class": profile_proof_class,
+        "effective_proof_class": effective_proof_class,
+        "override_requested": proof_class_override is not None,
+        "changed": proof_class_override is not None and proof_class_override != profile_proof_class,
+    }
+    if proof_class_override is not None:
+        resolution["override_proof_class"] = proof_class_override
+    return profile_proof_class, effective_proof_class, resolution
+
+
+def proof_class_override_cli_suffix(
+    *,
+    proof_class_resolution: dict[str, Any] | None,
+    fallback_proof_class: str | None,
+) -> str:
+    if not isinstance(proof_class_resolution, dict) or proof_class_resolution.get("source") != "cli-override":
+        return ""
+    proof_class = proof_class_resolution.get("effective_proof_class") or proof_class_resolution.get("override_proof_class")
+    if proof_class is None:
+        proof_class = fallback_proof_class
+    if proof_class not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"invalid proof_class override resolution: {proof_class}")
+    return f" --proof-class {proof_class}"
+
+
 def run_batch_profile(
     *,
     profile_path: Path,
     run_id: str,
     out_root: Path,
+    proof_class_override: str | None = None,
     timeout_seconds: int | None = None,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
@@ -1320,9 +1369,10 @@ def run_batch_profile(
     if profile.get("schema_version") != SCHEMA_VERSION:
         raise SystemExit(f"unsupported batch profile schema_version: {profile.get('schema_version')}")
     profile_id = profile_required_string(profile, "profile_id")
-    proof_class = profile_required_string(profile, "proof_class")
-    if proof_class not in ALLOWED_PROOF_CLASSES:
-        raise SystemExit(f"unsupported proof_class in batch profile: {proof_class}")
+    profile_proof_class, proof_class, proof_class_resolution = resolve_batch_profile_proof_class(
+        profile,
+        proof_class_override=proof_class_override,
+    )
     require_competition_exact_host_attestation(proof_class, context="run-batch-profile")
     mode = profile_string(profile, "mode", default="deterministic")
     if mode not in {"deterministic", "opencode"}:
@@ -1364,7 +1414,9 @@ def run_batch_profile(
                 profile_path=profile_path,
                 run_id=run_id,
                 out_root=out_root,
+                profile_proof_class=profile_proof_class,
                 proof_class=proof_class,
+                proof_class_resolution=proof_class_resolution,
                 mode=mode,
                 preflight_result=preflight_result,
                 repo_root=repo_root,
@@ -1449,6 +1501,7 @@ def run_batch_profile(
         plan=plan,
         run_result=run_result,
         route_metrics_artifact=route_metrics_artifact,
+        proof_class_resolution=proof_class_resolution,
         out_root=out_root,
         repo_root=repo_root,
     )
@@ -1462,7 +1515,9 @@ def run_batch_profile(
         "run_id": run_id,
         "out_root": repo_relative(out_root, repo_root=repo_root),
         "db_path": repo_relative(db_path, repo_root=repo_root),
+        "profile_proof_class": profile_proof_class,
         "proof_class": proof_class,
+        "proof_class_resolution": proof_class_resolution,
         "mode": mode,
         "worker_count": len(plan["units"]),
         "plan_path": plan["plan_path"],
@@ -1508,6 +1563,7 @@ def run_batch_profile(
         acceptance_boundary=acceptance_boundary,
         attempt_evidence_policy=attempt_evidence_policy,
         report_artifacts=report_artifacts,
+        proof_class_resolution=proof_class_resolution,
         repo_root=repo_root,
     )
     result.update(context_refs)
@@ -1751,7 +1807,9 @@ def write_evaluate_profile_report(
         "out_root": repo_relative(out_root, repo_root=repo_root),
         "profile": artifact_ref(profile_path, repo_root=repo_root),
         "profile_id": batch_result.get("profile_id"),
+        "profile_proof_class": batch_result.get("profile_proof_class"),
         "proof_class": batch_result.get("proof_class"),
+        "proof_class_resolution": batch_result.get("proof_class_resolution"),
         "mode": batch_result.get("mode"),
         "batch_profile_report": batch_report_ref,
         "context_pack": batch_result.get("context_pack"),
@@ -2020,15 +2078,23 @@ def write_judge_evidence_index(
 
     profile_rel = repo_relative(profile_path, repo_root=repo_root)
     out_root_rel = repo_relative(out_root, repo_root=repo_root)
+    proof_class_suffix = proof_class_override_cli_suffix(
+        proof_class_resolution=evaluate_report.get("proof_class_resolution")
+        if isinstance(evaluate_report.get("proof_class_resolution"), dict)
+        else None,
+        fallback_proof_class=str(evaluate_report.get("proof_class", "")),
+    )
     if reproduction_commands is None:
         reproduction_commands = {
             "evaluate_profile": (
                 "python3 -B -m validation.tools.opencode_agent_harness evaluate "
                 f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+                f"{proof_class_suffix}"
             ),
             "run_batch_profile": (
                 "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
                 f"--profile {profile_rel} --run-id {run_id} --out-root {out_root_rel}"
+                f"{proof_class_suffix}"
             ),
         }
         if isinstance(summary_path_text, str) and summary_path_text:
@@ -2553,6 +2619,8 @@ def build_resume_manifest(
         payload["attempt_evidence_policy"] = bind_verified_baseline_into_policy(policy, verified_baseline_ref)
     if verified_baseline_ref is not None:
         payload["verified_unsafe_baseline"] = verified_baseline_ref
+    if isinstance(context_pack.get("proof_class_resolution"), dict):
+        payload["proof_class_resolution"] = json.loads(json.dumps(context_pack["proof_class_resolution"]))
     return payload
 
 
@@ -3541,6 +3609,7 @@ def write_context_pack_and_agent_index(
     acceptance_boundary: dict[str, Any] | None = None,
     attempt_evidence_policy: dict[str, Any] | None = None,
     report_artifacts: dict[str, dict[str, Any]] | None = None,
+    proof_class_resolution: dict[str, Any] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, dict[str, str]]:
     db_path = repo_path(db_path, repo_root=repo_root)
@@ -3652,6 +3721,7 @@ def write_context_pack_and_agent_index(
         "run_id": run_id,
         "target_id": target_id,
         "proof_class": proof_class,
+        **({"proof_class_resolution": proof_class_resolution} if proof_class_resolution is not None else {}),
         "mode": mode,
         "status": run_result.get("status"),
         "budget": {
@@ -3723,6 +3793,7 @@ def write_context_pack_and_agent_index(
         "run_id": run_id,
         "target_id": target_id,
         "proof_class": proof_class,
+        **({"proof_class_resolution": proof_class_resolution} if proof_class_resolution is not None else {}),
         "checkpoint_backend": graph.get("checkpoint_backend", "sqlite"),
         "agent_coordination_contract": build_agent_coordination_contract(
             graph=graph,
@@ -3883,6 +3954,7 @@ def write_before_after_exhibit_profile_report(
     run_result: dict[str, Any],
     route_metrics_artifact: dict[str, Any] | None,
     out_root: Path,
+    proof_class_resolution: dict[str, Any] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any] | None:
     if not profile_bool(profile, "emit_before_after_exhibit_report", default=False):
@@ -3897,6 +3969,7 @@ def write_before_after_exhibit_profile_report(
             run_id=run_id,
             out_root=out_root,
             summary_path=summary_path,
+            proof_class_resolution=proof_class_resolution,
             repo_root=repo_root,
         )
         payload = {
@@ -3906,7 +3979,9 @@ def write_before_after_exhibit_profile_report(
             "reason": "competition_summary_missing",
             "run_id": run_id,
             "profile_id": profile_required_string(profile, "profile_id"),
+            "profile_proof_class": profile.get("proof_class"),
             "proof_class": proof_class,
+            "proof_class_resolution": proof_class_resolution,
             "mode": mode,
             "claim_boundary": {
                 "source": "batch_profile_acceptance_boundary",
@@ -4017,6 +4092,7 @@ def write_before_after_exhibit_profile_report(
         run_id=run_id,
         out_root=out_root,
         summary_path=summary_path,
+        proof_class_resolution=proof_class_resolution,
         repo_root=repo_root,
     )
     payload = {
@@ -4025,7 +4101,9 @@ def write_before_after_exhibit_profile_report(
         "status": status,
         "run_id": run_id,
         "profile_id": profile_required_string(profile, "profile_id"),
+        "profile_proof_class": profile.get("proof_class"),
         "proof_class": proof_class,
+        "proof_class_resolution": proof_class_resolution,
         "mode": mode,
         "claim_boundary": {
             "source": "batch_profile_acceptance_boundary",
@@ -4077,13 +4155,19 @@ def before_after_reproduction_commands(
     run_id: str,
     out_root: Path,
     summary_path: Path,
-    repo_root: Path,
+    proof_class_resolution: dict[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
 ) -> dict[str, str]:
+    proof_class_suffix = proof_class_override_cli_suffix(
+        proof_class_resolution=proof_class_resolution,
+        fallback_proof_class=None,
+    )
     return {
         "run_command": (
             "python3 -B -m validation.tools.opencode_agent_harness run-batch-profile "
             f"--profile {repo_relative(profile_path, repo_root=repo_root)} "
             f"--run-id {run_id} --out-root {repo_relative(out_root, repo_root=repo_root)}"
+            f"{proof_class_suffix}"
         ),
         "verify_command": (
             "python3 -B validation/tools/validate_competition_run_summary.py "
