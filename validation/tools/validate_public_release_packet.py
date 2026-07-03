@@ -859,6 +859,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     for field in (
         "publication_manifest",
         "publishability",
+        "harness_architecture_summary",
         "before_after_repair_exhibit",
         "known_gaps",
         "reproduction_commands",

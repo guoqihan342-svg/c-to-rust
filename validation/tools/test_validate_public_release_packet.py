@@ -419,6 +419,89 @@ def write_opencode_safety_transform_attempt_fixture(
     write_json(summary_path, summary_payload)
     refs["workflow_metrics"]["sha256"] = judge_validator.sha256_file(workflow_metrics_path)
     refs["summary"]["sha256"] = judge_validator.sha256_file(summary_path)
+    runtime_env = opencode_runtime_env_contract(root, scope="worker-a-attempt")
+    handoff_path = evidence_root / "opencode-handoff-contract.json"
+    session_path = evidence_root / "opencode-session-evidence.json"
+    worker_command = [
+        "python3",
+        "-B",
+        "-m",
+        "validation.tools.opencode_agent_harness",
+        "run-worker",
+        "--worker-id",
+        "worker-a",
+        "--summary",
+        refs["summary"]["path"],
+    ]
+    worker_command_line = shlex.join(worker_command)
+    opencode_prompt = "Run worker-a safety transform"
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        "max",
+        "--model",
+        "GLM-5.1",
+        opencode_prompt,
+    ]
+    opencode_command_line = shlex.join(opencode_argv)
+    launch_policy = {
+        "opencode_agent": None,
+        "opencode_command": "opencode",
+        "opencode_model": "GLM-5.1",
+        "opencode_skip_permissions": False,
+        "opencode_variant": "max",
+    }
+    launch_policy_sha256 = judge_validator.sha256_text(json.dumps(launch_policy, sort_keys=True))
+    handoff_payload = {
+        "schema_version": 1,
+        "runner_kind": "opencode-run",
+        "run_id": "opencode-run",
+        "worker_id": "worker-a",
+        "attempt": 1,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": launch_policy_sha256,
+        "opencode_runtime_env": runtime_env,
+        "worker_command": worker_command,
+        "worker_command_line": worker_command_line,
+        "worker_command_sha256": judge_validator.sha256_text(worker_command_line),
+        "expected_summary_path": refs["summary"]["path"],
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": opencode_command_line,
+        "prompt": opencode_prompt,
+    }
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {
+                        "input": {
+                            "command": worker_command_line,
+                            "workdir": str(REPO_ROOT),
+                        }
+                    },
+                }
+            }
+        ],
+    }
+    write_json(handoff_path, handoff_payload)
+    write_json(session_path, session_payload)
+    contract_verification = judge_validator.recompute_opencode_contract_execution(
+        session_evidence=session_payload,
+        worker_command=worker_command,
+        summary_path=summary_path,
+        repo_root=REPO_ROOT,
+    )
     payload = {
         "schema_version": 1,
         "report_kind": "opencode-safety-transform-attempt",
@@ -431,7 +514,17 @@ def write_opencode_safety_transform_attempt_fixture(
             "final_gate_status": "passed",
         },
         "workflow_metrics": refs["workflow_metrics"],
-        "contract_verification": {"status": "executed"},
+        "contract_verification": contract_verification,
+        "handoff_contract": {
+            "path": repo_relative(handoff_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(handoff_path),
+        },
+        "opencode_session_evidence": {
+            "path": repo_relative(session_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(session_path),
+        },
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
@@ -576,6 +669,29 @@ def sync_packet_bound_bundle(packet: dict) -> None:
     notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
     notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
     packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
+def harness_contract_matrix_fixture() -> list[dict]:
+    def row(stage: str, graph_node: str, role: str, artifact: str, validator: str) -> dict:
+        return {
+            "stage": stage,
+            "graph_nodes": [graph_node],
+            "roles": [role],
+            "artifacts": [artifact],
+            "validators": [validator],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "translation_coverage_numerator": 0,
+            "boundary": f"{stage} stage is harness contract evidence only.",
+        }
+
+    return [
+        row("plan", "load_plan", "planner", "worker_plan", "validate_worker_plan_contract"),
+        row("translate", "worker", "worker", "worker_report", "validate_opencode_agent_runtime_contract"),
+        row("verify", "merge", "verifier", "workflow_metrics", "validate_competition_summary_entrypoint_contract"),
+        row("repair", "repair_retry", "repairer", "repair_hints", "validate_repair_self_heal_contract"),
+        row("report", "report", "reporter", "judge_evidence_index", "validate_public_release_packet"),
+    ]
 
 
 def valid_packet(root: Path) -> dict:
@@ -789,6 +905,17 @@ def valid_packet(root: Path) -> dict:
             }
         },
         "harness_architecture_summary": {
+            "report_kind": "harness-architecture-summary",
+            "sources": [],
+            "graph_runtime": "opencode-harness-langgraph-inspired",
+            "graph_nodes": ["load_plan", "worker", "merge", "repair_retry", "report"],
+            "worker_count": 1,
+            "repair_round_cap": 5,
+            "roles": ["planner", "worker", "verifier", "repairer", "reporter"],
+            "checkpoint_backend": "sqlite",
+            "contract_matrix": harness_contract_matrix_fixture(),
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
             "rollup": {
                 "source_count": 1,
                 "worker_count": 1,
@@ -973,6 +1100,7 @@ def valid_packet(root: Path) -> dict:
         "competition_config_archive": competition_config_archive,
         "publication_manifest": publication_manifest,
         "publishability": bundle_payload["publishability"],
+        "harness_architecture_summary": bundle_payload["harness_architecture_summary"],
         "before_after_repair_exhibit": before_after_repair_exhibit,
         "opencode_patch_boundary": {
             "report_kind": "opencode-patch-boundary",
@@ -1017,6 +1145,11 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(packet["publishability"]["status"], "internal_preview")
         self.assertFalse(packet["publishability"]["competition_exact_publishable"])
         self.assertEqual(packet["publishability"]["required_model"], "GLM-5.1")
+        self.assertEqual(
+            [entry["stage"] for entry in packet["harness_architecture_summary"]["contract_matrix"]],
+            ["plan", "translate", "verify", "repair", "report"],
+        )
+        self.assertFalse(packet["harness_architecture_summary"]["semantic_gate"])
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
 
@@ -1028,6 +1161,26 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         ref_status = schema["properties"]["summary"]["properties"]["published_artifact_ref_status"]
         self.assertEqual(ref_status["properties"]["semantic_gate"]["const"], False)
         self.assertEqual(ref_status["properties"]["translation_coverage_numerator"]["const"], 0)
+        self.assertIn("harness_architecture_summary", schema["required"])
+
+    def test_validate_packet_rejects_harness_contract_matrix_missing_report_stage(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-harness-matrix-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["harness_architecture_summary"]["contract_matrix"] = [
+            entry
+            for entry in packet["harness_architecture_summary"]["contract_matrix"]
+            if entry["stage"] != "report"
+        ]
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("harness_architecture_summary" in error and "contract_matrix" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_validate_packet_requires_opencode_patch_boundary(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-boundary-", dir=REPO_ROOT / "target"))

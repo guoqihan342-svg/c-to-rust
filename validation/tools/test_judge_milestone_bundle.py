@@ -1539,6 +1539,40 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         with self.assertRaises(jsonschema.exceptions.ValidationError):
             jsonschema.validate(missing_contract_matrix, schema)
 
+        valid_matrix = report["harness_architecture_summary"]["contract_matrix"]
+        contract_matrix_rewrites = {
+            "missing_repair": [
+                entry for entry in valid_matrix if entry["stage"] != "repair"
+            ],
+            "duplicate_translate": [
+                valid_matrix[0],
+                valid_matrix[1],
+                valid_matrix[2],
+                json.loads(json.dumps(valid_matrix[1])),
+                valid_matrix[4],
+            ],
+            "wrong_order": [
+                valid_matrix[1],
+                valid_matrix[0],
+                valid_matrix[2],
+                valid_matrix[3],
+                valid_matrix[4],
+            ],
+            "unknown_stage": [
+                valid_matrix[0],
+                valid_matrix[1],
+                valid_matrix[2],
+                valid_matrix[3],
+                {**valid_matrix[4], "stage": "publish"},
+            ],
+        }
+        for label, rewritten_matrix in contract_matrix_rewrites.items():
+            with self.subTest(label=label):
+                expanded = json.loads(json.dumps(report))
+                expanded["harness_architecture_summary"]["contract_matrix"] = rewritten_matrix
+                with self.assertRaises(jsonschema.exceptions.ValidationError):
+                    jsonschema.validate(expanded, schema)
+
         expanded = json.loads(json.dumps(report))
         expanded["harness_architecture_summary"]["contract_matrix"][1]["chat_output_is_evidence"] = True
         with self.assertRaises(jsonschema.exceptions.ValidationError):

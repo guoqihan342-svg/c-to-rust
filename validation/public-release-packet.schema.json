@@ -16,6 +16,7 @@
     "competition_config_archive",
     "publication_manifest",
     "publishability",
+    "harness_architecture_summary",
     "before_after_repair_exhibit",
     "opencode_patch_boundary",
     "quantitative_evaluation",
@@ -181,6 +182,9 @@
         "target_artifacts_regenerable": {"type": "boolean"}
       }
     },
+    "harness_architecture_summary": {
+      "$ref": "#/$defs/harnessArchitectureSummary"
+    },
     "before_after_repair_exhibit": {
       "type": "object",
       "additionalProperties": true,
@@ -262,6 +266,97 @@
       "properties": {
         "status": {"const": "present"},
         "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "harnessArchitectureSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "sources",
+        "graph_nodes",
+        "worker_count",
+        "repair_round_cap",
+        "roles",
+        "contract_matrix",
+        "chat_output_is_evidence",
+        "semantic_gate"
+      ],
+      "properties": {
+        "report_kind": {"const": "harness-architecture-summary"},
+        "sources": {"type": "array", "items": {"type": "object"}},
+        "graph_runtime": {"type": ["string", "null"]},
+        "graph_nodes": {"type": "array", "items": {"type": "string"}},
+        "worker_count": {"type": "integer", "minimum": 0},
+        "repair_round_cap": {"type": "integer", "minimum": 0, "maximum": 5},
+        "roles": {"type": "array", "items": {"type": "string"}},
+        "checkpoint_backend": {"type": ["string", "null"]},
+        "contract_matrix": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            {
+              "allOf": [
+                {"$ref": "#/$defs/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "plan"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "translate"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "verify"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "repair"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "report"}}}
+              ]
+            }
+          ],
+          "items": false
+        },
+        "chat_output_is_evidence": {"const": false},
+        "semantic_gate": {"const": false}
+      }
+    },
+    "harnessContractMatrixEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "stage",
+        "graph_nodes",
+        "roles",
+        "artifacts",
+        "validators",
+        "semantic_gate",
+        "chat_output_is_evidence",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "stage": {"type": "string", "minLength": 1},
+        "graph_nodes": {"type": "array", "items": {"type": "string"}},
+        "roles": {"type": "array", "items": {"type": "string"}},
+        "artifacts": {"type": "array", "items": {"type": "string"}},
+        "validators": {"type": "array", "items": {"type": "string"}},
+        "semantic_gate": {"const": false},
+        "chat_output_is_evidence": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
       }
     },
     "progressDeltaLedger": {

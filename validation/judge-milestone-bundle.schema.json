@@ -415,33 +415,41 @@
         "checkpoint_backend": {"type": ["string", "null"]},
         "contract_matrix": {
           "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": true,
-            "required": [
-              "stage",
-              "graph_nodes",
-              "roles",
-              "artifacts",
-              "validators",
-              "semantic_gate",
-              "chat_output_is_evidence",
-              "translation_coverage_numerator",
-              "boundary"
-            ],
-            "properties": {
-              "stage": {"type": "string", "minLength": 1},
-              "graph_nodes": {"type": "array", "items": {"type": "string"}},
-              "roles": {"type": "array", "items": {"type": "string"}},
-              "artifacts": {"type": "array", "items": {"type": "string"}},
-              "validators": {"type": "array", "items": {"type": "string"}},
-              "semantic_gate": {"const": false},
-              "chat_output_is_evidence": {"const": false},
-              "translation_coverage_numerator": {"const": 0},
-              "boundary": {"type": "string", "minLength": 1}
+          "minItems": 5,
+          "maxItems": 5,
+          "items": [
+            {
+              "allOf": [
+                {"$ref": "#/definitions/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "plan"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/definitions/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "translate"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/definitions/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "verify"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/definitions/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "repair"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/definitions/harnessContractMatrixEntry"},
+                {"properties": {"stage": {"const": "report"}}}
+              ]
             }
-          }
+          ],
+          "additionalItems": false
         },
         "chat_output_is_evidence": {"const": false},
         "semantic_gate": {"const": false}
@@ -1165,6 +1173,32 @@
         "path": {"type": "string", "minLength": 1},
         "status": {"type": "string"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "harnessContractMatrixEntry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "stage",
+        "graph_nodes",
+        "roles",
+        "artifacts",
+        "validators",
+        "semantic_gate",
+        "chat_output_is_evidence",
+        "translation_coverage_numerator",
+        "boundary"
+      ],
+      "properties": {
+        "stage": {"type": "string", "minLength": 1},
+        "graph_nodes": {"type": "array", "items": {"type": "string"}},
+        "roles": {"type": "array", "items": {"type": "string"}},
+        "artifacts": {"type": "array", "items": {"type": "string"}},
+        "validators": {"type": "array", "items": {"type": "string"}},
+        "semantic_gate": {"const": false},
+        "chat_output_is_evidence": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "boundary": {"type": "string", "minLength": 1}
       }
     },
     "baselineVerificationSummary": {
