@@ -196,6 +196,7 @@
       "required": [
         "competition_exact_host_attested",
         "required_agent_tool",
+        "required_agent",
         "required_model",
         "required_variant",
         "opencode_model_availability"
@@ -208,6 +209,12 @@
           "type": "string",
           "enum": [
             "opencode"
+          ]
+        },
+        "required_agent": {
+          "type": "string",
+          "enum": [
+            "c2rust-migrator"
           ]
         },
         "required_model": {

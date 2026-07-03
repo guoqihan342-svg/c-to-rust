@@ -204,6 +204,7 @@ def add_competition_exact_host_attestation(summary: dict, summary_path: Path, *,
     summary["competition_exact_host_attestation"] = {
         "competition_exact_host_attested": True,
         "required_agent_tool": "opencode",
+        "required_agent": "c2rust-migrator",
         "required_model": "GLM-5.1",
         "required_variant": "max",
         "opencode_model_availability": {
@@ -266,6 +267,24 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["proof_class"], "competition-exact")
+
+    def test_rejects_competition_exact_when_host_attestation_agent_missing_or_wrong(self) -> None:
+        module = load_validator_module()
+        for missing_or_wrong in ("missing", "wrong"):
+            with self.subTest(missing_or_wrong=missing_or_wrong):
+                summary = valid_summary()
+                summary["proof_class"] = "competition-exact"
+                with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+                    summary_path = Path(tmp) / "competition-run-summary.json"
+                    add_competition_exact_host_attestation(summary, summary_path)
+                    if missing_or_wrong == "missing":
+                        summary["competition_exact_host_attestation"].pop("required_agent")
+                    else:
+                        summary["competition_exact_host_attestation"]["required_agent"] = "default"
+                    write_summary_with_workflow_metrics(summary_path, summary)
+
+                    with self.assertRaisesRegex(SystemExit, "required_agent"):
+                        module.validate_summary(summary_path, repo_root=REPO_ROOT)
 
     def test_rejects_competition_exact_when_probe_stdout_lacks_glm51(self) -> None:
         module = load_validator_module()

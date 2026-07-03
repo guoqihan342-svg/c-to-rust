@@ -2073,6 +2073,7 @@ class RunCompetitionTests(unittest.TestCase):
             attestation = summary["competition_exact_host_attestation"]
             availability = attestation["opencode_model_availability"]
             self.assertTrue(attestation["competition_exact_host_attested"])
+            self.assertEqual(attestation["required_agent"], "c2rust-migrator")
             self.assertEqual(availability["argv"], ["opencode", "models"])
             self.assertTrue(availability["model_listed"])
             stdout_path = out_root / availability["logs"]["stdout"]

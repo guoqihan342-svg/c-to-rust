@@ -38,6 +38,7 @@ LF_STABLE_TEXT_SUFFIXES = {
     ".yml",
 }
 COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
 
@@ -113,6 +114,8 @@ def validate_competition_exact_host_attestation(
         )
     if attestation.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
         raise SystemExit("competition exact host attestation required_agent_tool must be opencode")
+    if attestation.get("required_agent") != COMPETITION_OPENCODE_AGENT:
+        raise SystemExit("competition exact host attestation required_agent must be c2rust-migrator")
     if attestation.get("required_model") != COMPETITION_OPENCODE_MODEL:
         raise SystemExit("competition exact host attestation required_model must be GLM-5.1")
     if attestation.get("required_variant") != COMPETITION_OPENCODE_VARIANT:

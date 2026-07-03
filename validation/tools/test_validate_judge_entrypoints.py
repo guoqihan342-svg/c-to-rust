@@ -7583,6 +7583,28 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "output contains forbidden local absolute path"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
+    def test_competition_smoke_command_log_rejects_root_only_flag_host_paths_in_output_text(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["bash", "-lc", "echo ok"],
+                        "returncode": 0,
+                        "workdir": ".",
+                        "stdout": "cc args: -I/mnt/c -L/workspace --sysroot=/opt",
+                        "stderr": r"link args: -L\\server\share -L//server/share",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "output contains forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
     def test_competition_smoke_command_log_rejects_parent_traversal_workdir(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
             command_log = Path(tmp) / "commands.jsonl"

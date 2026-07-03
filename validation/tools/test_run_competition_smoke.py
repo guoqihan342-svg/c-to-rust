@@ -805,12 +805,19 @@ class RunCompetitionSmokeTests(unittest.TestCase):
         module = load_smoke_module()
         cases = {
             "echo ok; /mnt/c/Users/me/tool.exe": "echo ok; tool.exe",
+            "cc -I/mnt/c -L/workspace --sysroot=/opt": "cc -Ic -Lworkspace --sysroot=opt",
+            "-I/mnt/c": "-Ic",
+            "--sysroot=/opt": "--sysroot=opt",
             r"echo ok && \\wsl$\Ubuntu\home\me\tool.exe": "echo ok && tool.exe",
             "echo ok | //wsl.localhost/Ubuntu/home/me/python3": "echo ok | python3",
             "echo ok | //wsl$/Ubuntu/home/me/python3": "echo ok | python3",
             "echo ok | /workspace/project/tools/python3": "echo ok | python3",
             r"echo ok && \\server\share\tool.exe": "echo ok && tool.exe",
+            r"ld -L\\server\share": "ld -Lshare",
+            r"-L\\server\share": "-Lshare",
             "echo ok && //server/share/tool": "echo ok && tool",
+            "ld -L//server/share": "ld -Lshare",
+            "-L//server/share": "-Lshare",
             r'echo ok; "C:\Program Files\Python314\python.exe"': 'echo ok; "python.exe"',
         }
 

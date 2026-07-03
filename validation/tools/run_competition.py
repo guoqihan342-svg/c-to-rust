@@ -29,6 +29,7 @@ EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slic
 UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
 COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
 COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
 LF_STABLE_TEXT_SUFFIXES = {
@@ -482,6 +483,7 @@ def build_competition_exact_host_attestation(
     return {
         "competition_exact_host_attested": True,
         "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_agent": COMPETITION_OPENCODE_AGENT,
         "required_model": COMPETITION_OPENCODE_MODEL,
         "required_variant": COMPETITION_OPENCODE_VARIANT,
         "opencode_model_availability": {

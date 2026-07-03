@@ -33,61 +33,61 @@ COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
 LOCAL_HOST_PATH_UNQUOTED = (
     r"(?:"
     r"[A-Za-z]:[\\/][^\s;&|]+|"
-    r"/mnt/[A-Za-z]/[^\s;&|]+|"
-    r"/home/[^\s;&|]+|"
-    r"/Users/[^\s;&|]+|"
-    r"/tmp/[^\s;&|]+|"
-    r"/var/[^\s;&|]+|"
-    r"/workspace/[^\s;&|]+|"
-    r"/__w/[^\s;&|]+|"
-    r"/opt/[^\s;&|]+|"
-    r"/builds/[^\s;&|]+|"
+    r"/mnt/[A-Za-z](?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/home(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/Users(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/tmp(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/var(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/workspace(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/__w(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/opt(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
+    r"/builds(?:/[^\s;&|]+|(?=$|[\s;&|]))|"
     r"\\\\wsl\$\\[^\s;&|]+|"
     r"\\\\wsl\.localhost\\[^\s;&|]+|"
-    r"\\\\[^\\/\s;&|]+\\[^\\/\s;&|]+\\[^\s;&|]+|"
+    r"\\\\[^\\/\s;&|]+\\[^\\/\s;&|]+(?:\\[^\s;&|]+|(?=$|[\s;&|]))|"
     r"//wsl\$/[^\s;&|]+|"
     r"//wsl\.localhost/[^\s;&|]+|"
-    r"(?<!:)//[^/\s;&|]+/[^/\s;&|]+/[^\s;&|]+"
+    r"(?<!:)//[^/\s;&|]+/[^/\s;&|]+(?:/[^\s;&|]+|(?=$|[\s;&|]))"
     r")"
 )
 LOCAL_HOST_PATH_DOUBLE_QUOTED = (
     r"(?:"
     r'[A-Za-z]:[\\/][^"]+|'
-    r'/mnt/[A-Za-z]/[^"]+|'
-    r'/home/[^"]+|'
-    r'/Users/[^"]+|'
-    r'/tmp/[^"]+|'
-    r'/var/[^"]+|'
-    r'/workspace/[^"]+|'
-    r'/__w/[^"]+|'
-    r'/opt/[^"]+|'
-    r'/builds/[^"]+|'
+    r'/mnt/[A-Za-z](?:/[^"]+|(?="))|'
+    r'/home(?:/[^"]+|(?="))|'
+    r'/Users(?:/[^"]+|(?="))|'
+    r'/tmp(?:/[^"]+|(?="))|'
+    r'/var(?:/[^"]+|(?="))|'
+    r'/workspace(?:/[^"]+|(?="))|'
+    r'/__w(?:/[^"]+|(?="))|'
+    r'/opt(?:/[^"]+|(?="))|'
+    r'/builds(?:/[^"]+|(?="))|'
     r'\\\\wsl\$\\[^"]+|'
     r'\\\\wsl\.localhost\\[^"]+|'
-    r'\\\\[^\\/\s]+\\[^\\/\s]+\\[^"]+|'
+    r'\\\\[^\\/\s"]+\\[^\\/\s"]+(?:\\[^"]+|(?="))|'
     r'//wsl\$/[^"]+|'
     r'//wsl\.localhost/[^"]+|'
-    r'(?<!:)//[^/\s"]+/[^/\s"]+/[^"]+'
+    r'(?<!:)//[^/\s"]+/[^/\s"]+(?:/[^"]+|(?="))'
     r")"
 )
 LOCAL_HOST_PATH_SINGLE_QUOTED = (
     r"(?:"
     r"[A-Za-z]:[\\/][^']+|"
-    r"/mnt/[A-Za-z]/[^']+|"
-    r"/home/[^']+|"
-    r"/Users/[^']+|"
-    r"/tmp/[^']+|"
-    r"/var/[^']+|"
-    r"/workspace/[^']+|"
-    r"/__w/[^']+|"
-    r"/opt/[^']+|"
-    r"/builds/[^']+|"
+    r"/mnt/[A-Za-z](?:/[^']+|(?='))|"
+    r"/home(?:/[^']+|(?='))|"
+    r"/Users(?:/[^']+|(?='))|"
+    r"/tmp(?:/[^']+|(?='))|"
+    r"/var(?:/[^']+|(?='))|"
+    r"/workspace(?:/[^']+|(?='))|"
+    r"/__w(?:/[^']+|(?='))|"
+    r"/opt(?:/[^']+|(?='))|"
+    r"/builds(?:/[^']+|(?='))|"
     r"\\\\wsl\$\\[^']+|"
     r"\\\\wsl\.localhost\\[^']+|"
-    r"\\\\[^\\/\s]+\\[^\\/\s]+\\[^']+|"
+    r"\\\\[^\\/\s']+\\[^\\/\s']+(?:\\[^']+|(?='))|"
     r"//wsl\$/[^']+|"
     r"//wsl\.localhost/[^']+|"
-    r"(?<!:)//[^/\s']+/[^/\s']+/[^']+"
+    r"(?<!:)//[^/\s']+/[^/\s']+(?:/[^']+|(?='))"
     r")"
 )
 LOCAL_HOST_PATH_IN_COMMAND = re.compile(
@@ -789,7 +789,13 @@ def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) 
     if not argument or not any(separator in argument for separator in ["/", "\\"]):
         return argument
     sanitized_argument = sanitize_host_paths_in_command_text(argument)
-    if any(token in argument for token in [";", "|", "&&"]):
+    is_shell_fragment = any(token in argument for token in [";", "|", "&&"])
+    is_compiler_path_flag = argument.startswith(
+        ("-I", "-L", "-o", "-isystem", "-iquote", "-idirafter", "-include", "-isysroot", "--sysroot=")
+    )
+    if sanitized_argument != argument and (is_shell_fragment or re.search(r"\s", argument) or is_compiler_path_flag):
+        return sanitized_argument
+    if is_shell_fragment:
         return sanitized_argument
     path = Path(argument)
     resolved = path if path.is_absolute() else repo_root / path
