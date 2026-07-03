@@ -2683,9 +2683,11 @@ def validate_opencode_contract_recomputed_from_session(
         "expected_worker_command_sha256",
         "executed_shell_command_count",
         "executed_shell_commands",
+        "first_tool_name",
         "first_shell_command",
         "first_shell_tool_name",
         "first_shell_workdir_status",
+        "expected_workdir_status",
         "first_shell_command_matches_worker_command",
         "first_shell_workdir_matches_repo_root",
         "tools_before_first_shell",
@@ -3187,6 +3189,11 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
         raise ValueError("opencode_safety_transform_attempt.translation_coverage_numerator must be 0")
     if payload.get("status") != "accepted":
         raise ValueError("opencode_safety_transform_attempt.status must be accepted")
+    run_id = require_string(payload.get("run_id"), "opencode_safety_transform_attempt.run_id")
+    worker_id = require_string(payload.get("worker_id"), "opencode_safety_transform_attempt.worker_id")
+    attempt_number = payload.get("attempt")
+    if not isinstance(attempt_number, int) or isinstance(attempt_number, bool) or attempt_number < 1:
+        raise ValueError("opencode_safety_transform_attempt.attempt must be a positive integer")
 
     summary_payload = require_object(payload.get("summary"), "opencode_safety_transform_attempt.summary")
     summary = validate_artifact_binding_shape(
@@ -3242,6 +3249,125 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
     if contract.get("translation_coverage_numerator") != 0:
         raise ValueError("opencode_safety_transform_attempt.attempt_contract.translation_coverage_numerator must be 0")
 
+    verification = require_object(
+        payload.get("contract_verification"),
+        "opencode_safety_transform_attempt.contract_verification",
+    )
+    required_verification_fields = (
+        "expected_worker_command_line",
+        "expected_summary_path",
+        "expected_worker_command_sha256",
+        "executed_shell_command_count",
+        "executed_shell_commands",
+        "first_tool_name",
+        "first_shell_command",
+        "first_shell_tool_name",
+        "first_shell_workdir_status",
+        "expected_workdir_status",
+        "first_shell_command_matches_worker_command",
+        "first_shell_workdir_matches_repo_root",
+        "tools_before_first_shell",
+        "contract_failure_reason",
+        "worker_command_seen",
+        "summary_exists",
+        "status",
+    )
+    for field in required_verification_fields:
+        if field not in verification:
+            raise ValueError(f"opencode_safety_transform_attempt.contract_verification.{field} is required")
+    handoff_binding = validate_hash_bound_artifact_binding(
+        payload.get("handoff_contract"),
+        "opencode_safety_transform_attempt.handoff_contract",
+        repo_root=repo_root,
+    )
+    handoff_payload = require_object(
+        load_json(repo_path(handoff_binding["path"], repo_root=repo_root)),
+        "opencode_safety_transform_attempt.handoff_contract file",
+    )
+    if handoff_payload.get("runner_kind") != "opencode-run":
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.runner_kind must be opencode-run")
+    if handoff_payload.get("run_id") != run_id:
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.run_id must match run_id")
+    if handoff_payload.get("worker_id") != worker_id:
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.worker_id must match worker_id")
+    if handoff_payload.get("attempt") != attempt_number:
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.attempt must match attempt")
+    launch_policy = validate_opencode_launch_policy_binding(
+        handoff_payload.get("launch_policy"),
+        handoff_payload.get("launch_policy_sha256"),
+        "opencode_safety_transform_attempt.handoff_contract",
+    )
+    handoff_runtime_env = validate_opencode_runtime_env_contract(
+        handoff_payload.get("opencode_runtime_env"),
+        "opencode_safety_transform_attempt.handoff_contract",
+    )
+    worker_command = require_string_argv(
+        handoff_payload.get("worker_command"),
+        "opencode_safety_transform_attempt.handoff_contract.worker_command",
+    )
+    worker_command_line = require_string(
+        handoff_payload.get("worker_command_line"),
+        "opencode_safety_transform_attempt.handoff_contract.worker_command_line",
+    )
+    if worker_command_line != shell_command_line(worker_command):
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.worker_command_line must match worker_command")
+    worker_command_sha256 = validate_sha256_hex(
+        handoff_payload.get("worker_command_sha256"),
+        "opencode_safety_transform_attempt.handoff_contract.worker_command_sha256",
+    )
+    if worker_command_sha256 != sha256_text(worker_command_line):
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.worker_command_sha256 must match worker_command_line")
+    expected_summary_path = require_string(
+        handoff_payload.get("expected_summary_path"),
+        "opencode_safety_transform_attempt.handoff_contract.expected_summary_path",
+    )
+    if expected_summary_path != summary["path"]:
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.expected_summary_path must match summary.path")
+    opencode_argv = validate_opencode_run_argv_binding(
+        handoff_payload.get("opencode_argv"),
+        "opencode_safety_transform_attempt.handoff_contract.opencode_argv",
+        launch_policy=launch_policy,
+    )
+    opencode_command_line = require_string(
+        handoff_payload.get("opencode_command_line"),
+        "opencode_safety_transform_attempt.handoff_contract.opencode_command_line",
+    )
+    if opencode_command_line != shell_command_line(opencode_argv):
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.opencode_command_line must match opencode_argv")
+    prompt = require_string(
+        handoff_payload.get("prompt"),
+        "opencode_safety_transform_attempt.handoff_contract.prompt",
+    )
+    if prompt != opencode_argv[-1]:
+        raise ValueError("opencode_safety_transform_attempt.handoff_contract.prompt must match opencode_argv prompt")
+    session_binding = validate_hash_bound_artifact_binding(
+        payload.get("opencode_session_evidence"),
+        "opencode_safety_transform_attempt.opencode_session_evidence",
+        repo_root=repo_root,
+    )
+    session_evidence = require_object(
+        load_json(repo_path(session_binding["path"], repo_root=repo_root)),
+        "opencode_safety_transform_attempt.opencode_session_evidence file",
+    )
+    session_runtime_env = validate_opencode_runtime_env_contract(
+        session_evidence.get("opencode_runtime_env"),
+        "opencode_safety_transform_attempt.opencode_session_evidence",
+    )
+    compare_opencode_runtime_env(
+        session_runtime_env,
+        handoff_runtime_env,
+        "opencode_safety_transform_attempt.opencode_session_evidence",
+        expected_label="opencode_safety_transform_attempt.handoff_contract",
+    )
+    recomputed_contract = validate_opencode_contract_recomputed_from_session(
+        embedded_verification=verification,
+        session_evidence=session_evidence,
+        worker_command=worker_command,
+        summary_path=summary_path,
+        label="opencode_safety_transform_attempt",
+        repo_root=repo_root,
+    )
+
     units = payload.get("safety_transform_units")
     if not isinstance(units, list) or not units:
         raise ValueError("opencode_safety_transform_attempt.safety_transform_units must be a non-empty list")
@@ -3287,6 +3413,12 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
         "rollback_ref_count": rollback_ref_count,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
+        "contract_verification_status": "executed",
+        "handoff_contract": handoff_binding,
+        "opencode_session_evidence": session_binding,
+        "recomputed_contract": recomputed_contract,
+        "launch_policy": launch_policy,
+        "opencode_runtime_env": handoff_runtime_env,
     }
     result["workflow_metrics"] = workflow_metrics
     return result

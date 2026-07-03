@@ -342,6 +342,68 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
         "path": repo_relative(workflow_metrics_path),
         "sha256": validator.sha256_file(workflow_metrics_path),
     }
+    launch_policy = opencode_launch_policy()
+    runtime_env = opencode_runtime_env_contract(artifact_dir, scope="worker-a")
+    worker_cmd = worker_command(artifact_dir)
+    worker_command_line = shlex.join(worker_cmd)
+    opencode_prompt = "Execute test safety transform worker."
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        launch_policy["opencode_variant"],
+        "--model",
+        launch_policy["opencode_model"],
+        opencode_prompt,
+    ]
+    handoff_path = artifact_dir / "opencode-handoff-contract.json"
+    handoff_payload = {
+        "schema_version": 1,
+        "run_id": "run-test",
+        "worker_id": "worker-a",
+        "attempt": 2,
+        "runner_kind": "opencode-run",
+        "request_path": repo_relative(artifact_dir / "request.json"),
+        "expected_summary_path": repo_relative(summary_path),
+        "worker_command": worker_cmd,
+        "worker_command_line": worker_command_line,
+        "worker_command_sha256": validator.sha256_text(worker_command_line),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": shlex.join(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "prompt": opencode_prompt,
+        "opencode_runtime_env": runtime_env,
+        "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires validators",
+    }
+    write_json(handoff_path, handoff_payload)
+    session_path = artifact_dir / "opencode-session-evidence.json"
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {"input": {"command": worker_command_line, "workdir": str(REPO_ROOT)}},
+                }
+            }
+        ],
+    }
+    write_json(session_path, session_payload)
+    contract_verification = validator.recompute_opencode_contract_execution(
+        session_evidence=session_payload,
+        worker_command=worker_cmd,
+        summary_path=summary_path,
+        repo_root=REPO_ROOT,
+    )
     payload = {
         "schema_version": 1,
         "report_kind": "opencode-safety-transform-attempt",
@@ -354,7 +416,15 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
             "final_gate_status": "passed",
         },
         "workflow_metrics": refs["workflow-metrics"],
-        "contract_verification": {"status": "executed"},
+        "handoff_contract": {
+            "path": repo_relative(handoff_path),
+            "sha256": validator.sha256_file(handoff_path),
+        },
+        "opencode_session_evidence": {
+            "path": repo_relative(session_path),
+            "sha256": validator.sha256_file(session_path),
+        },
+        "contract_verification": contract_verification,
         "chat_output_is_evidence": False,
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
@@ -4888,6 +4958,43 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertEqual(result["repair_round_cap"], 5)
         self.assertFalse(result["semantic_gate"])
         self.assertEqual(result["translation_coverage_numerator"], 0)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_shallow_contract_without_session_evidence(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        payload.pop("opencode_session_evidence")
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_safety_transform_attempt.*opencode_session_evidence"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_requires_glm_51_handoff(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["launch_policy"]["opencode_model"] = "not-GLM-5.1"
+        handoff_payload["launch_policy_sha256"] = opencode_launch_policy_sha256(handoff_payload["launch_policy"])
+        write_json(handoff_path, handoff_payload)
+        payload["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_model must be GLM-5.1"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
     def test_opencode_safety_transform_attempt_rejects_summary_final_gate_drift(self) -> None:
         target_dir = REPO_ROOT / "target"
