@@ -6273,6 +6273,7 @@ def write_opencode_preflight_marker(
     marker_path = repo_path(marker_path, repo_root=repo_root)
     marker = {
         "schema_version": SCHEMA_VERSION,
+        "report_kind": "opencode-preflight-marker",
         "run_id": run_id,
         "status": "written",
         "created_at": now_text(),

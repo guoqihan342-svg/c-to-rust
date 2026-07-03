@@ -704,6 +704,12 @@ def rel_path(path: Path, repo_root: Path) -> str:
 
 
 def repo_relative_path(path: Path, repo_root: Path, field_name: str) -> str:
+    if not path.is_absolute():
+        raw_text = str(path)
+        if "\\" in raw_text or raw_text.startswith("~"):
+            raise ValueError(f"{field_name} must be repo-relative POSIX")
+        if ".." in Path(raw_text.replace("\\", "/")).parts:
+            raise ValueError(f"{field_name} must be repo-relative POSIX")
     resolved = path if path.is_absolute() else repo_root / path
     try:
         return resolved.resolve().relative_to(repo_root.resolve()).as_posix()

@@ -560,6 +560,23 @@ class RunCompetitionSmokeTests(unittest.TestCase):
 
             self.assertFalse((out_root / "logs" / "commands.jsonl").exists())
 
+    def test_slice_spec_with_tilde_is_rejected_before_command_log(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            with self.assertRaisesRegex(ValueError, "slice_spec must be repo-relative POSIX"):
+                module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-tilde-slice-spec-test",
+                    slice_spec=Path("~/slice.json"),
+                )
+
+            self.assertFalse((out_root / "logs" / "commands.jsonl").exists())
+
     def test_command_log_omits_local_absolute_paths_for_external_out_root(self) -> None:
         module = load_smoke_module()
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:

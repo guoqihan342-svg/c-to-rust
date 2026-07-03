@@ -76,6 +76,25 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertIn("evaluate --profile", resume_protocol["resume_entrypoints"])
         self.assertEqual(resume_protocol["worker_state_source"], "agent-index.agents_by_worker_id")
 
+    def test_write_preflight_marker_emits_judge_required_report_kind(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="opencode-marker-test-", dir=target_dir) as tmp:
+            marker_path = Path(tmp) / "harness" / "opencode-preflight-marker.json"
+            marker_rel = Path(harness.repo_relative(marker_path, repo_root=REPO_ROOT))
+
+            result = harness.write_opencode_preflight_marker(
+                marker_path=marker_rel,
+                run_id="preflight-marker-kind-test",
+                repo_root=REPO_ROOT,
+            )
+
+            payload = json.loads(marker_path.read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "written")
+            self.assertEqual(payload.get("report_kind"), "opencode-preflight-marker")
+            self.assertEqual(payload.get("run_id"), "preflight-marker-kind-test")
+            self.assertEqual(payload.get("status"), "written")
+
     def assert_architecture_contracts(self, contracts: dict) -> None:
         context_contract = contracts["context_management"]
         self.assertEqual(context_contract["contract_kind"], "context-management")

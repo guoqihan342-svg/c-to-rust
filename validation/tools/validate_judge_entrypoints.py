@@ -48,6 +48,12 @@ LOCAL_ABSOLUTE_PATH = re.compile(
     r"//wsl\.localhost/"
     r")"
 )
+COMPETITION_SMOKE_REPO_INPUT_FLAGS = {
+    "--coverage-report",
+    "--out",
+    "--output",
+    "--slice-spec",
+}
 REQUIRED_HARNESS_FEATURES = (
     "h1_evaluate_one_click",
     "h2_multi_worker_fanout",
@@ -915,6 +921,7 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         "competition_smoke_command_log command contains forbidden local absolute path"
                     )
+            validate_competition_smoke_command_repo_inputs(command)
             for field in ("stdout", "stderr"):
                 value = entry.get(field)
                 if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
@@ -922,11 +929,21 @@ def validate_competition_smoke_command_log_contract(
                         "competition_smoke_command_log output contains forbidden local absolute path"
                     )
             for field in ("cwd", "workdir"):
+                if field not in entry:
+                    continue
                 value = entry.get(field)
-                if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+                if not isinstance(value, str):
+                    raise ValueError(f"competition_smoke_command_log {field} must be a string")
+                if LOCAL_ABSOLUTE_PATH.search(value):
                     raise ValueError(
                         "competition_smoke_command_log workdir contains forbidden local absolute path"
                     )
+                try:
+                    assert_repo_relative_posix(value)
+                except ValueError as error:
+                    raise ValueError(
+                        f"competition_smoke_command_log {field} must be repo-relative POSIX: {value}"
+                    ) from error
             checked_entries += 1
     if checked_entries == 0:
         raise ValueError("competition_smoke_command_log must contain at least one entry")
@@ -939,6 +956,29 @@ def validate_competition_smoke_command_log_contract(
         "entry_count": checked_entries,
         "observed_steps": sorted(observed_steps),
     }
+
+
+def validate_competition_smoke_command_repo_inputs(command: list[str]) -> None:
+    for index, argument in enumerate(command):
+        if argument in COMPETITION_SMOKE_REPO_INPUT_FLAGS:
+            if index + 1 >= len(command):
+                raise ValueError(f"competition_smoke_command_log command repo input {argument} missing value")
+            validate_competition_smoke_command_repo_input(argument, command[index + 1])
+            continue
+        for flag in COMPETITION_SMOKE_REPO_INPUT_FLAGS:
+            prefix = f"{flag}="
+            if argument.startswith(prefix):
+                validate_competition_smoke_command_repo_input(flag, argument[len(prefix) :])
+                break
+
+
+def validate_competition_smoke_command_repo_input(flag: str, value: str) -> None:
+    try:
+        assert_repo_relative_posix(value)
+    except ValueError as error:
+        raise ValueError(
+            f"competition_smoke_command_log command repo input {flag} must be repo-relative POSIX: {value}"
+        ) from error
 
 
 def validate_vendored_clang_verification_contract(
