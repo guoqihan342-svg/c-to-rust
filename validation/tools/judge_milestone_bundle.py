@@ -1611,6 +1611,13 @@ def publication_archive_ref(archive: dict[str, Any] | None) -> dict[str, Any]:
                 "sha256": manifest.get("sha256"),
                 "status": manifest.get("status"),
             }
+    materialized_manifest = archive.get("materialized_manifest")
+    if isinstance(materialized_manifest, dict):
+        ref["materialized_manifest"] = {
+            "path": materialized_manifest.get("path"),
+            "sha256": materialized_manifest.get("sha256"),
+            "status": materialized_manifest.get("status"),
+        }
     return ref
 
 

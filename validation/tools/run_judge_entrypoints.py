@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import shlex
 import subprocess
 import sys
@@ -39,6 +40,7 @@ DERIVED_ARTIFACT_FILENAMES = (
     "public-release-packet.json",
     "selected-entrypoints-validation-config.json",
 )
+DERIVED_ARTIFACT_DIRNAMES = ("competition-config-archive",)
 
 
 def main() -> int:
@@ -92,6 +94,12 @@ def run_judge_entrypoints(
     log_dir = out_path.parent / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     config_archive = build_competition_config_archive(repo_root=repo_root)
+    if not dry_run:
+        config_archive = materialize_competition_config_archive(
+            config_archive,
+            out_path=out_path,
+            repo_root=repo_root,
+        )
 
     try:
         config_path = resolve_input_path(config_path, repo_root=repo_root)
@@ -208,6 +216,12 @@ def remove_stale_derived_artifacts(out_path: Path) -> None:
         if artifact_path.is_dir() and not artifact_path.is_symlink():
             raise IsADirectoryError(f"derived artifact path is a directory: {artifact_path}")
         if artifact_path.exists() or artifact_path.is_symlink():
+            artifact_path.unlink()
+    for dirname in DERIVED_ARTIFACT_DIRNAMES:
+        artifact_path = out_path.parent / dirname
+        if artifact_path.is_dir() and not artifact_path.is_symlink():
+            shutil.rmtree(artifact_path)
+        elif artifact_path.exists() or artifact_path.is_symlink():
             artifact_path.unlink()
 
 
@@ -645,6 +659,15 @@ def build_judge_run_summary(
         }
         for result in command_results
     ]
+    config_archive_summary = {
+        "status": config_archive.get("status"),
+        "root": config_archive.get("root"),
+        "file_count": config_archive.get("file_count", 0),
+    }
+    materialized_manifest = config_archive.get("materialized_manifest")
+    if isinstance(materialized_manifest, dict):
+        config_archive_summary["materialized_manifest"] = materialized_manifest
+
     return {
         "report_kind": "judge-entrypoints-summary",
         "headline": (
@@ -660,11 +683,7 @@ def build_judge_run_summary(
             "validation_status": validation_status,
             "readiness_report": readiness_ref,
         },
-        "competition_config_archive": {
-            "status": config_archive.get("status"),
-            "root": config_archive.get("root"),
-            "file_count": config_archive.get("file_count", 0),
-        },
+        "competition_config_archive": config_archive_summary,
         "claim_boundary": {
             "semantic_gate": False,
             "semantic_claim_source": claim_boundary.get("semantic_claim_source", "validator-owned-artifacts"),
@@ -735,6 +754,20 @@ def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
             ),
         },
     }
+
+
+def materialize_competition_config_archive(
+    config_archive: dict[str, Any],
+    *,
+    out_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    manifest_path = out_path.parent / "competition-config-archive" / "manifest.json"
+    manifest_payload = json.loads(json.dumps(config_archive))
+    atomic_write_json(manifest_path, manifest_payload)
+    archive = json.loads(json.dumps(config_archive))
+    archive["materialized_manifest"] = artifact_ref(manifest_path, repo_root=repo_root)
+    return archive
 
 
 def candidate_config_files(root: Path) -> list[Path]:

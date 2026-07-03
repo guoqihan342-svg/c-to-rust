@@ -151,6 +151,10 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
         repo_root=repo_root,
         bundle_manifest_path=str(checked_bundle_file["path"]),
     )
+    checked_materialized_manifest = require_materialized_competition_config_archive_manifest(
+        archive,
+        repo_root=repo_root,
+    )
 
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
     publication_archive = require_object(
@@ -174,6 +178,23 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
             "publication_manifest.competition_config_archive.bundle_manifest must match "
             "competition_config_archive.files.config/competition-env/bundle-manifest.json"
         )
+    publication_materialized_manifest = require_object(
+        publication_archive.get("materialized_manifest"),
+        "publication_manifest.competition_config_archive.materialized_manifest",
+    )
+    if {
+        "path": publication_materialized_manifest.get("path"),
+        "sha256": publication_materialized_manifest.get("sha256"),
+        "status": publication_materialized_manifest.get("status"),
+    } != {
+        "path": checked_materialized_manifest["path"],
+        "sha256": checked_materialized_manifest["sha256"],
+        "status": checked_materialized_manifest["status"],
+    }:
+        raise ValueError(
+            "publication_manifest.competition_config_archive.materialized_manifest must match "
+            "competition_config_archive.materialized_manifest"
+        )
     external_refs = require_object(archive.get("external_refs"), "competition_config_archive.external_refs")
     missing_external_refs = sorted(set(judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES) - set(external_refs))
     if missing_external_refs:
@@ -190,6 +211,32 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
             judge_validator.validate_ref(ref, repo_root=repo_root)
         except ValueError as error:
             raise ValueError(f"competition_config_archive.external_refs.{path_text}: {error}") from error
+
+
+def require_materialized_competition_config_archive_manifest(
+    archive: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    label = "competition_config_archive.materialized_manifest"
+    ref = require_object(archive.get("materialized_manifest"), label)
+    try:
+        checked = judge_validator.validate_ref(ref, repo_root=repo_root)
+    except ValueError as error:
+        raise ValueError(f"{label}: {error}") from error
+    manifest_path = judge_validator.repo_path(str(checked["path"]), repo_root=repo_root)
+    try:
+        manifest_payload = judge_validator.load_json(manifest_path)
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        raise ValueError(f"{label}: unable to read JSON payload: {error}") from error
+    expected_payload = json.loads(json.dumps(archive))
+    expected_payload.pop("materialized_manifest", None)
+    if manifest_payload != expected_payload:
+        raise ValueError(
+            "competition_config_archive.materialized_manifest payload must match "
+            "competition_config_archive without materialized_manifest"
+        )
+    return checked
 
 
 def require_competition_config_archive_matches_bundle_manifest(

@@ -313,6 +313,19 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertFalse(public_packet["claim_boundary"]["packet_is_semantic_gate"])
         self.assertEqual(public_packet["claim_boundary"]["translation_coverage_numerator"], 0)
         self.assertEqual(public_packet["competition_config_archive"]["status"], "present")
+        archive_manifest_path = out_path.parent / "competition-config-archive" / "manifest.json"
+        self.assertTrue(archive_manifest_path.is_file())
+        archive_manifest_ref = public_packet["competition_config_archive"]["materialized_manifest"]
+        self.assertEqual(archive_manifest_ref["path"], repo_relative(archive_manifest_path))
+        self.assertEqual(archive_manifest_ref["status"], "present")
+        self.assertEqual(archive_manifest_ref["sha256"], runner.validator.sha256_file(archive_manifest_path))
+        self.assertEqual(report["competition_config_archive"]["materialized_manifest"], archive_manifest_ref)
+        self.assertEqual(report["summary"]["competition_config_archive"]["materialized_manifest"], archive_manifest_ref)
+        archive_manifest = json.loads(archive_manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(archive_manifest["report_kind"], "competition-config-archive")
+        self.assertEqual(archive_manifest["status"], "present")
+        self.assertFalse(archive_manifest["claim_boundary"]["semantic_gate"])
+        self.assertNotIn("materialized_manifest", archive_manifest)
         self.assertEqual(public_packet["summary"]["entrypoint_count"], 2)
         self.assertEqual(public_packet["summary"]["blockers"], milestone_bundle["blockers"])
         self.assertEqual(public_packet["summary"]["workflow_metrics"]["repair_activity"], milestone_bundle["workflow_metrics"]["rollup"]["repair_activity"])
@@ -782,6 +795,9 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         ]
         for artifact_name in stale_artifacts:
             (out_path.parent / artifact_name).write_text('{"status":"stale"}\n', encoding="utf-8")
+        stale_archive_dir = out_path.parent / "competition-config-archive"
+        stale_archive_dir.mkdir()
+        (stale_archive_dir / "manifest.json").write_text('{"status":"stale"}\n', encoding="utf-8")
 
         def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
             raise AssertionError("dry-run must not execute commands")
@@ -799,6 +815,8 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(report["status"], "planned")
         for artifact_name in stale_artifacts:
             self.assertFalse((out_path.parent / artifact_name).exists(), artifact_name)
+        self.assertFalse(stale_archive_dir.exists())
+        self.assertNotIn("materialized_manifest", report["competition_config_archive"])
 
     def test_dry_run_preflight_failure_is_not_planned(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
