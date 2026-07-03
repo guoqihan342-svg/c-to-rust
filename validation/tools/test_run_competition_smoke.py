@@ -25,7 +25,7 @@ def load_smoke_module():
 
 
 LOCAL_ABSOLUTE_PATH = re.compile(
-    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|\\\\wsl\$\\|//wsl\$/|//wsl\.localhost/)"
+    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|/workspace/|/__w/|/opt/|/builds/|\\\\wsl\$\\|//wsl\$/|\\\\wsl\.localhost\\|//wsl\.localhost/|\\\\[^\\/\s]+\\[^\\/\s]+\\|(?<!:)//[^/\s]+/[^/\s]+/)"
 )
 
 
@@ -717,8 +717,43 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                 if isinstance(argument, str)
             ]
             self.assertNotIn(sys.executable, logged_arguments)
-            self.assertTrue(any(argument == "summary/vendored-clang-verification.json" for argument in logged_arguments))
-            self.assertTrue(any(argument == "reports/evidence-governance.json" for argument in logged_arguments))
+            self.assertTrue(
+                any(argument == "out-root:summary/vendored-clang-verification.json" for argument in logged_arguments)
+            )
+            self.assertTrue(any(argument == "out-root:reports/evidence-governance.json" for argument in logged_arguments))
+            self.assertFalse(
+                any(
+                    argument in {"summary/vendored-clang-verification.json", "reports/evidence-governance.json"}
+                    for argument in logged_arguments
+                )
+            )
+
+    def test_external_out_root_command_paths_match_logged_workdir(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-replayability-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            output_flags = {"--out", "--output", "--coverage-report"}
+            for entry in command_entries:
+                command = entry["command"]
+                if entry.get("workdir") != ".":
+                    continue
+                for index, argument in enumerate(command[:-1]):
+                    if argument in output_flags:
+                        self.assertTrue(command[index + 1].startswith("out-root:"), command)
 
     def test_command_log_sanitizes_python_executable_with_spaces(self) -> None:
         module = load_smoke_module()
@@ -762,6 +797,9 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             r"echo ok && \\wsl$\Ubuntu\home\me\tool.exe": "echo ok && tool.exe",
             "echo ok | //wsl.localhost/Ubuntu/home/me/python3": "echo ok | python3",
             "echo ok | //wsl$/Ubuntu/home/me/python3": "echo ok | python3",
+            "echo ok | /workspace/project/tools/python3": "echo ok | python3",
+            r"echo ok && \\server\share\tool.exe": "echo ok && tool.exe",
+            "echo ok && //server/share/tool": "echo ok && tool",
             r'echo ok; "C:\Program Files\Python314\python.exe"': 'echo ok; "python.exe"',
         }
 
@@ -787,8 +825,10 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                     "include path: /mnt/c/Users/me/FlashDB/inc\n"
                     "cwd: //wsl.localhost/Ubuntu/home/me/project\n"
                     "source: //wsl$/Ubuntu/home/me/project/src/fdb.c\n"
+                    "ci source: /workspace/project/src/fdb.c\n"
+                    "unc source: //server/share/project/src/fdb.c\n"
                 ),
-                r"output path: \\wsl$\Ubuntu\home\me\project\target\out.json",
+                r"output path: \\wsl$\Ubuntu\home\me\project\target\out.json and \\server\share\project\target\out.json",
             )
 
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:

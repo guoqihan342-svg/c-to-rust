@@ -7076,6 +7076,77 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "command repo input --slice-spec must be repo-relative POSIX"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
+    def test_competition_smoke_command_log_rejects_parent_traversal_out_root_ref(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "vendored-clang-verification",
+                        "command": [
+                            "python3",
+                            "-B",
+                            "validation/tools/verify_vendored_clang.py",
+                            "--out",
+                            "out-root:../summary/vendored-clang-verification.json",
+                        ],
+                        "returncode": 0,
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "command repo input --out must be repo-relative POSIX"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_common_ci_absolute_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": [
+                            "/workspace/project/config/competition-env/toolchain-check.sh",
+                            "/__w/repo/repo/python",
+                            "/opt/hostedtoolcache/Python/python",
+                            "/builds/group/project/tool",
+                        ],
+                        "returncode": 0,
+                        "stdout": "source path: /workspace/project/src/fdb.c",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_generic_unc_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": [r"\\server\share\toolchain-check.bat", "//server/share/toolchain-check.sh"],
+                        "returncode": 0,
+                        "stderr": r"include path: \\server\share\project\include and //server/share/project/include",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
     def test_merge_execution_argv_allows_host_trace(self) -> None:
         result = validator.validate_local_absolute_path_policy(
             {"merge_execution": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},

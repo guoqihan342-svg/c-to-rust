@@ -37,10 +37,16 @@ LOCAL_HOST_PATH_UNQUOTED = (
     r"/Users/[^\s;&|]+|"
     r"/tmp/[^\s;&|]+|"
     r"/var/[^\s;&|]+|"
+    r"/workspace/[^\s;&|]+|"
+    r"/__w/[^\s;&|]+|"
+    r"/opt/[^\s;&|]+|"
+    r"/builds/[^\s;&|]+|"
     r"\\\\wsl\$\\[^\s;&|]+|"
     r"\\\\wsl\.localhost\\[^\s;&|]+|"
+    r"\\\\[^\\/\s;&|]+\\[^\\/\s;&|]+\\[^\s;&|]+|"
     r"//wsl\$/[^\s;&|]+|"
-    r"//wsl\.localhost/[^\s;&|]+"
+    r"//wsl\.localhost/[^\s;&|]+|"
+    r"(?<!:)//[^/\s;&|]+/[^/\s;&|]+/[^\s;&|]+"
     r")"
 )
 LOCAL_HOST_PATH_DOUBLE_QUOTED = (
@@ -51,10 +57,16 @@ LOCAL_HOST_PATH_DOUBLE_QUOTED = (
     r'/Users/[^"]+|'
     r'/tmp/[^"]+|'
     r'/var/[^"]+|'
+    r'/workspace/[^"]+|'
+    r'/__w/[^"]+|'
+    r'/opt/[^"]+|'
+    r'/builds/[^"]+|'
     r'\\\\wsl\$\\[^"]+|'
     r'\\\\wsl\.localhost\\[^"]+|'
+    r'\\\\[^\\/\s]+\\[^\\/\s]+\\[^"]+|'
     r'//wsl\$/[^"]+|'
-    r'//wsl\.localhost/[^"]+'
+    r'//wsl\.localhost/[^"]+|'
+    r'(?<!:)//[^/\s"]+/[^/\s"]+/[^"]+'
     r")"
 )
 LOCAL_HOST_PATH_SINGLE_QUOTED = (
@@ -65,10 +77,16 @@ LOCAL_HOST_PATH_SINGLE_QUOTED = (
     r"/Users/[^']+|"
     r"/tmp/[^']+|"
     r"/var/[^']+|"
+    r"/workspace/[^']+|"
+    r"/__w/[^']+|"
+    r"/opt/[^']+|"
+    r"/builds/[^']+|"
     r"\\\\wsl\$\\[^']+|"
     r"\\\\wsl\.localhost\\[^']+|"
+    r"\\\\[^\\/\s]+\\[^\\/\s]+\\[^']+|"
     r"//wsl\$/[^']+|"
-    r"//wsl\.localhost/[^']+"
+    r"//wsl\.localhost/[^']+|"
+    r"(?<!:)//[^/\s']+/[^/\s']+/[^']+"
     r")"
 )
 LOCAL_HOST_PATH_IN_COMMAND = re.compile(
@@ -774,11 +792,23 @@ def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) 
         return sanitized_argument
     path = Path(argument)
     resolved = path if path.is_absolute() else repo_root / path
-    for root in [repo_root.resolve(), out_root.resolve()]:
+    resolved_path = resolved.resolve()
+    repo_root_resolved = repo_root.resolve()
+    out_root_resolved = out_root.resolve()
+    try:
+        return resolved_path.relative_to(repo_root_resolved).as_posix()
+    except ValueError:
+        pass
+    try:
+        out_root_relative = resolved_path.relative_to(out_root_resolved).as_posix()
+    except ValueError:
+        out_root_relative = None
+    if out_root_relative is not None:
         try:
-            return resolved.resolve().relative_to(root).as_posix()
+            out_root_resolved.relative_to(repo_root_resolved)
+            return out_root_relative
         except ValueError:
-            continue
+            return f"out-root:{out_root_relative}"
     return path_basename(argument)
 
 

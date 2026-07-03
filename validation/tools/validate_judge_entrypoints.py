@@ -65,11 +65,13 @@ LOCAL_ABSOLUTE_PATH = re.compile(
     r"(?:^|[^A-Za-z0-9_])(?:"
     r"[A-Za-z]:[\\/]|"
     r"/mnt/[A-Za-z]/|"
-    r"/home/|/Users/|/tmp/|/var/|"
+    r"/home/|/Users/|/tmp/|/var/|/workspace/|/__w/|/opt/|/builds/|"
     r"\\\\wsl\$\\|"
     r"//wsl\$/|"
     r"\\\\wsl\.localhost\\|"
-    r"//wsl\.localhost/"
+    r"//wsl\.localhost/|"
+    r"\\\\[^\\/\s]+\\[^\\/\s]+\\|"
+    r"(?<!:)//[^/\s]+/[^/\s]+/"
     r")"
 )
 COMPETITION_SMOKE_REPO_INPUT_FLAGS = {
@@ -78,6 +80,12 @@ COMPETITION_SMOKE_REPO_INPUT_FLAGS = {
     "--output",
     "--slice-spec",
 }
+COMPETITION_SMOKE_OUTPUT_FLAGS = {
+    "--coverage-report",
+    "--out",
+    "--output",
+}
+OUT_ROOT_REF_PREFIX = "out-root:"
 REQUIRED_HARNESS_FEATURES = (
     "h1_evaluate_one_click",
     "h2_multi_worker_fanout",
@@ -1180,6 +1188,12 @@ def validate_competition_smoke_command_repo_inputs(command: list[str]) -> None:
 
 
 def validate_competition_smoke_command_repo_input(flag: str, value: str) -> None:
+    if value.startswith(OUT_ROOT_REF_PREFIX):
+        if flag not in COMPETITION_SMOKE_OUTPUT_FLAGS:
+            raise ValueError(
+                f"competition_smoke_command_log command repo input {flag} must be repo-relative POSIX: {value}"
+            )
+        value = value[len(OUT_ROOT_REF_PREFIX) :]
     try:
         assert_repo_relative_posix(value)
     except ValueError as error:
