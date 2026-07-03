@@ -180,6 +180,8 @@ def run_competition_smoke(
     profile = load_profile(repo_root)
     environment = detect_execution_environment()
     deviations = environment_deviations(profile, environment, proof_class=proof_class)
+    if proof_class == "competition-exact" and not environment.get("competition_exact_host_attested"):
+        raise SystemExit(f"proof_class=competition-exact requires {COMPETITION_EXACT_HOST_ENV}=1")
 
     steps: list[dict[str, Any]] = []
     commands = smoke_commands(
@@ -213,6 +215,9 @@ def run_competition_smoke(
             if opencode_model_availability["status"] != "available":
                 failure_class = "opencode_model_unavailable"
                 setattr(result, "failure_class", failure_class)
+                raise SystemExit(
+                    f"opencode_model_unavailable: {COMPETITION_OPENCODE_MODEL} must be listed by opencode models"
+                )
         step_status_value = smoke_step_status(
             step,
             result.returncode,
