@@ -2,15 +2,15 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
+    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
-      "c_oracle": "8b15e66c32350820553deafe019fe5d964ed431c7d83d173c009efc11e44ae88",
+      "c_oracle": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
       "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
       "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
       "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
-      "unsafe_ledger": "29082bd72a84611c9895856813883c61483354160dada733ec713363d2bda1f3",
-      "unsafe_scan": "23b91f39469d56adef0f5c5c5973f0a515b559d601753e9ad35607c80b687e0f"
+      "unsafe_ledger": "2250b9599e54117b3180698344b26ca8167849db495eb66fa5a19571e42af4ba",
+      "unsafe_scan": "6c348234a29931f80c8db9129537ac9ef51a009909d87b48f5b7ac5d91f31c9a"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
@@ -31,7 +31,7 @@
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147",
+    "slice_spec_sha256=c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
     "fixture_hash=real-fdb-calc-crc32-fixture",
     "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
@@ -51,7 +51,7 @@
   "config_header": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "21b868d4bfef7eb36c8f63582b4424beba297c770c67de97183c1803cf273703"
+    "sha256": "aecb259adc5c65afcd1917af920c1b3115dbf8cd36babc7c0368b660f7cb6514"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -68,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-  "repo_commit": "45dfc5d7fb7d605533baeaed79c4cad19d784d39",
+  "repo_commit": "ea92d53551fb2fd243163c054d8e3345ac8acb73",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

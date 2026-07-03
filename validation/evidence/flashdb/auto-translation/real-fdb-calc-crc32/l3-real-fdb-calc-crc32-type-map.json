@@ -1,12 +1,12 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-translator-input.json",
-    "sha256": "21b868d4bfef7eb36c8f63582b4424beba297c770c67de97183c1803cf273703",
+    "sha256": "aecb259adc5c65afcd1917af920c1b3115dbf8cd36babc7c0368b660f7cb6514",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147",
+    "slice_spec_sha256=c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
     "fixture_hash=real-fdb-calc-crc32-fixture",
     "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
@@ -33,7 +33,7 @@
   ],
   "level": "L3",
   "mappings": [],
-  "repo_commit": "45dfc5d7fb7d605533baeaed79c4cad19d784d39",
+  "repo_commit": "ea92d53551fb2fd243163c054d8e3345ac8acb73",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {

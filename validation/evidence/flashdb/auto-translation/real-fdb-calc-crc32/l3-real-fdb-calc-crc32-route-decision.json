@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "6cfc31f2b92ca1b33cc732dd62c12fdbece580e40b515e93bfab7ca75fba0011",
+        "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
         "status": "generated"
       },
       "candidate_id": "c2rust-baseline",
@@ -41,7 +41,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "6cfc31f2b92ca1b33cc732dd62c12fdbece580e40b515e93bfab7ca75fba0011",
+          "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
           "status": "generated"
         },
         "candidate_id": "c2rust-baseline",
@@ -278,12 +278,12 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "6cfc31f2b92ca1b33cc732dd62c12fdbece580e40b515e93bfab7ca75fba0011",
+      "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
       "status": "generated"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "sha256": "c59ed96b31da4747d9c7a4bc9978b9a6bc098793773d3ebaf0c07c2a90631d57",
+      "sha256": "78255d436bec9803e962bf2488ff73b7921760a38436623fa99b0e4f030e0895",
       "status": "recorded"
     },
     "clang_lowering_report": {
@@ -293,7 +293,7 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "c307045e630659afb5dee878a216d53f7f12c3b7f39d0a06609efaa2753d8f7e",
+      "sha256": "21ade496f466445e8f669b4829f53c0297897304d66004f7426bbe9b99d066f6",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -302,7 +302,7 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "sha256": "848f37aa38bbc706e5ad6990b9d50a0123aa1b7ee0cd2380da0e6204d2079275",
+      "sha256": "3b1e304f722e0541d5250d388146797efa77a42fe51db71a258cc7af7b0263fd",
       "status": "recorded"
     }
   },
@@ -312,7 +312,7 @@
     "source_branch": "competition",
     "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
     "source_file_hashes": {
-      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      "src/fdb_utils.c": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
     },
     "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
     "source_root": "sources/FlashDB"

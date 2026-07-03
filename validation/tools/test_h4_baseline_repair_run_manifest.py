@@ -1,7 +1,8 @@
-import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import unittest
+
+from validation.tools import validate_judge_entrypoints as judge_validator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -13,7 +14,7 @@ MANIFEST = (
 
 
 def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return judge_validator.sha256_file(path)
 
 
 def repo_path(path_text: str) -> Path:

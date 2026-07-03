@@ -10,7 +10,7 @@
   },
   "build_profile_hash": "4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
   "c2rust_baseline_identity": {
-    "sha256": "e940fe65966f9c5d9758550e4dc6bae513c813b23822da3d229d4b18e9dc8161",
+    "sha256": "cd67043f32053002080a86c687cbe6357d0644a5b75c01c5ac3fabbd6789bf06",
     "status": "generated"
   },
   "c_oracle_harness_identity": {
@@ -51,24 +51,24 @@
   "competition_environment_identity": {
     "path": "config/competition-env/environment.json",
     "profile_id": "huawei-competition-ubuntu-24.04",
-    "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
+    "sha256": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c"
   },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "d946711eb72714a67751e351418fe31fdcbdfd61f3c8f8ef3ec859d566f45274",
+      "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
       "status": "generated"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-      "sha256": "14ff03fb9f7040ceb77c624fe52400ef40728b492df19869477516133a8968e4",
+      "sha256": "1e9218998f0afc66da01c97e84aed5c6c9dadf32f3640d52085e093943de6ab1",
       "status": "refused"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "de919284a9715e0766799e17a4820d4f79ae3add5a19b4ddddd2ec1b87ac9d29",
+      "sha256": "2e9ea5827e8e603b29f14779c5ad3fad37b57b1e9e6510d2286a30448ec32058",
       "status": "passed"
     }
   },
@@ -115,7 +115,7 @@
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "182bdeb481ecd69925296c750bde18f14ac25563bb22ced747ba2b9303c1bbd1",
+    "sha256": "ada2503942136ca42ab5c3a862606acd4efe40ba20eafe4952601dcf6e0116b2",
     "status": "refused"
   },
   "scalar_ub_contract_identity": {
@@ -132,7 +132,7 @@
     "type_map": 1
   },
   "slice_id": "real-fdb-calc-crc32",
-  "slice_spec_sha256": "14c1f10656350812b3318514f9fb8082db8c988dd12dcca779487006f5507147",
+  "slice_spec_sha256": "c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "source_file_hashes": {
     "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
@@ -147,7 +147,7 @@
   "translator_manifest_sha256": "de4e9145c80cd20645d6045ebecce5f5da4fb0668685ae4c88ba1958e824f17f",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "de2900a7aeccfb468afd310c40f7b03e8591ff884965b1ff897a137a71776422",
+    "sha256": "1f36dd94ed078a526b4cca816d8cd223576b505f38265d993fb73eef8a27e7d4",
     "status": "passed"
   }
 }

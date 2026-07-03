@@ -6971,6 +6971,33 @@ class AutoMigrateTests(unittest.TestCase):
             ["wsl", "c2rust-transpile", "--emit-build-files", "--output-dir", "out", "compile_commands.json"],
         )
 
+    def test_c2rust_generation_evidence_argv_keeps_repo_artifact_paths_relative(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        output_dir = REPO_ROOT / "validation" / "evidence" / "demo" / "auto-translation" / "slice" / "generated"
+        compile_commands = output_dir / "compile_commands.json"
+
+        evidence_argv = auto_migrate.c2rust_generation_evidence_argv(
+            [
+                "/opt/c2rust-transpile",
+                "--emit-build-files",
+                "--output-dir",
+                str(output_dir),
+                str(compile_commands),
+            ]
+        )
+
+        self.assertEqual(evidence_argv[0], "/opt/c2rust-transpile")
+        self.assertEqual(
+            evidence_argv,
+            [
+                "/opt/c2rust-transpile",
+                "--emit-build-files",
+                "--output-dir",
+                "validation/evidence/demo/auto-translation/slice/generated",
+                "validation/evidence/demo/auto-translation/slice/generated/compile_commands.json",
+            ],
+        )
+
     def test_c2rust_toolchain_repair_preserves_explicit_command_override(self) -> None:
         auto_migrate = load_auto_migrate_module()
         with mock.patch.dict(os.environ, {"C2RUST_COMMAND": "wsl c2rust-transpile"}):

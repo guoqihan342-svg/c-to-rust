@@ -2,7 +2,7 @@
   "bound_inputs": {
     "baseline_manifest": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "6cfc31f2b92ca1b33cc732dd62c12fdbece580e40b515e93bfab7ca75fba0011",
+      "sha256": "486f121017727dca94a39a8b41a66a9edd4532cf13fcfee745622ba5fdfd4e39",
       "status": "generated"
     },
     "c2rust_output": {
@@ -17,7 +17,7 @@
     },
     "compile_artifact": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib",
-      "sha256": "30f97369f8556e88b1fca0c5096a3d0056142260c7145e14f9b40ea0efa231d6",
+      "sha256": "4d0d490231ca443d76b759346557a2fc319f167092cdd37e6bde83705d7b73bf",
       "status": "compiled"
     },
     "fixture": {
@@ -81,7 +81,7 @@
   },
   "compile_artifact": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib",
-    "sha256": "30f97369f8556e88b1fca0c5096a3d0056142260c7145e14f9b40ea0efa231d6",
+    "sha256": "4d0d490231ca443d76b759346557a2fc319f167092cdd37e6bde83705d7b73bf",
     "status": "compiled"
   },
   "correctness_role": "direct_replay_evidence",
@@ -93,9 +93,9 @@
         "run",
         "--quiet",
         "--manifest-path",
-        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-harness/Cargo.toml",
+        "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-harness/Cargo.toml",
         "--",
-        "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-results.json"
+        "/mnt/f/agent/crustpaper/0630/validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-results.json"
       ],
       "exit_status": "passed",
       "returncode": 0,
@@ -105,7 +105,7 @@
       "working_directory": "."
     },
     "exit_status": "passed",
-    "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
+    "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
     "harness_main": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-direct-replay-harness/src/main.rs",
       "sha256": "0b11e8fb6bd37fec2090a0027c753034a8ced36fed71adcb2fac2bd205515311",

@@ -102,7 +102,7 @@
       "profile": {
         "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
         "profile_id": "flashdb-fdb-utils-before-after",
-        "sha256": "be266a90a35812b5ccb69ea43dd688da1fbeb60ad4926a2ba3ec4ee133dd9562"
+        "sha256": "480ecbd603b89884574114dea7799ed2e1fcf3fbf7fe444de1f9186e80009d14"
       },
       "proof_class": "local-simulation",
       "purpose": "core-translation-before-after-exhibit",
@@ -114,7 +114,7 @@
       "run_id": "competition-flashdb-before-after-exhibit",
       "tracked_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-h4-baseline-repair-run.json",
-        "sha256": "19c5122d0660c06fcf88a438f3011776c0bbd591a50d4d181abbc0492631696e"
+        "sha256": "8e06d57c36de240d1116722978239f2a0d0c0dc08fd4cd9d339da46068964094"
       },
       "verification_commands": [
         "python3 -B validation/tools/validate_competition_run_summary.py --summary target/competition-out-flashdb-before-after-exhibit/summary/competition-run-summary.json"

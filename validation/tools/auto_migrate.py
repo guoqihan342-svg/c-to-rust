@@ -4640,7 +4640,7 @@ def run_c2rust_baseline_generation(
     argv = c2rust_generation_argv(selected, compile_commands, output_dir)
     generation: dict[str, Any] = {
         "command": {
-            "argv": argv,
+            "argv": c2rust_generation_evidence_argv(argv),
             "working_directory": rel(REPO_ROOT),
             "output_dir": rel(output_dir),
             "stdout_log": rel(stdout_log),
@@ -4750,6 +4750,20 @@ def c2rust_generation_argv(selected: dict[str, Any], compile_commands: Path, out
         str(output_dir),
         str(compile_commands),
     ]
+
+
+def c2rust_generation_evidence_argv(argv: list[str]) -> list[str]:
+    return [repo_relative_absolute_arg(item) for item in argv]
+
+
+def repo_relative_absolute_arg(value: str) -> str:
+    path = Path(value)
+    if not path.is_absolute():
+        return value
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except (OSError, ValueError):
+        return value
 
 
 def combined_c2rust_output(rust_files: list[Path]) -> str:

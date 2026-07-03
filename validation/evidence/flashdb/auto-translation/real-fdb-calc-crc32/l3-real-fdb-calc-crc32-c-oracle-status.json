@@ -83,9 +83,9 @@
       "argv": [
         "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe"
       ],
-      "attempted": false,
+      "attempted": true,
       "diagnostics": [
-        "C oracle harness execution could not start; no oracle evidence accepted."
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
       ],
       "executable_path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe",
       "output_gate": {
@@ -94,7 +94,7 @@
           "return_code"
         ],
         "diagnostics": [
-          "C oracle harness output gate did not run because harness execution did not exit zero."
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
         ],
         "expected_stdout_fragments": [
           "fixture case empty-crc-zero return_code matched",
@@ -102,20 +102,20 @@
         ],
         "fixture_expected_output_status": "declared_not_executed",
         "gate": "c_oracle_harness_output",
-        "matched_stdout_fragments": [],
-        "missing_stdout_fragments": [
+        "matched_stdout_fragments": [
           "fixture case empty-crc-zero return_code matched",
           "fixture case ascii-123456789-crc-zero return_code matched"
         ],
+        "missing_stdout_fragments": [],
         "schema_version": 1,
         "semantic_pass": false,
-        "status": "not_run_not_oracle"
+        "status": "matched_not_oracle"
       },
-      "returncode": null,
+      "returncode": 0,
       "semantic_pass": false,
-      "status": "execution_error_not_oracle",
-      "stderr": "[Errno 2] No such file or directory: 'validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-harness-draft.exe'",
-      "stdout": "",
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for fdb_calc_crc32\nfixture input: validation/l2_slices/fixtures/real-fdb-calc-crc32.json\nfixture case empty-crc-zero return_code matched\nfixture case ascii-123456789-crc-zero return_code matched\n",
       "timeout_seconds": 30,
       "working_directory": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32"
     },
@@ -170,7 +170,7 @@
     ],
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
   },
-  "fixture_sha256": "3c633b2afe24ce58a57a91825187b91d071b6681dcc9d52a75b9a9c81c8cc3cf",
+  "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
   "global_linkage_requirements": [
     {
       "definition_status": "same_file_top_level_declared",
