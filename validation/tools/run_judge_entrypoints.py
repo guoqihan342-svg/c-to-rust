@@ -368,6 +368,7 @@ def write_public_release_packet(
         "milestone_release_notes": artifact_ref(release_notes_path, repo_root=repo_root),
         "competition_config_archive": report.get("competition_config_archive", {}),
         "publication_manifest": publication,
+        "publishability": bundle.get("publishability", {}),
         "before_after_repair_exhibit": bundle.get("before_after_repair_exhibit", {}),
         "opencode_patch_boundary": public_packet_opencode_patch_boundary(bundle, repo_root=repo_root),
         "quantitative_evaluation": bundle.get("quantitative_evaluation", {}),

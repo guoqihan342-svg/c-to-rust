@@ -885,6 +885,7 @@ def valid_packet(root: Path) -> dict:
         "milestone_release_notes": notes,
         "competition_config_archive": competition_config_archive,
         "publication_manifest": publication_manifest,
+        "publishability": bundle_payload["publishability"],
         "before_after_repair_exhibit": before_after_repair_exhibit,
         "opencode_patch_boundary": {
             "report_kind": "opencode-patch-boundary",
@@ -926,6 +927,9 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         )
         self.assertFalse(packet["before_after_repair_exhibit"]["semantic_gate"])
         self.assertEqual(packet["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
+        self.assertEqual(packet["publishability"]["status"], "internal_preview")
+        self.assertFalse(packet["publishability"]["competition_exact_publishable"])
+        self.assertEqual(packet["publishability"]["required_model"], "GLM-5.1")
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
 
@@ -1468,6 +1472,52 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
                 "before_after_repair_exhibit must match judge_milestone_bundle.before_after_repair_exhibit" in error
                 for error in result["errors"]
             ),
+            result["errors"],
+        )
+
+    def test_validate_packet_requires_publishability_from_bound_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-publishability-missing-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet.pop("publishability", None)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any("publishability" in error for error in result["errors"]), result["errors"])
+
+    def test_validate_packet_rejects_publishability_drift_from_bound_bundle(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-publishability-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["publishability"] = {
+            "status": "external_release_ready",
+            "scope": "full",
+            "publication_scope": "full",
+            "external_milestone_claim_ready": True,
+            "external_milestone": True,
+            "blocker_count": 0,
+            "blockers": [],
+            "all_entrypoints_run_publishable": True,
+            "focused_run": False,
+            "competition_exact_publishable": True,
+            "required_agent_tool": "opencode",
+            "required_model": "GLM-5.1",
+            "opencode_glm51_required": True,
+            "opencode_glm51_preflight_status": "passed",
+            "opencode_glm51_publishable": True,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "target_artifacts_regenerable": True,
+        }
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("publishability must match judge_milestone_bundle.publishability" in error for error in result["errors"]),
             result["errors"],
         )
 

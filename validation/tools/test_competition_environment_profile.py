@@ -1461,6 +1461,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("summary.blockers", skill)
         self.assertIn("published_artifact_ref_status", skill)
         self.assertIn("passed bundle cannot publish bad artifact ref status", skill)
+        self.assertIn("judge_milestone_bundle.publishability", skill)
 
     def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
         self.assertTrue(COMPAT_PROFILE_DIR.exists())
