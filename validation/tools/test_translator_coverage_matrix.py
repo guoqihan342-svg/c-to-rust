@@ -278,8 +278,8 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
         workflow = Path(".github/workflows/core-translator-validation-ci.yml")
         text = workflow.read_text(encoding="utf-8")
 
-        self.assertIn("python -m unittest validation.tools.test_translator_coverage_matrix", text)
-        self.assertIn("python validation/tools/translator_coverage_matrix.py", text)
+        self.assertIn("python3 -B -m unittest validation.tools.test_translator_coverage_matrix", text)
+        self.assertIn("python3 -B validation/tools/translator_coverage_matrix.py", text)
 
     def _minimal_matrix(self, capabilities: list[dict]) -> dict:
         return {
