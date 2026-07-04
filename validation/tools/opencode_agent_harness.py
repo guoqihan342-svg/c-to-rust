@@ -5317,6 +5317,7 @@ def run_worker_process(
     repo_root: Path,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     env: dict[str, str] | None = None,
+    worker_command: list[str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
     retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
     attempts: list[dict[str, Any]] = []
@@ -5328,12 +5329,16 @@ def run_worker_process(
             timeout_seconds=timeout_seconds,
             env=env,
         )
-        transient_lock = mode == "opencode" and opencode_database_locked(completed)
+        database_locked = mode == "opencode" and opencode_database_locked(completed)
+        worker_command_observed = database_locked and opencode_worker_command_observed(completed, worker_command)
+        transient_lock = database_locked and not worker_command_observed
         attempts.append(
             {
                 "attempt": index + 1,
                 "process_returncode": int(completed.returncode),
                 "transient_lock": transient_lock,
+                "database_locked": database_locked,
+                "worker_command_observed": worker_command_observed,
                 "stderr_tail": tail_text(completed.stderr or "", 512),
             }
         )
@@ -5493,6 +5498,20 @@ def opencode_database_locked(completed: subprocess.CompletedProcess[str]) -> boo
             "sqlite_busy",
             "sqlite busy",
         )
+    )
+
+
+def opencode_worker_command_observed(
+    completed: subprocess.CompletedProcess[str],
+    worker_command: list[str] | None,
+) -> bool:
+    if worker_command is None:
+        return False
+    expected_worker_command_line = shell_command_line(worker_command)
+    session_evidence = parse_opencode_stdout_session(completed.stdout or "")
+    return any(
+        command_matches_for_contract(command, expected_worker_command_line)
+        for command in extract_opencode_shell_commands(session_evidence)
     )
 
 
@@ -5667,6 +5686,7 @@ def run_worker(
             repo_root=repo_root,
             timeout_seconds=timeout_seconds,
             env=opencode_process_env,
+            worker_command=worker_command,
         )
     timed_out = completed_process_timed_out(completed)
     stdout_path = logs_dir / "harness-worker-executor.stdout.log"
@@ -8589,6 +8609,38 @@ def opencode_session_events(session_evidence: dict[str, Any]) -> list[Any]:
     return []
 
 
+def parse_opencode_stdout_session(stdout: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        events = []
+        jsonl_error = None
+        for line in stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as line_error:
+                jsonl_error = line_error
+                break
+        if events and jsonl_error is None:
+            return {
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": events,
+            }
+        return {
+            "parsed": False,
+            "parse_error": str(jsonl_error or error),
+            "raw_output": stdout[:20000],
+        }
+    return {
+        "parsed": True,
+        "format": "json",
+        "session": parsed,
+    }
+
+
 def normalize_command_for_contract(command: str) -> str:
     return " ".join(command.strip().split())
 
@@ -8823,43 +8875,7 @@ def write_opencode_session_evidence(
     }
     if opencode_runtime_env is not None:
         evidence["opencode_runtime_env"] = opencode_runtime_env
-    try:
-        parsed = json.loads(stdout)
-    except json.JSONDecodeError as error:
-        events = []
-        jsonl_error = None
-        for line in stdout.splitlines():
-            if not line.strip():
-                continue
-            try:
-                events.append(json.loads(line))
-            except json.JSONDecodeError as line_error:
-                jsonl_error = line_error
-                break
-        if events and jsonl_error is None:
-            evidence.update(
-                {
-                    "parsed": True,
-                    "format": "jsonl",
-                    "session_events": events,
-                }
-            )
-        else:
-            evidence.update(
-                {
-                    "parsed": False,
-                    "parse_error": str(jsonl_error or error),
-                    "raw_output": stdout[:20000],
-                }
-            )
-    else:
-        evidence.update(
-            {
-                "parsed": True,
-                "format": "json",
-                "session": parsed,
-            }
-        )
+    evidence.update(parse_opencode_stdout_session(stdout))
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(evidence_path, evidence)
     return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}

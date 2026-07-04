@@ -8183,6 +8183,73 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(event_payload["opencode_process_retries"], result["opencode_process_retries"])
 
+    def test_run_worker_opencode_database_lock_after_worker_command_does_not_retry(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                contract = json.loads(
+                    (out_root / "workers" / "worker-a" / "harness" / "opencode-handoff-contract.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 1, stdout=stdout + "\n", stderr="database is locked\n")
+
+            with patch.object(harness.time, "sleep", return_value=None):
+                result = harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["process_returncode"], 1)
+            self.assertNotIn("opencode_process_retries", result)
+            self.assertEqual(result["opencode_contract_verification"]["status"], "executed")
+            self.assertEqual(result["repair_hint"]["root_cause_key"], "worker_process_failed")
+
     def test_run_plan_opencode_passes_preflight_report_to_workers(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
