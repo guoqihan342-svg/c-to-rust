@@ -1276,6 +1276,24 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
     runtime_env = opencode_runtime_env_contract(worker_root, scope=worker["worker_id"])
     command = worker_command(worker_root)
     command_line = shlex.join(command)
+    opencode_prompt = f"Execute worker {worker['worker_id']} handoff contract."
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        launch_policy["opencode_variant"],
+        "--model",
+        launch_policy["opencode_model"],
+    ]
+    if launch_policy.get("opencode_agent"):
+        opencode_argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy.get("opencode_skip_permissions"):
+        opencode_argv.append("--dangerously-skip-permissions")
+    opencode_argv.append(opencode_prompt)
     set_artifact_ref(
         worker["summary"],
         summary_path,
@@ -1310,6 +1328,9 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
             "worker_command_line": command_line,
             "worker_command_sha256": validator.sha256_text(command_line),
             "expected_summary_path": repo_relative(summary_path),
+            "opencode_argv": opencode_argv,
+            "opencode_command_line": shlex.join(opencode_argv),
+            "prompt": opencode_prompt,
             "opencode_runtime_env": runtime_env,
         },
     )
@@ -4705,6 +4726,75 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
                 repo_root=REPO_ROOT,
             )
+
+    def test_judge_evidence_index_rejects_worker_handoff_opencode_argv_policy_drift(self) -> None:
+        def materialized_payload(temp_dir: Path) -> dict:
+            payload = valid_opencode_judge_index_payload()
+            materialize_opencode_judge_index_artifacts(
+                payload,
+                temp_dir / "out",
+                profile_payload={
+                    "schema_version": 1,
+                    "profile_id": "opencode-profile",
+                    "mode": "opencode",
+                    **opencode_launch_policy(),
+                },
+            )
+            return payload
+
+        with self.subTest(tamper="green_control"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-handoff-argv-", dir=REPO_ROOT / "target"))
+            payload = materialized_payload(temp_dir)
+            result = validator.validate_opencode_agent_runtime_contract(
+                payload["opencode_agent_runtime"],
+                repo_root=REPO_ROOT,
+            )
+            self.assertEqual(result["status"], "passed")
+
+        def tamper_model(argv: list) -> None:
+            argv[argv.index("--model") + 1] = "not-GLM-5.1"
+
+        def tamper_variant(argv: list) -> None:
+            argv[argv.index("--variant") + 1] = "lite"
+
+        def tamper_extra_flag(argv: list) -> None:
+            argv[-1:-1] = ["--profile", "dev"]
+
+        cases = [
+            (
+                "non_glm_model",
+                tamper_model,
+                r"opencode_agent_runtime.workers\[0\].handoff_contract.opencode_argv --model must be GLM-5.1",
+            ),
+            (
+                "non_max_variant",
+                tamper_variant,
+                r"opencode_agent_runtime.workers\[0\].handoff_contract.opencode_argv --variant must be max",
+            ),
+            (
+                "unexpected_flag",
+                tamper_extra_flag,
+                r"opencode_agent_runtime.workers\[0\].handoff_contract.opencode_argv has unexpected flags: --profile",
+            ),
+        ]
+        for name, tamper, expected_error in cases:
+            with self.subTest(tamper=name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-handoff-argv-", dir=REPO_ROOT / "target"))
+                payload = materialized_payload(temp_dir)
+                worker = payload["opencode_agent_runtime"]["workers"][0]
+                handoff_path = REPO_ROOT / worker["handoff_contract"]["path"]
+                handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+                tamper(handoff_payload["opencode_argv"])
+                handoff_payload["opencode_command_line"] = shlex.join(handoff_payload["opencode_argv"])
+                write_json(handoff_path, handoff_payload)
+                worker["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_judge_evidence_index_contract(
+                        payload,
+                        path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
+                        repo_root=REPO_ROOT,
+                    )
 
     def test_judge_evidence_index_requires_matching_worker_opencode_launch_policy(self) -> None:
         payload = valid_opencode_judge_index_payload()

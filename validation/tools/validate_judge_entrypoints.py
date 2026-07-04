@@ -3402,6 +3402,20 @@ def validate_opencode_worker_runtime(
         )
         if expected_summary_path != bindings["summary"]["path"]:
             raise ValueError(f"{label}.handoff_contract.expected_summary_path must match summary.path")
+        opencode_argv = validate_opencode_run_argv_binding(
+            handoff_payload.get("opencode_argv"),
+            f"{label}.handoff_contract.opencode_argv",
+            launch_policy=handoff_policy,
+        )
+        opencode_command_line = require_string(
+            handoff_payload.get("opencode_command_line"),
+            f"{label}.handoff_contract.opencode_command_line",
+        )
+        if opencode_command_line != shell_command_line(opencode_argv):
+            raise ValueError(f"{label}.handoff_contract.opencode_command_line must match opencode_argv")
+        handoff_prompt = require_string(handoff_payload.get("prompt"), f"{label}.handoff_contract.prompt")
+        if handoff_prompt != opencode_argv[-1]:
+            raise ValueError(f"{label}.handoff_contract.prompt must match opencode_argv prompt")
         session_evidence = require_object(
             load_json(repo_path(bindings["opencode_session_evidence"]["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
