@@ -179,6 +179,30 @@ P0-C/P0-D 详细冲刺顺序：
 
 H7 后续硬化只作为回归门禁，不允许抢占 P0-C/P0-D 主线：`run_judge_entrypoints.py` 已继承有限 timeout 合同（per-entrypoint `--timeout-seconds`、超时规范化为 124、`root_cause_key=process_timeout`、run report timeout policy），且关键 run report、selected validation config、bundle/public packet、release notes 与 entrypoint stdout/stderr 已切到同目录临时文件加 `os.replace` 的原子写；`python3 -B` portable command 合同也已关闭：judge config、tracked reproduction manifests 和 test contract 固定使用 `python3 -B`，validator 拒绝裸 `python -B`，runner 本地执行层会解析到可运行的非绝对 Python launcher 并在报告中同时保留 canonical argv/effective argv。这些项后续只作为回归门禁，只有在评委 runner、validator 或 local-artifact deep validation 暴露漂移时才重新打开。
 
+### 2026-07-04 外部逐行评审吸收与 CI 红灯修复
+
+外部多 agent 逐行评审（crates/c2r-translator 全部源码与测试的行级审计，71 条 findings）结论：主翻译路径（clang → typed IR）+ oracle 门禁未发现可静默误译语义验收的 critical 缺陷；风险集中在 legacy 遗留模块、证据 provenance 精度和测试可信度。按"稳定与证据链优先"吸收如下，所有修复必须 TDD 且不放宽任何 gate。
+
+已落地（2026-07-04，commit `21fdb72..0b6c612`）：
+
+- **CI 红灯根因一（evidence 级联遗漏）**：real-fdb-calc-crc32 evidence 刷新遗漏级联更新——`auto_manifest.c2rust_baseline` sha、`final_verification.verified_unsafe_baseline` sha、auto-cache-metadata 三个 identity、bundle-manifest 的 `scripts/c2rust-migrator.py` sha、before-after profile 的 `translation_before_after` sha。已用 `resync_sha_bindings` 修复并级联；final-verification↔verified-baseline 是 path 环，resync 会跳过该边，必须手工改 sha 后再级联。教训固化为流程：刷新任何 evidence 后必须跑两条 resync `--check` 门，且 push 后必须确认 CI 绿灯（本次红灯连续 6 个 push 未被发现）。
+- **CI 红灯根因二（哈希口径分叉）**：translator_input 的 `source_file_hashes` 按原始字节哈希，而 FlashDB 上游 text 属性使 checkout 换行平台相关（Windows CRLF / Linux LF）。`auto_migrate.sha256` 已统一委托 `judge_validator.sha256_file`（后缀门控 LF-stable），producer/validator 单一口径，`.rlib` 等二进制不受影响；测试期望值同步为 LF-canonical。
+- **legacy 静默误译向量 fail-closed 关闭**：C 八进制字面量（Rust 重释为十进制，如 `010`/`0644`）现被 `unsupported_syntax` 拒绝并覆盖声明/赋值/return/循环条件；裸 `char`（目标平台有符号）移出 `map_c_type` 走 `type_uncertainty` 拒绝。另修 `std::env::vars()` 非 Unicode panic（改 `vars_os` lossy 共享收集器）与 `emit_policy_from_spec` 双份逐字重复（合一为 pub(crate) 共享，防报告证据与候选生成 policy 漂移）。四条 bounded_translation 锁定测试已入库。
+
+进行中/新增待办（按稳定与证据链优先排序；R1-R3 本轮已开工）：
+
+- [ ] **P0-R1 signed 左移/取负 runtime precondition 缺口**：`collect_binary_runtime_preconditions` 对 signed `Shl` 无值域 UB precondition（C11 6.5.7p4 负值左移/结果溢出），`collect_expr_runtime_preconditions` 对 signed `Neg`（`-INT_MIN` UB）不记录，而 emitter 均不拒绝——缺失的 code 对 `scalar_admission` gate 永远不可见，是 oracle 边界诚实性的真实缺口。验收：新 precondition code 进入 artifacts 收集器 + auto_migrate 契约注册 + 红绿测试，全量 cargo/python 回归绿。
+- [ ] **P0-R2 clang-lowering-report 主机路径净化**：`write_clang_lowering_report_artifact` 未净化 `clang_path`/arguments 中的绝对主机路径，已提交证据实际泄漏 `C:\Program Files\LLVM\bin\clang.exe`；`portable_artifact_path` 剥离失败时也静默回退绝对路径进 manifest（fail-open）。验收：生产端净化 + fail-closed（或显式 non_portable 标记）+ 负例测试；历史泄漏 evidence 不批量重写，按 judge-chain scope 原则处理。
+- [ ] **P0-R9 CI auto-retry exhibit 测试 ubuntu-only 失败**：`test_run_batch_profile_auto_retry_produces_verified_before_after_repair_exhibit` 仅在 ubuntu CI 失败（`run_plan.status=failed`），Windows worktree 与 WSL fresh LF clone 按 CI 模块序列复现均绿。已推送断言诊断增强（读取 `run_plan` 的 workers/merge_execution 详情），等 CI 输出定位修复；push 后确认 CI 绿灯是本项验收的一部分。
+- [ ] **P1-R3 pointer-graph 三态化**：翻译被阻断时 pointer-graph artifact 仍无条件断言 `not_applicable`/"slice has no pointer surface"（指针分析根本未运行）；应区分 not_applicable（分析已跑且无指针）与 not_evaluated/blocked（翻译阻断），schema 与 validator 同步。
+- [ ] **P1-R4 clang 门控测试可见化**：123 个真实 clang 测试在未设 `C2R_RUN_CLANG_AST_TESTS=1` 时 early-return 静默变绿（CI 报 123 个虚假 passed），且各自复制硬编码 Windows `C:/Program Files/LLVM/bin/clang.exe` 默认路径（比赛主机是 Ubuntu）。改为可见 skip + 单一共享门控 helper + Linux 优先默认路径，消除约 1000 行复制样板。
+- [ ] **P1-R5 clang-lowering-report 双跑合一**：启用 report feature 时同一 slice 执行两次完整 clang lowering（`translate_slice_with_optional_clang_lowered_ir` 一次、`write_clang_lowering_report_artifact` 再一次），双倍子进程/AST JSON 解析开销，且两次运行间 CLANG_PATH/源文件变化会造成报告与 draft 错配、`typed_ir_sha256` 与 `rust_draft_sha256` 绑定成错对。translate 路径应缓存并复用同一份 report。
+- [ ] **P1-R6 legacy translator 退役评估**：其"接受子集"内仍有两类静默语义丢弃——指针函数不匹配模板时发射 `return_code: 0, status: "ok"` 空壳（丢弃全部函数体语义且不校验 C 返回值确为 0），以及 output-buffer 模板把 `out[0] = v` 写无条件改写为 `return v;` 劫持控制流。评审建议整体退役或将 `translate_slice` 从 pub API 降级 crate 私有（仅保留 artifacts 层 retired 包装）；在此之前不扩不修其 C 覆盖。
+- [ ] **P1-R7 clang_frontend qualType 解析模型层缺陷显式 fail-closed**：多维数组维度顺序被 `rfind('[')` 颠倒建模（`int[2][3]` 解析成 3 个 `int[2]`）、返回函数指针的函数按第一个 `'('` 切分出错误返回类型、固定宽度 typedef 拼写不校验 `desugaredQualType` 一致性（自定义 `typedef unsigned long uint32_t;` 会被静默按 32 位建模）。三者当前均被下游类型匹配兜底拒绝，但骨架模型数据本身错误且拒绝原因误导；应在解析层显式拒绝并补负例。
+- [ ] **P2-R8 测试工程维护项（固定时间盒，不抢占 P0）**：EnvVarGuard 并行 `set_var` 与库代码 `env::vars()` 的 glibc 竞态、约 131 处测试临时目录从不清理、20 份 TargetAbiProfile 字面量样板与巨型内联 JSON fixture 收敛到 `include_str!` fixture 模式。
+
+边界不变：以上全部是稳定性/证据链/测试可信度加固，不新增 semantic gate，不提高 `translation_coverage_numerator`，也不关闭缺真实 `GLM-5.1` host 的 P0-H9。
+
 ### H7 后 P0 冲刺队列
 
 当前修正（2026-07-03）：P0-H8 已通过 fresh LF clone artifact-producing run 与 local-artifact deep validation 关闭；本小节中早期 public packet 的 `blocked-by-P0-H8` 叙事只保留为历史上下文。当前 release-ready 限制转为 P0-H9：OpenCode artifacts 必须在比赛 GLM-5.1/OpenCode host 或等价 provider 配置上重新生成，不能用本机 local-simulation 证据替代。
