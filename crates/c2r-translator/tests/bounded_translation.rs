@@ -30398,6 +30398,136 @@ fn clang_lowering_report_feature_blocks_retired_legacy_fallback_when_unavailable
 }
 
 #[cfg(feature = "clang-lowering-report")]
+fn write_one_shot_fake_clang(out_dir: &std::path::Path) -> (PathBuf, PathBuf) {
+    let fake_clang = out_dir.join(if cfg!(windows) {
+        "fake-clang.cmd"
+    } else {
+        "fake-clang"
+    });
+    let count_file = out_dir.join("fake-clang-count.txt");
+    let ast_file = out_dir.join("add_one_ast.json");
+    fs::write(
+        &ast_file,
+        include_str!("../fixtures/clang_ast/add_one_ast.json"),
+    )
+    .unwrap();
+
+    if cfg!(windows) {
+        fs::write(
+            &fake_clang,
+            format!(
+                "@echo off\r\n\
+if not exist \"{count}\" (\r\n\
+  >\"{count}\" echo 1\r\n\
+  type \"{ast}\"\r\n\
+  exit /b 0\r\n\
+)\r\n\
+set /p CURRENT=<\"{count}\"\r\n\
+set /a NEXT=%CURRENT%+1\r\n\
+>\"{count}\" echo %NEXT%\r\n\
+echo fake clang invoked more than once 1>&2\r\n\
+exit /b 1\r\n",
+                count = count_file.display(),
+                ast = ast_file.display()
+            ),
+        )
+        .unwrap();
+    } else {
+        fs::write(
+            &fake_clang,
+            format!(
+                "#!/bin/sh\n\
+if [ ! -f '{count}' ]; then\n\
+  echo 1 > '{count}'\n\
+  cat '{ast}'\n\
+  exit 0\n\
+fi\n\
+current=$(cat '{count}')\n\
+echo $((current + 1)) > '{count}'\n\
+echo 'fake clang invoked more than once' >&2\n\
+exit 1\n",
+                count = count_file.display(),
+                ast = ast_file.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&fake_clang, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    (fake_clang, count_file)
+}
+
+#[cfg(feature = "clang-lowering-report")]
+#[test]
+fn clang_lowering_report_reuses_translation_report_without_second_clang_invocation() {
+    let source_root = unique_out_dir("clang-lowering-single-run-source");
+    fs::create_dir_all(&source_root).unwrap();
+    fs::write(
+        source_root.join("add_one.c"),
+        "int add_one(int value) { return value + 1; }\n",
+    )
+    .unwrap();
+    let out_dir = unique_out_dir("clang-lowering-single-run");
+    fs::create_dir_all(&out_dir).unwrap();
+    let (fake_clang, count_file) = write_one_shot_fake_clang(&out_dir);
+    let _clang_path_guard = EnvVarGuard::set_path("CLANG_PATH", &fake_clang);
+    let source_root = source_root.to_string_lossy().replace('\\', "/");
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "add-one-single-run",
+        "source_commit": "1234567",
+        "function_name": "add_one",
+        "c_source": "int add_one(int value) { return value + 1; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": source_root,
+        "source_file": "add_one.c",
+        "source_file_hashes": {
+            "add_one.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "add_one.c",
+            "line_start": 1,
+            "line_end": 1,
+            "byte_start": 0,
+            "byte_end": 43,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "clang",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+    let invocation_count = fs::read_to_string(&count_file).unwrap();
+    let report = json_file(out_dir.join("l3-add-one-single-run-clang-lowering-report.json"));
+    let rust = fs::read_to_string(out_dir.join("l3-add-one-single-run-rust-draft.rs")).unwrap();
+
+    assert_eq!(
+        invocation_count.trim(),
+        "1",
+        "clang lowering report must reuse the translation lowering instead of launching clang twice"
+    );
+    assert_eq!(manifest.status, "generated");
+    assert!(manifest
+        .artifact_paths
+        .iter()
+        .any(|path| path.ends_with("l3-add-one-single-run-clang-lowering-report.json")));
+    assert_eq!(report["status"], "lowered");
+    assert_eq!(report["typed_ir_candidate"]["status"], "generated");
+    assert!(rust.contains("pub fn add_one(value: i32) -> i32"));
+}
+
+#[cfg(feature = "clang-lowering-report")]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled() {

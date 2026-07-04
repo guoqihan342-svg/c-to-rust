@@ -139,7 +139,15 @@ pub fn write_translation_artifacts(
 ) -> Result<ArtifactManifest, Box<dyn Error>> {
     fs::create_dir_all(out_dir)?;
     #[cfg(feature = "clang-lowering-report")]
-    let result = translate_slice_with_optional_clang_lowered_ir(spec);
+    let clang_lowered_attempt =
+        crate::clang_lowered_translation::try_clang_lowered_translation_attempt(spec);
+    #[cfg(feature = "clang-lowering-report")]
+    let result = translate_slice_with_optional_clang_lowered_ir(
+        spec,
+        clang_lowered_attempt
+            .as_ref()
+            .and_then(|attempt| attempt.result.clone()),
+    );
     #[cfg(not(feature = "clang-lowering-report"))]
     let result = translate_slice_with_retired_legacy_direct_path(spec);
     let prefix = format!("l3-{}", spec.slice_id);
@@ -160,7 +168,12 @@ pub fn write_translation_artifacts(
     let artifacts = {
         let mut artifacts = artifacts;
         artifacts.push(write_clang_lowering_report_artifact(
-            spec, out_dir, &prefix,
+            spec,
+            out_dir,
+            &prefix,
+            clang_lowered_attempt
+                .as_ref()
+                .map(|attempt| &attempt.report),
         )?);
         artifacts
     };
@@ -218,10 +231,11 @@ fn translate_slice_with_retired_legacy_direct_path(spec: &SliceSpec) -> Translat
 }
 
 #[cfg(feature = "clang-lowering-report")]
-fn translate_slice_with_optional_clang_lowered_ir(spec: &SliceSpec) -> TranslationResult {
-    if let Some(result) =
-        crate::clang_lowered_translation::try_translate_slice_with_clang_lowered_ir(spec)
-    {
+fn translate_slice_with_optional_clang_lowered_ir(
+    spec: &SliceSpec,
+    clang_lowered_result: Option<TranslationResult>,
+) -> TranslationResult {
+    if let Some(result) = clang_lowered_result {
         return result;
     }
     let mut result = translate_slice(spec);
@@ -296,17 +310,24 @@ pub(crate) fn write_clang_lowering_report_artifact(
     spec: &SliceSpec,
     out_dir: &Path,
     prefix: &str,
+    reused_report: Option<&clang_frontend::ClangLoweringReport>,
 ) -> Result<PathBuf, Box<dyn Error>> {
     let mut value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
         Ok(parse_spec) => {
             let source_file = parse_spec.source_root.join(&parse_spec.source_file);
-            let environment = crate::clang_lowered_translation::collect_environment_lossy();
-            let report =
-                crate::clang_lowered_translation::lower_parse_spec_report_with_optional_ast_fixture(
+            let owned_report;
+            let report = if let Some(report) = reused_report {
+                report
+            } else {
+                let environment = crate::clang_lowered_translation::collect_environment_lossy();
+                owned_report =
+                    crate::clang_lowered_translation::lower_parse_spec_report_with_optional_ast_fixture(
                     &environment,
                     &parse_spec,
                     spec.build_profile.clang_ast_fixture.as_deref(),
                 );
+                &owned_report
+            };
             let emit_policy = emit_policy_from_spec(spec);
             let typed_ir_candidate = typed_ir_candidate_evidence(
                 report.function_ir.as_ref(),
@@ -1466,7 +1487,8 @@ mod clang_lowering_report_artifact_tests {
         let out_dir = unique_out_dir("clang-lowering-report-error");
         fs::create_dir_all(&out_dir).unwrap();
 
-        let path = write_clang_lowering_report_artifact(&spec, &out_dir, "l3-add-one").unwrap();
+        let path =
+            write_clang_lowering_report_artifact(&spec, &out_dir, "l3-add-one", None).unwrap();
         let value: Value = serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap();
 
         assert_eq!(value["schema_version"], 1);

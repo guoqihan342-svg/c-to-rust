@@ -37,10 +37,9 @@ mod clang_lowered_translation_module_tests {
             ..SliceSpec::default()
         };
 
-        assert!(
-            crate::clang_lowered_translation::try_translate_slice_with_clang_lowered_ir(&spec)
-                .is_none()
-        );
+        let attempt =
+            crate::clang_lowered_translation::try_clang_lowered_translation_attempt(&spec);
+        assert!(attempt.is_none());
     }
 }
 

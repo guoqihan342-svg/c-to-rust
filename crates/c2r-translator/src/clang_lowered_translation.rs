@@ -32,9 +32,14 @@ pub(crate) fn collect_environment_lossy() -> BTreeMap<String, String> {
         .collect()
 }
 
-pub(crate) fn try_translate_slice_with_clang_lowered_ir(
+pub(crate) struct ClangLoweredTranslationAttempt {
+    pub report: clang_frontend::ClangLoweringReport,
+    pub result: Option<TranslationResult>,
+}
+
+pub(crate) fn try_clang_lowered_translation_attempt(
     spec: &SliceSpec,
-) -> Option<TranslationResult> {
+) -> Option<ClangLoweredTranslationAttempt> {
     let parse_spec = clang_frontend::ClangParseSpec::from_slice_spec(spec).ok()?;
     let environment = collect_environment_lossy();
     let report = lower_parse_spec_report_with_optional_ast_fixture(
@@ -42,6 +47,14 @@ pub(crate) fn try_translate_slice_with_clang_lowered_ir(
         &parse_spec,
         spec.build_profile.clang_ast_fixture.as_deref(),
     );
+    let result = translation_result_from_clang_lowering_report(spec, &report);
+    Some(ClangLoweredTranslationAttempt { report, result })
+}
+
+fn translation_result_from_clang_lowering_report(
+    spec: &SliceSpec,
+    report: &clang_frontend::ClangLoweringReport,
+) -> Option<TranslationResult> {
     let function_ir = report.function_ir.as_ref()?;
     let rust_code = typed_ir::emit_rust_from_ir_with_globals_and_policy(
         function_ir,
