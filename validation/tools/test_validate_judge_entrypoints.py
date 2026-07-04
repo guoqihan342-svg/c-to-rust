@@ -431,6 +431,8 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
     }
     write_json(handoff_path, handoff_payload)
     session_path = artifact_dir / "opencode-session-evidence.json"
+    stdout_path = artifact_dir / "opencode.stdout.log"
+    stderr_path = artifact_dir / "opencode.stderr.log"
     session_payload = {
         "schema_version": 1,
         "process_returncode": 0,
@@ -446,6 +448,12 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
             }
         ],
     }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
     write_json(session_path, session_payload)
     contract_verification = validator.recompute_opencode_contract_execution(
         session_evidence=session_payload,
@@ -1152,6 +1160,58 @@ def set_artifact_ref(ref: dict, path: Path, payload: dict | None = None) -> None
     ref["sha256"] = validator.sha256_file(path)
 
 
+def opencode_session_stdout_jsonl(events: list) -> str:
+    return "".join(json.dumps(event, sort_keys=True) + "\n" for event in events)
+
+
+def ensure_opencode_jsonl_session_events(session_payload: dict) -> None:
+    events = session_payload.get("session_events")
+    if not isinstance(events, list):
+        return
+    while len(events) < 2:
+        events.append(
+            {
+                "type": "text",
+                "part": {
+                    "text": "fixture-jsonl-keepalive",
+                },
+            }
+        )
+
+
+def bind_opencode_session_raw_logs(
+    session_path: Path,
+    session_payload: dict,
+    *,
+    stdout_path: Path | None = None,
+    stderr_path: Path | None = None,
+) -> None:
+    existing_session = json.loads(session_path.read_text(encoding="utf-8")) if session_path.is_file() else {}
+    if stdout_path is None:
+        stdout_path_text = session_payload.get("stdout_path") or existing_session.get("stdout_path")
+        stdout_path = REPO_ROOT / stdout_path_text if stdout_path_text else session_path.with_name("stdout.log")
+    if stderr_path is None:
+        stderr_path_text = session_payload.get("stderr_path") or existing_session.get("stderr_path")
+        stderr_path = REPO_ROOT / stderr_path_text if stderr_path_text else session_path.with_name("stderr.log")
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    if "session_events" in session_payload:
+        ensure_opencode_jsonl_session_events(session_payload)
+        stdout_path.write_text(
+            opencode_session_stdout_jsonl(session_payload["session_events"]),
+            encoding="utf-8",
+            newline="\n",
+        )
+    elif not stdout_path.exists():
+        stdout_path.write_text("", encoding="utf-8", newline="\n")
+    if not stderr_path.exists():
+        stderr_path.write_text("", encoding="utf-8", newline="\n")
+    session_payload["stdout_path"] = repo_relative(stdout_path)
+    session_payload["stderr_path"] = repo_relative(stderr_path)
+    session_payload["stdout_sha256"] = validator.sha256_file(stdout_path)
+    session_payload["stderr_sha256"] = validator.sha256_file(stderr_path)
+
+
 def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, launch_policy: dict) -> None:
     base_root = path.parent.parent if path.parent.name == "harness" else path.parent
     harness_dir = base_root / "harness"
@@ -1161,6 +1221,8 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
     marker_path = harness_dir / "opencode-preflight-marker.json"
     contract_path = harness_dir / "opencode-preflight-contract.json"
     session_path = logs_dir / "opencode-preflight-session-evidence.json"
+    stdout_path = logs_dir / "opencode-preflight.stdout.log"
+    stderr_path = logs_dir / "opencode-preflight.stderr.log"
     runtime_env = opencode_runtime_env_contract(base_root, scope="preflight")
     marker_command = [
         "python3",
@@ -1202,29 +1264,33 @@ def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, l
             "opencode_runtime_env": runtime_env,
         },
     )
-    write_json(
-        session_path,
-        {
-            "schema_version": 1,
-            "process_returncode": 0,
-            "parsed": True,
-            "format": "jsonl",
-            "opencode_runtime_env": runtime_env,
-            "session_events": [
-                {
-                    "part": {
-                        "tool": "bash",
-                        "state": {
-                            "input": {
-                                "command": marker_command_line,
-                                "workdir": str(REPO_ROOT),
-                            }
-                        },
-                    }
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {
+                        "input": {
+                            "command": marker_command_line,
+                            "workdir": str(REPO_ROOT),
+                        }
+                    },
                 }
-            ],
-        },
+            }
+        ],
+    }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
     )
+    write_json(session_path, session_payload)
     model_stdout = "GLM-5.1\n"
     model_stderr = ""
     model_stdout_path = logs_dir / "opencode-models.stdout.log"
@@ -1322,6 +1388,7 @@ def rewrite_preflight_session_evidence(preflight_path: Path, session_payload: di
     existing_session = json.loads(session_path.read_text(encoding="utf-8"))
     if "opencode_runtime_env" not in session_payload and "opencode_runtime_env" in existing_session:
         session_payload["opencode_runtime_env"] = existing_session["opencode_runtime_env"]
+    bind_opencode_session_raw_logs(session_path, session_payload)
     write_json(session_path, session_payload)
     session_ref["sha256"] = validator.sha256_file(session_path)
     write_json(preflight_path, preflight_payload)
@@ -1422,28 +1489,34 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
     )
     worker["handoff_contract"]["path"] = repo_relative(handoff_path)
     worker["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
-    write_json(
-        session_path,
-        {
-            "schema_version": 1,
-            "process_returncode": 0,
-            "parsed": True,
-            "format": "jsonl",
-            "opencode_runtime_env": runtime_env,
-            "session_events": [
-                {
-                    "part": {
-                        "tool": "bash",
-                        "state": {"input": {"command": command_line, "workdir": str(REPO_ROOT)}},
-                    }
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {"input": {"command": command_line, "workdir": str(REPO_ROOT)}},
                 }
-            ],
-        },
+            }
+        ],
+    }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
     )
+    write_json(session_path, session_payload)
     worker["opencode_session_evidence"]["path"] = repo_relative(session_path)
     worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
-    set_artifact_ref(worker["logs"]["stdout"], stdout_path)
-    set_artifact_ref(worker["logs"]["stderr"], stderr_path)
+    worker["logs"]["stdout"]["path"] = repo_relative(stdout_path)
+    worker["logs"]["stdout"]["sha256"] = validator.sha256_file(stdout_path)
+    worker["logs"]["stderr"]["path"] = repo_relative(stderr_path)
+    worker["logs"]["stderr"]["sha256"] = validator.sha256_file(stderr_path)
     worker["opencode_contract_verification"] = {
         "status": "executed",
         "expected_worker_command_line": command_line,
@@ -1470,8 +1543,16 @@ def rewrite_worker_session_evidence(worker: dict, session_payload: dict) -> None
     existing_session = json.loads(session_path.read_text(encoding="utf-8"))
     if "opencode_runtime_env" not in session_payload and "opencode_runtime_env" in existing_session:
         session_payload["opencode_runtime_env"] = existing_session["opencode_runtime_env"]
+    bind_opencode_session_raw_logs(session_path, session_payload)
     write_json(session_path, session_payload)
     worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+    if "logs" in worker:
+        stdout_path = REPO_ROOT / session_payload["stdout_path"]
+        stderr_path = REPO_ROOT / session_payload["stderr_path"]
+        worker["logs"]["stdout"]["path"] = repo_relative(stdout_path)
+        worker["logs"]["stdout"]["sha256"] = validator.sha256_file(stdout_path)
+        worker["logs"]["stderr"]["path"] = repo_relative(stderr_path)
+        worker["logs"]["stderr"]["sha256"] = validator.sha256_file(stderr_path)
 
 
 def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, profile_payload: dict) -> None:
@@ -4791,6 +4872,48 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         payload["opencode_agent_runtime"],
                         repo_root=REPO_ROOT,
                     )
+
+    def test_opencode_agent_runtime_rejects_session_evidence_not_reparsed_from_stdout(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-session-raw-drift-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+                "auto_retry": True,
+            },
+        )
+        worker = payload["opencode_agent_runtime"]["workers"][0]
+        session_path = REPO_ROOT / worker["opencode_session_evidence"]["path"]
+        session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+        stdout_path = REPO_ROOT / session_payload["stdout_path"]
+        stdout_path.write_text(
+            opencode_session_stdout_jsonl(
+                [
+                    {"type": "text", "part": {"text": "summary-only spoof"}},
+                    {"type": "text", "part": {"text": "still no shell"}},
+                ]
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
+        session_payload["stdout_sha256"] = validator.sha256_file(stdout_path)
+        worker["logs"]["stdout"]["sha256"] = validator.sha256_file(stdout_path)
+        write_json(session_path, session_payload)
+        worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"opencode_agent_runtime\.workers\[0\]\.opencode_session_evidence\.session_events must match parsed stdout",
+        ):
+            validator.validate_opencode_agent_runtime_contract(
+                payload["opencode_agent_runtime"],
+                repo_root=REPO_ROOT,
+            )
 
     def test_opencode_agent_runtime_rejects_invalid_worker_summary_contract(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-summary-contract-", dir=REPO_ROOT / "target"))

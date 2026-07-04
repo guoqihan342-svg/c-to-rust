@@ -27,6 +27,38 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def opencode_session_stdout_jsonl(events: list) -> str:
+    return "".join(json.dumps(event, sort_keys=True) + "\n" for event in events)
+
+
+def ensure_opencode_jsonl_session_events(session_payload: dict) -> None:
+    events = session_payload.get("session_events")
+    if not isinstance(events, list):
+        return
+    while len(events) < 2:
+        events.append({"type": "text", "part": {"text": "fixture-jsonl-keepalive"}})
+
+
+def bind_opencode_session_raw_logs(
+    session_path: Path,
+    session_payload: dict,
+    *,
+    stdout_path: Path,
+    stderr_path: Path,
+) -> None:
+    from validation.tools import judge_milestone_bundle as bundle
+
+    ensure_opencode_jsonl_session_events(session_payload)
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text(opencode_session_stdout_jsonl(session_payload["session_events"]), encoding="utf-8", newline="\n")
+    stderr_path.write_text("", encoding="utf-8", newline="\n")
+    session_payload["stdout_path"] = repo_relative(stdout_path)
+    session_payload["stderr_path"] = repo_relative(stderr_path)
+    session_payload["stdout_sha256"] = bundle.validator.sha256_file(stdout_path)
+    session_payload["stderr_sha256"] = bundle.validator.sha256_file(stderr_path)
+
+
 def artifact_ref(path: Path) -> dict:
     from validation.tools import judge_milestone_bundle as bundle
 
@@ -74,6 +106,8 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
     marker_path = root / "harness" / "opencode-preflight-marker.json"
     handoff_path = root / "harness" / "opencode-preflight-contract.json"
     session_path = root / "logs" / "opencode-preflight-session-evidence.json"
+    session_stdout_path = root / "logs" / "opencode-preflight.stdout.log"
+    session_stderr_path = root / "logs" / "opencode-preflight.stderr.log"
     preflight_path = root / "harness" / "opencode-preflight-report.json"
     model_stdout_path = root / "logs" / "opencode-models.stdout.log"
     model_stderr_path = root / "logs" / "opencode-models.stderr.log"
@@ -141,29 +175,33 @@ def write_opencode_preflight_fixture(root: Path, *, run_id: str = "opencode") ->
             "opencode_runtime_env": runtime_env,
         },
     )
-    write_json(
-        session_path,
-        {
-            "schema_version": 1,
-            "process_returncode": 0,
-            "parsed": True,
-            "format": "jsonl",
-            "opencode_runtime_env": runtime_env,
-            "session_events": [
-                {
-                    "part": {
-                        "tool": "bash",
-                        "state": {
-                            "input": {
-                                "command": worker_command_line,
-                                "workdir": str(REPO_ROOT),
-                            }
-                        },
-                    }
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {
+                        "input": {
+                            "command": worker_command_line,
+                            "workdir": str(REPO_ROOT),
+                        }
+                    },
                 }
-            ],
-        },
+            }
+        ],
+    }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=session_stdout_path,
+        stderr_path=session_stderr_path,
     )
+    write_json(session_path, session_payload)
     model_stdout_path.parent.mkdir(parents=True, exist_ok=True)
     model_stdout_path.write_text("GLM-5.1\n", encoding="utf-8")
     model_stderr_path.write_text("", encoding="utf-8")

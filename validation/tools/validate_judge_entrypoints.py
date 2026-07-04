@@ -3091,7 +3091,71 @@ def validate_opencode_contract_recomputed_from_session(
     return recomputed
 
 
-def validate_opencode_session_evidence_contract(session_evidence: dict[str, Any], label: str) -> None:
+def parse_opencode_stdout_session_for_contract(stdout: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        events = []
+        jsonl_error = None
+        for line in stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError as line_error:
+                jsonl_error = line_error
+                break
+        if events and jsonl_error is None:
+            return {
+                "parsed": True,
+                "format": "jsonl",
+                "session_events": events,
+            }
+        return {
+            "parsed": False,
+            "parse_error": str(jsonl_error or error),
+            "raw_output": stdout[:20000],
+        }
+    return {
+        "parsed": True,
+        "format": "json",
+        "session": parsed,
+    }
+
+
+def validate_opencode_session_raw_log_binding(
+    session_evidence: dict[str, Any],
+    label: str,
+    *,
+    repo_root: Path,
+) -> None:
+    for stream in ("stdout", "stderr"):
+        stream_path_text = require_string(session_evidence.get(f"{stream}_path"), f"{label}.{stream}_path")
+        expected_sha256 = validate_sha256_hex(
+            session_evidence.get(f"{stream}_sha256"),
+            f"{label}.{stream}_sha256",
+        )
+        stream_path = repo_path(stream_path_text, repo_root=repo_root)
+        if not stream_path.is_file():
+            raise ValueError(f"{label}.{stream}_path must exist")
+        if sha256_file(stream_path) != expected_sha256:
+            raise ValueError(f"{label}.{stream}_sha256 must match {stream}_path")
+
+    stdout_path = repo_path(require_string(session_evidence.get("stdout_path"), f"{label}.stdout_path"), repo_root=repo_root)
+    parsed_stdout = parse_opencode_stdout_session_for_contract(stdout_path.read_text(encoding="utf-8"))
+    for field in ("format", "parsed"):
+        if parsed_stdout.get(field) != session_evidence.get(field):
+            raise ValueError(f"{label}.{field} must match parsed stdout")
+    if parsed_stdout.get("session_events") != session_evidence.get("session_events"):
+        raise ValueError(f"{label}.session_events must match parsed stdout")
+
+
+def validate_opencode_session_evidence_contract(
+    session_evidence: dict[str, Any],
+    label: str,
+    *,
+    repo_root: Path | None = None,
+) -> None:
     if session_evidence.get("format") != "jsonl":
         raise ValueError(f"{label}.format must be jsonl")
     if session_evidence.get("parsed") is not True:
@@ -3099,6 +3163,8 @@ def validate_opencode_session_evidence_contract(session_evidence: dict[str, Any]
     returncode = session_evidence.get("process_returncode")
     if not isinstance(returncode, int) or isinstance(returncode, bool) or returncode != 0:
         raise ValueError(f"{label}.process_returncode must be 0")
+    if repo_root is not None:
+        validate_opencode_session_raw_log_binding(session_evidence, label, repo_root=repo_root)
 
 
 def validate_hash_bound_artifact_binding(
@@ -3303,7 +3369,11 @@ def validate_opencode_preflight_binding(
             load_json(repo_path(session_binding["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
         )
-        validate_opencode_session_evidence_contract(session_evidence, f"{label}.opencode_session_evidence")
+        validate_opencode_session_evidence_contract(
+            session_evidence,
+            f"{label}.opencode_session_evidence",
+            repo_root=repo_root,
+        )
         session_runtime_env = validate_opencode_runtime_env_contract(
             session_evidence.get("opencode_runtime_env"),
             f"{label}.opencode_session_evidence",
@@ -3538,7 +3608,11 @@ def validate_opencode_worker_runtime(
             load_json(repo_path(bindings["opencode_session_evidence"]["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
         )
-        validate_opencode_session_evidence_contract(session_evidence, f"{label}.opencode_session_evidence")
+        validate_opencode_session_evidence_contract(
+            session_evidence,
+            f"{label}.opencode_session_evidence",
+            repo_root=repo_root,
+        )
         session_runtime_env = validate_opencode_runtime_env_contract(
             session_evidence.get("opencode_runtime_env"),
             f"{label}.opencode_session_evidence",
@@ -4011,6 +4085,7 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
     validate_opencode_session_evidence_contract(
         session_evidence,
         "opencode_safety_transform_attempt.opencode_session_evidence",
+        repo_root=repo_root,
     )
     session_runtime_env = validate_opencode_runtime_env_contract(
         session_evidence.get("opencode_runtime_env"),

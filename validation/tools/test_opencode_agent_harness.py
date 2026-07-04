@@ -6795,6 +6795,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             evidence = json.loads((REPO_ROOT / binding["path"]).read_text(encoding="utf-8"))
             self.assertIs(evidence["parsed"], True)
             self.assertEqual(evidence["format"], "jsonl")
+            self.assertEqual(evidence["stdout_sha256"], harness.sha256_file(stdout_path))
+            self.assertEqual(evidence["stderr_sha256"], harness.sha256_file(stderr_path))
             self.assertEqual([event["type"] for event in evidence["session_events"]], ["step_start", "text"])
 
     def test_opencode_worker_prompt_forces_exact_command_and_fresh_summary(self) -> None:

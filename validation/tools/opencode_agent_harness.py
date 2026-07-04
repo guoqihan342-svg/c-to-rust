@@ -9128,6 +9128,8 @@ def write_opencode_session_evidence(
         "process_returncode": int(completed.returncode),
         "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
         "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
+        "stdout_sha256": sha256_file(stdout_path),
+        "stderr_sha256": sha256_file(stderr_path),
     }
     if opencode_runtime_env is not None:
         evidence["opencode_runtime_env"] = opencode_runtime_env
