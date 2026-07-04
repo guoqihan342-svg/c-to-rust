@@ -13,10 +13,7 @@ use crate::clang_frontend;
 use crate::typed_ir;
 #[cfg(feature = "clang-lowering-report")]
 use crate::TranslationSource;
-use crate::{
-    legacy_translation::translate_slice, ArtifactManifest, SliceSpec, TranslationError,
-    TranslationResult,
-};
+use crate::{translate_slice, ArtifactManifest, SliceSpec, TranslationError, TranslationResult};
 
 pub(crate) fn write_core_translation_artifacts(
     spec: &SliceSpec,

@@ -20,7 +20,10 @@ pub use model::{
 };
 
 pub use artifacts::write_translation_artifacts;
-pub use legacy_translation::translate_slice;
+// The legacy string translator is retired to a crate-internal compatibility
+// candidate source; `translate_slice` is deliberately not re-exported as
+// public API and stays visible to this crate only.
+pub(crate) use legacy_translation::translate_slice;
 
 #[cfg(all(test, feature = "clang-lowering-report"))]
 mod clang_lowered_translation_module_tests {
