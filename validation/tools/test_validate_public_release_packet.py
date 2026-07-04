@@ -2548,6 +2548,41 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_passed_bundle_with_non_present_published_artifact_ref_status(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-missing-published-ref-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        missing_ref = {
+            "artifact_name": "judge_evidence_index",
+            "path": "target/competition-out/summary/judge-evidence-index.json",
+            "status": "missing",
+        }
+        packet["publication_manifest"].setdefault("published_artifact_refs", []).append(missing_ref)
+        packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+            packet["publication_manifest"]
+        )
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "passed bundle cannot publish non-present artifact ref status: judge_evidence_index:missing"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_published_artifact_ref_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-published-ref-hash-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"

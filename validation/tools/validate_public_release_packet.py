@@ -621,10 +621,14 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
     for ref in refs:
         ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
         status = ref_obj.get("status")
+        artifact_name = ref_obj.get("artifact_name", "unknown")
         if status in bad_statuses:
-            artifact_name = ref_obj.get("artifact_name", "unknown")
             raise ValueError(
                 f"passed bundle cannot publish bad artifact ref status: {artifact_name}:{status}"
+            )
+        if status != "present":
+            raise ValueError(
+                f"passed bundle cannot publish non-present artifact ref status: {artifact_name}:{status}"
             )
 
 
