@@ -151,7 +151,9 @@ python -B -m validation.tools.opencode_agent_harness opencode-preflight ^
 
 目标：在 DeepSeek V4 Pro 本地替代模式下跑 2 个独立 FlashDB worker，验证 `context-pack`、`agent-index`、SQLite ledger、worker report、preflight binding、resume manifest 和 merge summary 的一致性。
 
-推荐拆分：
+**已验证通过（2026-07-04 本会话）**：用 `deepseek/deepseek-v4-pro` + `c2rust-migrator` + `max`、`max_workers=2` 跑了 `fdb_calc_crc32`（`f9d0421`）+ `fdb_blob_make`（`93d1755`）两个独立 worker（临时 profile 放 gitignored `target/`，不新增 committed profile 以免动 planned-batches allowlist / bundle-manifest）。结果：batch `status=completed`、两 worker 都 `summary_status=passed` / `rc=0`；`context-pack`、`agent-index`、`run-plan-report`、`batch-profile-report`、merge `competition-run-summary` 全部一致引用两个 worker id；SQLite ledger 的 `artifacts` 表按 `agent_id` 记录两个 worker，各自完整绑定 `opencode-handoff-contract`、`opencode-safety-transform-attempt-1`、`run-worker-report`、`opencode-session-evidence`、`competition-run-summary`（隔离 out-root）。`DEEPSEEK_API_KEY` 全量扫描零泄漏（`sk-` 模式在 target 证据中 0 命中）。注：`resume-manifest` 由 `evaluate --profile` / resume 入口产生，`run-batch-profile` 不生成，属预期。边界不变：`local-simulation`，`local_simulation_closes_p0_h9=false`，DeepSeek 只是本机演练。剩余可深化项：多 worker 一致性**负例**（伪造某 worker 身份漂移必须 fail-closed）、`evaluate --profile` 路径下的 resume-manifest 两 worker 续跑命令验证。
+
+若继续拆分并行（避免同工作树 clobber，建议每会话用独立 git worktree 或独立克隆）：
 
 - Agent A：只负责 DeepSeek V4 Pro preflight/profile/CLI 传参。
 - Agent B：只负责 context-pack / agent-index / SQLite ledger 一致性负例。
