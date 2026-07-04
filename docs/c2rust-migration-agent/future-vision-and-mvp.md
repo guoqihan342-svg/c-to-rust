@@ -2,7 +2,7 @@
 
 # 未来愿景与 MVP 路线
 
-本文是中文主文档。当前用户约束：后续 agent 的全局待办只写本文，不再新增其它待办文件。
+本文是中文主文档。当前用户约束：后续 agent 的全局待办、接力摘要和下一步开发入口都只写本文，不再维护单独接力文件或其它待办文件。
 
 ## 1. 目标
 
@@ -12,7 +12,7 @@
 
 ## 1.1. 待办执行规则
 
-从本文开始，后续核心翻译开发默认按本文件的 P0/P1/P2 待办推进；除非出现阻塞 bug，优先顺序不再被临时 demo 或单个项目牵着走。**当前冲刺的待办事项只允许维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md` 这一个文件中；接力摘要只允许维护在 `docs/c2rust-migration-agent/recent-work-handoff-2026-07-04.md` 中。**其它文档若出现 checklist、tasks、Next 或 P0/P1/P2 文字，只能是局部验收模板、历史实施计划或分析材料，不能覆盖本文优先级，也不能作为新的全局待办入口。英文镜像可在正式发布或需要双语审阅时由单一 agent 独占同步；本轮分发给其它 agent 时不再把 `.en.md` 当作待办入口。
+从本文开始，后续核心翻译开发默认按本文件的 P0/P1/P2 待办推进；除非出现阻塞 bug，优先顺序不再被临时 demo 或单个项目牵着走。**当前冲刺的待办事项、接力摘要、最新验证和下一步开发入口只允许维护在 `docs/c2rust-migration-agent/future-vision-and-mvp.md` 这一个中文主文件中；英文镜像只作为同步镜像和 doc mirror 合同存在，不作为独立待办入口。**其它文档若出现 checklist、tasks、Next 或 P0/P1/P2 文字，只能是局部验收模板、历史实施计划或分析材料，不能覆盖本文优先级，也不能作为新的全局待办入口。`recent-work-handoff-2026-07-04.md` 的有效内容已并入本文，该接力文件及其英文镜像不再维护。
 
 本文的 Phase 2/3/4 描述能力成熟阶段；P0/P1/P2 是默认执行队列。实际开工时以 P0/P1/P2 为准，遇到 Phase 条目和 P 队列交叉时，把对应能力拆成最小可验证切片执行。
 
@@ -37,7 +37,7 @@
 - **默认路径必须暴露真实能力**：无 clang 的默认 CI/比赛路径不能把 legacy string translator 的成功包装成 typed-IR 成功；typed IR 因 `CLANG_PATH`、project-local vendored clang 或工具缺失未运行时，evidence、metrics 和公开叙述必须明确标记 unavailable/compatibility fallback。
 - **project-local clang 只是候选来源，不是已验证事实**：仓库声明 `tools/llvm/bin/clang*` 或 `tools/clang/bin/clang*` 搜索路径，只表示允许把 clang 放进项目；只有 `toolchain-check.sh` 或同等 Linux/WSL/CI evidence 同时证明二进制、`-print-resource-dir`、`stdint.h`/`stddef.h` 最小 TU AST dump 和 include 搜索路径可用后，才可把该 lane 标为 available。仓库中没有实际 vendored clang 包或未运行该 smoke 时，必须写成 missing/unverified。
 - **交接文档要短而可审计**：`CONTEXT.md` 只能作为当前状态、最近验证和下一步的 handoff；长会话日志要拆分或归档到 `docs/c2rust-migration-agent/archive/`，不能作为 release 文档、外部评估入口或能力证明。
-- **本轮待办/接力文件收敛**：用户最新约束优先于历史双语镜像规则。接力只写 `recent-work-handoff-2026-07-04.md`，待办只写本文；不要新增其它接力、TODO、roadmap 或计划文件。若后续进入正式发布文档同步阶段，再由一个 agent 单独同步英文镜像并运行 doc mirror 测试，避免多个 agent 同时维护两套待办入口造成分叉。
+- **本轮待办/接力文件收敛**：用户最新约束优先。`recent-work-handoff-2026-07-04.md` 已并入本文并删除；后续 agent 只读本文确定当前状态、下一步和优先级，不要新增其它接力、TODO、roadmap 或计划文件。英文镜像只随本文同步以满足 doc mirror 合同，不能变成第二套待办入口。
 
 本轮补充（2026-07-04 harness 证据链收紧）：`run_judge_entrypoints.py` 的 competition config archive producer 现在只枚举 `bundle-manifest.json` 自身和已声明的 `COMPETITION_ENV_BUNDLE_FILE_ROLES` 文件，不会把同目录临时/诊断文件先夹带进 run report 再等待下游拒绝；`validate_public_release_packet.py` 会把 `publication_manifest.competition_config_archive.status/root/report_kind/file_count` 反向绑定到 run report 顶层 archive；`run_competition_smoke.py` 会在 host attestation 或 `opencode models` 早退前删除旧 `summary/competition-smoke-summary.json`；`judge_milestone_bundle.py` 也要求 `validation.status=passed` 时，所有会进入 bundle rollup / publication refs 的 `key_artifacts` 都必须有同 entrypoint 的 `validation.expected_artifacts` 绑定，缺失时以 `validated_artifact_binding_missing:<entrypoint>:<artifact>` 阻断。边界不变：这些都是配置归档、smoke 和 bundle 证据链防伪，不是 semantic gate，也不关闭缺真实 `OpenCode + GLM-5.1 + c2rust-migrator + max` host 的 H9。
 
@@ -47,7 +47,17 @@
 
 活跃项：
 
-### 2026-07-04 当前冲刺总令
+### 2026-07-05 当前执行状态与冲刺总令
+
+当前分支：`codex/flashdb-rust-skeleton`。最近已推送基线：`4e06cc25 Harden resume manifest worker identity contract`，远端 `origin/codex/flashdb-rust-skeleton` 与本地 HEAD 在该提交一致。本轮把原接力文件内容收敛进本文后，`docs/c2rust-migration-agent/recent-work-handoff-2026-07-04.md` 和 `.en.md` 不再作为开发入口。
+
+当前有效已完成项：
+
+- DeepSeek 本地演练 profile 已切到 `deepseek/deepseek-v4-pro`，并在设置 `DEEPSEEK_API_KEY` 的本机环境下跑通过 `OpenCode + deepseek/deepseek-v4-pro + c2rust-migrator + max` 的 local-simulation rehearsal；API key 只允许通过环境变量传入，不能写进 config/evidence/代码。
+- 已用 `deepseek/deepseek-v4-pro` + `c2rust-migrator` + `max` 跑通过 2-worker local rehearsal：`fdb_calc_crc32` 与 `fdb_blob_make` 两个 worker 均 passed，context-pack、agent-index、run-plan、batch profile、merge summary、SQLite artifact rows、worker report、session evidence 和 safety-transform attempt 都按隔离 out-root 绑定；`sk-` 密钥扫描零泄漏。边界不变：它仍是 `local-simulation`，`local_simulation_closes_p0_h9=false`。
+- `resume-manifest.json` 现在写出顶层 `worker_ids`，顺序必须与 `workers[].worker_id` 完全一致；validator 在该字段存在但漂移时 fail-closed。已验证：`test_opencode_agent_harness` 159 tests OK、`test_validate_judge_entrypoints` 231 tests OK、`test_doc_mirror_contract` OK、`git diff --check` OK。
+
+当前最小下一步：继续按 P0-H9 / P0-D 主线推进。若没有真实 `GLM-5.1` host，则不要声称 H9 关闭；优先补能在本地验证的 harness 证据合同、resume/replay 负例、public packet 防伪和 before/after 展品接线。若拿到真实或等价 `OpenCode + GLM-5.1 + c2rust-migrator + max` host，则第一优先级是在该 host 上重跑 preflight、multi-worker evaluate/profile、judge entrypoints 和 public packet gate。
 
 本轮继续按比赛环境开发，但在真实 `GLM-5.1` host 不可用前，先用 `OpenCode + deepseek/deepseek-v4-pro + c2rust-migrator + max` 代替 GLM5.1 做本地演练。普通 `opencode models` 已能看到 `deepseek/deepseek-v4-pro`，但 harness 的 repo-local isolated runtime 仍必须用 `opencode-preflight` 实测确认；不能直接把普通模型列表当作 passed evidence。所有 DeepSeek 运行都必须写明 `local_simulation_closes_p0_h9=false`、`semantic_gate=false`、`translation_coverage_numerator=0`，最终 H9 仍只能由真实或等价 `OpenCode + GLM-5.1 + c2rust-migrator + max` artifacts 关闭。
 
@@ -62,9 +72,9 @@
 
 当前最小开发目标：
 
-1. 把本地 DeepSeek 演练从 `opencode/deepseek-v4-flash-free` 升级或新增为 `deepseek/deepseek-v4-pro`，保持 `--opencode-agent c2rust-migrator` 与 `--opencode-variant max`。
-2. 先跑单 worker preflight/profile；通过后扩成 2-worker local rehearsal，验证 context/agent index、SQLite ledger、worker report、preflight binding、resume manifest 和 merge summary。
-3. harness 稳定后再回到核心翻译 before/after：真实 C slice、raw C2Rust/unsafe baseline、accepted safe patch、oracle/diff/negative diff、unsafe before/after、workflow metrics、competition summary。
+1. 在真实 GLM host 不可用时，继续补 harness 负例和 public artifact 防伪：resume-manifest worker id 漂移、worker report/session/safety attempt cross-binding、public packet published refs、competition smoke command log 只要有浅信任入口就补 fail-closed 测试。
+2. 在有 `DEEPSEEK_API_KEY` 的本机环境中，只把 DeepSeek V4 Pro 当 rehearsal：可跑 focused 单 worker / 2-worker local rehearsal 证明 wiring，但所有报告必须保留 `local_simulation_closes_p0_h9=false`。
+3. harness 稳定后回到核心翻译 before/after：真实 C slice、raw C2Rust/unsafe baseline、accepted safe patch、oracle/diff/negative diff、unsafe before/after、workflow metrics、competition summary。
 
 ### H7 稳定性审查整合状态
 
