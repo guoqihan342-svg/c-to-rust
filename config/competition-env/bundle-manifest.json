@@ -121,7 +121,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-deepseek-local-rehearsal.json",
       "role": "planned-batch-profile",
-      "sha256": "2123b8a9ffe0f86287f68ff3173f85c3438eed9ba845c3e128d4646f45b4fe5c"
+      "sha256": "03aaf032a4cacb3aa2a1262d5400fcdc8efab2c1a5b8b5c6b51bc751cbb81d49"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
