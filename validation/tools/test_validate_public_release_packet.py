@@ -2662,6 +2662,51 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_opencode_attempt_ref_when_boundary_absent_even_if_ref_unhealthy(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-unhealthy-attempt-ref-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        blocker = "blocked-for-test"
+        packet["status"] = "blocked"
+        packet["summary"]["blockers"] = [blocker]
+        packet["publishability"]["status"] = "blocked"
+        packet["publishability"]["scope"] = "blocked"
+        packet["publishability"]["publication_scope"] = "blocked"
+        packet["publishability"]["blocker_count"] = 1
+        packet["publishability"]["blockers"] = [blocker]
+        unhealthy_attempt_ref = {
+            "artifact_name": "opencode_safety_transform_attempt",
+            "path": "target/competition-out/summary/opencode-safety-transform-attempt.json",
+            "status": "sha256_mismatch",
+            "sha256": "0" * 64,
+        }
+        append_published_artifact_ref(packet, unhealthy_attempt_ref)
+
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["status"] = "blocked"
+        bundle_payload["blockers"] = [blocker]
+        bundle_payload["publishability"] = json.loads(json.dumps(packet["publishability"]))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "opencode_patch_boundary.opencode_safety_transform_attempt.status must not be absent"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_published_artifact_ref_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-published-ref-hash-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"

@@ -635,9 +635,17 @@ def public_packet_opencode_preflight_proof_summary(
 def public_packet_opencode_attempt_summary(value: object, *, repo_root: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {"status": "absent"}
-    if value.get("status") not in {"present", "passed"} or not isinstance(value.get("path"), str):
-        return {"status": "absent"}
     result: dict[str, Any] = {
+        "status": value.get("status", "unknown"),
+    }
+    if isinstance(value.get("path"), str):
+        result["path"] = value.get("path")
+    if isinstance(value.get("sha256"), str):
+        result["sha256"] = value.get("sha256")
+    if value.get("status") not in {"present", "passed"} or not isinstance(value.get("path"), str):
+        result["artifact_read_status"] = "not_checked"
+        return result
+    result = {
         "path": value.get("path"),
         "sha256": value.get("sha256"),
         "status": value.get("status", "unknown"),

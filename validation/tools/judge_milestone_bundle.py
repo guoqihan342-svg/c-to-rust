@@ -143,6 +143,7 @@ def build_judge_milestone_bundle(
         opencode_runtime=opencode_runtime,
     )
     blockers.extend(validated_artifact_contract_errors)
+    blockers.extend(publication_artifact_ref_blockers(entrypoint_reports))
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
     publishability = build_publishability(
@@ -1711,6 +1712,14 @@ def build_publication_manifest(
         else None
     )
     artifact_refs = publication_artifact_refs(entrypoint_reports)
+    if not artifact_refs and judge_entrypoints_run_report.get("status") == "present":
+        artifact_refs.append(
+            {
+                **json.loads(json.dumps(judge_entrypoints_run_report)),
+                "artifact_name": "judge_entrypoints_run_report",
+                "entrypoint_id": "judge_entrypoints_run",
+            }
+        )
     repo_commit = source_commit_ref(repo_root=repo_root)
     return {
         "report_kind": "publication-manifest",
@@ -1850,6 +1859,22 @@ def publication_artifact_refs(entrypoint_reports: list[dict[str, Any]]) -> list[
             ref["entrypoint_id"] = entry.get("id")
             refs.append(ref)
     return refs
+
+
+def publication_artifact_ref_blockers(entrypoint_reports: list[dict[str, Any]]) -> list[str]:
+    blockers: list[str] = []
+    for entry in entrypoint_reports:
+        entrypoint_id = str(entry.get("id", "unknown"))
+        artifacts = entry.get("artifacts", {})
+        if not isinstance(artifacts, dict):
+            continue
+        for artifact_name, artifact in sorted(artifacts.items()):
+            if not isinstance(artifact, dict):
+                continue
+            status = artifact.get("status")
+            if status not in {"present", "passed"}:
+                blockers.append(f"published_artifact_not_present:{entrypoint_id}:{artifact_name}:{status}")
+    return blockers
 
 
 def source_commit_ref(*, repo_root: Path) -> dict[str, Any]:

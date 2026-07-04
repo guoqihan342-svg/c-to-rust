@@ -550,12 +550,24 @@ def require_opencode_safety_transform_attempt_boundary_contract(
     if status == "absent":
         if attempt_refs:
             raise ValueError(
-                f"{label}.status must be present when publication_manifest publishes "
+                f"{label}.status must not be absent when publication_manifest publishes "
                 "opencode_safety_transform_attempt"
             )
         return
     if status not in {"present", "passed"}:
-        raise ValueError(f"{label}.status must be present, passed, or absent")
+        if len(attempt_refs) != 1:
+            raise ValueError(
+                "publication_manifest.published_artifact_refs must include exactly one "
+                "opencode_safety_transform_attempt when opencode_patch_boundary summary is abnormal"
+            )
+        published_ref = attempt_refs[0]
+        if summary.get("status") != published_ref.get("status"):
+            raise ValueError(f"{label}.status must match publication_manifest.published_artifact_refs")
+        if summary.get("path") != published_ref.get("path"):
+            raise ValueError(f"{label}.path must match publication_manifest.published_artifact_refs")
+        if summary.get("sha256") != published_ref.get("sha256"):
+            raise ValueError(f"{label}.sha256 must match publication_manifest.published_artifact_refs")
+        return
     if len(attempt_refs) != 1:
         raise ValueError(
             "publication_manifest.published_artifact_refs must include exactly one "
@@ -595,19 +607,11 @@ def require_opencode_safety_transform_attempt_boundary_contract(
 
 
 def opencode_safety_transform_attempt_refs(publication: dict[str, Any]) -> list[dict[str, Any]]:
-    refs = publication.get("published_artifact_refs")
-    if refs is None:
-        return []
-    if not isinstance(refs, list):
-        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    refs = published_artifact_refs(publication)
     return [
         require_object(ref, "publication_manifest.published_artifact_refs[]")
         for ref in refs
-        if (
-            isinstance(ref, dict)
-            and ref.get("artifact_name") == "opencode_safety_transform_attempt"
-            and ref.get("status") in {"present", "passed"}
-        )
+        if isinstance(ref, dict) and ref.get("artifact_name") == "opencode_safety_transform_attempt"
     ]
 
 
