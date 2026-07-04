@@ -3000,6 +3000,16 @@ def validate_opencode_contract_recomputed_from_session(
     return recomputed
 
 
+def validate_opencode_session_evidence_contract(session_evidence: dict[str, Any], label: str) -> None:
+    if session_evidence.get("format") != "jsonl":
+        raise ValueError(f"{label}.format must be jsonl")
+    if session_evidence.get("parsed") is not True:
+        raise ValueError(f"{label}.parsed must be true")
+    returncode = session_evidence.get("process_returncode")
+    if not isinstance(returncode, int) or isinstance(returncode, bool) or returncode != 0:
+        raise ValueError(f"{label}.process_returncode must be 0")
+
+
 def validate_hash_bound_artifact_binding(
     value: Any,
     label: str,
@@ -3202,6 +3212,7 @@ def validate_opencode_preflight_binding(
             load_json(repo_path(session_binding["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
         )
+        validate_opencode_session_evidence_contract(session_evidence, f"{label}.opencode_session_evidence")
         session_runtime_env = validate_opencode_runtime_env_contract(
             session_evidence.get("opencode_runtime_env"),
             f"{label}.opencode_session_evidence",
@@ -3423,6 +3434,7 @@ def validate_opencode_worker_runtime(
             load_json(repo_path(bindings["opencode_session_evidence"]["path"], repo_root=repo_root)),
             f"{label}.opencode_session_evidence file",
         )
+        validate_opencode_session_evidence_contract(session_evidence, f"{label}.opencode_session_evidence")
         session_runtime_env = validate_opencode_runtime_env_contract(
             session_evidence.get("opencode_runtime_env"),
             f"{label}.opencode_session_evidence",
@@ -3886,6 +3898,10 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
     session_evidence = require_object(
         load_json(repo_path(session_binding["path"], repo_root=repo_root)),
         "opencode_safety_transform_attempt.opencode_session_evidence file",
+    )
+    validate_opencode_session_evidence_contract(
+        session_evidence,
+        "opencode_safety_transform_attempt.opencode_session_evidence",
     )
     session_runtime_env = validate_opencode_runtime_env_contract(
         session_evidence.get("opencode_runtime_env"),

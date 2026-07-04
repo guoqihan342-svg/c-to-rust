@@ -4414,6 +4414,44 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_opencode_preflight_binding_rejects_failed_session_evidence_contract(self) -> None:
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}, "process_returncode must be 0"),
+            ("unparsed_session", {"parsed": False}, "parsed must be true"),
+            ("non_jsonl_format", {"format": "text"}, "format must be jsonl"),
+        ]
+        for case_name, updates, expected_error in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-session-contract-", dir=REPO_ROOT / "target"))
+                payload = valid_opencode_judge_index_payload()
+                materialize_opencode_judge_index_artifacts(
+                    payload,
+                    temp_dir / "out",
+                    profile_payload={
+                        "schema_version": 1,
+                        "profile_id": "opencode-profile",
+                        "mode": "opencode",
+                        **opencode_launch_policy(),
+                    },
+                )
+                preflight_path = temp_dir / "out" / "harness" / "opencode-preflight-report.json"
+                preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+                session_path = REPO_ROOT / preflight_payload["opencode_session_evidence"]["path"]
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                rewrite_preflight_session_evidence(preflight_path, session_payload)
+                payload["opencode_agent_runtime"]["opencode_preflight_report"]["sha256"] = validator.sha256_file(preflight_path)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"opencode_agent_runtime\.opencode_preflight_report\.opencode_session_evidence\.{expected_error}",
+                ):
+                    validator.validate_opencode_preflight_binding(
+                        payload["opencode_agent_runtime"]["opencode_preflight_report"],
+                        "opencode_agent_runtime.opencode_preflight_report",
+                        repo_root=REPO_ROOT,
+                    )
+
     def test_judge_evidence_index_rejects_preflight_first_shell_mismatch_even_if_marker_runs_later(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-preflight-late-marker-", dir=REPO_ROOT / "target"))
         payload = valid_opencode_judge_index_payload()
@@ -4631,6 +4669,42 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
                 repo_root=REPO_ROOT,
             )
+
+    def test_opencode_agent_runtime_rejects_failed_worker_session_evidence_contract(self) -> None:
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}, "process_returncode must be 0"),
+            ("unparsed_session", {"parsed": False}, "parsed must be true"),
+            ("non_jsonl_format", {"format": "text"}, "format must be jsonl"),
+        ]
+        for case_name, updates, expected_error in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-session-contract-", dir=REPO_ROOT / "target"))
+                payload = valid_opencode_judge_index_payload()
+                materialize_opencode_judge_index_artifacts(
+                    payload,
+                    temp_dir / "out",
+                    profile_payload={
+                        "schema_version": 1,
+                        "profile_id": "opencode-profile",
+                        "mode": "opencode",
+                        **opencode_launch_policy(),
+                        "auto_retry": True,
+                    },
+                )
+                worker = payload["opencode_agent_runtime"]["workers"][0]
+                session_path = REPO_ROOT / worker["opencode_session_evidence"]["path"]
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                rewrite_worker_session_evidence(worker, session_payload)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"opencode_agent_runtime\.workers\[0\]\.opencode_session_evidence\.{expected_error}",
+                ):
+                    validator.validate_opencode_agent_runtime_contract(
+                        payload["opencode_agent_runtime"],
+                        repo_root=REPO_ROOT,
+                    )
 
     def test_judge_evidence_index_rejects_worker_session_missing_workdir(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-missing-workdir-", dir=REPO_ROOT / "target"))
@@ -6123,6 +6197,36 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "opencode_safety_transform_attempt.*opencode_session_evidence"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_failed_session_evidence_contract(self) -> None:
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}, "process_returncode must be 0"),
+            ("unparsed_session", {"parsed": False}, "parsed must be true"),
+            ("non_jsonl_format", {"format": "text"}, "format must be jsonl"),
+        ]
+        for case_name, updates, expected_error in cases:
+            with self.subTest(case=case_name):
+                target_dir = REPO_ROOT / "target"
+                target_dir.mkdir(exist_ok=True)
+                temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-session-contract-", dir=target_dir))
+                attempt_ref = write_opencode_safety_transform_attempt_ref(
+                    temp_dir / "opencode-safety-transform-attempt-2.json"
+                )
+                attempt_path = REPO_ROOT / attempt_ref["path"]
+                payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+                session_path = REPO_ROOT / payload["opencode_session_evidence"]["path"]
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                write_json(session_path, session_payload)
+                payload["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+                write_json(attempt_path, payload)
+                attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"opencode_safety_transform_attempt\.opencode_session_evidence\.{expected_error}",
+                ):
+                    validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
     def test_opencode_safety_transform_attempt_contract_requires_glm_51_handoff(self) -> None:
         target_dir = REPO_ROOT / "target"
