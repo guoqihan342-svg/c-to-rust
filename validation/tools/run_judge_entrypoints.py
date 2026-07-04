@@ -364,6 +364,13 @@ def command_with_proof_class_override(command: str, *, proof_class_override: str
             replaced = True
             index += 2
             continue
+        if part.startswith("--proof-class="):
+            if replaced:
+                raise ValueError(f"{entry_id} command must not repeat --proof-class")
+            rewritten.extend(["--proof-class", proof_class_override])
+            replaced = True
+            index += 1
+            continue
         rewritten.append(part)
         index += 1
     if not replaced:

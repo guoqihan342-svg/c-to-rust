@@ -1,4 +1,5 @@
 import json
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -951,6 +952,64 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertEqual(post_run_config["entrypoints"][0]["proof_class"], "competition-exact")
         self.assertEqual(calls[0][-2:], ["--proof-class", "competition-exact"])
         self.assertEqual(report["entrypoints"][0]["proof_class"], "competition-exact")
+
+    def test_runner_proof_class_override_rewrites_equals_form_command_flag(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-proof-class-equals-override-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "allowed_proof_classes": ["local-simulation", "competition-exact"],
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "proof_class": "local-simulation",
+                            "command": (
+                                "python3 -B -m validation.tools.judge_demo "
+                                "--proof-class=local-simulation --run-id demo-run"
+                            ),
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        calls: list[list[str]] = []
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        with patch.dict("os.environ", {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+            with patch.object(
+                runner.validator,
+                "validate_config",
+                side_effect=[passed_validation_result(), passed_validation_result()],
+            ) as validate_config:
+                with patch.object(runner.validator, "write_readiness_report"):
+                    with patch.object(runner, "attach_milestone_bundle"):
+                        report = runner.run_judge_entrypoints(
+                            config_path=config_path,
+                            entrypoint_ids=[],
+                            out_path=out_path,
+                            proof_class_override="competition-exact",
+                            command_runner=fake_runner,
+                            repo_root=REPO_ROOT,
+                        )
+
+        self.assertEqual(report["status"], "passed")
+        preflight_config = json.loads(Path(validate_config.call_args_list[0].args[0]).read_text(encoding="utf-8"))
+        command = preflight_config["entrypoints"][0]["command"]
+        self.assertNotIn("--proof-class=local-simulation", command)
+        self.assertEqual(shlex.split(command).count("--proof-class"), 1)
+        self.assertIn("--proof-class competition-exact", command)
+        self.assertEqual(calls[0].count("--proof-class"), 1)
+        self.assertEqual(calls[0][-4:-2], ["--proof-class", "competition-exact"])
 
     def test_runner_proof_class_override_rejects_duplicate_command_flag_without_throwing(self) -> None:
         from validation.tools import run_judge_entrypoints as runner
