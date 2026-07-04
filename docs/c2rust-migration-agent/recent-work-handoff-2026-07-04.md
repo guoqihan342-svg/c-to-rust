@@ -45,14 +45,7 @@ git rev-parse origin/codex/flashdb-rust-skeleton
 a070b9437e59a8dbe1e63a6fd8f376bee5176cad
 ```
 
-当前仍有未跟踪文档：
-
-```text
-?? docs/c2rust-migration-agent/chat-export-for-other-ai-2026-07-04.md
-?? docs/c2rust-migration-agent/harness-stability-review-2026-07-02.md
-```
-
-除非用户明确要求，不要把旧的未跟踪报告混入功能提交。本文件已是 tracked 文件；如果要提交本文，提交前要重新看 `git status --short`，确认没有夹带其它 agent 的改动。
+旧的未跟踪聊天导出和 7 月 2 日 harness 审查稿已清理；后续 agent 继续只看本文件和 `future-vision-and-mvp.md`。提交前仍要重新看 `git status --short`，确认没有夹带其它 agent 的改动。
 
 ## 最近已完成并推送
 
