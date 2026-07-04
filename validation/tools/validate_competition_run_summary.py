@@ -73,6 +73,7 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
 
     validate_artifact_roots(summary.get("artifact_roots", []), repo_root=repo_root)
     validate_workflow_metrics(summary, summary_path=summary_path, repo_root=repo_root)
+    validate_command_log(summary, summary_path=summary_path, repo_root=repo_root)
     validate_final_gate(summary)
     validate_slice_counts(summary)
     validate_workers(summary)
@@ -86,6 +87,44 @@ def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict
         "semantic_pass": summary["slices"]["semantic_pass"],
         "final_gate": summary["final_gate"]["status"],
     }
+
+
+def validate_command_log(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:
+    binding = summary["command_log"]
+    log_ref = binding["path"]
+    if not is_repo_relative_posix_path(log_ref):
+        raise SystemExit(f"competition run summary command_log.path must be repo-relative POSIX: {log_ref}")
+    log_path = resolve_summary_artifact(log_ref, summary_path=summary_path, repo_root=repo_root)
+    if log_path is None:
+        raise SystemExit(f"competition run summary command_log.path does not exist: {log_ref}")
+    actual_sha = sha256(log_path)
+    if actual_sha != binding["sha256"]:
+        raise SystemExit("competition run summary command_log.sha256 does not match artifact")
+    checked_entries = 0
+    with log_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entry = json.loads(stripped)
+            except json.JSONDecodeError as error:
+                raise SystemExit(f"competition run summary command_log line {line_number} must be valid JSON") from error
+            if not isinstance(entry, dict):
+                raise SystemExit(f"competition run summary command_log line {line_number} must be an object")
+            if entry.get("run_id") != summary["run_id"]:
+                raise SystemExit(
+                    f"competition run summary command_log line {line_number} run_id must match summary run_id"
+                )
+            if entry.get("canonical") is not True:
+                raise SystemExit(f"competition run summary command_log line {line_number} canonical must be true")
+            if entry.get("log_path") != log_ref:
+                raise SystemExit(
+                    f"competition run summary command_log line {line_number} log_path must match command_log.path"
+                )
+            checked_entries += 1
+    if checked_entries == 0:
+        raise SystemExit("competition run summary command_log must contain at least one entry")
 
 
 def validate_competition_exact_host_attestation(

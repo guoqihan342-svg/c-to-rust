@@ -843,6 +843,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             marker_path = repo_root / "target" / "harness" / "opencode-preflight-marker.json"
             handoff_path = repo_root / "target" / "harness" / "opencode-preflight-contract.json"
             session_path = repo_root / "target" / "logs" / "opencode-preflight-session-evidence.json"
+            session_stdout_path = repo_root / "target" / "logs" / "opencode-preflight-session.stdout.jsonl"
+            session_stderr_path = repo_root / "target" / "logs" / "opencode-preflight-session.stderr.log"
             session_path.parent.mkdir(parents=True, exist_ok=True)
             runtime_env_paths = {
                 "XDG_CONFIG_HOME": "target/opencode-runtime/preflight/config",
@@ -934,6 +936,28 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            session_events = [
+                {
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": worker_command_line,
+                                "workdir": str(repo_root),
+                            }
+                        },
+                    }
+                },
+                {
+                    "type": "text",
+                    "part": {"text": "fixture-jsonl-keepalive"},
+                }
+            ]
+            session_stdout_path.write_text(
+                "".join(json.dumps(event, sort_keys=True) + "\n" for event in session_events),
+                encoding="utf-8",
+            )
+            session_stderr_path.write_text("", encoding="utf-8")
             session_path.write_text(
                 json.dumps(
                     {
@@ -942,19 +966,11 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                         "parsed": True,
                         "format": "jsonl",
                         "opencode_runtime_env": runtime_env,
-                        "session_events": [
-                            {
-                                "part": {
-                                    "tool": "bash",
-                                    "state": {
-                                        "input": {
-                                            "command": worker_command_line,
-                                            "workdir": str(repo_root),
-                                        }
-                                    },
-                                }
-                            }
-                        ],
+                        "stdout_path": session_stdout_path.relative_to(repo_root).as_posix(),
+                        "stderr_path": session_stderr_path.relative_to(repo_root).as_posix(),
+                        "stdout_sha256": sha256_file(session_stdout_path),
+                        "stderr_sha256": sha256_file(session_stderr_path),
+                        "session_events": session_events,
                     },
                     sort_keys=True,
                 )

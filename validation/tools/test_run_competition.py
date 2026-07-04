@@ -1002,6 +1002,19 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(entries[0]["stderr"], "")
             self.assertTrue(all(not Path(entry["log_path"]).is_absolute() for entry in entries))
             self.assertTrue(all("\\" not in entry["log_path"] for entry in entries))
+            self.assertTrue(all(entry.get("run_id") == "run-test" for entry in entries))
+            self.assertTrue(all(entry.get("canonical") is True for entry in entries))
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["command_log"]["path"], "logs/commands.jsonl")
+            self.assertEqual(summary["command_log"]["sha256"], module.sha256(log_path))
+            validator = load_summary_validator_module()
+            self.assertEqual(
+                validator.validate_summary(
+                    out_root / "summary" / "competition-run-summary.json",
+                    repo_root=REPO_ROOT,
+                )["status"],
+                "passed",
+            )
 
     def test_runner_archives_failed_slice_command_without_unexecuted_validator_log(self) -> None:
         module = load_runner_module()

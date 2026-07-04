@@ -618,6 +618,24 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
             repair_history["patch_events_sha256"] = sha256_file(patch_events_path)
         metrics_path = summary_path.parent / "workflow-metrics.json"
         metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        command_log_path = summary_path.parent / "commands.jsonl"
+        command_log_path.write_text(
+            json.dumps(
+                {
+                    "canonical": True,
+                    "command": ["python3", "-B", "-m", "validation.tools.validate_competition_run_summary"],
+                    "log_path": "commands.jsonl",
+                    "returncode": 0,
+                    "run_id": "run-measured",
+                    "stderr": "",
+                    "stdout": "",
+                    "step": "validate-competition-summary",
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         summary_path.write_text(
             json.dumps(
                 {
@@ -651,6 +669,10 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                     "workflow_metrics": {
                         "path": "workflow-metrics.json",
                         "sha256": sha256_file(metrics_path),
+                    },
+                    "command_log": {
+                        "path": "commands.jsonl",
+                        "sha256": sha256_file(command_log_path),
                     },
                     "artifact_roots": [
                         "target/competition-out/evidence",

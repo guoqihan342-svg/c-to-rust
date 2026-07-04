@@ -265,6 +265,30 @@ def write_competition_summary_fixture(summary_path: Path) -> tuple[dict, dict]:
         "path": repo_relative(metrics_path),
         "sha256": judge_validator.sha256_file(metrics_path),
     }
+    command_log_path = summary_path.parent / "commands.jsonl"
+    command_log_ref = repo_relative(command_log_path)
+    command_log_path.parent.mkdir(parents=True, exist_ok=True)
+    command_log_path.write_text(
+        json.dumps(
+            {
+                "canonical": True,
+                "command": ["python3", "-B", "-m", "validation.tools.validate_competition_run_summary"],
+                "log_path": command_log_ref,
+                "returncode": 0,
+                "run_id": summary["run_id"],
+                "stderr": "",
+                "stdout": "",
+                "step": "validate-competition-summary",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary["command_log"] = {
+        "path": command_log_ref,
+        "sha256": judge_validator.sha256_file(command_log_path),
+    }
     write_json(summary_path, summary)
     return (
         {"path": repo_relative(summary_path), "status": "present", "sha256": judge_validator.sha256_file(summary_path)},

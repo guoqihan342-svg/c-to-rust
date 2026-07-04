@@ -1122,6 +1122,29 @@ def write_competition_run_summary_with_workflow_metrics(summary_path: Path, summ
         "path": repo_relative(metrics_path),
         "sha256": validator.sha256_file(metrics_path),
     }
+    command_log_path = summary_path.parent / "commands.jsonl"
+    command_log_ref = repo_relative(command_log_path)
+    command_log_path.write_text(
+        json.dumps(
+            {
+                "canonical": True,
+                "command": ["python3", "-B", "-m", "validation.tools.validate_competition_run_summary"],
+                "log_path": command_log_ref,
+                "returncode": 0,
+                "run_id": summary["run_id"],
+                "stderr": "",
+                "stdout": "",
+                "step": "validate-competition-summary",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary["command_log"] = {
+        "path": command_log_ref,
+        "sha256": validator.sha256_file(command_log_path),
+    }
     write_json(summary_path, summary)
     return metrics_path
 

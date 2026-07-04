@@ -717,6 +717,12 @@ def build_exact_host_revalidation(
         result.update({"status": "failed", "errors": ["run_report.config.path missing"]})
         return result
 
+    try:
+        validator.validate_ref(config_ref, repo_root=repo_root)
+    except ValueError as error:
+        result.update({"status": "failed", "errors": [f"run_report.config {error}"]})
+        return result
+
     config_path = str(config_ref["path"])
     try:
         validation = validator.validate_config(

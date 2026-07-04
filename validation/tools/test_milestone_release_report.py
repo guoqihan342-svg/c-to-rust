@@ -615,6 +615,25 @@ class MilestoneReleaseReportTests(unittest.TestCase):
         self._write_bound_before_after_artifacts(summary_path, workflow_metrics)
         metrics_path = summary_path.parent / "workflow-metrics.json"
         metrics_path.write_text(json.dumps(workflow_metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        command_log_path = summary_path.parent / "commands.jsonl"
+        command_log_ref = self._repo_rel(summary_path.parent, command_log_path)
+        command_log_path.write_text(
+            json.dumps(
+                {
+                    "canonical": True,
+                    "command": ["python3", "-B", "-m", "validation.tools.validate_competition_run_summary"],
+                    "log_path": command_log_ref,
+                    "returncode": 0,
+                    "run_id": workflow_metrics["run_id"],
+                    "stderr": "",
+                    "stdout": "",
+                    "step": "validate-competition-summary",
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         summary_path.write_text(
             json.dumps(
                 {
@@ -650,6 +669,10 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                     "workflow_metrics": {
                         "path": "workflow-metrics.json",
                         "sha256": metrics_sha256 or sha256_file(metrics_path),
+                    },
+                    "command_log": {
+                        "path": command_log_ref,
+                        "sha256": sha256_file(command_log_path),
                     },
                     "artifact_roots": [
                         "target/competition-out/evidence",

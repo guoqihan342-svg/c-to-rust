@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import jsonschema
@@ -2561,6 +2562,46 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["publishability"]["status"], "blocked")
         self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
         self.assertFalse(report["competition_host_readiness"]["competition_exact_host_verified"])
+
+    def test_exact_host_revalidation_rejects_bound_config_sha_drift(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-config-ref-drift-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "judge-entrypoints.json"
+        write_json(config_path, {"schema_version": 1, "entrypoints": []})
+        run_report = {
+            "config": {
+                "path": repo_relative(config_path),
+                "status": "present",
+                "sha256": "0" * 64,
+            }
+        }
+        entrypoints = [
+            {
+                "id": "competition_environment_smoke",
+                "proof_class": "competition-exact",
+                "competition_exact_host_attested": True,
+            }
+        ]
+
+        with mock.patch.object(
+            bundle.validator,
+            "validate_config",
+            return_value={
+                "status": "passed",
+                "config": {"path": repo_relative(config_path)},
+                "errors": [],
+                "proof_class_contract": {
+                    "status": "passed",
+                    "entrypoints": {"competition_environment_smoke": "competition-exact"},
+                },
+            },
+        ) as validate_config:
+            result = bundle.build_exact_host_revalidation(run_report, entrypoints, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(any("run_report.config" in error and "sha256" in error for error in result["errors"]))
+        validate_config.assert_not_called()
 
     def test_bundle_blocks_focused_run_from_external_milestone_claim(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

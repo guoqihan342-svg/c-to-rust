@@ -159,15 +159,16 @@ def run_competition(
     generated_slice_specs_root = out_root / "slice-specs"
     generated_slice_specs_root.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
+    run_id = run_id or time.strftime("run-%Y%m%dT%H%M%SZ", time.gmtime())
     exact_host_attestation = build_competition_exact_host_attestation(
         proof_class=proof_class,
         command_runner=command_runner,
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
 
-    run_id = run_id or time.strftime("run-%Y%m%dT%H%M%SZ", time.gmtime())
     slice_failures = 0
     gate_failures = 0
     typed_ir_generated = 0
@@ -205,6 +206,7 @@ def run_competition(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
     if environment_result.returncode != 0 and proof_class == "competition-exact":
         gate_failures += 1
@@ -216,6 +218,7 @@ def run_competition(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
     unit_statuses.extend(extraction_unit_statuses)
     slice_failures += extraction_failures
@@ -244,6 +247,7 @@ def run_competition(
                 repo_root=repo_root,
                 logs_dir=logs_dir,
                 out_root=out_root,
+                run_id=run_id,
             )
             if auto_result.returncode != 0:
                 slice_failures += 1
@@ -325,6 +329,7 @@ def run_competition(
             repo_root=repo_root,
             logs_dir=logs_dir,
             out_root=out_root,
+            run_id=run_id,
         )
         if validation_result.returncode != 0:
             gate_failures += 1
@@ -336,6 +341,7 @@ def run_competition(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
     openspec_result = run_logged_step(
         "openspec-validate",
@@ -344,6 +350,7 @@ def run_competition(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
 
     unsafe_summary = unsafe_budget_summary(unsafe_result)
@@ -416,17 +423,18 @@ def run_competition(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
     if summary_validation.returncode != 0:
         gate_failures += 1
         summary["final_gate"]["status"] = "failed"
-        summary_path = write_summary_with_workflow_metrics(
-            summary,
-            unit_statuses=unit_statuses,
-            worker_workflow_metrics=worker_workflow_metrics,
-            out_root=out_root,
-            repo_root=repo_root,
-        )
+    summary_path = write_summary_with_workflow_metrics(
+        summary,
+        unit_statuses=unit_statuses,
+        worker_workflow_metrics=worker_workflow_metrics,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
 
     return CompetitionRunResult(
         exit_code=0 if summary["final_gate"]["status"] == "passed" and slice_failures == 0 and gate_failures == 0 else 1,
@@ -464,6 +472,7 @@ def build_competition_exact_host_attestation(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    run_id: str,
 ) -> dict[str, Any] | None:
     if proof_class != "competition-exact":
         return None
@@ -474,6 +483,7 @@ def build_competition_exact_host_attestation(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
     stdout_path = logs_dir / "opencode-models.stdout.log"
     stderr_path = logs_dir / "opencode-models.stderr.log"
@@ -939,6 +949,12 @@ def write_summary_with_workflow_metrics(
         "path": summary_reference_path(workflow_metrics_path, repo_root=repo_root, out_root=out_root),
         "sha256": sha256(workflow_metrics_path),
     }
+    command_log_path = out_root / "logs" / "commands.jsonl"
+    if command_log_path.is_file():
+        summary["command_log"] = {
+            "path": summary_reference_path(command_log_path, repo_root=repo_root, out_root=out_root),
+            "sha256": sha256(command_log_path),
+        }
     summary_path = summary_dir / "competition-run-summary.json"
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary_path
@@ -1243,6 +1259,7 @@ def extract_slice_specs(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    run_id: str,
 ) -> tuple[list[Path], int, list[dict[str, Any]]]:
     generated = []
     failures = 0
@@ -1260,6 +1277,7 @@ def extract_slice_specs(
             repo_root=repo_root,
             logs_dir=logs_dir,
             out_root=out_root,
+            run_id=run_id,
         )
         if result.returncode != 0:
             failures += 1
@@ -1339,6 +1357,7 @@ def run_logged_step(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    run_id: str,
 ) -> subprocess.CompletedProcess[str]:
     result = run_step(command, command_runner=command_runner, repo_root=repo_root)
     append_command_log(
@@ -1348,6 +1367,7 @@ def run_logged_step(
         repo_root=repo_root,
         logs_dir=logs_dir,
         out_root=out_root,
+        run_id=run_id,
     )
     return result
 
@@ -1360,6 +1380,7 @@ def append_command_log(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    run_id: str,
 ) -> None:
     log_path = logs_dir / "commands.jsonl"
     entry = {
@@ -1369,6 +1390,8 @@ def append_command_log(
         "stdout": result.stdout,
         "stderr": result.stderr,
         "log_path": summary_log_path(log_path, repo_root=repo_root, out_root=out_root),
+        "run_id": run_id,
+        "canonical": True,
     }
     with log_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, sort_keys=True) + "\n")

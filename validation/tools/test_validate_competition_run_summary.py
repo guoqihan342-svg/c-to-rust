@@ -189,6 +189,28 @@ def workflow_metrics_for(summary: dict) -> dict:
 def write_summary_with_workflow_metrics(summary_path: Path, summary: dict) -> None:
     metrics_path = summary_path.parent / "workflow-metrics.json"
     metrics_path.write_text(json.dumps(workflow_metrics_for(summary), sort_keys=True), encoding="utf-8")
+    command_log_path = summary_path.parent / "commands.jsonl"
+    command_log_path.write_text(
+        json.dumps(
+            {
+                "step": "environment-check",
+                "command": ["bash", "-lc", "echo ok"],
+                "returncode": 0,
+                "stdout": "ok",
+                "stderr": "",
+                "log_path": command_log_path.name,
+                "run_id": summary["run_id"],
+                "canonical": True,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary["command_log"] = {
+        "path": command_log_path.name,
+        "sha256": lf_stable_sha256(command_log_path),
+    }
     summary["workflow_metrics"] = {
         "path": "workflow-metrics.json",
         "sha256": lf_stable_sha256(metrics_path),
@@ -242,6 +264,69 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed")
         self.assertEqual(result["proof_class"], "wsl-local-simulation")
+
+    def test_summary_requires_command_log_binding(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            summary = valid_summary()
+            write_summary_with_workflow_metrics(summary_path, summary)
+            summary.pop("command_log")
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("command_log", str(raised.exception))
+
+    def test_summary_rejects_command_log_drift(self) -> None:
+        module = load_validator_module()
+
+        def rewrite_summary(summary_path: Path, summary: dict, command_log_path: Path) -> None:
+            summary["command_log"]["sha256"] = lf_stable_sha256(command_log_path)
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+        cases = [
+            ("sha_drift", "sha256 does not match artifact"),
+            ("run_id_drift", "run_id must match summary run_id"),
+            ("canonical_false", "canonical must be true"),
+            ("canonical_missing", "canonical must be true"),
+            ("log_path_drift", "log_path must match command_log.path"),
+            ("empty_log", "must contain at least one entry"),
+            ("invalid_json", "must be valid JSON"),
+        ]
+        for case_name, expected_error in cases:
+            with self.subTest(case=case_name):
+                with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+                    summary_path = Path(tmp) / "competition-run-summary.json"
+                    summary = valid_summary()
+                    write_summary_with_workflow_metrics(summary_path, summary)
+                    command_log_path = summary_path.parent / "commands.jsonl"
+                    original = command_log_path.read_text(encoding="utf-8")
+                    entry = json.loads(original)
+
+                    if case_name == "sha_drift":
+                        command_log_path.write_text(original + original, encoding="utf-8")
+                    elif case_name == "empty_log":
+                        command_log_path.write_text("", encoding="utf-8")
+                        rewrite_summary(summary_path, summary, command_log_path)
+                    elif case_name == "invalid_json":
+                        command_log_path.write_text("{not-json}\n", encoding="utf-8")
+                        rewrite_summary(summary_path, summary, command_log_path)
+                    else:
+                        if case_name == "run_id_drift":
+                            entry["run_id"] = "stale-run"
+                        elif case_name == "canonical_false":
+                            entry["canonical"] = False
+                        elif case_name == "canonical_missing":
+                            entry.pop("canonical")
+                        elif case_name == "log_path_drift":
+                            entry["log_path"] = "logs/other.jsonl"
+                        command_log_path.write_text(json.dumps(entry, sort_keys=True) + "\n", encoding="utf-8")
+                        rewrite_summary(summary_path, summary, command_log_path)
+
+                    with self.assertRaisesRegex(SystemExit, expected_error):
+                        module.validate_summary(summary_path, repo_root=REPO_ROOT)
 
     def test_rejects_competition_exact_without_host_attestation(self) -> None:
         module = load_validator_module()
