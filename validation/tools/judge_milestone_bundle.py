@@ -487,6 +487,10 @@ def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str
     auto_recovered = int_or_zero(rollup.get("auto_recovered_unit_count"))
     rollback_evidence_count = int_or_zero(rollup.get("rollback_evidence_count"))
     unsafe_reduced_by = int_or_zero(rollup.get("unsafe_reduced_by"))
+    bound_units = int_or_zero(rollup.get("bound_unit_count"))
+    verified_baseline_units = int_or_zero(rollup.get("verified_baseline_unit_count"))
+    missing_verified_baseline_units = int_or_zero(rollup.get("missing_verified_baseline_unit_count"))
+    all_units_verified_baseline_bound = rollup.get("all_units_verified_baseline_bound")
     unsafe_reduction = rollup.get("unsafe_reduction", {}) if isinstance(rollup.get("unsafe_reduction"), dict) else {}
     baseline_total_unsafe = int_or_none(unsafe_reduction.get("baseline_total_unsafe"))
     if auto_recovered > observed:
@@ -495,6 +499,13 @@ def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str
         blockers.append("repair_accounting_unsafe_reduced_by_exceeds_measured_baseline")
     if observed > 0 and rollback_evidence_count == 0:
         blockers.append("repair_accounting_rollback_evidence_missing_for_observed_repairs")
+    if verified_baseline_units + missing_verified_baseline_units != bound_units:
+        blockers.append("repair_accounting_verified_baseline_counts_mismatch")
+    expected_all_units_verified = (
+        bound_units > 0 and verified_baseline_units == bound_units and missing_verified_baseline_units == 0
+    )
+    if all_units_verified_baseline_bound is not expected_all_units_verified:
+        blockers.append("repair_accounting_verified_baseline_all_bound_mismatch")
     return blockers
 
 

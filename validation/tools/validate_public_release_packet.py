@@ -1076,6 +1076,10 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     ):
         if packet.get(field) != bundle.get(field):
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+    require_before_after_verified_baseline_accounting(
+        require_object(packet.get("before_after_repair_exhibit"), "before_after_repair_exhibit"),
+        "before_after_repair_exhibit",
+    )
 
     require_publishability_publication_scope_contract(
         require_object(packet.get("publishability"), "publishability"),
@@ -1180,6 +1184,33 @@ def require_bound_bundle_identity_contract(packet: dict[str, Any], bundle: dict[
         raise ValueError("judge_milestone_bundle.blockers must be present when status is blocked")
     if packet.get("status") != status:
         raise ValueError("public_release_packet.status must match judge_milestone_bundle.status")
+
+
+def require_before_after_verified_baseline_accounting(value: dict[str, Any], label: str) -> None:
+    rollup = require_object(value.get("rollup"), f"{label}.rollup")
+    bound_units = require_non_negative_int(rollup.get("bound_unit_count"), f"{label}.rollup.bound_unit_count")
+    verified_units = require_non_negative_int(
+        rollup.get("verified_baseline_unit_count"),
+        f"{label}.rollup.verified_baseline_unit_count",
+    )
+    missing_units = require_non_negative_int(
+        rollup.get("missing_verified_baseline_unit_count"),
+        f"{label}.rollup.missing_verified_baseline_unit_count",
+    )
+    all_bound = rollup.get("all_units_verified_baseline_bound")
+    if not isinstance(all_bound, bool):
+        raise ValueError(f"{label}.rollup.all_units_verified_baseline_bound must be a boolean")
+    if verified_units + missing_units != bound_units:
+        raise ValueError("before_after_repair_exhibit verified baseline accounting mismatch")
+    expected_all_bound = bound_units > 0 and verified_units == bound_units and missing_units == 0
+    if all_bound is not expected_all_bound:
+        raise ValueError("before_after_repair_exhibit verified baseline all-bound flag mismatch")
+
+
+def require_non_negative_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
 
 
 def expected_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:
