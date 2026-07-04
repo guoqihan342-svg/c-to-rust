@@ -3346,6 +3346,14 @@ def validate_opencode_worker_runtime(
             raise ValueError(f"{label}.worker_report.worker_id must match worker_id")
         if worker_report_payload.get("runner_kind") != "opencode-run":
             raise ValueError(f"{label}.worker_report.runner_kind must be opencode-run")
+        if worker_report_payload.get("mode") != "opencode":
+            raise ValueError(f"{label}.worker_report.mode must be opencode")
+        if worker_report_payload.get("recorded") is not True:
+            raise ValueError(f"{label}.worker_report.recorded must be true")
+        for field in ("exit_code", "process_returncode"):
+            value = worker_report_payload.get(field)
+            if not isinstance(value, int) or isinstance(value, bool) or value != 0:
+                raise ValueError(f"{label}.worker_report.{field} must be 0")
         worker_runtime_env = validate_opencode_runtime_env_contract(
             worker_report_payload.get("opencode_runtime_env"),
             f"{label}.worker_report",

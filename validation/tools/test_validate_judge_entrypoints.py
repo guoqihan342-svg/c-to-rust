@@ -1312,9 +1312,13 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
             "schema_version": 1,
             "report_kind": "run-worker-report",
             "worker_id": worker["worker_id"],
+            "mode": "opencode",
             "runner_kind": "opencode-run",
             "summary_path": repo_relative(summary_path),
             "summary_status": "passed",
+            "recorded": True,
+            "exit_code": 0,
+            "process_returncode": 0,
             "opencode_runtime_env": runtime_env,
         },
     )
@@ -4803,6 +4807,46 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 path_text=repo_relative(temp_dir / "out" / "harness" / "judge-evidence-index.json"),
                 repo_root=REPO_ROOT,
             )
+
+    def test_judge_evidence_index_rejects_worker_report_execution_state_drift(self) -> None:
+        cases = [
+            ("wrong_mode", {"mode": "deterministic"}, "worker_report.mode must be opencode"),
+            ("not_recorded", {"recorded": False}, "worker_report.recorded must be true"),
+            ("nonzero_exit_code", {"exit_code": 1}, "worker_report.exit_code must be 0"),
+            (
+                "nonzero_process_returncode",
+                {"process_returncode": 1},
+                "worker_report.process_returncode must be 0",
+            ),
+        ]
+        for case_name, updates, expected_error in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(
+                    tempfile.mkdtemp(prefix="judge-opencode-worker-report-execution-", dir=REPO_ROOT / "target")
+                )
+                payload = valid_opencode_judge_index_payload()
+                materialize_opencode_judge_index_artifacts(
+                    payload,
+                    temp_dir / "out",
+                    profile_payload={
+                        "schema_version": 1,
+                        "profile_id": "opencode-profile",
+                        "mode": "opencode",
+                        **opencode_launch_policy(),
+                    },
+                )
+                worker = payload["opencode_agent_runtime"]["workers"][0]
+                worker_report_path = REPO_ROOT / worker["worker_report"]["path"]
+                worker_report = json.loads(worker_report_path.read_text(encoding="utf-8"))
+                worker_report.update(updates)
+                write_json(worker_report_path, worker_report)
+                worker["worker_report"]["sha256"] = validator.sha256_file(worker_report_path)
+
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_opencode_agent_runtime_contract(
+                        payload["opencode_agent_runtime"],
+                        repo_root=REPO_ROOT,
+                    )
 
     def test_judge_evidence_index_rejects_worker_handoff_opencode_argv_policy_drift(self) -> None:
         def materialized_payload(temp_dir: Path) -> dict:
