@@ -94,6 +94,7 @@ def resume_replay_commands(
     summary: Path,
     report: Path,
     worker_root: Path,
+    retry_hint_id: str | None = None,
 ) -> dict:
     argv = [
         "python3",
@@ -110,7 +111,7 @@ def resume_replay_commands(
         "--mode",
         "deterministic",
     ]
-    return {
+    commands = {
         "run_worker": {
             "argv": argv,
             "command": shlex.join(argv),
@@ -126,6 +127,39 @@ def resume_replay_commands(
             },
         }
     }
+    if retry_hint_id is not None:
+        retry_argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "retry-worker",
+            "--db",
+            repo_relative(ledger),
+            "--run-id",
+            run_id,
+            "--worker-id",
+            worker_id,
+            "--hint-id",
+            retry_hint_id,
+            "--mode",
+            "deterministic",
+        ]
+        commands["retry_worker"] = {
+            "argv": retry_argv,
+            "command": shlex.join(retry_argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(worker_root),
+            "replay_safety": {
+                "status": "ready",
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+            },
+        }
+    return commands
 
 
 def write_valid_command_log(
@@ -7973,6 +8007,110 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             ValueError,
             r"resume_manifest\.workers\[0\]\.replay_commands must be an object",
         ):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_retry_replay_hint_id_must_match_open_worker_hint(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-retry-hint-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        worker_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "isolated_out_root": repo_relative(worker_root),
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {
+            "entrypoints": {"resume_manifest": repo_relative(resume_manifest)},
+            "workers": [worker_fields],
+        }
+        agent_payload = {
+            "reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}},
+            "agents": [worker_fields],
+            "agents_by_worker_id": {"worker-001": worker_fields},
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        run_id = "resume-retry-hint-binding"
+        expected_hint = f"repair:{run_id}:worker-001:process_timeout"
+        stale_hint = f"repair:{run_id}:worker-999:process_timeout"
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": run_id,
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "repair_hints": {
+                "source": "sqlite repair_hints",
+                "open_count": 1,
+                "hints": [
+                    {
+                        "hint_id": expected_hint,
+                        "status": "open",
+                        "worker_id": "worker-001",
+                    }
+                ],
+            },
+            "workers": [
+                {
+                    **worker_fields,
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id=run_id,
+                        worker_id="worker-001",
+                        assignment=assignment,
+                        request=request,
+                        summary=summary,
+                        report=report,
+                        worker_root=worker_root,
+                        retry_hint_id=stale_hint,
+                    ),
+                }
+            ],
+            "worker_count": 1,
+        }
+
+        with self.assertRaisesRegex(ValueError, "--hint-id must match an open repair_hints entry for worker"):
             validator.validate_resume_manifest_contract(
                 payload,
                 path_text=repo_relative(resume_manifest),

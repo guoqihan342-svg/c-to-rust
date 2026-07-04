@@ -5105,6 +5105,11 @@ def validate_resume_manifest_contract(
             raise ValueError("resume_manifest.worker_ids must match workers")
     if len(set(actual_worker_ids)) != len(actual_worker_ids):
         raise ValueError("resume_manifest.workers worker_id values must be unique")
+    run_id = require_string(payload.get("run_id"), "resume_manifest.run_id")
+    open_hint_ids_by_worker_id = resume_manifest_open_repair_hint_ids_by_worker(
+        payload.get("repair_hints"),
+        run_id=run_id,
+    )
     for index, worker in enumerate(workers):
         worker_payload = require_object(worker, f"resume_manifest.workers[{index}]")
         require_string(worker_payload.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
@@ -5115,8 +5120,9 @@ def validate_resume_manifest_contract(
         validate_resume_manifest_worker_replay_commands(
             worker_payload,
             index=index,
-            run_id=require_string(payload.get("run_id"), "resume_manifest.run_id"),
+            run_id=run_id,
             ledger_path=ledger_path,
+            open_hint_ids_by_worker_id=open_hint_ids_by_worker_id,
             repo_root=repo_root,
         )
     worker_consistency = validate_resume_manifest_worker_consistency(
@@ -5143,6 +5149,7 @@ def validate_resume_manifest_worker_replay_commands(
     index: int,
     run_id: str,
     ledger_path: str,
+    open_hint_ids_by_worker_id: dict[str, set[str]],
     repo_root: Path,
 ) -> dict[str, Any]:
     worker_id = require_string(worker.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
@@ -5169,10 +5176,43 @@ def validate_resume_manifest_worker_replay_commands(
             run_id=run_id,
             ledger_path=ledger_path,
             require_hint=True,
+            expected_hint_ids=open_hint_ids_by_worker_id.get(worker_id, set()),
             repo_root=repo_root,
         )
         result["retry_worker"] = retry_worker
     return result
+
+
+def resume_manifest_open_repair_hint_ids_by_worker(value: Any, *, run_id: str) -> dict[str, set[str]]:
+    if not isinstance(value, dict):
+        return {}
+    hints = value.get("hints")
+    if not isinstance(hints, list):
+        return {}
+    result: dict[str, set[str]] = {}
+    for hint in hints:
+        if not isinstance(hint, dict) or hint.get("status") != "open":
+            continue
+        hint_id = hint.get("hint_id")
+        if not isinstance(hint_id, str) or not hint_id:
+            continue
+        worker_id = hint.get("worker_id")
+        if not isinstance(worker_id, str) or not worker_id:
+            worker_id = resume_manifest_worker_id_from_repair_hint_id(hint_id, run_id=run_id)
+        if worker_id:
+            result.setdefault(worker_id, set()).add(hint_id)
+    return result
+
+
+def resume_manifest_worker_id_from_repair_hint_id(hint_id: str, *, run_id: str) -> str | None:
+    prefix = f"repair:{run_id}:"
+    if not hint_id.startswith(prefix):
+        return None
+    remainder = hint_id[len(prefix) :]
+    if ":" not in remainder:
+        return None
+    worker_id, _root_cause = remainder.rsplit(":", 1)
+    return worker_id or None
 
 
 def validate_resume_manifest_replay_command(
@@ -5185,6 +5225,7 @@ def validate_resume_manifest_replay_command(
     run_id: str,
     ledger_path: str,
     require_hint: bool,
+    expected_hint_ids: set[str] | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     command_payload = require_object(value, label)
@@ -5213,9 +5254,14 @@ def validate_resume_manifest_replay_command(
     mode = flags.get("--mode")
     if mode not in {"deterministic", "opencode"}:
         raise ValueError(f"resume_manifest worker {worker_id} {label} --mode must be deterministic or opencode")
-    if require_hint and not flags.get("--hint-id"):
+    hint_id = flags.get("--hint-id")
+    if require_hint and not hint_id:
         raise ValueError(f"resume_manifest worker {worker_id} {label} command must include --hint-id")
-    if not require_hint and flags.get("--hint-id"):
+    if require_hint and expected_hint_ids is not None and hint_id not in expected_hint_ids:
+        raise ValueError(
+            f"resume_manifest worker {worker_id} {label} --hint-id must match an open repair_hints entry for worker"
+        )
+    if not require_hint and hint_id:
         raise ValueError(f"resume_manifest worker {worker_id} {label} command must not include --hint-id")
     preflight = worker.get("opencode_preflight_report")
     if mode == "opencode":
