@@ -8455,6 +8455,33 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "output contains forbidden local absolute path"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
+    def test_competition_smoke_command_log_rejects_nested_tool_output_host_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["bash", "-lc", "echo ok"],
+                        "returncode": 0,
+                        "workdir": ".",
+                        "tool_output": {
+                            "stdout": "source path: /root/work/project/src/fdb.c",
+                            "stderr": "compiler path: /usr/bin/clang",
+                            "source": "/workspace/project/src/fdb.c",
+                            "include_dirs": ["//wsl$/Ubuntu/home/runner/project/include"],
+                            "artifacts": {"output": r"\\server\share\project\target\out.json"},
+                        },
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
     def test_competition_smoke_command_log_rejects_parent_traversal_workdir(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
             command_log = Path(tmp) / "commands.jsonl"
@@ -8687,9 +8714,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                             "/__w/repo/repo/python",
                             "/opt/hostedtoolcache/Python/python",
                             "/builds/group/project/tool",
+                            "/root/work/project/tool",
+                            "/usr/bin/clang",
                         ],
                         "returncode": 0,
-                        "stdout": "source path: /workspace/project/src/fdb.c",
+                        "stdout": "source path: /workspace/project/src/fdb.c; compiler: /usr/bin/clang",
                     },
                     sort_keys=True,
                 )

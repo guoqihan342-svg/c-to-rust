@@ -33,6 +33,18 @@ def sha256_file(path: Path) -> str:
     return judge_validator.sha256_file(path)
 
 
+def write_minimal_preflight_report(path: Path, launch_policy: dict) -> dict:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"launch_policy": launch_policy}, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "path": path.relative_to(REPO_ROOT).as_posix(),
+        "sha256": sha256_file(path),
+        "status": "passed",
+        "contract_status": "executed",
+        "launch_policy": launch_policy,
+    }
+
+
 def assert_repo_relative_posix(testcase: unittest.TestCase, path_text: str) -> None:
     testcase.assertIsInstance(path_text, str)
     testcase.assertTrue(path_text)
@@ -1015,21 +1027,24 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 )
 
     def test_judge_validator_rejects_resume_replay_with_non_glm_preflight_model(self) -> None:
+        launch_policy = {
+            "opencode_command": "opencode",
+            "opencode_model": None,
+            "opencode_agent": "c2rust-migrator",
+            "opencode_variant": "max",
+            "opencode_skip_permissions": True,
+        }
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        temp_context = tempfile.TemporaryDirectory(prefix="competition-env-test-", dir=target_dir)
+        self.addCleanup(temp_context.cleanup)
+        preflight = write_minimal_preflight_report(
+            Path(temp_context.name) / "harness" / "opencode-preflight-report.json",
+            launch_policy,
+        )
         worker = {
             "worker_id": "worker-001",
-            "opencode_preflight_report": {
-                "path": "target/harness/opencode-preflight-report.json",
-                "sha256": "a" * 64,
-                "status": "passed",
-                "contract_status": "executed",
-                "launch_policy": {
-                    "opencode_command": "opencode",
-                    "opencode_model": None,
-                    "opencode_agent": "c2rust-migrator",
-                    "opencode_variant": "max",
-                    "opencode_skip_permissions": True,
-                },
-            },
+            "opencode_preflight_report": preflight,
         }
         argv = [
             "python3",
@@ -1046,7 +1061,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "--mode",
             "opencode",
             "--opencode-preflight-report",
-            "target/harness/opencode-preflight-report.json",
+            preflight["path"],
         ]
 
         with self.assertRaisesRegex(ValueError, "--opencode-model must be GLM-5.1"):
@@ -1066,21 +1081,24 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             )
 
     def test_judge_validator_rejects_resume_replay_with_non_max_opencode_variant(self) -> None:
+        launch_policy = {
+            "opencode_command": "opencode",
+            "opencode_model": "GLM-5.1",
+            "opencode_agent": "c2rust-migrator",
+            "opencode_variant": "max",
+            "opencode_skip_permissions": True,
+        }
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        temp_context = tempfile.TemporaryDirectory(prefix="competition-env-test-", dir=target_dir)
+        self.addCleanup(temp_context.cleanup)
+        preflight = write_minimal_preflight_report(
+            Path(temp_context.name) / "harness" / "opencode-preflight-report.json",
+            launch_policy,
+        )
         worker = {
             "worker_id": "worker-001",
-            "opencode_preflight_report": {
-                "path": "target/harness/opencode-preflight-report.json",
-                "sha256": "a" * 64,
-                "status": "passed",
-                "contract_status": "executed",
-                "launch_policy": {
-                    "opencode_command": "opencode",
-                    "opencode_model": "GLM-5.1",
-                    "opencode_agent": "c2rust-migrator",
-                    "opencode_variant": "max",
-                    "opencode_skip_permissions": True,
-                },
-            },
+            "opencode_preflight_report": preflight,
         }
         argv = [
             "python3",
@@ -1097,7 +1115,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
             "--mode",
             "opencode",
             "--opencode-preflight-report",
-            "target/harness/opencode-preflight-report.json",
+            preflight["path"],
             "--opencode-model",
             "GLM-5.1",
             "--opencode-agent",

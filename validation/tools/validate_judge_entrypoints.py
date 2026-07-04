@@ -72,6 +72,8 @@ LOCAL_ABSOLUTE_PATH = re.compile(
     r"/Users(?:/|(?=$|[\s;&|\"'`,)]))|"
     r"/tmp(?:/|(?=$|[\s;&|\"'`,)]))|"
     r"/var(?:/|(?=$|[\s;&|\"'`,)]))|"
+    r"/root(?:/|(?=$|[\s;&|\"'`,)]))|"
+    r"/usr(?:/|(?=$|[\s;&|\"'`,)]))|"
     r"/workspace(?:/|(?=$|[\s;&|\"'`,)]))|"
     r"/__w(?:/|(?=$|[\s;&|\"'`,)]))|"
     r"/opt(?:/|(?=$|[\s;&|\"'`,)]))|"
@@ -496,6 +498,26 @@ def validate_local_absolute_path_policy(payload: Any, *, label: str) -> dict[str
         "host_trace_allowed_count": len(allowed),
         "host_trace_allowed_locations": allowed,
     }
+
+
+def assert_payload_has_no_local_absolute_path(payload: Any, *, label: str) -> None:
+    forbidden: list[str] = []
+
+    def visit(value: Any, parts: tuple[str, ...]) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                visit(child, (*parts, str(key)))
+            return
+        if isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, (*parts, str(index)))
+            return
+        if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+            forbidden.append(json_path(parts))
+
+    visit(payload, ())
+    if forbidden:
+        raise ValueError(f"{label} contains forbidden local absolute path at {forbidden}")
 
 
 def validate_ref(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
@@ -1200,6 +1222,10 @@ def validate_competition_smoke_command_log_contract(
                 raise ValueError("competition_smoke_command_log workdir must be repo root '.'")
             if "cwd" in command_context and command_context["cwd"] != command_context["workdir"]:
                 raise ValueError("competition_smoke_command_log cwd must match workdir")
+            assert_payload_has_no_local_absolute_path(
+                entry,
+                label=f"competition_smoke_command_log line {line_number}",
+            )
             if step == "opencode-glm-model-probe":
                 if entry.get("returncode") != 0:
                     raise ValueError("competition_smoke_command_log opencode-glm-model-probe returncode must be 0")

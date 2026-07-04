@@ -26,7 +26,7 @@ def load_smoke_module():
 
 
 LOCAL_ABSOLUTE_PATH = re.compile(
-    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|/workspace/|/__w/|/opt/|/builds/|\\\\wsl\$\\|//wsl\$/|\\\\wsl\.localhost\\|//wsl\.localhost/|\\\\[^\\/\s]+\\[^\\/\s]+\\|(?<!:)//[^/\s]+/[^/\s]+/)"
+    r"(?:[A-Za-z]:[\\/]|/mnt/[A-Za-z]/|/home/|/Users/|/tmp/|/var/|/root/|/usr/|/workspace/|/__w/|/opt/|/builds/|\\\\wsl\$\\|//wsl\$/|\\\\wsl\.localhost\\|//wsl\.localhost/|\\\\[^\\/\s]+\\[^\\/\s]+\\|(?<!:)//[^/\s]+/[^/\s]+/)"
 )
 
 
@@ -930,6 +930,8 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             "echo ok | //wsl.localhost/Ubuntu/home/me/python3": "echo ok | python3",
             "echo ok | //wsl$/Ubuntu/home/me/python3": "echo ok | python3",
             "echo ok | /workspace/project/tools/python3": "echo ok | python3",
+            "echo ok; /root/work/project/tools/python3": "echo ok; python3",
+            "echo ok | /usr/bin/clang": "echo ok | clang",
             r"echo ok && \\server\share\tool.exe": "echo ok && tool.exe",
             r"ld -L\\server\share": "ld -Lshare",
             r"-L\\server\share": "-Lshare",
@@ -995,6 +997,20 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertIn("fdb.c", joined_output)
             self.assertNotIn("//wsl$", joined_output)
             self.assertIn("out.json", joined_output)
+
+    def test_output_text_for_log_sanitizes_container_absolute_paths(self) -> None:
+        module = load_smoke_module()
+
+        logged = module.output_text_for_log(
+            "cwd: /root/work/project; source: /root/work/project/src/fdb.c; compiler: /usr/bin/clang"
+        )
+
+        self.assertIn("project", logged)
+        self.assertIn("fdb.c", logged)
+        self.assertIn("clang", logged)
+        self.assertNotIn("/root/", logged)
+        self.assertNotIn("/usr/", logged)
+        self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
 
     def test_command_log_records_repo_relative_workdir(self) -> None:
         module = load_smoke_module()
