@@ -558,7 +558,19 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
         "unit_count": 1,
         "measured_unsafe_unit_count": 1,
         "accepted_patch_unit_count": 1,
-        "units": [{"unit_id": "demo/store-add-one", "status": "bound"}],
+        "units": [
+            {
+                "unit_id": "demo/store-add-one",
+                "status": "bound",
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 3,
+                    "current_total_unsafe": 1,
+                    "reduced_by": 2,
+                    "ratio": 1 / 3,
+                },
+            }
+        ],
     }
     workflow_metrics["per_unit_statuses"] = [
         {
@@ -6776,6 +6788,99 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 require_hint=False,
             )
 
+    def test_resume_manifest_opencode_replay_rejects_preflight_sha_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-opencode-preflight-sha-", dir=target_dir))
+        out_root = temp_dir / "out"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        preflight = out_root / "harness" / "opencode-preflight-report.json"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = out_root / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
+        report = out_root / "workers" / "worker-001" / "harness" / "run-worker-report.json"
+        preflight.parent.mkdir(parents=True, exist_ok=True)
+        preflight.write_text('{"report_kind":"opencode-preflight"}\n', encoding="utf-8")
+        runtime_env = opencode_runtime_env_contract(out_root, scope="preflight")
+        preflight_binding = {
+            "path": repo_relative(preflight),
+            "sha256": "a" * 64,
+            "status": "passed",
+            "contract_status": "executed",
+            "launch_policy": {
+                "opencode_command": "opencode",
+                "opencode_model": "GLM-5.1",
+                "opencode_agent": "c2rust-migrator",
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            },
+            "opencode_runtime_env": runtime_env,
+            "opencode_model_availability": {
+                "status": "available",
+                "opencode_command": "opencode",
+                "required_model": "GLM-5.1",
+                "process_returncode": 0,
+                "model_listed": True,
+            },
+        }
+        worker = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "isolated_out_root": repo_relative(out_root / "workers" / "worker-001"),
+            "opencode_preflight_report": preflight_binding,
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            repo_relative(ledger),
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
+            "--opencode-variant",
+            "max",
+            "--opencode-preflight-report",
+            repo_relative(preflight),
+        ]
+        command_payload = {
+            "argv": argv,
+            "command": shlex.join(argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(out_root / "workers" / "worker-001"),
+            "replay_safety": {
+                "status": "ready",
+                "reason": "opencode_preflight_contract_bound",
+            },
+        }
+
+        with self.assertRaisesRegex(ValueError, "opencode_preflight_report.sha256 mismatch"):
+            validator.validate_resume_manifest_replay_command(
+                command_payload,
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path=repo_relative(ledger),
+                require_hint=False,
+            )
+
     def test_resume_manifest_opencode_replay_requires_repo_owned_preflight_agent(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
@@ -6787,10 +6892,12 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         request = out_root / "harness" / "assignments" / "worker-001-request.json"
         summary = out_root / "workers" / "worker-001" / "summary" / "competition-run-summary.json"
         report = out_root / "workers" / "worker-001" / "harness" / "run-worker-report.json"
+        preflight.parent.mkdir(parents=True, exist_ok=True)
+        preflight.write_text('{"report_kind":"opencode-preflight"}\n', encoding="utf-8")
         runtime_env = opencode_runtime_env_contract(out_root, scope="preflight")
         preflight_binding = {
             "path": repo_relative(preflight),
-            "sha256": "a" * 64,
+            "sha256": validator.sha256_file(preflight),
             "status": "passed",
             "contract_status": "executed",
             "launch_policy": {

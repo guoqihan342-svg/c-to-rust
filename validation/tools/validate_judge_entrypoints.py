@@ -4678,6 +4678,7 @@ def validate_resume_manifest_contract(
             index=index,
             run_id=require_string(payload.get("run_id"), "resume_manifest.run_id"),
             ledger_path=ledger_path,
+            repo_root=repo_root,
         )
     worker_consistency = validate_resume_manifest_worker_consistency(
         workers,
@@ -4702,6 +4703,7 @@ def validate_resume_manifest_worker_replay_commands(
     index: int,
     run_id: str,
     ledger_path: str,
+    repo_root: Path,
 ) -> dict[str, Any]:
     worker_id = require_string(worker.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
     replay = require_object(worker.get("replay_commands"), f"resume_manifest.workers[{index}].replay_commands")
@@ -4714,6 +4716,7 @@ def validate_resume_manifest_worker_replay_commands(
         run_id=run_id,
         ledger_path=ledger_path,
         require_hint=False,
+        repo_root=repo_root,
     )
     result: dict[str, Any] = {"run_worker": run_worker}
     if "retry_worker" in replay:
@@ -4726,6 +4729,7 @@ def validate_resume_manifest_worker_replay_commands(
             run_id=run_id,
             ledger_path=ledger_path,
             require_hint=True,
+            repo_root=repo_root,
         )
         result["retry_worker"] = retry_worker
     return result
@@ -4741,6 +4745,7 @@ def validate_resume_manifest_replay_command(
     run_id: str,
     ledger_path: str,
     require_hint: bool,
+    repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     command_payload = require_object(value, label)
     replay_safety = require_object(command_payload.get("replay_safety"), f"{label}.replay_safety")
@@ -4780,6 +4785,12 @@ def validate_resume_manifest_replay_command(
             raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report.status must be passed")
         if not is_sha256_hex(preflight.get("sha256")):
             raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report.sha256 must be a sha256")
+        preflight_path = require_string(preflight.get("path"), f"resume_manifest worker {worker_id} {label} opencode_preflight_report.path")
+        preflight_file = repo_path(preflight_path, repo_root=repo_root)
+        if not preflight_file.is_file():
+            raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report.path missing")
+        if sha256_file(preflight_file) != preflight["sha256"]:
+            raise ValueError(f"resume_manifest worker {worker_id} {label} opencode_preflight_report.sha256 mismatch")
         if preflight.get("contract_status") != "executed":
             raise ValueError(
                 f"resume_manifest worker {worker_id} {label} opencode_preflight_report.contract_status must be executed"
