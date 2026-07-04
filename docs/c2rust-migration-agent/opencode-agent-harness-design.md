@@ -4,6 +4,8 @@
 
 本文定义比赛主路径使用的 OpenCode-only Agent Harness。它不是新的翻译器，也不是通用 Agent 平台；它是现有 `run_competition.py`、`auto_migrate.py`、evidence validator 和 OpenCode 多 agent 工作流之间的控制层。
 
+> 说明：本文是架构设计说明，不是 canonical backlog；当前全局待办只看 `future-vision-and-mvp.md`。
+
 ## 目标
 
 P0 采用 **SQLite 调度队列级持久化**：SQLite 记录 run、agent、task、slice、artifact、gate、event、lease 和 merge plan；长期知识库能力只保留接口，不作为当前语义证明来源。

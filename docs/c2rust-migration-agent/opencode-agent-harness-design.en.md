@@ -2,6 +2,8 @@
 
 This document defines the competition-path OpenCode-only Agent Harness. It is not a new translator and not a general agent platform. It is the control layer between the existing `run_competition.py`, `auto_migrate.py`, evidence validators, and OpenCode multi-agent execution.
 
+> Note: this is architecture design material, not the canonical backlog; project-wide priorities follow `future-vision-and-mvp.md`.
+
 ## Goal
 
 P0 uses **SQLite as a scheduling-queue persistence layer**. SQLite records runs, agents, tasks, slices, artifacts, gates, events, leases, and merge plans. Long-term knowledge-base behavior is left as a future interface only.
