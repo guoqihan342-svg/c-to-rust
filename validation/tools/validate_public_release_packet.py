@@ -670,6 +670,31 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
             )
 
 
+def require_published_judge_evidence_indexes_are_deep_validated(
+    publication: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> None:
+    for ref in published_artifact_refs(publication):
+        ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
+        if ref_obj.get("artifact_name") != "judge_evidence_index" or ref_obj.get("status") != "present":
+            continue
+        try:
+            checked = judge_validator.validate_ref(ref_obj, repo_root=repo_root)
+            path_text = str(checked["path"])
+            payload = judge_validator.load_json(judge_validator.repo_path(path_text, repo_root=repo_root))
+            judge_validator.validate_judge_evidence_index_contract(
+                payload,
+                path_text=path_text,
+                repo_root=repo_root,
+            )
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            raise ValueError(
+                "publication_manifest.published_artifact_refs[].judge_evidence_index contract failed: "
+                f"{error}"
+            ) from error
+
+
 def competition_host_readiness_allows_exact_preflight(readiness: dict[str, Any]) -> bool:
     return (
         readiness.get("status") == "ready"
@@ -1076,6 +1101,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
     require_published_artifact_refs_are_hash_bound(publication, repo_root=repo_root)
     require_passed_bundle_published_refs_are_healthy(bundle, publication)
+    require_published_judge_evidence_indexes_are_deep_validated(publication, repo_root=repo_root)
     for field in ("judge_entrypoints_run_report", "readiness_report"):
         if packet.get(field) != bundle.get(field):
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
@@ -1274,9 +1300,13 @@ def require_before_after_rollup_matches_sources(value: dict[str, Any], rollup: d
             before_after_units.extend(unit for unit in units if isinstance(unit, dict))
 
     verified_units = sum(1 for unit in before_after_units if before_after_unit_has_verified_unsafe_baseline(unit))
+    measured_unsafe_units = sum(1 for unit in before_after_units if before_after_unit_has_measured_unsafe_reduction(unit))
+    accepted_patch_units = sum(1 for unit in before_after_units if isinstance(unit.get("accepted_patch"), dict))
     expected = {
         "source_count": len(sources),
         "bound_unit_count": bound_unit_count,
+        "measured_unsafe_unit_count": measured_unsafe_units,
+        "accepted_patch_unit_count": accepted_patch_units,
         "verified_baseline_unit_count": verified_units,
         "missing_verified_baseline_unit_count": len(before_after_units) - verified_units,
         "all_units_verified_baseline_bound": bool(before_after_units) and verified_units == len(before_after_units),
@@ -1302,6 +1332,11 @@ def before_after_unit_has_verified_unsafe_baseline(unit: dict[str, Any]) -> bool
         and baseline.get("semantic_claim_source") == "verified_unsafe_baseline_gates"
         and baseline.get("generated_draft_semantic_pass") is False
     )
+
+
+def before_after_unit_has_measured_unsafe_reduction(unit: dict[str, Any]) -> bool:
+    unsafe_reduction = unit.get("unsafe_reduction")
+    return isinstance(unsafe_reduction, dict) and unsafe_reduction.get("status") == "measured"
 
 
 def require_non_negative_int(value: Any, label: str) -> int:

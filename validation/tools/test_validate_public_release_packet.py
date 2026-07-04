@@ -8,6 +8,7 @@ from typing import Callable
 import jsonschema
 
 from validation.tools import milestone_release_notes
+from validation.tools import test_validate_judge_entrypoints as judge_entrypoint_fixtures
 from validation.tools import validate_judge_entrypoints as judge_validator
 from validation.tools import validate_public_release_packet as packet_validator
 
@@ -1249,6 +1250,17 @@ def valid_packet(root: Path) -> dict:
                             "semantic_claim_source": "verified_unsafe_baseline_gates",
                             "generated_draft_semantic_pass": False,
                         },
+                        "accepted_patch": {
+                            "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/accepted-safe.patch",
+                            "status": "accepted",
+                            "sha256": "2" * 64,
+                        },
+                        "unsafe_reduction": {
+                            "status": "measured",
+                            "baseline_total_unsafe": 2,
+                            "current_total_unsafe": 0,
+                            "reduced_by": 2,
+                        },
                         "patch_origin": {
                             "source": "accepted_safe_evidence",
                             "accepted_patch_bound": True,
@@ -2175,6 +2187,71 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "passed", result["errors"])
 
+    def test_validate_packet_rejects_published_judge_index_opencode_attempt_source_mismatch(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-index-attempt-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir)
+        attach_opencode_safety_attempt(packet, attempt_ref)
+
+        index_payload = judge_entrypoint_fixtures.valid_opencode_judge_index_payload()
+        judge_entrypoint_fixtures.materialize_opencode_judge_index_artifacts(
+            index_payload,
+            temp_dir / "judge-out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **judge_entrypoint_fixtures.opencode_launch_policy(),
+                "auto_retry": True,
+            },
+        )
+        worker = index_payload["opencode_agent_runtime"]["workers"][0]
+        worker["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+        other_attempt_path = temp_dir / "judge-out" / "workers" / "worker-a" / "harness" / "other-attempt.json"
+        write_json(other_attempt_path, {"report_kind": "test-opencode-safety-transform-attempt", "id": "drifted"})
+        worker_report_path = REPO_ROOT / worker["worker_report"]["path"]
+        worker_report = json.loads(worker_report_path.read_text(encoding="utf-8"))
+        worker_report["opencode_safety_transform_attempt"] = {
+            "path": repo_relative(other_attempt_path),
+            "sha256": judge_validator.sha256_file(other_attempt_path),
+        }
+        write_json(worker_report_path, worker_report)
+        worker["worker_report"]["sha256"] = judge_validator.sha256_file(worker_report_path)
+
+        index_path = temp_dir / "judge-out" / "harness" / "judge-evidence-index.json"
+        write_json(index_path, index_payload)
+        index_ref = {
+            "artifact_name": "judge_evidence_index",
+            "entrypoint_id": "opencode_multi_worker_evaluate_profile",
+            "path": repo_relative(index_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(index_path),
+        }
+        append_published_artifact_ref(packet, index_ref)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "publication_manifest.published_artifact_refs[].judge_evidence_index contract failed" in error
+                and "worker_report.opencode_safety_transform_attempt must match opencode_safety_transform_attempt"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_opencode_safety_attempt_boundary_hash_drift(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-hash-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -3033,6 +3110,42 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             any("before_after_repair_exhibit rollup must match sources" in error for error in result["errors"]),
             result["errors"],
         )
+
+    def test_validate_packet_rejects_before_after_patch_or_unsafe_rollup_source_mismatch(self) -> None:
+        drift_cases = {
+            "measured_unsafe_unit_count": 2,
+            "accepted_patch_unit_count": 2,
+        }
+        for field, spoofed_value in drift_cases.items():
+            with self.subTest(field=field):
+                temp_dir = Path(
+                    tempfile.mkdtemp(
+                        prefix=f"public-release-packet-before-after-{field.replace('_', '-')}-",
+                        dir=REPO_ROOT / "target",
+                    )
+                )
+                packet_path = temp_dir / "summary" / "public-release-packet.json"
+                packet = valid_packet(temp_dir)
+                mutated = json.loads(json.dumps(packet["before_after_repair_exhibit"]))
+                mutated["rollup"][field] = spoofed_value
+                packet["before_after_repair_exhibit"] = mutated
+                bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+                bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+                bundle_payload["before_after_repair_exhibit"] = mutated
+                write_json(bundle_path, bundle_payload)
+                packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+                notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+                notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+                packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+                write_json(packet_path, packet)
+
+                result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(
+                    any("before_after_repair_exhibit rollup must match sources" in error for error in result["errors"]),
+                    result["errors"],
+                )
 
     def test_validate_packet_requires_publishability_from_bound_bundle(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-publishability-missing-", dir=REPO_ROOT / "target"))
