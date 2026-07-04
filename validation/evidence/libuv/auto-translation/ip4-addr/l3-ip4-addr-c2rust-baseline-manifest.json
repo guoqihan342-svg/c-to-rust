@@ -69,7 +69,8 @@
   "toolchain_repair": {
     "competition_environment": {
       "profile": "config/competition-env/environment.json",
-      "proof_class": "local_or_wsl_until_competition_run"
+      "proof_class": "local_or_wsl_until_competition_run",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
     },
     "correctness_role": "candidate_context_only",
     "must_not_claim": [
