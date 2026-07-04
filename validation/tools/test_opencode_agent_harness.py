@@ -668,6 +668,77 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             hint_rows = fetch_rows(db_path, "select status from repair_hints")
             self.assertEqual(hint_rows, [("revalidated_passed",)])
 
+    def test_run_plan_auto_retry_suppresses_after_command_database_lock(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-after-command-lock",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            plan_path = out_root / "harness" / "worker-plan.json"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "run-after-command-lock",
+                        "plan_path": repo_rel(plan_path),
+                        "units": [{"worker_id": "worker-a", "slice_id": "demo-add-one", "function": "add_one"}],
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            def fake_run_worker(**kwargs: object) -> dict[str, object]:
+                return {
+                    "exit_code": 1,
+                    "process_returncode": 1,
+                    "summary_status": "blocked",
+                    "summary_path": repo_rel(out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"),
+                    "report_path": repo_rel(out_root / "workers" / "worker-a" / "harness" / "run-worker-report.json"),
+                    "logs": {},
+                    "recorded": False,
+                    "repair_hint": {
+                        "hint_id": "repair:run-after-command-lock:worker-a:database_locked_after_command",
+                        "root_cause_key": "opencode_database_locked_after_worker_command_seen",
+                    },
+                    "opencode_contract_verification": {"status": "executed"},
+                }
+
+            def fake_retry_worker(**kwargs: object) -> dict[str, object]:
+                raise AssertionError("run-plan must not relaunch a worker command after it reached the shell")
+
+            with patch.object(harness, "run_worker", side_effect=fake_run_worker), patch.object(
+                harness, "retry_worker", side_effect=fake_retry_worker
+            ):
+                result = harness.run_plan(
+                    db_path=db_path,
+                    run_id="run-after-command-lock",
+                    plan_path=plan_path,
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    auto_retry=True,
+                    repo_root=REPO_ROOT,
+                )
+
+            worker = result["workers"][0]
+            self.assertNotIn("auto_retry", worker)
+            self.assertEqual([attempt["attempt"] for attempt in worker["attempts"]], [1])
+            self.assertEqual(
+                worker["auto_retry_suppressed"],
+                {
+                    "status": "suppressed",
+                    "hint_id": "repair:run-after-command-lock:worker-a:database_locked_after_command",
+                    "root_cause_key": "opencode_database_locked_after_worker_command_seen",
+                    "reason": "assigned worker command already reached the shell; retry would risk duplicate execution",
+                    "evidence_boundary": "opencode_contract_verification.status=executed",
+                },
+            )
+
     def test_run_plan_auto_retry_has_defensive_outer_cap_if_retry_worker_regresses(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"

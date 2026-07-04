@@ -20,6 +20,26 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE_ROOT = Path("validation/evidence")
 POLICY_TIERS = ("dev", "ci", "release")
+POLICY_BUDGETS = {
+    "dev": {
+        "max_file_count": 20000,
+        "max_total_bytes": 1024 * 1024 * 1024,
+        "max_diagnostic_bytes": 256 * 1024 * 1024,
+        "max_largest_file_bytes": 256 * 1024 * 1024,
+    },
+    "ci": {
+        "max_file_count": 10000,
+        "max_total_bytes": 256 * 1024 * 1024,
+        "max_diagnostic_bytes": 64 * 1024 * 1024,
+        "max_largest_file_bytes": 64 * 1024 * 1024,
+    },
+    "release": {
+        "max_file_count": 7500,
+        "max_total_bytes": 128 * 1024 * 1024,
+        "max_diagnostic_bytes": 16 * 1024 * 1024,
+        "max_largest_file_bytes": 32 * 1024 * 1024,
+    },
+}
 PATH_LIKE_KEYS = {
     "path",
     "fixture_path",
@@ -143,6 +163,8 @@ def build_policy_compliance(
         claim_anchor_issue_count=int(portability.get("claim_anchor_issue_count", 0)),
         profile_hash_issue_count=int(portability.get("profile_hash_issue_count", 0)),
     )
+    budget = build_budget_compliance(policy_tier, inventory)
+    add_gate("evidence_budget", not budget["failed_budget_keys"], **budget)
 
     if policy_tier in {"ci", "release"}:
         pipelines = inventory.get("pipelines") if isinstance(inventory.get("pipelines"), list) else []
@@ -177,6 +199,42 @@ def build_policy_compliance(
         "failed_gates": failed_gate_names,
         "gates": gates,
     }
+
+
+def build_budget_compliance(policy_tier: str, inventory: dict[str, Any]) -> dict[str, Any]:
+    budget = POLICY_BUDGETS[policy_tier]
+    retention_classes = inventory.get("retention_classes") if isinstance(inventory.get("retention_classes"), dict) else {}
+    diagnostic = (
+        retention_classes.get("diagnostic_only")
+        if isinstance(retention_classes.get("diagnostic_only"), dict)
+        else {}
+    )
+    largest_files = inventory.get("largest_files") if isinstance(inventory.get("largest_files"), list) else []
+    largest_file_bytes = max(
+        [nonnegative_int(item.get("bytes")) for item in largest_files if isinstance(item, dict)],
+        default=0,
+    )
+    measurements = {
+        "file_count": nonnegative_int(inventory.get("file_count")),
+        "total_bytes": nonnegative_int(inventory.get("total_bytes")),
+        "diagnostic_bytes": nonnegative_int(diagnostic.get("total_bytes")),
+        "largest_file_bytes": largest_file_bytes,
+    }
+    details: dict[str, Any] = {
+        "policy_tier": policy_tier,
+        "failed_budget_keys": [],
+    }
+    for key, value in measurements.items():
+        max_key = f"max_{key}"
+        max_value = nonnegative_int(budget[max_key])
+        over = max(0, value - max_value)
+        details[key] = value
+        details[max_key] = max_value
+        details[f"remaining_{key}"] = max(0, max_value - value)
+        details[f"over_{key}"] = over
+        if over:
+            details["failed_budget_keys"].append(key)
+    return details
 
 
 def build_inventory(repo_root: Path, evidence_dir: Path) -> dict[str, Any]:
@@ -508,6 +566,10 @@ def find_duration_ms(node: Any) -> list[int]:
         for value in node:
             values.extend(find_duration_ms(value))
     return values
+
+
+def nonnegative_int(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
 
 
 def retention_class_for(relative_path: Path, *, evidence_dir: Path | None = None) -> str:

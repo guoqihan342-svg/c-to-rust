@@ -222,6 +222,49 @@ class EvidenceGovernanceTests(unittest.TestCase):
             gate_names = {gate["name"] for gate in report["policy_compliance"]["gates"]}
             self.assertIn("portability", gate_names)
             self.assertIn("retention_metadata", gate_names)
+            budget_gate = self._gate(report, "evidence_budget")
+            self.assertEqual(budget_gate["status"], "passed")
+            self.assertEqual(budget_gate["policy_tier"], "ci")
+            self.assertGreater(budget_gate["max_total_bytes"], 0)
+            self.assertEqual(budget_gate["total_bytes"], report["inventory"]["total_bytes"])
+            self.assertGreaterEqual(budget_gate["remaining_total_bytes"], 0)
+
+    def test_policy_budget_gate_fails_when_inventory_exceeds_threshold(self) -> None:
+        budget = evidence_governance.POLICY_BUDGETS["ci"]
+        policy = evidence_governance.build_policy_compliance(
+            "ci",
+            portability={
+                "status": "passed",
+                "claim_anchor_issue_count": 0,
+                "profile_hash_issue_count": 0,
+                "diagnostic_host_metadata_count": 0,
+            },
+            inventory={
+                "file_count": budget["max_file_count"] + 1,
+                "total_bytes": budget["max_total_bytes"] + 1,
+                "retention_classes": {
+                    "diagnostic_only": {
+                        "file_count": 1,
+                        "total_bytes": budget["max_diagnostic_bytes"] + 1,
+                    }
+                },
+                "largest_files": [
+                    {
+                        "path": "target/full-regression/run-1/large.log",
+                        "bytes": budget["max_largest_file_bytes"] + 1,
+                    }
+                ],
+                "pipelines": [],
+            },
+        )
+
+        self.assertEqual(policy["status"], "failed")
+        self.assertIn("evidence_budget", policy["failed_gates"])
+        gate = self._gate({"policy_compliance": policy}, "evidence_budget")
+        self.assertEqual(gate["over_total_bytes"], 1)
+        self.assertEqual(gate["over_file_count"], 1)
+        self.assertEqual(gate["over_diagnostic_bytes"], 1)
+        self.assertEqual(gate["over_largest_file_bytes"], 1)
 
     def test_release_policy_tier_blocks_diagnostic_host_metadata(self) -> None:
         with tempfile.TemporaryDirectory(prefix="evidence-governance-test-") as tmp:
@@ -376,6 +419,12 @@ class EvidenceGovernanceTests(unittest.TestCase):
 
     def _write_json(self, path: Path, payload: dict) -> None:
         self._write(path, json.dumps(payload, indent=2, sort_keys=True))
+
+    def _gate(self, report: dict, name: str) -> dict:
+        for gate in report["policy_compliance"]["gates"]:
+            if gate["name"] == name:
+                return gate
+        self.fail(f"missing policy compliance gate: {name}")
 
 
 if __name__ == "__main__":

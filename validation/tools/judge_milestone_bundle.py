@@ -922,7 +922,11 @@ def opencode_preflight_summary_publishable(summary: dict[str, Any]) -> bool:
         return False
     if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
         return False
+    if summary.get("opencode_agent") != validator.COMPETITION_OPENCODE_AGENT:
+        return False
     if summary.get("opencode_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("opencode_variant") != validator.COMPETITION_OPENCODE_VARIANT:
         return False
     if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
         return False

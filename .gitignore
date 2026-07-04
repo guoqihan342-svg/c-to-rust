@@ -7,3 +7,5 @@
 /validation/evidence/**/*.exe
 /validation/evidence/**/generated-rust-replay-compile.*
 /validation/evidence/**/rust-check*.stderr.jsonl
+__pycache__/
+*.pyc

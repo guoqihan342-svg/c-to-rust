@@ -3815,6 +3815,9 @@ def write_context_pack_and_agent_index(
         if isinstance(worker_result.get("auto_retry"), dict):
             worker_entry["auto_retry"] = worker_result["auto_retry"]
             agent_entry["auto_retry"] = worker_result["auto_retry"]
+        if isinstance(worker_result.get("auto_retry_suppressed"), dict):
+            worker_entry["auto_retry_suppressed"] = worker_result["auto_retry_suppressed"]
+            agent_entry["auto_retry_suppressed"] = worker_result["auto_retry_suppressed"]
         workers.append(worker_entry)
         agents.append(agent_entry)
     graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
@@ -4785,6 +4788,22 @@ def copy_opencode_worker_evidence(source: dict[str, Any], target: dict[str, Any]
             target[field] = value
 
 
+def run_plan_auto_retry_suppression(result: dict[str, Any], *, hint_id: str | None) -> dict[str, Any] | None:
+    repair_hint = result.get("repair_hint")
+    if not isinstance(repair_hint, dict):
+        return None
+    root_cause_key = repair_hint.get("root_cause_key")
+    if root_cause_key != "opencode_database_locked_after_worker_command_seen":
+        return None
+    return {
+        "status": "suppressed",
+        "hint_id": hint_id,
+        "root_cause_key": root_cause_key,
+        "reason": "assigned worker command already reached the shell; retry would risk duplicate execution",
+        "evidence_boundary": "opencode_contract_verification.status=executed",
+    }
+
+
 def run_plan_worker_final_decision(worker_result: dict[str, Any]) -> dict[str, str]:
     if int(worker_result.get("exit_code", 1)) == 0 and worker_result.get("summary_status") == "passed":
         return {"status": "accepted", "reason": "worker_summary_passed"}
@@ -4891,68 +4910,72 @@ def run_plan(
             repair_hint = result.get("repair_hint")
             if isinstance(repair_hint, dict) and isinstance(repair_hint.get("hint_id"), str):
                 hint_id = repair_hint["hint_id"]
-            outer_round_cap = REPAIR_ROUND_CAP + 2
-            for _outer_round in range(outer_round_cap):
-                retry_result = retry_worker(
-                    db_path=db_path,
-                    run_id=run_id,
-                    worker_id=unit["worker_id"],
-                    hint_id=hint_id,
-                    mode=mode,
-                    opencode_command=opencode_command,
-                    opencode_model=opencode_model,
-                    opencode_agent=opencode_agent,
-                    opencode_variant=opencode_variant,
-                    opencode_skip_permissions=opencode_skip_permissions,
-                    opencode_allow_non_competition_model=opencode_allow_non_competition_model,
-                    opencode_preflight_report=opencode_preflight_report,
-                    repair_trace=repair_trace,
-                    timeout_seconds=timeout_seconds,
-                    command_runner=command_runner,
-                    repo_root=repo_root,
-                    keep_open_on_failure=True,
-                )
-                retry_entry = {
-                    "exit_code": int(retry_result.get("exit_code", 1)),
-                    "summary_status": retry_result.get("summary_status"),
-                    "hint_id": retry_result.get("hint_id", hint_id),
-                    "hint_status": retry_result.get("hint_status"),
-                    "summary_path": retry_result.get("summary_path"),
-                    "report_path": retry_result.get("report_path"),
-                    "logs": retry_result.get("logs"),
-                    "process_returncode": retry_result.get("process_returncode"),
-                }
-                copy_opencode_worker_evidence(retry_result, retry_entry)
-                for field in ("repair_round_cap", "repair_rounds", "retry_limit", "rollback_evidence", "diagnostics"):
-                    if field in retry_result:
-                        retry_entry[field] = retry_result[field]
-                retry_results.append(retry_entry)
-                if retry_result.get("status") != "retry_limit_exceeded":
-                    attempt_timeline.append(run_plan_attempt_from_worker_result(retry_result))
-                if retry_result.get("hint_id"):
-                    hint_id = str(retry_result["hint_id"])
-                if int(retry_result.get("exit_code", 1)) == 0:
-                    worker_result.update(
-                        {
-                            "exit_code": 0,
-                            "summary_status": retry_result.get("summary_status"),
-                            "summary_path": retry_result.get("summary_path"),
-                            "report_path": retry_result.get("report_path"),
-                            "recorded": bool(retry_result.get("recorded")),
-                        }
-                    )
-                    copy_opencode_worker_evidence(retry_result, worker_result)
-                    break
-                if retry_result.get("status") == "retry_limit_exceeded":
-                    break
+            suppression = run_plan_auto_retry_suppression(result, hint_id=hint_id)
+            if suppression is not None:
+                worker_result["auto_retry_suppressed"] = suppression
             else:
-                if retry_results:
-                    retry_results[-1]["status"] = "outer_retry_limit_exceeded"
-                    retry_results[-1]["hint_status"] = "outer_retry_limit_exceeded"
-                    retry_results[-1]["outer_retry_limit"] = {
-                        "max_outer_rounds": outer_round_cap,
-                        "reason": "retry_worker did not return success or retry_limit_exceeded",
+                outer_round_cap = REPAIR_ROUND_CAP + 2
+                for _outer_round in range(outer_round_cap):
+                    retry_result = retry_worker(
+                        db_path=db_path,
+                        run_id=run_id,
+                        worker_id=unit["worker_id"],
+                        hint_id=hint_id,
+                        mode=mode,
+                        opencode_command=opencode_command,
+                        opencode_model=opencode_model,
+                        opencode_agent=opencode_agent,
+                        opencode_variant=opencode_variant,
+                        opencode_skip_permissions=opencode_skip_permissions,
+                        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+                        opencode_preflight_report=opencode_preflight_report,
+                        repair_trace=repair_trace,
+                        timeout_seconds=timeout_seconds,
+                        command_runner=command_runner,
+                        repo_root=repo_root,
+                        keep_open_on_failure=True,
+                    )
+                    retry_entry = {
+                        "exit_code": int(retry_result.get("exit_code", 1)),
+                        "summary_status": retry_result.get("summary_status"),
+                        "hint_id": retry_result.get("hint_id", hint_id),
+                        "hint_status": retry_result.get("hint_status"),
+                        "summary_path": retry_result.get("summary_path"),
+                        "report_path": retry_result.get("report_path"),
+                        "logs": retry_result.get("logs"),
+                        "process_returncode": retry_result.get("process_returncode"),
                     }
+                    copy_opencode_worker_evidence(retry_result, retry_entry)
+                    for field in ("repair_round_cap", "repair_rounds", "retry_limit", "rollback_evidence", "diagnostics"):
+                        if field in retry_result:
+                            retry_entry[field] = retry_result[field]
+                    retry_results.append(retry_entry)
+                    if retry_result.get("status") != "retry_limit_exceeded":
+                        attempt_timeline.append(run_plan_attempt_from_worker_result(retry_result))
+                    if retry_result.get("hint_id"):
+                        hint_id = str(retry_result["hint_id"])
+                    if int(retry_result.get("exit_code", 1)) == 0:
+                        worker_result.update(
+                            {
+                                "exit_code": 0,
+                                "summary_status": retry_result.get("summary_status"),
+                                "summary_path": retry_result.get("summary_path"),
+                                "report_path": retry_result.get("report_path"),
+                                "recorded": bool(retry_result.get("recorded")),
+                            }
+                        )
+                        copy_opencode_worker_evidence(retry_result, worker_result)
+                        break
+                    if retry_result.get("status") == "retry_limit_exceeded":
+                        break
+                else:
+                    if retry_results:
+                        retry_results[-1]["status"] = "outer_retry_limit_exceeded"
+                        retry_results[-1]["hint_status"] = "outer_retry_limit_exceeded"
+                        retry_results[-1]["outer_retry_limit"] = {
+                            "max_outer_rounds": outer_round_cap,
+                            "reason": "retry_worker did not return success or retry_limit_exceeded",
+                        }
         if retry_results:
             worker_result["auto_retry"] = {
                 "attempt_count": len(retry_results),
