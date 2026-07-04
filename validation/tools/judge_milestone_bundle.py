@@ -1080,6 +1080,17 @@ def build_before_after_repair_exhibit_rollup(sources: list[dict[str, Any]]) -> d
             }
         )
 
+    before_after_units = [
+        unit
+        for source in exhibit_sources
+        for unit in source.get("before_after_units", [])
+        if isinstance(unit, dict)
+    ]
+    verified_baseline_unit_count = sum(
+        1
+        for unit in before_after_units
+        if before_after_unit_has_verified_unsafe_baseline(unit)
+    )
     measured = [
         source.get("unsafe_reduction", {})
         for source in exhibit_sources
@@ -1100,6 +1111,10 @@ def build_before_after_repair_exhibit_rollup(sources: list[dict[str, Any]]) -> d
                 for source in exhibit_sources
                 if isinstance(source.get("before_after_units"), list)
             ),
+            "verified_baseline_unit_count": verified_baseline_unit_count,
+            "missing_verified_baseline_unit_count": len(before_after_units) - verified_baseline_unit_count,
+            "all_units_verified_baseline_bound": bool(before_after_units)
+            and verified_baseline_unit_count == len(before_after_units),
             "measured_unsafe_unit_count": sum(
                 sum(
                     1
