@@ -292,15 +292,65 @@ def validate_translation_before_after_summary(metrics: dict[str, Any]) -> None:
     units = summary.get("units")
     if not isinstance(units, list) or len(units) != unit_count:
         raise SystemExit("workflow metrics artifact translation_before_after.units count must match unit_count")
-    actual_count = sum(
-        1 for unit in metrics["per_unit_statuses"] if isinstance(unit, dict) and isinstance(unit.get("translation_before_after"), dict)
-    )
+    evidence_units: list[tuple[str, dict[str, Any]]] = []
+    for unit in metrics["per_unit_statuses"]:
+        if not isinstance(unit, dict):
+            continue
+        before_after = unit.get("translation_before_after")
+        if not isinstance(before_after, dict):
+            continue
+        unit_id = unit.get("unit_id")
+        if not isinstance(unit_id, str) or not unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after per-unit evidence requires unit_id")
+        evidence_units.append((unit_id, before_after))
+    actual_count = len(evidence_units)
     if actual_count != unit_count:
         raise SystemExit("workflow metrics artifact translation_before_after.unit_count does not match per-unit evidence")
+    measured_actual = sum(
+        1
+        for _unit_id, evidence in evidence_units
+        if isinstance(evidence.get("unsafe_reduction"), dict)
+        and evidence["unsafe_reduction"].get("status") == "measured"
+    )
+    if measured_count != measured_actual:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.measured_unsafe_unit_count does not match per-unit evidence"
+        )
+    patch_actual = sum(1 for _unit_id, evidence in evidence_units if isinstance(evidence.get("accepted_patch"), dict))
+    if patch_count != patch_actual:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.accepted_patch_unit_count does not match per-unit evidence"
+        )
+    validate_translation_before_after_units_projection(units, evidence_units)
     if status == "not_provided" and unit_count != 0:
         raise SystemExit("workflow metrics artifact translation_before_after not_provided status requires zero units")
     if status == "bound" and unit_count == 0:
         raise SystemExit("workflow metrics artifact translation_before_after bound status requires units")
+
+
+def validate_translation_before_after_units_projection(
+    units: list[Any],
+    evidence_units: list[tuple[str, dict[str, Any]]],
+) -> None:
+    projected_by_unit_id: dict[str, dict[str, Any]] = {}
+    for projected in units:
+        if not isinstance(projected, dict):
+            raise SystemExit("workflow metrics artifact translation_before_after.units entries must be objects")
+        unit_id = projected.get("unit_id")
+        if not isinstance(unit_id, str) or not unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after.units entries require unit_id")
+        if unit_id in projected_by_unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after.units contains duplicate unit_id")
+        projected_by_unit_id[unit_id] = projected
+
+    for unit_id, evidence in evidence_units:
+        projected = projected_by_unit_id.get(unit_id)
+        if not isinstance(projected, dict):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+        if projected.get("status") != evidence.get("status"):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+        if projected.get("unsafe_reduction") != evidence.get("unsafe_reduction"):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
 
 
 def validate_per_unit_statuses(
