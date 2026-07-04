@@ -347,7 +347,14 @@ def run_competition(
     )
 
     unsafe_summary = unsafe_budget_summary(unsafe_result)
-    if unsafe_summary["status"] != "passed" or openspec_result.returncode != 0:
+    # bash exits 127 when the OpenSpec CLI is not installed. OpenSpec is
+    # repository governance tooling, not competition evidence: judge CI and
+    # the competition host are not required to provide it, mirroring its
+    # demotion to an optional governance check in the OpenCode preflight.
+    # The commands.jsonl record keeps the skip auditable; a present-but-
+    # failing openspec validate still fails the gate.
+    openspec_gate_failed = openspec_result.returncode not in (0, 127)
+    if unsafe_summary["status"] != "passed" or openspec_gate_failed:
         gate_failures += 1
 
     status = "passed" if slice_failures == 0 and gate_failures == 0 and semantic_pass > 0 else "failed"

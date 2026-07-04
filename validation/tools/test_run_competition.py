@@ -354,16 +354,23 @@ class FakeCommandRunner:
         *,
         fail_auto_migrate_for: set[str] | None = None,
         fail_commands_containing: set[str] | None = None,
+        missing_commands_containing: set[str] | None = None,
         stdout_by_command_marker: dict[str, str] | None = None,
     ) -> None:
         self.commands: list[list[str]] = []
         self.fail_auto_migrate_for = fail_auto_migrate_for or set()
         self.fail_commands_containing = fail_commands_containing or set()
+        self.missing_commands_containing = missing_commands_containing or set()
         self.stdout_by_command_marker = stdout_by_command_marker or {}
 
     def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         self.commands.append(command)
         command_text = " ".join(command)
+        for marker in self.missing_commands_containing:
+            if marker in command_text:
+                return subprocess.CompletedProcess(
+                    command, 127, "", f"bash: line 1: {marker.split()[0]}: command not found"
+                )
         for marker in self.fail_commands_containing:
             if marker in command_text:
                 return subprocess.CompletedProcess(command, 1, "", f"failed {marker}")
@@ -453,6 +460,54 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["attempted"], 1)
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
+
+    def test_missing_openspec_cli_does_not_fail_final_gate(self) -> None:
+        # bash exits 127 when the optional OpenSpec CLI is absent (judge CI,
+        # competition host). OpenSpec is repository governance tooling, not
+        # competition evidence, so its absence must not fail the merge final
+        # gate; the logged command record keeps the skip auditable.
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(missing_commands_containing={"openspec validate"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test-openspec-missing",
+            )
+
+            self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
+            self.assertEqual(result.summary["final_gate"]["status"], "passed")
+
+    def test_failing_openspec_validation_still_fails_final_gate(self) -> None:
+        # A present-but-failing openspec validate remains a governance gate
+        # failure; only the missing-CLI 127 envelope is exempt.
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_commands_containing={"openspec validate"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test-openspec-failed",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            self.assertEqual(result.summary["final_gate"]["status"], "failed")
 
     def test_runner_writes_machine_readable_workflow_metrics_artifact(self) -> None:
         module = load_runner_module()
