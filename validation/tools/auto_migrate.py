@@ -8767,7 +8767,7 @@ def source_file_hashes(spec: dict[str, Any]) -> dict[str, str]:
 
 def tool_versions() -> dict[str, str]:
     return {
-        "python": command_version(["python", "--version"]),
+        "python": command_version([sys.executable, "--version"]),
         "rustc": command_version(["rustc", "--version"]),
         "cargo": command_version(["cargo", "--version"]),
         "openspec": command_version(
