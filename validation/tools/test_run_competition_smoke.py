@@ -980,6 +980,33 @@ class RunCompetitionSmokeTests(unittest.TestCase):
                 self.assertEqual(logged, expected)
                 self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
 
+    def test_command_argument_for_log_sanitizes_home_and_users_host_paths(self) -> None:
+        # Drift matrix boundary: the shell-fragment sanitizer test never
+        # exercises a standalone /home or /Users (macOS) absolute path, nor a
+        # WSL/host path attached to include/source/output-style flags. These
+        # cells must scrub to a basename so a Windows/macOS/WSL producer never
+        # leaks host roots into commands.jsonl consumed on the judge host.
+        module = load_smoke_module()
+        cases = {
+            "echo ok; /home/runner/project/tool.py": "echo ok; tool.py",
+            "echo ok | /Users/me/project/tool": "echo ok | tool",
+            "cc -I/home/runner/FlashDB/include": "cc -Iinclude",
+            "-I/home/runner/FlashDB/include": "-Iinclude",
+            "cc -c /home/runner/project/src/fdb.c": "cc -c fdb.c",
+            "-o/mnt/c/Users/runner/target/out.json": "-oout.json",
+            r"-o\\wsl$\Ubuntu\home\runner\target\out.json": "-oout.json",
+        }
+        for argument, expected in cases.items():
+            with self.subTest(argument=argument):
+                logged = module.command_argument_for_log(
+                    argument,
+                    repo_root=REPO_ROOT,
+                    out_root=REPO_ROOT / "target" / "competition-smoke",
+                )
+
+                self.assertEqual(logged, expected)
+                self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
+
     def test_command_log_sanitizes_stdout_and_stderr_host_paths(self) -> None:
         module = load_smoke_module()
 

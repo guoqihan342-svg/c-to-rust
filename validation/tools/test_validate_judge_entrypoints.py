@@ -9112,6 +9112,216 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "forbidden local absolute path"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
+    def test_competition_smoke_command_log_rejects_host_path_workdir_forms(self) -> None:
+        # Drift matrix cell: workdir field x each host path form. The existing
+        # workdir tests only lock parent-traversal / missing / non-root /
+        # cwd-disagreement / non-string; none pin that a Windows drive, UNC,
+        # WSL (\\wsl$, //wsl$, //wsl.localhost) or /mnt/c / Linux-absolute
+        # workdir is rejected fail-closed.
+        host_workdirs = {
+            "windows-drive": "C:\\Users\\runner\\repo",
+            "windows-drive-forward": "C:/Users/runner/repo",
+            "windows-unc": "\\\\server\\share\\repo",
+            "wsl-unc-backslash": "\\\\wsl$\\Ubuntu\\home\\runner\\repo",
+            "wsl-localhost-backslash": "\\\\wsl.localhost\\Ubuntu\\home\\runner\\repo",
+            "wsl-slash-alias": "//wsl$/Ubuntu/home/runner/repo",
+            "wsl-localhost-slash": "//wsl.localhost/Ubuntu/home/runner/repo",
+            "wsl-drive-mount": "/mnt/c/Users/runner/repo",
+            "linux-home": "/home/runner/repo",
+            "linux-root": "/root/work/repo",
+        }
+        for label, workdir in host_workdirs.items():
+            with self.subTest(workdir=label):
+                with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+                    command_log = Path(tmp) / "commands.jsonl"
+                    command_log.write_text(
+                        json.dumps(
+                            {
+                                "step": "environment-check",
+                                "command": ["bash", "-lc", "echo ok"],
+                                "returncode": 0,
+                                "workdir": workdir,
+                            },
+                            sort_keys=True,
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+
+                    with self.assertRaisesRegex(
+                        ValueError, "workdir contains forbidden local absolute path"
+                    ):
+                        validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_host_path_cwd_forms(self) -> None:
+        # Drift matrix cell: cwd field x each host path form, with a repo-root
+        # workdir="." so the earlier workdir gate passes and the cwd branch is
+        # what fails closed.
+        host_cwds = {
+            "windows-drive": "C:\\Users\\runner\\repo",
+            "windows-unc": "\\\\server\\share\\repo",
+            "wsl-unc-backslash": "\\\\wsl$\\Ubuntu\\home\\runner\\repo",
+            "wsl-slash-alias": "//wsl$/Ubuntu/home/runner/repo",
+            "wsl-localhost-slash": "//wsl.localhost/Ubuntu/home/runner/repo",
+            "wsl-drive-mount": "/mnt/c/Users/runner/repo",
+            "linux-usr": "/usr/local/repo",
+        }
+        for label, cwd in host_cwds.items():
+            with self.subTest(cwd=label):
+                with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+                    command_log = Path(tmp) / "commands.jsonl"
+                    command_log.write_text(
+                        json.dumps(
+                            {
+                                "step": "environment-check",
+                                "command": ["bash", "-lc", "echo ok"],
+                                "returncode": 0,
+                                "cwd": cwd,
+                                "workdir": ".",
+                            },
+                            sort_keys=True,
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+
+                    # The cwd/workdir scan labels both fields "workdir" in the
+                    # forbidden-path message; the point is the host cwd is
+                    # rejected fail-closed rather than silently accepted.
+                    with self.assertRaisesRegex(
+                        ValueError, "workdir contains forbidden local absolute path"
+                    ):
+                        validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_host_path_repo_input_flag_values(self) -> None:
+        # Drift matrix cell: repo-input flag values (--out / --output /
+        # --coverage-report / --slice-spec) x host path forms. Existing tests
+        # only lock ~/ (tilde) and ../ (parent traversal) for these flags; none
+        # pin that a Windows drive, UNC, WSL or /mnt/c value supplied to a
+        # source/output flag is rejected fail-closed.
+        script_by_step = {
+            "core-auto-evidence-validator": "validation/tools/validate_auto_translation_evidence.py",
+            "vendored-clang-verification": "validation/tools/verify_vendored_clang.py",
+            "translator-coverage-matrix": "validation/tools/translator_coverage_matrix.py",
+        }
+        host_values = {
+            "windows-drive": "C:\\out\\summary.json",
+            "windows-drive-forward": "C:/out/summary.json",
+            "windows-unc": "\\\\server\\share\\out.json",
+            "wsl-unc-backslash": "\\\\wsl$\\Ubuntu\\home\\runner\\out.json",
+            "wsl-slash-alias": "//wsl$/Ubuntu/home/runner/out.json",
+            "wsl-localhost-slash": "//wsl.localhost/Ubuntu/home/runner/out.json",
+            "wsl-drive-mount": "/mnt/c/Users/runner/out.json",
+            "linux-home": "/home/runner/out.json",
+        }
+        flag_by_step = {
+            "core-auto-evidence-validator": "--slice-spec",
+            "vendored-clang-verification": "--out",
+            "translator-coverage-matrix": "--coverage-report",
+        }
+        for step, flag in flag_by_step.items():
+            for label, value in host_values.items():
+                with self.subTest(step=step, flag=flag, value=label):
+                    with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+                        command_log = Path(tmp) / "commands.jsonl"
+                        command_log.write_text(
+                            json.dumps(
+                                {
+                                    "step": step,
+                                    "command": ["python3", "-B", script_by_step[step], flag, value],
+                                    "returncode": 0,
+                                    "workdir": ".",
+                                },
+                                sort_keys=True,
+                            )
+                            + "\n",
+                            encoding="utf-8",
+                        )
+
+                        with self.assertRaisesRegex(
+                            ValueError, "command contains forbidden local absolute path"
+                        ):
+                            validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_rejects_host_path_output_flag_value(self) -> None:
+        # Drift matrix cell: --output flag value x host path form. --output is
+        # in COMPETITION_SMOKE_REPO_INPUT_FLAGS/OUTPUT_FLAGS but no negative
+        # test locks a host absolute value for it specifically.
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "milestone-release-report",
+                        "command": [
+                            "python3",
+                            "-B",
+                            "validation/tools/milestone_release_report.py",
+                            "--output",
+                            "\\\\wsl$\\Ubuntu\\home\\runner\\project\\target\\report.json",
+                        ],
+                        "returncode": 0,
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "command contains forbidden local absolute path"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
+    def test_competition_smoke_command_log_accepts_repo_relative_workdir_cwd_and_flag_values(self) -> None:
+        # Green control for the drift matrix: legitimate repo-relative cwd,
+        # workdir, and repo-input flag values (including an out-root:-prefixed
+        # output) must pass so the negative cells above are not vacuously green.
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                "".join(
+                    json.dumps(entry, sort_keys=True) + "\n"
+                    for entry in [
+                        {
+                            "step": "environment-check",
+                            "command": ["bash", "-lc", "echo ok"],
+                            "returncode": 0,
+                            "cwd": ".",
+                            "workdir": ".",
+                        },
+                        {
+                            "step": "core-auto-evidence-validator",
+                            "command": [
+                                "python3",
+                                "-B",
+                                "validation/tools/validate_auto_translation_evidence.py",
+                                "--slice-spec",
+                                "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+                            ],
+                            "returncode": 0,
+                            "workdir": ".",
+                        },
+                        {
+                            "step": "vendored-clang-verification",
+                            "command": [
+                                "python3",
+                                "-B",
+                                "validation/tools/verify_vendored_clang.py",
+                                "--out",
+                                "out-root:summary/vendored-clang-verification.json",
+                            ],
+                            "returncode": 0,
+                            "workdir": ".",
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = validator.validate_competition_smoke_command_log_contract(command_log)
+
+            self.assertEqual(result["status"], "passed")
+
     def test_merge_execution_argv_allows_host_trace(self) -> None:
         result = validator.validate_local_absolute_path_policy(
             {"merge_execution": {"argv": ["C:\\Python314\\python.exe", "validation/tools/run_competition.py"]}},
