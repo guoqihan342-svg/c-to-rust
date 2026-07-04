@@ -38,7 +38,7 @@
   },
   "oracle_evidence": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-    "sha256": "3a85307440a721b2b35acec0a39b0996766ed7779e5160aee9cb0444a2f6c72b"
+    "sha256": "e62fc6394346bd7afb2da8e72d1e8fc2c537f2b568a2357f8b049628b7ff3ee6"
   },
   "patch_log": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-safety-step-log.jsonl",

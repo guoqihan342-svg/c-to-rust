@@ -29,7 +29,7 @@
     {
       "path": "scripts/c2rust-migrator.py",
       "role": "repo-local-c2rust-migrator-entrypoint",
-      "sha256": "40ebee1cf487ff7bcb01ebae7659a933eb2b39d282b466a7f73d52cad3e1087c"
+      "sha256": "cd553163b30abd02ca19b78db2fda97af5473ff84a9a52e33d0bc4a783541575"
     },
     {
       "path": "crates/c2r-translator/Cargo.lock",
@@ -111,7 +111,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "03e67f4a967424f995107be2d30b2598c525a3ded692b254647bd51c9e7f9c7f"
+      "sha256": "37c071b806cbb77738eceba891b9a04441a0b5d92f11ae63c59fa0a063d67eaa"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
@@ -131,7 +131,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "b2aabde26f9487323107b2583bedaf4d62cc2764fe185d50acc1a75d33d6d2be"
+      "sha256": "b453c3d5208d55e5b54ed4c6ab4ac307ddb567f2f41a9350010cf800bf44ad13"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
