@@ -1313,7 +1313,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -2822,7 +2822,7 @@ class AutoMigrateTests(unittest.TestCase):
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "zlib-adler32-step.json"),
@@ -2878,7 +2878,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -2939,7 +2939,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -3052,7 +3052,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -3272,7 +3272,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -3379,7 +3379,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4211,7 +4211,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4282,7 +4282,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4364,7 +4364,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4462,7 +4462,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4590,7 +4590,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4719,7 +4719,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4852,7 +4852,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4978,7 +4978,7 @@ class AutoMigrateTests(unittest.TestCase):
 
                 result = subprocess.run(
                     [
-                        "python",
+                        sys.executable,
                         str(AUTO_MIGRATE),
                         "--slice-spec",
                         str(spec_path),
@@ -5133,7 +5133,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5291,7 +5291,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5377,7 +5377,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             validation_result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -5412,7 +5412,7 @@ class AutoMigrateTests(unittest.TestCase):
             manifest_path.write_text(json.dumps(evidence_manifest), encoding="utf-8")
             broken_validation = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -5462,7 +5462,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5527,7 +5527,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5770,7 +5770,7 @@ class AutoMigrateTests(unittest.TestCase):
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5837,7 +5837,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             validation_result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "flashdb",
@@ -5861,7 +5861,7 @@ class AutoMigrateTests(unittest.TestCase):
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
@@ -5923,7 +5923,7 @@ class AutoMigrateTests(unittest.TestCase):
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
@@ -6515,7 +6515,7 @@ class AutoMigrateTests(unittest.TestCase):
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
@@ -6560,7 +6560,7 @@ class AutoMigrateTests(unittest.TestCase):
             environment.pop("LIBCLANG_PATH", None)
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
@@ -6615,7 +6615,7 @@ class AutoMigrateTests(unittest.TestCase):
             environment.pop("LIBCLANG_PATH", None)
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
@@ -6694,7 +6694,7 @@ class AutoMigrateTests(unittest.TestCase):
             out_root = Path(tmp) / "evidence"
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
@@ -6750,7 +6750,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             validation = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "flashdb",
@@ -6796,7 +6796,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),

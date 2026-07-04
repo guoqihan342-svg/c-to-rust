@@ -4,6 +4,7 @@ import importlib.util
 import jsonschema
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -267,7 +268,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -289,7 +290,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -316,7 +317,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -338,7 +339,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -365,7 +366,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -387,7 +388,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -414,7 +415,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -436,7 +437,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1149,7 +1150,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1171,7 +1172,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1198,7 +1199,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1228,7 +1229,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1255,7 +1256,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1284,7 +1285,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
                     result = subprocess.run(
                         [
-                            "python",
+                            sys.executable,
                             str(VALIDATOR),
                             "--target-id",
                             "zlib-ng",
@@ -1311,7 +1312,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1342,7 +1343,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1369,7 +1370,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1408,7 +1409,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1567,7 +1568,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1632,7 +1633,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1662,7 +1663,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -1730,7 +1731,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "zlib-ng",
@@ -1913,7 +1914,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -1940,7 +1941,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -1977,7 +1978,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2016,7 +2017,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2046,7 +2047,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -2072,7 +2073,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2102,7 +2103,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2131,7 +2132,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2160,7 +2161,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2189,7 +2190,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2236,7 +2237,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2283,7 +2284,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2312,7 +2313,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2347,7 +2348,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2384,7 +2385,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2415,7 +2416,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2459,7 +2460,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2510,7 +2511,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2573,7 +2574,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2636,7 +2637,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2681,7 +2682,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2710,7 +2711,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2740,7 +2741,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2814,7 +2815,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2845,7 +2846,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2874,7 +2875,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2912,7 +2913,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2947,7 +2948,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -2985,7 +2986,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3014,7 +3015,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3041,7 +3042,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3069,7 +3070,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3294,7 +3295,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3347,7 +3348,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3402,7 +3403,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3444,7 +3445,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3486,7 +3487,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3528,7 +3529,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3582,7 +3583,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3641,7 +3642,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3706,7 +3707,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3741,7 +3742,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3794,7 +3795,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
                     result = subprocess.run(
                         [
-                            "python",
+                            sys.executable,
                             str(VALIDATOR),
                             "--target-id",
                             "demo",
@@ -3821,7 +3822,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
             out_root = tmp_path / "evidence"
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -3863,7 +3864,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "flashdb",
@@ -3892,7 +3893,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3924,7 +3925,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -3959,7 +3960,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
                     result = subprocess.run(
                         [
-                            "python",
+                            sys.executable,
                             str(VALIDATOR),
                             "--target-id",
                             "demo",
@@ -3992,7 +3993,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -4033,7 +4034,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
                     result = subprocess.run(
                         [
-                            "python",
+                            sys.executable,
                             str(VALIDATOR),
                             "--target-id",
                             "demo",
@@ -4065,7 +4066,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -4097,7 +4098,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -4145,7 +4146,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4173,7 +4174,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -4200,7 +4201,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4235,7 +4236,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -4262,7 +4263,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -4297,7 +4298,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -4353,7 +4354,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
         out_root = tmp_path / "evidence"
         subprocess.run(
             [
-                "python",
+                sys.executable,
                 str(AUTO_MIGRATE),
                 "--slice-spec",
                 str(spec_path),
@@ -5503,7 +5504,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5530,7 +5531,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
@@ -5557,7 +5558,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUTO_MIGRATE),
                     "--slice-spec",
                     str(spec_path),
@@ -5585,7 +5586,7 @@ class ValidateAutoTranslationEvidenceTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(VALIDATOR),
                     "--target-id",
                     "demo",
