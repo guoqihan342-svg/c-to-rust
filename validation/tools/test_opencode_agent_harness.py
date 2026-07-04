@@ -2301,6 +2301,21 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            stale_files = [
+                out_root / "summary" / "competition-run-summary.json",
+                out_root / "summary" / "workflow-metrics.json",
+                out_root / "summary" / "route-governance-metrics-report.json",
+                out_root / "harness" / "run-plan-report.json",
+                out_root / "harness" / "judge-evidence-index.json",
+                out_root / "harness" / "context-pack.json",
+                out_root / "harness" / "agent-index.json",
+                out_root / "state" / "opencode-agent-harness.sqlite3",
+                out_root / "workers" / "old-worker" / "summary" / "competition-run-summary.json",
+                out_root / "harness" / "plans" / "old-workers.json",
+            ]
+            for stale_file in stale_files:
+                stale_file.parent.mkdir(parents=True, exist_ok=True)
+                stale_file.write_text(json.dumps({"stale": True}), encoding="utf-8")
 
             def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
                 if len(argv) >= 2 and argv[1] == "models":
@@ -2337,6 +2352,26 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertFalse(result["local_simulation_closes_p0_h9"])
             self.assertEqual(result["worker_count"], 0)
             self.assertNotIn("run_plan", result)
+            self.assertEqual(result["stale_artifact_cleanup"]["status"], "passed")
+            self.assertEqual(
+                sorted(result["stale_artifact_cleanup"]["removed_artifacts"]),
+                sorted(
+                    [
+                        repo_rel(out_root / "summary" / "competition-run-summary.json"),
+                        repo_rel(out_root / "summary" / "workflow-metrics.json"),
+                        repo_rel(out_root / "summary" / "route-governance-metrics-report.json"),
+                        repo_rel(out_root / "harness" / "run-plan-report.json"),
+                        repo_rel(out_root / "harness" / "judge-evidence-index.json"),
+                        repo_rel(out_root / "harness" / "context-pack.json"),
+                        repo_rel(out_root / "harness" / "agent-index.json"),
+                        repo_rel(out_root / "state" / "opencode-agent-harness.sqlite3"),
+                        repo_rel(out_root / "workers"),
+                        repo_rel(out_root / "harness" / "plans"),
+                    ]
+                ),
+            )
+            for stale_file in stale_files:
+                self.assertFalse(stale_file.exists(), stale_file)
             self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
             self.assertFalse((out_root / "harness" / "plans").exists())
 

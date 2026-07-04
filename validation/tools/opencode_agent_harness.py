@@ -73,6 +73,22 @@ OPENCODE_WORKER_EVIDENCE_FIELDS = (
     "opencode_preflight_report",
     "opencode_runtime_env",
 )
+BLOCKED_PREFLIGHT_STALE_ARTIFACT_PATHS = (
+    Path("summary") / "competition-run-summary.json",
+    Path("summary") / "workflow-metrics.json",
+    Path("summary") / "route-governance-metrics-report.json",
+    Path("summary") / "before-after-exhibit.json",
+    Path("harness") / "run-plan-report.json",
+    Path("harness") / "judge-evidence-index.json",
+    Path("harness") / "context-pack.json",
+    Path("harness") / "agent-index.json",
+    Path("harness") / "merge-plan.json",
+    Path("state") / "opencode-agent-harness.sqlite3",
+)
+BLOCKED_PREFLIGHT_STALE_ARTIFACT_DIRS = (
+    Path("workers"),
+    Path("harness") / "plans",
+)
 OPENCODE_RUNTIME_ENV_KEYS = (
     "XDG_CONFIG_HOME",
     "XDG_DATA_HOME",
@@ -1262,6 +1278,10 @@ def write_blocked_batch_preflight_report(
     report_path = out_root / "harness" / "batch-profile-report.json"
     raw_preflight_path = preflight_result.get("report_path", out_root / "harness" / "opencode-preflight-report.json")
     preflight_report_path = repo_path(Path(str(raw_preflight_path)), repo_root=repo_root)
+    stale_artifact_cleanup = cleanup_blocked_batch_preflight_stale_artifacts(
+        out_root=out_root,
+        repo_root=repo_root,
+    )
     preflight_binding: dict[str, Any] = {
         "path": repo_relative(preflight_report_path, repo_root=repo_root),
         "sha256": sha256_file(preflight_report_path) if preflight_report_path.is_file() else "",
@@ -1292,6 +1312,7 @@ def write_blocked_batch_preflight_report(
         "mode": mode,
         "worker_count": 0,
         "opencode_preflight_report": preflight_binding,
+        "stale_artifact_cleanup": stale_artifact_cleanup,
         "semantic_gate": False,
         "translation_coverage_numerator": 0,
         "local_simulation_closes_p0_h9": False,
@@ -1307,6 +1328,60 @@ def write_blocked_batch_preflight_report(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(report_path, result)
     return result
+
+
+def cleanup_blocked_batch_preflight_stale_artifacts(
+    *,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    out_root = repo_path(out_root, repo_root=repo_root)
+    out_root_resolved = out_root.resolve()
+    removed_artifacts: list[str] = []
+    errors: list[dict[str, str]] = []
+
+    def remove_artifact(relative_path: Path) -> None:
+        path = out_root / relative_path
+        if not path.exists():
+            return
+        resolved = path.resolve()
+        try:
+            resolved.relative_to(out_root_resolved)
+        except ValueError:
+            errors.append(
+                {
+                    "path": str(relative_path.as_posix()),
+                    "error": "refusing_to_remove_outside_out_root",
+                }
+            )
+            return
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError as exc:
+            errors.append(
+                {
+                    "path": repo_relative(path, repo_root=repo_root),
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+            return
+        removed_artifacts.append(repo_relative(path, repo_root=repo_root))
+
+    for relative_path in BLOCKED_PREFLIGHT_STALE_ARTIFACT_PATHS:
+        remove_artifact(relative_path)
+    for relative_path in BLOCKED_PREFLIGHT_STALE_ARTIFACT_DIRS:
+        remove_artifact(relative_path)
+
+    return {
+        "status": "passed" if not errors else "failed",
+        "scope": "blocked-opencode-preflight-stale-artifacts",
+        "removed_artifacts": removed_artifacts,
+        "error_count": len(errors),
+        "errors": errors,
+    }
 
 
 def resolve_batch_profile_proof_class(
