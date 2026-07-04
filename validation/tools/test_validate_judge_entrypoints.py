@@ -7063,6 +7063,36 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 agent_payload=agent_payload,
             )
 
+    def test_context_agent_index_rejects_agents_by_worker_id_value_worker_id_drift(self) -> None:
+        common_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": "target/out/harness/assignments/worker-001.json",
+            "request_path": "target/out/harness/assignments/worker-001-request.json",
+            "summary_path": "target/out/workers/worker-001/summary/competition-run-summary.json",
+            "report_path": "target/out/workers/worker-001/harness/run-worker-report.json",
+            "isolated_out_root": "target/out/workers/worker-001",
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {"workers": [common_fields]}
+        agent_payload = {
+            "agents": [common_fields],
+            "agents_by_worker_id": {
+                "worker-001": {
+                    **common_fields,
+                    "worker_id": "stale-worker-999",
+                }
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "agents_by_worker_id.worker-001.worker_id must match map key",
+        ):
+            validator.validate_context_agent_index_consistency(context_payload, agent_payload)
+
     def test_context_agent_index_consistency_rejects_context_out_root_drift(self) -> None:
         canonical_root = "target/out/workers/worker-001"
         stale_context_root = "target/out/stale-workers/worker-001"

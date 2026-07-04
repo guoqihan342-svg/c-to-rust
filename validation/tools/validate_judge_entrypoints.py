@@ -4690,6 +4690,8 @@ def validate_context_agent_index_consistency(
         context_worker = context_by_worker_id[worker_id]
         agent_entry = require_object(agents_by_worker_id[worker_id], f"agents_by_worker_id.{worker_id}")
         listed_agent = agents_by_list_id[worker_id]
+        if "worker_id" in agent_entry and agent_entry.get("worker_id") != worker_id:
+            raise ValueError(f"agents_by_worker_id.{worker_id}.worker_id must match map key")
         for field in comparable_fields:
             values = [payload.get(field) for payload in (context_worker, listed_agent, agent_entry) if field in payload]
             if values and any(value != values[0] for value in values[1:]):
