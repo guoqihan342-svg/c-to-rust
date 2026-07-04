@@ -3966,7 +3966,15 @@ fn is_named_function_decl(node: &Value, function_name: &str) -> bool {
 
 #[cfg(feature = "typed-ir")]
 fn function_return_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFrontendError> {
-    let Some((return_type, _)) = qual_type.split_once('(') else {
+    if qual_type.contains("(*") {
+        return Err(ClangFrontendError {
+            kind: "unsupported_function_type".to_string(),
+            message: format!(
+                "function pointer return type requires explicit function-pointer return lowering evidence: {qual_type}"
+            ),
+        });
+    }
+    let Some((return_type, _)) = split_function_qual_type(qual_type) else {
         return Err(ClangFrontendError {
             kind: "unsupported_function_type".to_string(),
             message: format!("unsupported function qualType: {qual_type}"),
@@ -3992,6 +4000,7 @@ fn type_from_ast_type_object(
     type_object: &Value,
     target_abi: Option<&TargetAbiProfile>,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    validate_fixed_width_typedef_desugaring(type_object, target_abi)?;
     type_from_ast_type_object_with_parser(
         type_object,
         |qual_type| type_from_qual_type_with_target_abi(qual_type, target_abi),
@@ -4054,6 +4063,136 @@ fn clang_type_candidate_spellings(type_object: &Value) -> Vec<String> {
         .into_iter()
         .filter_map(|field| string_field(type_object, field))
         .collect()
+}
+
+#[cfg(feature = "typed-ir")]
+#[derive(Clone, Copy)]
+struct FixedWidthInteger {
+    signed: bool,
+    width: u16,
+}
+
+#[cfg(feature = "typed-ir")]
+fn validate_fixed_width_typedef_desugaring(
+    type_object: &Value,
+    target_abi: Option<&TargetAbiProfile>,
+) -> Result<(), ClangFrontendError> {
+    let Some(qual_type) = string_field(type_object, "qualType") else {
+        return Ok(());
+    };
+    let Some(expected) = fixed_width_integer_signature(qual_type.trim()) else {
+        return Ok(());
+    };
+
+    for field in ["desugaredQualType", "canonicalQualType"] {
+        let Some(spelling) = string_field(type_object, field) else {
+            continue;
+        };
+        let spelling = spelling.trim();
+        if spelling == qual_type.trim() {
+            continue;
+        }
+        let parsed = type_from_qual_type_with_target_abi(spelling, target_abi)?;
+        match parsed.kind {
+            ClangTypeKind::Integer { signed, width }
+                if signed == expected.signed && width == expected.width => {}
+            ClangTypeKind::Integer { signed, width } => {
+                return Err(fixed_width_typedef_mismatch_error(
+                    qual_type.trim(),
+                    expected,
+                    field,
+                    spelling,
+                    Some((signed, width)),
+                    None,
+                ));
+            }
+            ClangTypeKind::Unsupported { reason } => {
+                if target_abi.is_none() && reason.contains("requires target ABI width provenance") {
+                    continue;
+                }
+                return Err(fixed_width_typedef_mismatch_error(
+                    qual_type.trim(),
+                    expected,
+                    field,
+                    spelling,
+                    None,
+                    Some(reason.as_str()),
+                ));
+            }
+            _ => {
+                return Err(fixed_width_typedef_mismatch_error(
+                    qual_type.trim(),
+                    expected,
+                    field,
+                    spelling,
+                    None,
+                    Some("desugared type is not an integer"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "typed-ir")]
+fn fixed_width_typedef_mismatch_error(
+    qual_type: &str,
+    expected: FixedWidthInteger,
+    field: &str,
+    spelling: &str,
+    actual: Option<(bool, u16)>,
+    reason: Option<&str>,
+) -> ClangFrontendError {
+    let actual_text = actual
+        .map(|(signed, width)| format!("signed={signed}, width={width}"))
+        .or_else(|| reason.map(str::to_string))
+        .unwrap_or_else(|| "unresolved".to_string());
+    ClangFrontendError {
+        kind: "fixed_width_typedef_desugaring_mismatch".to_string(),
+        message: format!(
+            "{qual_type} requires {field}={spelling} to prove the same fixed-width integer contract (expected signed={}, width={}; actual {actual_text})",
+            expected.signed, expected.width
+        ),
+    }
+}
+
+#[cfg(feature = "typed-ir")]
+fn fixed_width_integer_signature(spelling: &str) -> Option<FixedWidthInteger> {
+    match spelling {
+        "int8_t" => Some(FixedWidthInteger {
+            signed: true,
+            width: 8,
+        }),
+        "uint8_t" => Some(FixedWidthInteger {
+            signed: false,
+            width: 8,
+        }),
+        "int16_t" => Some(FixedWidthInteger {
+            signed: true,
+            width: 16,
+        }),
+        "uint16_t" => Some(FixedWidthInteger {
+            signed: false,
+            width: 16,
+        }),
+        "int32_t" => Some(FixedWidthInteger {
+            signed: true,
+            width: 32,
+        }),
+        "uint32_t" => Some(FixedWidthInteger {
+            signed: false,
+            width: 32,
+        }),
+        "int64_t" => Some(FixedWidthInteger {
+            signed: true,
+            width: 64,
+        }),
+        "uint64_t" => Some(FixedWidthInteger {
+            signed: false,
+            width: 64,
+        }),
+        _ => None,
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4610,15 +4749,34 @@ fn split_function_pointer_qual_type(qual_type: &str) -> Option<FunctionPointerQu
 fn split_function_qual_type(qual_type: &str) -> Option<(&str, &str)> {
     let trimmed = qual_type.trim();
     let open = trimmed.find('(')?;
-    if !trimmed.ends_with(')') {
+    let close = matching_close_paren(trimmed, open)?;
+    if close != trimmed.len() - 1 {
         return None;
     }
     let return_type = trimmed[..open].trim();
-    let params = trimmed[open + 1..trimmed.len() - 1].trim();
+    let params = trimmed[open + 1..close].trim();
     if return_type.is_empty() {
         return None;
     }
     Some((return_type, params))
+}
+
+#[cfg(feature = "typed-ir")]
+fn matching_close_paren(text: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (offset, ch) in text[open..].char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(open + offset);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 #[cfg(feature = "typed-ir")]
@@ -4695,6 +4853,14 @@ fn split_array_qual_type(
     let element = prefix[..open_index].trim();
     if element.is_empty() {
         return Ok(None);
+    }
+    if element.contains('[') || element.contains(']') {
+        return Err(ClangFrontendError {
+            kind: "invalid_array_type".to_string(),
+            message: format!(
+                "multi-dimensional array qualType requires explicit layout evidence before typed IR lowering: {qual_type}"
+            ),
+        });
     }
     let len_spelling = prefix[open_index + 1..].trim();
     let len = if len_spelling.is_empty() {
@@ -9683,6 +9849,69 @@ mod tests {
     }
 
     #[test]
+    fn type_from_qual_type_rejects_multi_dimensional_array_before_dimension_reorder() {
+        let err =
+            type_from_qual_type("int[2][3]").expect_err("multi-dimensional array must fail closed");
+
+        assert_eq!(err.kind, "invalid_array_type");
+        assert!(err.message.contains("multi-dimensional array"));
+        assert!(err.message.contains("int[2][3]"));
+    }
+
+    #[test]
+    fn type_from_ast_type_object_rejects_fixed_width_typedef_desugared_width_mismatch() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        let type_object = serde_json::json!({
+            "qualType": "uint32_t",
+            "desugaredQualType": "unsigned long",
+            "canonicalQualType": "unsigned long"
+        });
+
+        let err = type_from_ast_type_object(&type_object, Some(&abi))
+            .expect_err("mismatched fixed-width typedef desugaring must fail closed");
+
+        assert_eq!(err.kind, "fixed_width_typedef_desugaring_mismatch");
+        assert!(err.message.contains("uint32_t"));
+        assert!(err.message.contains("desugaredQualType"));
+        assert!(err.message.contains("unsigned long"));
+        assert!(err.message.contains("32"));
+        assert!(err.message.contains("64"));
+    }
+
+    #[test]
+    fn type_from_ast_type_object_defers_target_dependent_fixed_width_desugaring_without_abi() {
+        let type_object = serde_json::json!({
+            "qualType": "uint64_t",
+            "desugaredQualType": "unsigned long",
+            "canonicalQualType": "unsigned long"
+        });
+
+        let ty = type_from_ast_type_object(&type_object, None)
+            .expect("target-dependent fixed-width typedef desugaring should wait for ABI proof");
+
+        assert_eq!(ty.spelled, "uint64_t");
+        assert_eq!(ty.canonical, "uint64_t");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
+    }
+
+    #[test]
     fn function_return_type_from_type_object_falls_back_to_desugared_signature() {
         let type_object = serde_json::json!({
             "qualType": "fdb_blob_t (fdb_blob_t)",
@@ -9694,6 +9923,20 @@ mod tests {
 
         assert_eq!(ty.spelled, "struct fdb_blob *");
         assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+    }
+
+    #[test]
+    fn function_return_type_from_type_object_rejects_function_pointer_return() {
+        let type_object = serde_json::json!({
+            "qualType": "int (*(void))(int)"
+        });
+
+        let err = function_return_type_from_type_object(&type_object)
+            .expect_err("function pointer return must fail closed");
+
+        assert_eq!(err.kind, "unsupported_function_type");
+        assert!(err.message.contains("function pointer return"));
+        assert!(err.message.contains("explicit"));
     }
 
     #[test]
