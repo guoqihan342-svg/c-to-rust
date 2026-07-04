@@ -33,3 +33,4 @@ The Chinese source currently contains these major headings:
 - Keep the first line of the Chinese source pointing to `CONTEXT.en.md` with the repository-standard mirror notice.
 - For project-wide priorities, follow `docs/c2rust-migration-agent/future-vision-and-mvp.md`; local plans, OpenSpec tasks, and validation checklists are scoped artifacts only.
 - 2026-07-02 handoff: the `opencode-agent-harness` stability review is directionally valid, but this branch has already absorbed timeout, atomic write, portable Python, retry cap, SQLite lock, fencing audit, `BEGIN IMMEDIATE`, and POSIX command-contract work into H7 regression gates. The active backlog stays focused on P0-C verified unsafe baseline and P0-D safety loop.
+- `opencode.json` is a git-tracked file wired into the CI path filter and the `config/competition-env/bundle-manifest.json` archive contract; changes to it must be followed by a hash-binding resync.

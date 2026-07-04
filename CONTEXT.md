@@ -64,4 +64,4 @@ python validation/tools/unsafe_budget.py --max-ratio 0.10
 - 2026-06-29：在 `codex/agent-harness-flashdb-mvp` 分支同步 docs 到当前 harness/FlashDB MVP 状态：`run-worker`、accepted-evidence 复用、`real-fdb-blob-make` L4 accepted evidence、`fdb_kv_set` blocked callee 边界。
 - 2026-07-01：H4 harness 已接入真实 FlashDB `baseline_repair_gate`：`real-fdb-calc-crc32` 第 1 轮产出 baseline unsafe gate 失败证据，root cause 为 `unsafe_baseline_requires_repair`；第 2 轮必须携带 repair hint 并复验 accepted safe evidence。最新验证产物：`target/competition-out-h4-flashdb-context-index-20260701`，其中 `context-pack.json` 和 `agent-index.json` 都索引 `attempt_evidence_policy`。
 - 2026-07-02：结合 `opencode-agent-harness-逐行稳定性审查.md` 复核：审查方向有道理，但当前分支已吸收 timeout、atomic write、portable python、retry cap、SQLite lock、fencing audit、`BEGIN IMMEDIATE` 和 POSIX command contract；H7 只保留为回归门禁。待办主线收敛到 P0-C verified unsafe baseline 和 P0-D safety loop。
-- 保留未跟踪文件：`opencode.json`，除非用户明确要求，不要提交或删除。
+- `opencode.json` 已是 git 跟踪文件，并进入 CI path filter 与 `config/competition-env/bundle-manifest.json` 归档合同；修改它必须同步 resync hash 绑定。
