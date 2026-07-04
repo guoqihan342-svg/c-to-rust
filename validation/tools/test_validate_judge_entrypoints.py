@@ -1276,7 +1276,14 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
     runtime_env = opencode_runtime_env_contract(worker_root, scope=worker["worker_id"])
     command = worker_command(worker_root)
     command_line = shlex.join(command)
-    set_artifact_ref(worker["summary"], summary_path)
+    set_artifact_ref(
+        worker["summary"],
+        summary_path,
+        {
+            "report_kind": "test-artifact",
+            "final_gate": {"status": "passed"},
+        },
+    )
     set_artifact_ref(
         worker["worker_report"],
         worker_report_path,
@@ -1285,6 +1292,8 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
             "report_kind": "run-worker-report",
             "worker_id": worker["worker_id"],
             "runner_kind": "opencode-run",
+            "summary_path": repo_relative(summary_path),
+            "summary_status": "passed",
             "opencode_runtime_env": runtime_env,
         },
     )
@@ -1759,6 +1768,10 @@ def write_minimal_context_ledger(
                 json.dumps(context_pack_payload, sort_keys=True),
             ),
         )
+        agent_index_payload_json = json.dumps(
+            json.loads(agent_index_path.read_text(encoding="utf-8")),
+            sort_keys=True,
+        )
         connection.execute(
             """
             insert into artifacts(
@@ -1772,7 +1785,7 @@ def write_minimal_context_ledger(
                 validator.sha256_file(agent_index_path),
                 "present",
                 "agent-index",
-                "{}",
+                agent_index_payload_json,
                 "2026-07-01T00:00:00Z",
             ),
         )
@@ -1785,11 +1798,12 @@ def write_minimal_context_ledger(
             connection.execute(
                 """
                 insert into artifacts(
-                  run_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                  run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
+                    worker.get("worker_id"),
                     "competition-run-summary",
                     worker["summary_path"],
                     validator.sha256_file(summary_path),
@@ -1821,6 +1835,76 @@ def write_minimal_context_ledger(
                         ),
                     )
         connection.commit()
+
+
+def write_context_ledger_case(
+    temp_dir: Path,
+    *,
+    run_id: str = "context-ledger-case",
+    ledger_run_id: str | None = None,
+    isolated_out_root: str | None = None,
+) -> dict:
+    out_root = temp_dir / "out"
+    context_pack = out_root / "harness" / "context-pack.json"
+    agent_index = out_root / "harness" / "agent-index.json"
+    ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+    worker_root = out_root / "workers" / "worker-001"
+    summary = worker_root / "summary" / "competition-run-summary.json"
+    report = worker_root / "harness" / "run-worker-report.json"
+    write_json(summary, {"final_gate": {"status": "passed"}})
+    write_json(report, {"report_kind": "run-worker-report", "worker_id": "worker-001"})
+    worker = {
+        "worker_id": "worker-001",
+        "summary_path": repo_relative(summary),
+        "report_path": repo_relative(report),
+    }
+    context_payload = {
+        "run_id": run_id,
+        "context_management_contract": {
+            "resume_protocol": {
+                "checkpoint_backend": "sqlite",
+                "ledger_path": repo_relative(ledger),
+            },
+        },
+        "workers": [worker],
+    }
+    agent_payload = {
+        "run_id": run_id,
+        "agents_by_worker_id": {
+            "worker-001": {
+                **worker,
+                "isolated_out_root": (
+                    isolated_out_root if isolated_out_root is not None else repo_relative(worker_root)
+                ),
+            }
+        },
+    }
+    write_json(context_pack, context_payload)
+    write_json(agent_index, agent_payload)
+    write_minimal_context_ledger(
+        ledger,
+        run_id=ledger_run_id if ledger_run_id is not None else run_id,
+        context_pack_path=context_pack,
+        context_pack_payload=context_payload,
+        agent_index_path=agent_index,
+    )
+    return {
+        "context_payload": context_payload,
+        "agent_payload": agent_payload,
+        "context_pack": context_pack,
+        "agent_index": agent_index,
+        "ledger": ledger,
+    }
+
+
+def validate_context_ledger_case(case: dict) -> dict:
+    return validator.validate_context_ledger_contract(
+        case["context_payload"],
+        case["agent_payload"],
+        context_path_text=repo_relative(case["context_pack"]),
+        agent_path_text=repo_relative(case["agent_index"]),
+        repo_root=REPO_ROOT,
+    )
 
 
 def bind_entrypoint_to_out_root(config: dict, temp_config: Path, *, entry_index: int, out_root: Path) -> Path:
@@ -6252,6 +6336,105 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_opencode_worker_report_summary_claims_must_match_bound_summary(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+
+        with self.subTest(drift="summary_status"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="opencode-summary-claim-", dir=target_dir))
+            rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+
+            result = validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+            self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+
+            runtime_worker = payload["opencode_runtime"]["workers"][0]
+            summary_path = REPO_ROOT / runtime_worker["summary"]["path"]
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary_payload["final_gate"]["status"] = "failed"
+            write_json(summary_path, summary_payload)
+            summary_sha = validator.sha256_file(summary_path)
+            runtime_worker["summary"]["sha256"] = summary_sha
+            payload["workers"][0]["summary"]["sha256"] = summary_sha
+            write_json(rehearsal_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                r"worker_report\.summary_status must match summary final_gate\.status",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                )
+
+        with self.subTest(drift="summary_path"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="opencode-summary-claim-", dir=target_dir))
+            rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+            runtime_worker = payload["opencode_runtime"]["workers"][0]
+            report_path = REPO_ROOT / runtime_worker["worker_report"]["path"]
+            report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+            report_payload["summary_path"] = "target/elsewhere/summary/competition-run-summary.json"
+            write_json(report_path, report_payload)
+            report_sha = validator.sha256_file(report_path)
+            runtime_worker["worker_report"]["sha256"] = report_sha
+            payload["workers"][0]["report"]["sha256"] = report_sha
+            write_json(rehearsal_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                r"worker_report\.summary_path must match summary\.path",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_opencode_rehearsal_worker_summary_status_claim_must_match_summary(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-rehearsal-claim-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+
+        result = validator.validate_harness_artifact_contracts(
+            {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+            require_local_artifacts=True,
+            repo_root=REPO_ROOT,
+        )
+        self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+
+        runtime_worker = payload["opencode_runtime"]["workers"][0]
+        summary_path = REPO_ROOT / runtime_worker["summary"]["path"]
+        summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary_payload["final_gate"]["status"] = "failed"
+        write_json(summary_path, summary_payload)
+        report_path = REPO_ROOT / runtime_worker["worker_report"]["path"]
+        report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+        report_payload["summary_status"] = "failed"
+        write_json(report_path, report_payload)
+        summary_sha = validator.sha256_file(summary_path)
+        report_sha = validator.sha256_file(report_path)
+        runtime_worker["summary"]["sha256"] = summary_sha
+        runtime_worker["worker_report"]["sha256"] = report_sha
+        payload["workers"][0]["summary"]["sha256"] = summary_sha
+        payload["workers"][0]["report"]["sha256"] = report_sha
+        self.assertEqual(payload["workers"][0]["summary_status"], "passed")
+        write_json(rehearsal_path, payload)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"workers\[0\]\.summary_status must match summary final_gate\.status",
+        ):
+            validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+
     def test_multi_worker_entrypoint_requires_multi_worker_judge_graph(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
@@ -7727,6 +7910,96 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertIn(f"ledger_path={repo_relative(ledger)}", message)
         self.assertIn("expected kind=run-worker-report", message)
         self.assertIn("regenerate OpenCode artifacts", message)
+
+    def test_context_ledger_agent_index_payload_json_drift_fails(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="ledger-agent-payload-drift-", dir=target_dir))
+        case = write_context_ledger_case(temp_dir)
+
+        self.assertEqual(validate_context_ledger_case(case)["status"], "passed")
+
+        with closing(sqlite3.connect(case["ledger"])) as connection:
+            connection.execute(
+                "update artifacts set payload_json=? where kind='agent-index'",
+                (json.dumps({"forged": True}),),
+            )
+            connection.commit()
+
+        with self.assertRaisesRegex(ValueError, "agent-index payload_json must match agent_index"):
+            validate_context_ledger_case(case)
+
+        with closing(sqlite3.connect(case["ledger"])) as connection:
+            connection.execute(
+                "update artifacts set payload_json=? where kind='agent-index'",
+                ("{not-json",),
+            )
+            connection.commit()
+
+        with self.assertRaisesRegex(ValueError, "agent-index payload_json must be valid JSON"):
+            validate_context_ledger_case(case)
+
+    def test_context_ledger_run_id_drift_fails_closed(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+
+        with self.subTest(drift="context_packs_row_run_id"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="ledger-run-id-drift-", dir=target_dir))
+            case = write_context_ledger_case(temp_dir, ledger_run_id="forged-run")
+
+            with self.assertRaisesRegex(ValueError, "context_packs run_id must match context_pack run_id"):
+                validate_context_ledger_case(case)
+
+        for kind, expected_error in (
+            ("agent-index", "agent-index artifact run_id must match context_packs run_id"),
+            ("competition-run-summary", "worker summary run_id must match context_packs run_id"),
+            ("run-worker-report", "worker report run_id must match context_packs run_id"),
+        ):
+            with self.subTest(drift=kind):
+                temp_dir = Path(tempfile.mkdtemp(prefix="ledger-run-id-drift-", dir=target_dir))
+                case = write_context_ledger_case(temp_dir)
+
+                self.assertEqual(validate_context_ledger_case(case)["status"], "passed")
+
+                with closing(sqlite3.connect(case["ledger"])) as connection:
+                    connection.execute(
+                        "update artifacts set run_id=? where kind=?",
+                        ("forged-run", kind),
+                    )
+                    connection.commit()
+
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validate_context_ledger_case(case)
+
+    def test_context_ledger_worker_rows_must_bind_worker_identity(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+
+        with self.subTest(drift="summary_agent_id"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="ledger-worker-identity-", dir=target_dir))
+            case = write_context_ledger_case(temp_dir)
+
+            self.assertEqual(validate_context_ledger_case(case)["status"], "passed")
+
+            with closing(sqlite3.connect(case["ledger"])) as connection:
+                connection.execute(
+                    "update artifacts set agent_id=? where kind='competition-run-summary'",
+                    ("worker-999",),
+                )
+                connection.commit()
+
+            with self.assertRaisesRegex(ValueError, "worker summary agent_id must match worker_id"):
+                validate_context_ledger_case(case)
+
+        with self.subTest(drift="isolated_out_root"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="ledger-worker-identity-", dir=target_dir))
+            case = write_context_ledger_case(
+                temp_dir,
+                isolated_out_root=repo_relative(temp_dir / "out" / "workers" / "worker-002"),
+            )
+
+            with self.assertRaisesRegex(ValueError, "worker summary path must be under agent isolated_out_root"):
+                validate_context_ledger_case(case)
 
     def test_context_pack_workers_must_match_agent_index_workers(self) -> None:
         config = load_default_config()

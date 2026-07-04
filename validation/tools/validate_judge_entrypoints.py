@@ -3312,6 +3312,7 @@ def validate_opencode_worker_runtime(
         assert_no_local_absolute_path(command)
 
     recomputed_contract = None
+    summary_final_gate_status = None
     if repo_root is not None:
         worker_report_payload = require_object(
             load_json(repo_path(bindings["worker_report"]["path"], repo_root=repo_root)),
@@ -3327,6 +3328,26 @@ def validate_opencode_worker_runtime(
             worker_report_payload.get("opencode_runtime_env"),
             f"{label}.worker_report",
         )
+        report_summary_path = require_string(
+            worker_report_payload.get("summary_path"),
+            f"{label}.worker_report.summary_path",
+        )
+        if report_summary_path != bindings["summary"]["path"]:
+            raise ValueError(f"{label}.worker_report.summary_path must match summary.path")
+        summary_payload = require_object(
+            load_json(repo_path(bindings["summary"]["path"], repo_root=repo_root)),
+            f"{label}.summary file",
+        )
+        summary_final_gate = (
+            summary_payload.get("final_gate") if isinstance(summary_payload.get("final_gate"), dict) else {}
+        )
+        summary_final_gate_status = str(summary_final_gate.get("status", "failed"))
+        report_summary_status = require_string(
+            worker_report_payload.get("summary_status"),
+            f"{label}.worker_report.summary_status",
+        )
+        if report_summary_status != summary_final_gate_status:
+            raise ValueError(f"{label}.worker_report.summary_status must match summary final_gate.status")
         handoff_payload = require_object(
             load_json(repo_path(bindings["handoff_contract"]["path"], repo_root=repo_root)),
             f"{label}.handoff_contract file",
@@ -3411,6 +3432,7 @@ def validate_opencode_worker_runtime(
         "contract_verification_status": "executed",
         "bindings": bindings,
         "recomputed_contract": recomputed_contract,
+        "summary_final_gate_status": summary_final_gate_status,
         "opencode_runtime_env": worker_runtime_env if repo_root is not None else None,
     }
 
@@ -3460,6 +3482,9 @@ def validate_opencode_agent_runtime_contract(
         "contract_status_counts": {"executed": worker_count},
         "opencode_preflight_report": preflight,
         "worker_ids": worker_ids,
+        "worker_summary_final_gate_statuses": {
+            worker["worker_id"]: worker.get("summary_final_gate_status") for worker in worker_results
+        },
     }
 
 
@@ -3630,6 +3655,11 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
         if verification != runtime_verification:
             raise ValueError(
                 f"opencode_hostless_rehearsal_report.workers[{index}].opencode_contract_verification must match opencode_runtime.workers"
+            )
+        recomputed_summary_status = runtime_result["worker_summary_final_gate_statuses"].get(worker_id)
+        if worker.get("summary_status") != recomputed_summary_status:
+            raise ValueError(
+                f"opencode_hostless_rehearsal_report.workers[{index}].summary_status must match summary final_gate.status"
             )
     if len(set(worker_ids)) != len(worker_ids):
         raise ValueError("opencode_hostless_rehearsal_report.workers worker_id values must be unique")
@@ -5260,10 +5290,15 @@ def validate_context_ledger_contract(
                 raise ValueError("context ledger context_packs payload_json must be valid JSON") from error
             if ledger_payload != context_payload:
                 raise ValueError("context ledger context_packs payload_json must match context_pack")
+            ledger_run_id = require_string(context_row[1], "context ledger context_packs.run_id")
+            for payload_label, bound_payload in (("context_pack", context_payload), ("agent_index", agent_payload)):
+                declared_run_id = bound_payload.get("run_id")
+                if declared_run_id is not None and declared_run_id != ledger_run_id:
+                    raise ValueError(f"context ledger context_packs run_id must match {payload_label} run_id")
 
             agent_row = connection.execute(
                 """
-                select sha256, status, semantic_role
+                select sha256, status, semantic_role, run_id, payload_json
                 from artifacts
                 where kind='agent-index' and repo_rel_path=?
                 """,
@@ -5275,6 +5310,14 @@ def validate_context_ledger_contract(
                 raise ValueError("context ledger agent-index artifact sha256 must match agent_index")
             if agent_row[1] not in {"present", "completed"} or agent_row[2] != "agent-index":
                 raise ValueError("context ledger agent-index artifact row must be present/completed with semantic_role=agent-index")
+            if agent_row[3] != ledger_run_id:
+                raise ValueError("context ledger agent-index artifact run_id must match context_packs run_id")
+            try:
+                agent_ledger_payload = json.loads(agent_row[4])
+            except (TypeError, json.JSONDecodeError) as error:
+                raise ValueError("context ledger agent-index payload_json must be valid JSON") from error
+            if agent_ledger_payload != agent_payload:
+                raise ValueError("context ledger agent-index payload_json must match agent_index")
 
             summary_count = 0
             agents_by_worker_id = require_object(agent_payload.get("agents_by_worker_id"), "agents_by_worker_id")
@@ -5282,13 +5325,20 @@ def validate_context_ledger_contract(
                 agent_entry = require_object(agent, f"agents_by_worker_id.{worker_id}")
                 summary_path_text = require_string(agent_entry.get("summary_path"), f"agents_by_worker_id.{worker_id}.summary_path")
                 assert_repo_relative_posix(summary_path_text)
+                isolated_out_root_prefix = None
+                isolated_out_root = agent_entry.get("isolated_out_root")
+                if isinstance(isolated_out_root, str):
+                    assert_repo_relative_posix(isolated_out_root)
+                    isolated_out_root_prefix = isolated_out_root.rstrip("/") + "/"
+                    if not summary_path_text.startswith(isolated_out_root_prefix):
+                        raise ValueError(f"context ledger worker summary path must be under agent isolated_out_root: {worker_id}")
                 summary_path = repo_path(summary_path_text, repo_root=repo_root)
                 if not summary_path.is_file():
                     raise ValueError(f"context ledger worker summary does not exist: {summary_path_text}")
                 summary_sha = sha256_file(summary_path)
                 summary_row = connection.execute(
                     """
-                    select sha256, status, semantic_role
+                    select sha256, status, semantic_role, run_id, agent_id
                     from artifacts
                     where kind='competition-run-summary' and repo_rel_path=?
                     """,
@@ -5305,16 +5355,22 @@ def validate_context_ledger_contract(
                     summary_path=summary_path,
                 ):
                     raise ValueError(f"context ledger worker summary row must be passed run-summary: {worker_id}")
+                if summary_row[3] != ledger_run_id:
+                    raise ValueError(f"context ledger worker summary run_id must match context_packs run_id: {worker_id}")
+                if summary_row[4] != worker_id:
+                    raise ValueError(f"context ledger worker summary agent_id must match worker_id: {worker_id}")
                 report_path_text = agent_entry.get("report_path")
                 if isinstance(report_path_text, str):
                     assert_repo_relative_posix(report_path_text)
+                    if isolated_out_root_prefix is not None and not report_path_text.startswith(isolated_out_root_prefix):
+                        raise ValueError(f"context ledger worker report path must be under agent isolated_out_root: {worker_id}")
                     report_path = repo_path(report_path_text, repo_root=repo_root)
                     if not report_path.is_file():
                         raise ValueError(f"context ledger worker report does not exist: {worker_id}")
                     report_sha = sha256_file(report_path)
                     report_row = connection.execute(
                         """
-                        select sha256, status, semantic_role, agent_id
+                        select sha256, status, semantic_role, agent_id, run_id
                         from artifacts
                         where kind='run-worker-report' and repo_rel_path=?
                         """,
@@ -5336,6 +5392,8 @@ def validate_context_ledger_contract(
                         raise ValueError(f"context ledger worker report row must be passed/failed/blocked worker-execution-report: {worker_id}")
                     if report_row[3] != worker_id:
                         raise ValueError(f"context ledger worker report agent_id must match worker_id: {worker_id}")
+                    if report_row[4] != ledger_run_id:
+                        raise ValueError(f"context ledger worker report run_id must match context_packs run_id: {worker_id}")
                 summary_count += 1
     except sqlite3.DatabaseError as error:
         raise ValueError(f"context ledger sqlite validation failed: {ledger_path_text}: {error}") from error
