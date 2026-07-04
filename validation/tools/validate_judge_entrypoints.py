@@ -4827,6 +4827,11 @@ def validate_resume_manifest_replay_command(
                 f"resume_manifest worker {worker_id} {label} opencode_preflight_report.launch_policy.opencode_agent "
                 f"must be {COMPETITION_OPENCODE_AGENT}"
             )
+        validate_opencode_preflight_binding(
+            preflight,
+            f"resume_manifest worker {worker_id} {label} opencode_preflight_report",
+            repo_root=repo_root,
+        )
     for field in ("assignment_path", "request_path", "summary_path", "report_path"):
         expected = worker.get(field)
         if isinstance(expected, str) and command_payload.get(field) != expected:

@@ -8248,7 +8248,10 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(result["process_returncode"], 1)
             self.assertNotIn("opencode_process_retries", result)
             self.assertEqual(result["opencode_contract_verification"]["status"], "executed")
-            self.assertEqual(result["repair_hint"]["root_cause_key"], "worker_process_failed")
+            self.assertEqual(
+                result["repair_hint"]["root_cause_key"],
+                "opencode_database_locked_after_worker_command_seen",
+            )
 
     def test_run_plan_opencode_passes_preflight_report_to_workers(self) -> None:
         with temp_repo_dir() as tmp:

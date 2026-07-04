@@ -5717,6 +5717,16 @@ def run_worker(
     rejected_summary_evidence = None
     if stale_summary_cleanup_error is not None:
         synthetic_failure_root_cause = "stale_summary_cleanup_failed"
+    if (
+        synthetic_failure_root_cause is None
+        and mode == "opencode"
+        and stale_summary_cleanup_error is None
+        and int(completed.returncode) != 0
+        and opencode_database_locked(completed)
+        and opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") == "executed"
+    ):
+        synthetic_failure_root_cause = "opencode_database_locked_after_worker_command_seen"
     opencode_contract_failed = (
         opencode_contract_verification is not None
         and opencode_contract_verification.get("status") != "executed"
@@ -5750,13 +5760,17 @@ def run_worker(
             repo_root=repo_root,
         )
     elif stale_summary_cleanup_error is None and not summary_path.exists():
-        provisional_root_cause = worker_failure_root_cause(
+        provisional_root_cause = synthetic_failure_root_cause or worker_failure_root_cause(
             process_returncode=int(completed.returncode),
             recorded=False,
             summary_status="missing-summary",
             opencode_contract_verification=opencode_contract_verification,
         )
-        if provisional_root_cause in {"opencode_contract_not_executed", "process_timeout"}:
+        if provisional_root_cause in {
+            "opencode_contract_not_executed",
+            "process_timeout",
+            "opencode_database_locked_after_worker_command_seen",
+        }:
             synthetic_failure_root_cause = provisional_root_cause
             write_blocked_worker_summary(
                 run_id=run_id,

@@ -2,6 +2,8 @@
 
 Purpose: OpenCode-facing Agent wrapper for the C-to-Rust migration harness.
 
+Competition evidence must be launched through the OpenCode preflight/session contract (`opencode` + `GLM-5.1` + `c2rust-migrator` + `max`); direct `scripts/c2rust-migrator.py` commands below are harness internals or local simulation unless wrapped by that contract.
+
 中文说明：此 Agent 面向比赛单次交互。OpenCode 可以使用多 worker 并行处理互不依赖的真实 C slice，但每个 worker 必须写入独立 out-root，最终只能由统一 validator 和 `competition-run-summary.json` 裁决。
 
 ## Primary Entrypoints
