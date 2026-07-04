@@ -18,6 +18,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools import milestone_release_notes
+from validation.tools import judge_milestone_bundle
 from validation.tools import validate_judge_entrypoints as judge_validator
 
 
@@ -311,7 +312,7 @@ def require_publication_archive_summary_projection(
             )
 
 
-def require_competition_config_archive_matches_run_report(packet: dict[str, Any], *, repo_root: Path) -> None:
+def require_competition_config_archive_matches_run_report(packet: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     run_report_ref = require_object(packet.get("judge_entrypoints_run_report"), "judge_entrypoints_run_report")
     try:
         checked_run_report = judge_validator.validate_ref(run_report_ref, repo_root=repo_root)
@@ -326,6 +327,23 @@ def require_competition_config_archive_matches_run_report(packet: dict[str, Any]
         raise ValueError(
             "competition_config_archive must match judge_entrypoints_run_report.competition_config_archive"
         )
+    return run_report
+
+
+def expected_proof_class_rollup_from_run_report(run_report: dict[str, Any]) -> dict[str, Any]:
+    proof_class_contract = judge_milestone_bundle.validation_proof_class_contract(run_report)
+    entrypoints = [
+        {
+            **entry,
+            "proof_class": judge_milestone_bundle.trusted_entrypoint_proof_class(
+                entry,
+                proof_class_contract=proof_class_contract,
+            ),
+        }
+        for entry in run_report.get("entrypoints", [])
+        if isinstance(entry, dict)
+    ]
+    return judge_milestone_bundle.build_proof_classes(entrypoints)
 
 
 def require_materialized_competition_config_archive_manifest(
@@ -1063,7 +1081,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
             raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
         if field in publication and publication.get(field) != packet.get(field):
             raise ValueError(f"publication_manifest.{field} must match public_release_packet.{field}")
-    require_competition_config_archive_matches_run_report(packet, repo_root=repo_root)
+    run_report = require_competition_config_archive_matches_run_report(packet, repo_root=repo_root)
 
     for field in (
         "publication_manifest",
@@ -1095,6 +1113,18 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     summary = require_object(packet.get("summary"), "summary")
     if summary.get("blockers") != bundle.get("blockers", []):
         raise ValueError("summary.blockers must match judge_milestone_bundle.blockers")
+    if summary.get("entrypoint_count") != run_report.get("entrypoint_count"):
+        raise ValueError("summary.entrypoint_count must match judge_entrypoints_run_report.entrypoint_count")
+    if summary.get("publication_scope") != publication.get("publication_scope"):
+        raise ValueError("summary.publication_scope must match judge_milestone_bundle.publication_manifest")
+    run_summary = require_object(run_report.get("summary"), "judge_entrypoints_run_report.summary")
+    run_readiness = require_object(run_summary.get("readiness"), "judge_entrypoints_run_report.summary.readiness")
+    if summary.get("readiness") != run_readiness:
+        raise ValueError("summary.readiness must match judge_entrypoints_run_report.summary.readiness")
+    bundle_summary = require_object(bundle.get("summary"), "judge_milestone_bundle.summary")
+    bundle_readiness = require_object(bundle_summary.get("readiness"), "judge_milestone_bundle.summary.readiness")
+    if summary.get("readiness") != bundle_readiness:
+        raise ValueError("summary.readiness must match judge_milestone_bundle.summary.readiness")
     if summary.get("published_artifact_ref_status") != expected_published_artifact_ref_status(publication):
         raise ValueError(
             "summary.published_artifact_ref_status must match "
@@ -1106,6 +1136,12 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
         )
     if summary.get("progress_delta_ledger") != bundle.get("progress_delta_ledger"):
         raise ValueError("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger")
+    recomputed_proof_class_rollup = expected_proof_class_rollup_from_run_report(run_report)
+    if bundle.get("proof_class_rollup", bundle.get("proof_classes")) != recomputed_proof_class_rollup:
+        raise ValueError(
+            "judge_milestone_bundle.proof_class_rollup must match recomputed "
+            "judge_entrypoints_run_report.entrypoints proof_class_rollup"
+        )
     expected_proof_class_rollup = bundle.get("proof_class_rollup", bundle.get("proof_classes"))
     if summary.get("proof_class_rollup") != expected_proof_class_rollup:
         raise ValueError("summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup")
@@ -1220,6 +1256,52 @@ def require_before_after_verified_baseline_accounting(value: dict[str, Any], lab
     expected_all_bound = bound_units > 0 and verified_units == bound_units and missing_units == 0
     if all_bound is not expected_all_bound:
         raise ValueError("before_after_repair_exhibit verified baseline all-bound flag mismatch")
+    require_before_after_rollup_matches_sources(value, rollup, label)
+
+
+def require_before_after_rollup_matches_sources(value: dict[str, Any], rollup: dict[str, Any], label: str) -> None:
+    sources = value.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError(f"{label}.sources must be a list")
+    if any(not isinstance(source, dict) for source in sources):
+        raise ValueError(f"{label}.sources must contain objects")
+    before_after_units: list[dict[str, Any]] = []
+    bound_unit_count = 0
+    for source in sources:
+        units = source.get("before_after_units")
+        if isinstance(units, list):
+            bound_unit_count += len(units)
+            before_after_units.extend(unit for unit in units if isinstance(unit, dict))
+
+    verified_units = sum(1 for unit in before_after_units if before_after_unit_has_verified_unsafe_baseline(unit))
+    expected = {
+        "source_count": len(sources),
+        "bound_unit_count": bound_unit_count,
+        "verified_baseline_unit_count": verified_units,
+        "missing_verified_baseline_unit_count": len(before_after_units) - verified_units,
+        "all_units_verified_baseline_bound": bool(before_after_units) and verified_units == len(before_after_units),
+    }
+    for field, expected_value in expected.items():
+        if rollup.get(field) != expected_value:
+            raise ValueError("before_after_repair_exhibit rollup must match sources")
+
+
+def before_after_unit_has_verified_unsafe_baseline(unit: dict[str, Any]) -> bool:
+    baseline = unit.get("baseline_verification")
+    if not isinstance(baseline, dict):
+        return False
+    path = baseline.get("path")
+    sha256 = baseline.get("sha256")
+    return (
+        isinstance(path, str)
+        and bool(path)
+        and isinstance(sha256, str)
+        and len(sha256) == 64
+        and baseline.get("status") == "passed"
+        and baseline.get("semantic_pass") is True
+        and baseline.get("semantic_claim_source") == "verified_unsafe_baseline_gates"
+        and baseline.get("generated_draft_semantic_pass") is False
+    )
 
 
 def require_non_negative_int(value: Any, label: str) -> int:

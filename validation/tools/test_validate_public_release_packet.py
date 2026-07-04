@@ -3,6 +3,7 @@ import shlex
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Callable
 
 import jsonschema
 
@@ -883,6 +884,32 @@ def sync_packet_bound_bundle(packet: dict, *, rebuild_release_notes: bool = True
         packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
 
 
+def rewrite_bound_run_report(packet: dict, mutate: Callable[[dict], None]) -> None:
+    run_report_path = REPO_ROOT / packet["judge_entrypoints_run_report"]["path"]
+    run_report_payload = json.loads(run_report_path.read_text(encoding="utf-8"))
+    mutate(run_report_payload)
+    write_json(run_report_path, run_report_payload)
+    run_report_ref = {
+        "path": repo_relative(run_report_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(run_report_path),
+    }
+    packet["judge_entrypoints_run_report"] = run_report_ref
+    packet["publication_manifest"]["judge_entrypoints_run_report"] = json.loads(json.dumps(run_report_ref))
+    for ref in packet["publication_manifest"].get("published_artifact_refs", []):
+        if isinstance(ref, dict) and ref.get("artifact_name") == "judge_entrypoints_run_report":
+            ref.update(json.loads(json.dumps(run_report_ref)))
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["judge_entrypoints_run_report"] = json.loads(json.dumps(run_report_ref))
+    bundle_payload["publication_manifest"]["judge_entrypoints_run_report"] = json.loads(json.dumps(run_report_ref))
+    for ref in bundle_payload["publication_manifest"].get("published_artifact_refs", []):
+        if isinstance(ref, dict) and ref.get("artifact_name") == "judge_entrypoints_run_report":
+            ref.update(json.loads(json.dumps(run_report_ref)))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+
 def harness_contract_matrix_fixture() -> list[dict]:
     def row(stage: str, graph_node: str, role: str, artifact: str, validator: str) -> dict:
         return {
@@ -1054,7 +1081,37 @@ def valid_packet(root: Path) -> dict:
         "sha256": judge_validator.sha256_file(archive_manifest_path),
     }
     competition_config_archive["materialized_manifest"] = archive_manifest_ref
-    write_json(run_report_path, {"competition_config_archive": competition_config_archive})
+    readiness_summary = {
+        "all_entrypoints_executed": True,
+        "executed_count": 4,
+        "configured_count": 4,
+        "validation_status": "passed",
+    }
+    run_report_payload = {
+        "status": "passed",
+        "entrypoint_count": 4,
+        "entrypoints": [
+            {
+                "id": "opencode_multi_worker_evaluate_profile",
+                "status": "passed",
+                "proof_class": "local-simulation",
+                "run_id": "fixture-run",
+                "competition_exact_host_attested": False,
+            }
+        ],
+        "validation": {
+            "status": "passed",
+            "proof_class_contract": {
+                "status": "passed",
+                "entrypoints": {
+                    "opencode_multi_worker_evaluate_profile": "local-simulation",
+                },
+            },
+        },
+        "summary": {"readiness": readiness_summary},
+        "competition_config_archive": competition_config_archive,
+    }
+    write_json(run_report_path, run_report_payload)
     run_report = {
         "path": repo_relative(run_report_path),
         "status": "present",
@@ -1184,6 +1241,14 @@ def valid_packet(root: Path) -> dict:
                     {
                         "unit_id": "flashdb/real-fdb-calc-crc32",
                         "status": "converged",
+                        "baseline_verification": {
+                            "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-verified-unsafe-baseline.json",
+                            "status": "passed",
+                            "sha256": "1" * 64,
+                            "semantic_pass": True,
+                            "semantic_claim_source": "verified_unsafe_baseline_gates",
+                            "generated_draft_semantic_pass": False,
+                        },
                         "patch_origin": {
                             "source": "accepted_safe_evidence",
                             "accepted_patch_bound": True,
@@ -1367,23 +1432,7 @@ def valid_packet(root: Path) -> dict:
             "translation_coverage_numerator": 0,
             "boundary": "Competition host readiness is an H9 launch contract, not semantic acceptance.",
         },
-        "proof_classes": {
-            "all": ["local-simulation"],
-            "highest_proof_class": "local-simulation",
-            "has_competition_exact": False,
-            "all_entrypoints_competition_exact": False,
-            "competition_exact_host_verified": False,
-            "entrypoints": [
-                {
-                    "id": "opencode_multi_worker_evaluate_profile",
-                    "proof_class": "local-simulation",
-                    "run_id": "fixture-run",
-                    "competition_exact_host_attested": False,
-                }
-            ],
-            "non_exact_entrypoints": ["opencode_multi_worker_evaluate_profile"],
-            "host_attestation_missing_entrypoints": [],
-        },
+        "proof_classes": packet_validator.expected_proof_class_rollup_from_run_report(run_report_payload),
         "semantic_evidence_rollup": {
             "accepted_evidence_semantic_pass_count": 1,
             "translator_generated_semantic_pass_count": 0,
@@ -1641,8 +1690,8 @@ def valid_packet(root: Path) -> dict:
         "status": "passed",
         "summary": {
             "entrypoint_count": 4,
-            "publication_scope": "all-entrypoints",
-            "readiness": {"status": "passed"},
+            "publication_scope": "internal_preview_full",
+            "readiness": readiness_summary,
             "blockers": [],
             "published_artifact_ref_status": {
                 **packet_validator.expected_published_artifact_ref_status(publication_manifest),
@@ -2020,6 +2069,21 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
                 "non_exact_entrypoints": [],
                 "host_attestation_missing_entrypoints": [],
             }
+        )
+        rewrite_bound_run_report(
+            packet,
+            lambda payload: (
+                payload["entrypoints"][0].update(
+                    {
+                        "proof_class": "competition-exact",
+                        "competition_exact_host_attested": True,
+                    }
+                ),
+                payload["validation"]["proof_class_contract"]["entrypoints"].__setitem__(
+                    "opencode_multi_worker_evaluate_profile",
+                    "competition-exact",
+                ),
+            ),
         )
         packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["proof_class"] = "competition-exact"
         sync_packet_bound_bundle(packet)
@@ -2942,6 +3006,34 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_before_after_rollup_source_mismatch_even_when_bundle_matches(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-before-after-source-rollup-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        mutated = json.loads(json.dumps(packet["before_after_repair_exhibit"]))
+        mutated["rollup"]["bound_unit_count"] = 2
+        mutated["rollup"]["verified_baseline_unit_count"] = 1
+        mutated["rollup"]["missing_verified_baseline_unit_count"] = 1
+        mutated["rollup"]["all_units_verified_baseline_bound"] = False
+        packet["before_after_repair_exhibit"] = mutated
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["before_after_repair_exhibit"] = mutated
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("before_after_repair_exhibit rollup must match sources" in error for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_validate_packet_requires_publishability_from_bound_bundle(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-publishability-missing-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -3258,6 +3350,48 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_summary_identity_drift_from_bound_bundle(self) -> None:
+        cases = [
+            (
+                "entrypoint-count",
+                lambda packet: packet["summary"].__setitem__("entrypoint_count", 999),
+                "summary.entrypoint_count must match judge_entrypoints_run_report.entrypoint_count",
+            ),
+            (
+                "publication-scope",
+                lambda packet: packet["summary"].__setitem__("publication_scope", "full"),
+                "summary.publication_scope must match judge_milestone_bundle.publication_manifest",
+            ),
+            (
+                "readiness",
+                lambda packet: packet["summary"].__setitem__(
+                    "readiness",
+                    {**packet["summary"]["readiness"], "executed_count": 999},
+                ),
+                "summary.readiness must match judge_entrypoints_run_report.summary.readiness",
+            ),
+        ]
+        for suffix, mutate, expected_error in cases:
+            with self.subTest(suffix=suffix):
+                temp_dir = Path(
+                    tempfile.mkdtemp(
+                        prefix=f"public-release-packet-summary-{suffix}-",
+                        dir=REPO_ROOT / "target",
+                    )
+                )
+                packet_path = temp_dir / "summary" / "public-release-packet.json"
+                packet = valid_packet(temp_dir)
+                mutate(packet)
+                write_json(packet_path, packet)
+
+                result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(
+                    any(expected_error in error for error in result["errors"]),
+                    result["errors"],
+                )
+
     def test_validate_packet_rejects_missing_workflow_metrics_summary_from_bundle(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-workflow-summary-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -3320,6 +3454,66 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertTrue(
             any(
                 "summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup" in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_bundle_proof_class_rollup_drift_from_run_report(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-proof-class-run-report-drift-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["publishability"].update(
+            {
+                "status": "external_release_ready",
+                "publication_scope": "full",
+                "external_milestone_claim_ready": True,
+                "external_milestone": True,
+                "competition_exact_publishable": True,
+                "focused_run": False,
+            }
+        )
+        packet["competition_host_readiness"].update(
+            {
+                "status": "ready",
+                "actual_highest_proof_class": "competition-exact",
+                "all_entrypoints_competition_exact": True,
+                "competition_exact_host_verified": True,
+                "external_milestone_claim_ready": True,
+                "missing_requirements": [],
+                "blocker_count": 0,
+            }
+        )
+        packet["summary"]["proof_class_rollup"].update(
+            {
+                "all": ["competition-exact"],
+                "highest_proof_class": "competition-exact",
+                "has_competition_exact": True,
+                "all_entrypoints_competition_exact": True,
+                "competition_exact_host_verified": True,
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "proof_class": "competition-exact",
+                        "run_id": "fixture-run",
+                        "competition_exact_host_attested": True,
+                    }
+                ],
+                "non_exact_entrypoints": [],
+                "host_attestation_missing_entrypoints": [],
+            }
+        )
+        packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["proof_class"] = "competition-exact"
+        sync_packet_bound_bundle(packet)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "judge_milestone_bundle.proof_class_rollup must match recomputed "
+                "judge_entrypoints_run_report.entrypoints proof_class_rollup" in error
                 for error in result["errors"]
             ),
             result["errors"],
