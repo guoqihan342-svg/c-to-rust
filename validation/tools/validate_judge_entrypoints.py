@@ -3437,6 +3437,21 @@ def validate_opencode_agent_runtime_contract(
     }
 
 
+def validate_hostless_rehearsal_bound_report(
+    payload: dict[str, Any],
+    field: str,
+    *,
+    expected_report_kind: str,
+    repo_root: Path,
+) -> dict[str, str]:
+    label = f"opencode_hostless_rehearsal_report.{field}"
+    binding = validate_hash_bound_artifact_binding(payload.get(field), label, repo_root=repo_root)
+    report_payload = require_object(load_json(repo_path(binding["path"], repo_root=repo_root)), f"{label} file")
+    if report_payload.get("report_kind") != expected_report_kind:
+        raise ValueError(f"{label}.report_kind must be {expected_report_kind}")
+    return binding
+
+
 def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
     binding = validate_artifact_binding_shape(ref, "opencode_hostless_rehearsal_report", repo_root=repo_root)
     payload = load_json(repo_path(binding["path"], repo_root=repo_root))
@@ -3478,39 +3493,102 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
             "opencode_hostless_rehearsal_report.h9_contract.local_simulation_closes_p0_h9 must be false"
         )
 
-    runtime = require_object(payload.get("opencode_runtime"), "opencode_hostless_rehearsal_report.opencode_runtime")
-    if runtime.get("runtime") != "opencode":
-        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.runtime must be opencode")
-    if runtime.get("semantic_gate") is not False:
-        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.semantic_gate must be false")
-    if runtime.get("chat_output_is_evidence") is not False:
-        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.chat_output_is_evidence must be false")
-    worker_count = runtime.get("worker_count")
-    if not isinstance(worker_count, int) or isinstance(worker_count, bool) or worker_count < 1:
-        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.worker_count must be positive")
-    if runtime.get("all_contracts_executed") is not True:
-        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.all_contracts_executed must be true")
-    if runtime.get("failed_or_missing_contract_workers") != []:
-        raise ValueError("opencode_hostless_rehearsal_report.opencode_runtime.failed_or_missing_contract_workers must be []")
-    counts = require_object(
-        runtime.get("contract_status_counts"),
-        "opencode_hostless_rehearsal_report.opencode_runtime.contract_status_counts",
+    batch_profile_report = validate_hostless_rehearsal_bound_report(
+        payload,
+        "batch_profile_report",
+        expected_report_kind="batch-profile-report",
+        repo_root=repo_root,
     )
-    if counts != {"executed": worker_count}:
-        raise ValueError(
-            "opencode_hostless_rehearsal_report.opencode_runtime.contract_status_counts must equal {'executed': worker_count}"
-        )
+    run_plan_report = validate_hostless_rehearsal_bound_report(
+        payload,
+        "run_plan_report",
+        expected_report_kind="run-plan-report",
+        repo_root=repo_root,
+    )
+    context_binding = validate_hash_bound_artifact_binding(
+        payload.get("context_pack"),
+        "opencode_hostless_rehearsal_report.context_pack",
+        repo_root=repo_root,
+    )
+    agent_binding = validate_hash_bound_artifact_binding(
+        payload.get("agent_index"),
+        "opencode_hostless_rehearsal_report.agent_index",
+        repo_root=repo_root,
+    )
+    context_payload = require_object(
+        load_json(repo_path(context_binding["path"], repo_root=repo_root)),
+        "opencode_hostless_rehearsal_report.context_pack file",
+    )
+    agent_payload = require_object(
+        load_json(repo_path(agent_binding["path"], repo_root=repo_root)),
+        "opencode_hostless_rehearsal_report.agent_index file",
+    )
+    context_contract = validate_context_management_contract(
+        context_payload,
+        path_text=context_binding["path"],
+        expected_artifacts={"context_pack": context_binding["path"], "agent_index": agent_binding["path"]},
+        repo_root=repo_root,
+    )
+    agent_contract = validate_agent_coordination_contract(agent_payload, path_text=agent_binding["path"])
+    context_agent_consistency = validate_context_agent_index_consistency(context_payload, agent_payload)
+    top_level_preflight = validate_opencode_preflight_binding(
+        payload.get("opencode_preflight_report"),
+        "opencode_hostless_rehearsal_report.opencode_preflight_report",
+        repo_root=repo_root,
+    )
+    runtime = require_object(payload.get("opencode_runtime"), "opencode_hostless_rehearsal_report.opencode_runtime")
+    runtime_result = validate_opencode_agent_runtime_contract(runtime, repo_root=repo_root)
+    compare_artifact_binding(
+        runtime_result["opencode_preflight_report"],
+        top_level_preflight,
+        "opencode_hostless_rehearsal_report.opencode_runtime.opencode_preflight_report",
+    )
+    worker_count = runtime_result["worker_count"]
 
     workers = payload.get("workers")
     if not isinstance(workers, list) or len(workers) != worker_count:
         raise ValueError("opencode_hostless_rehearsal_report.workers length must match worker_count")
+    runtime_workers = runtime.get("workers")
+    runtime_workers_by_id = entries_by_worker_id(runtime_workers, label="opencode_hostless_rehearsal_report.opencode_runtime.workers")
     worker_ids = []
     for index, worker_value in enumerate(workers):
         worker = require_object(worker_value, f"opencode_hostless_rehearsal_report.workers[{index}]")
         worker_id = require_string(worker.get("worker_id"), f"opencode_hostless_rehearsal_report.workers[{index}].worker_id")
         worker_ids.append(worker_id)
+        runtime_worker = runtime_workers_by_id.get(worker_id)
+        if runtime_worker is None:
+            raise ValueError(f"opencode_hostless_rehearsal_report.workers[{index}].worker_id must exist in opencode_runtime.workers")
         if worker.get("semantic_gate") is not False:
             raise ValueError(f"opencode_hostless_rehearsal_report.workers[{index}].semantic_gate must be false")
+        for field, runtime_field in (
+            ("summary", "summary"),
+            ("report", "worker_report"),
+            ("handoff_contract", "handoff_contract"),
+            ("opencode_session_evidence", "opencode_session_evidence"),
+        ):
+            top_binding = validate_hash_bound_artifact_binding(
+                worker.get(field),
+                f"opencode_hostless_rehearsal_report.workers[{index}].{field}",
+                repo_root=repo_root,
+            )
+            compare_artifact_binding(
+                top_binding,
+                require_object(
+                    runtime_worker.get(runtime_field),
+                    f"opencode_hostless_rehearsal_report.opencode_runtime.workers[{index}].{runtime_field}",
+                ),
+                f"opencode_hostless_rehearsal_report.workers[{index}].{field}",
+            )
+        worker_preflight = validate_opencode_preflight_binding(
+            worker.get("opencode_preflight_report"),
+            f"opencode_hostless_rehearsal_report.workers[{index}].opencode_preflight_report",
+            repo_root=repo_root,
+        )
+        compare_artifact_binding(
+            worker_preflight,
+            top_level_preflight,
+            f"opencode_hostless_rehearsal_report.workers[{index}].opencode_preflight_report",
+        )
         verification = require_object(
             worker.get("opencode_contract_verification"),
             f"opencode_hostless_rehearsal_report.workers[{index}].opencode_contract_verification",
@@ -3519,8 +3597,18 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
             raise ValueError(
                 f"opencode_hostless_rehearsal_report.workers[{index}].opencode_contract_verification.status must be executed"
             )
+        runtime_verification = require_object(
+            runtime_worker.get("opencode_contract_verification"),
+            f"opencode_hostless_rehearsal_report.opencode_runtime.workers[{index}].opencode_contract_verification",
+        )
+        if verification != runtime_verification:
+            raise ValueError(
+                f"opencode_hostless_rehearsal_report.workers[{index}].opencode_contract_verification must match opencode_runtime.workers"
+            )
     if len(set(worker_ids)) != len(worker_ids):
         raise ValueError("opencode_hostless_rehearsal_report.workers worker_id values must be unique")
+    if worker_ids != runtime_result["worker_ids"]:
+        raise ValueError("opencode_hostless_rehearsal_report.workers worker_id order must match opencode_runtime.workers")
     return {
         "status": "passed",
         "report_kind": "opencode-hostless-rehearsal-report",
@@ -3532,6 +3620,12 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
         "required_variant": COMPETITION_OPENCODE_VARIANT,
         "worker_count": worker_count,
         "worker_ids": worker_ids,
+        "batch_profile_report": batch_profile_report,
+        "run_plan_report": run_plan_report,
+        "context_contract": context_contract,
+        "agent_contract": agent_contract,
+        "context_agent_consistency": context_agent_consistency,
+        "opencode_preflight_report": top_level_preflight,
     }
 
 

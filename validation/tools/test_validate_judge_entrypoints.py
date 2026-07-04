@@ -1510,6 +1510,195 @@ def valid_deterministic_judge_index_payload() -> dict:
     return payload
 
 
+def write_opencode_hostless_rehearsal_fixture(root: Path) -> tuple[Path, dict]:
+    out_root = root / "out"
+    harness_dir = out_root / "harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    run_id = "hostless-rehearsal"
+    runtime_source = valid_opencode_judge_index_payload()
+    runtime_source["run_id"] = run_id
+    materialize_opencode_judge_index_artifacts(
+        runtime_source,
+        out_root,
+        profile_payload={"profile_id": "demo-hostless"},
+    )
+    runtime = runtime_source["opencode_agent_runtime"]
+    runtime_worker = runtime["workers"][0]
+    worker_id = runtime_worker["worker_id"]
+    worker_root = out_root / "workers" / worker_id
+    assignment = harness_dir / "assignments" / f"{worker_id}.json"
+    request = harness_dir / "assignments" / f"{worker_id}-request.json"
+    write_json(assignment, {"worker_id": worker_id, "report_kind": "assignment"})
+    write_json(request, {"worker_id": worker_id, "report_kind": "worker-request"})
+    worker_context = {
+        "assignment_path": repo_relative(assignment),
+        "function": "demo_unit",
+        "isolated_out_root": repo_relative(worker_root),
+        "out_root": repo_relative(worker_root),
+        "report_path": runtime_worker["worker_report"]["path"],
+        "request_path": repo_relative(request),
+        "slice_id": "demo-unit",
+        "source_commit": "abc123",
+        "source_sha256": "f" * 64,
+        "summary_path": runtime_worker["summary"]["path"],
+        "worker_id": worker_id,
+    }
+    batch_report_path = harness_dir / "batch-profile-report.json"
+    run_plan_report_path = harness_dir / "run-plan-report.json"
+    context_pack_path = harness_dir / "context-pack.json"
+    agent_index_path = harness_dir / "agent-index.json"
+    write_json(
+        batch_report_path,
+        {
+            "schema_version": 1,
+            "report_kind": "batch-profile-report",
+            "status": "completed",
+            "run_id": run_id,
+            "mode": "opencode",
+            "proof_class": "local-simulation",
+        },
+    )
+    write_json(
+        run_plan_report_path,
+        {
+            "schema_version": 1,
+            "report_kind": "run-plan-report",
+            "status": "completed",
+            "run_id": run_id,
+            "mode": "opencode",
+        },
+    )
+    context_payload = {
+        "report_kind": "context-pack",
+        "context_management_contract": {
+            "agent_index": repo_relative(agent_index_path),
+            "chat_output_is_evidence": False,
+            "context_pack": repo_relative(context_pack_path),
+            "contract_kind": "context-management",
+            "evidence_policy": "on-disk-artifacts-only",
+            "pipeline": [
+                {"stage": "plan", "role": "planner"},
+                {"stage": "translate", "role": "worker", "fanout": True},
+                {"stage": "verify", "role": "verifier"},
+                {"stage": "repair", "role": "repairer", "max_rounds": 5},
+            ],
+            "primary_report": repo_relative(batch_report_path),
+            "resume_protocol": {
+                "checkpoint_backend": "sqlite",
+                "ledger_path": repo_relative(out_root / "state" / "opencode-agent-harness.sqlite3"),
+                "worker_state_source": "agent-index.agents_by_worker_id",
+            },
+            "schema_version": 1,
+            "semantic_gate": False,
+        },
+        "entrypoints": {
+            "primary_report": repo_relative(batch_report_path),
+            "batch_profile_report": repo_relative(batch_report_path),
+            "run_plan_report": repo_relative(run_plan_report_path),
+        },
+        "workers": [worker_context],
+    }
+    agent_payload = {
+        "report_kind": "agent-index",
+        "agent_coordination_contract": {
+            "chat_output_is_evidence": False,
+            "checkpoint_backend": "sqlite",
+            "contract_kind": "agent-coordination",
+            "roles": {
+                "planner": {},
+                "worker": {"isolation": "per-worker out_root"},
+                "repairer": {"round_cap": 5},
+                "verifier": {},
+                "reporter": {},
+            },
+            "schema_version": 1,
+            "semantic_gate": False,
+            "worker_count": 1,
+        },
+        "agents": [worker_context],
+        "agents_by_worker_id": {worker_id: worker_context},
+        "reports": {
+            "batch_profile_report": {
+                "path": repo_relative(batch_report_path),
+                "report_kind": "batch-profile-report",
+                "status": "completed",
+            },
+            "run_plan_report": {
+                "path": repo_relative(run_plan_report_path),
+                "report_kind": "run-plan-report",
+                "status": "completed",
+            },
+        },
+    }
+    write_json(context_pack_path, context_payload)
+    write_json(agent_index_path, agent_payload)
+    rehearsal_path = harness_dir / "opencode-hostless-rehearsal-report.json"
+    payload = {
+        "schema_version": 1,
+        "report_kind": "opencode-hostless-rehearsal-report",
+        "status": "completed",
+        "exit_code": 0,
+        "run_id": run_id,
+        "profile_id": "demo-hostless",
+        "proof_class": "local-simulation",
+        "mode": "opencode",
+        "rehearsal_runner": "fake/fixture",
+        "closes_p0_h9": False,
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "h9_contract": {
+            "status": "blocked",
+            "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
+            "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
+            "required_model": "GLM-5.1",
+            "required_variant": "max",
+            "required_proof_class": "competition-exact",
+            "local_simulation_closes_p0_h9": False,
+        },
+        "batch_profile_report": {
+            "path": repo_relative(batch_report_path),
+            "sha256": validator.sha256_file(batch_report_path),
+        },
+        "run_plan_report": {
+            "path": repo_relative(run_plan_report_path),
+            "sha256": validator.sha256_file(run_plan_report_path),
+        },
+        "context_pack": {
+            "path": repo_relative(context_pack_path),
+            "sha256": validator.sha256_file(context_pack_path),
+        },
+        "agent_index": {
+            "path": repo_relative(agent_index_path),
+            "sha256": validator.sha256_file(agent_index_path),
+        },
+        "opencode_preflight_report": json.loads(json.dumps(runtime["opencode_preflight_report"])),
+        "opencode_runtime": runtime,
+        "workers": [
+            {
+                "worker_id": worker_id,
+                "summary_status": "passed",
+                "exit_code": 0,
+                "recorded": True,
+                "semantic_gate": False,
+                "summary": json.loads(json.dumps(runtime_worker["summary"])),
+                "report": json.loads(json.dumps(runtime_worker["worker_report"])),
+                "handoff_contract": json.loads(json.dumps(runtime_worker["handoff_contract"])),
+                "opencode_session_evidence": json.loads(json.dumps(runtime_worker["opencode_session_evidence"])),
+                "opencode_preflight_report": json.loads(json.dumps(runtime_worker["opencode_preflight_report"])),
+                "opencode_contract_verification": json.loads(json.dumps(runtime_worker["opencode_contract_verification"])),
+                "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+            }
+        ],
+        "worker_count": 1,
+        "boundary": "hostless rehearsal only",
+    }
+    write_json(rehearsal_path, payload)
+    return rehearsal_path, payload
+
+
 def write_minimal_context_ledger(
     path: Path,
     *,
@@ -6013,64 +6202,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)
         temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
-        rehearsal_path = temp_dir / "harness" / "opencode-hostless-rehearsal-report.json"
-        payload = {
-            "schema_version": 1,
-            "report_kind": "opencode-hostless-rehearsal-report",
-            "status": "completed",
-            "exit_code": 0,
-            "run_id": "hostless-rehearsal",
-            "profile_id": "demo-hostless",
-            "proof_class": "local-simulation",
-            "mode": "opencode",
-            "rehearsal_runner": "fake/fixture",
-            "closes_p0_h9": False,
-            "semantic_gate": False,
-            "chat_output_is_evidence": False,
-            "generated_draft_semantic_pass": False,
-            "translation_coverage_numerator": 0,
-            "h9_contract": {
-                "status": "blocked",
-                "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
-                "required_agent_tool": "opencode",
-                "required_agent": "c2rust-migrator",
-                "required_model": "GLM-5.1",
-                "required_variant": "max",
-                "required_proof_class": "competition-exact",
-                "local_simulation_closes_p0_h9": False,
-            },
-            "opencode_runtime": {
-                "runtime": "opencode",
-                "chat_output_is_evidence": False,
-                "semantic_gate": False,
-                "worker_count": 1,
-                "contract_status_counts": {"executed": 1},
-                "all_contracts_executed": True,
-                "failed_or_missing_contract_workers": [],
-                "workers": [
-                    {
-                        "worker_id": "worker-001",
-                        "chat_output_is_evidence": False,
-                        "semantic_gate": False,
-                        "opencode_contract_verification": {"status": "executed"},
-                    }
-                ],
-            },
-            "workers": [
-                {
-                    "worker_id": "worker-001",
-                    "summary_status": "passed",
-                    "exit_code": 0,
-                    "recorded": True,
-                    "semantic_gate": False,
-                    "opencode_contract_verification": {"status": "executed"},
-                    "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
-                }
-            ],
-            "worker_count": 1,
-            "boundary": "hostless rehearsal only",
-        }
-        write_json(rehearsal_path, payload)
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
 
         result = validator.validate_harness_artifact_contracts(
             {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
@@ -6104,6 +6236,21 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         require_local_artifacts=True,
                         repo_root=REPO_ROOT,
                     )
+
+    def test_opencode_hostless_rehearsal_contract_rejects_batch_profile_sha_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+        payload["batch_profile_report"]["sha256"] = "0" * 64
+        write_json(rehearsal_path, payload)
+
+        with self.assertRaisesRegex(ValueError, r"batch_profile_report.*sha256"):
+            validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
 
     def test_multi_worker_entrypoint_requires_multi_worker_judge_graph(self) -> None:
         target_dir = REPO_ROOT / "target"
