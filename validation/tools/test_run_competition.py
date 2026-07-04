@@ -136,6 +136,7 @@ def write_worker_summary(
     *,
     attempted: int,
     semantic_pass: int,
+    compiled: int | None = None,
     failed: int = 0,
     final_gate_status: str = "passed",
     workflow_metrics: dict | None = None,
@@ -158,8 +159,8 @@ def write_worker_summary(
         "translator_version": "0.1.0",
         "slices": {
             "attempted": attempted,
-            "typed_ir_generated": semantic_pass,
-            "compiled": semantic_pass,
+            "typed_ir_generated": semantic_pass if compiled is None else compiled,
+            "compiled": semantic_pass if compiled is None else compiled,
             "semantic_pass": semantic_pass,
             "refused": 0,
             "blocked": 0,
@@ -1074,6 +1075,7 @@ class RunCompetitionTests(unittest.TestCase):
                 worker_root,
                 "worker-a",
                 attempted=2,
+                compiled=2,
                 semantic_pass=1,
                 workflow_metrics={
                     "schema_version": 1,
@@ -1142,7 +1144,7 @@ class RunCompetitionTests(unittest.TestCase):
             metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(metrics["units_total"], 3)
             self.assertEqual(metrics["units_converged"], 2)
-            self.assertEqual(metrics["units_baseline_only"], 0)
+            self.assertEqual(metrics["units_baseline_only"], 1)
             self.assertEqual(metrics["avg_repair_rounds"], 1.0)
             self.assertAlmostEqual(metrics["auto_recovery_rate"], 1.0 / 3.0)
             self.assertEqual(metrics["human_interventions"], 1)

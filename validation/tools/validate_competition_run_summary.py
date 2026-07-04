@@ -263,10 +263,52 @@ def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, re
         raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
     if len(metrics["per_unit_statuses"]) != int(metrics["units_total"]):
         raise SystemExit("workflow metrics artifact per_unit_statuses count does not match units_total")
+    validate_per_unit_status_rollup(metrics, slices)
     validate_translation_before_after_summary(metrics)
     validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
     validate_root_unsafe_reduction_consistency(metrics)
     validate_root_cause_counts(metrics)
+
+
+def validate_per_unit_status_rollup(metrics: dict[str, Any], slices: dict[str, Any]) -> None:
+    counts = {
+        "compiled": 0,
+        "semantic_pass": 0,
+        "refused": 0,
+        "blocked": 0,
+        "failed": 0,
+    }
+    terminal_fields = ("semantic_pass", "refused", "blocked", "failed")
+    for index, unit in enumerate(metrics["per_unit_statuses"]):
+        if not isinstance(unit, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] must be an object")
+        for field in counts:
+            if not isinstance(unit.get(field), bool):
+                raise SystemExit(f"workflow metrics per_unit_statuses[{index}].{field} must be boolean")
+        terminal_true = [field for field in terminal_fields if unit[field] is True]
+        if len(terminal_true) > 1:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}] must have at most one terminal status flag"
+            )
+        if unit["semantic_pass"] is True and unit["compiled"] is not True:
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].semantic_pass requires compiled")
+        if not terminal_true and unit["compiled"] is not True:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}] must have one terminal status flag "
+                "or be compiled baseline-only"
+            )
+        for field in counts:
+            if unit[field] is True:
+                counts[field] += 1
+    for field, count in counts.items():
+        if count != int(slices[field]):
+            raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match competition summary")
+    if metrics["units_converged"] != counts["semantic_pass"]:
+        raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match units_converged")
+    if metrics["units_baseline_only"] != max(0, counts["compiled"] - counts["semantic_pass"]):
+        raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match units_baseline_only")
+    if metrics["fail_closed_count"] != counts["refused"] + counts["blocked"]:
+        raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match fail_closed_count")
 
 
 def validate_translation_before_after_summary(metrics: dict[str, Any]) -> None:
