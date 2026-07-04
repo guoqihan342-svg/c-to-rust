@@ -28977,32 +28977,47 @@ fn pointer_field_writes_record_lvalue_and_boundary_decisions() {
     };
     let out_dir = unique_out_dir("ip4-addr-fields");
 
-    let result = translate_slice(&spec);
     let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 
-    assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(manifest.slice_id, "ip4-addr-fields");
-    let addr = result
-        .pointer_graph
-        .nodes
-        .iter()
-        .find(|node| node.id == "addr")
-        .expect("addr pointer node");
-    assert!(addr.write_effects.contains(&"addr->sin_family".to_string()));
-    assert!(addr.write_effects.contains(&"addr->sin_port".to_string()));
-
-    let cfg = json_file(out_dir.join("l3-ip4-addr-fields-cfg.json"));
-    let pointer_graph = json_file(out_dir.join("l3-ip4-addr-fields-pointer-graph.json"));
     let plan = json_file(out_dir.join("l3-ip4-addr-fields-auto-translation-plan.json"));
-    let lvalue_kinds = cfg["cfg"]["functions"][0]["blocks"][0]["lvalue_kinds"]
-        .as_array()
-        .expect("lvalue kinds");
-    let addr_decisions = pointer_graph["pointer_graph"]["nodes"]
+    assert_eq!(
+        plan["translation_source"]["selected"],
+        "legacy-string-translator"
+    );
+    let plan_errors = plan["errors"].as_array().expect("plan errors");
+    assert!(
+        plan_errors.iter().all(|error| {
+            let kind = error["kind"].as_str().unwrap_or_default();
+            kind.starts_with("legacy_") && kind.ends_with("_retired")
+        }),
+        "expected only retired-legacy diagnostics, got {plan_errors:?}"
+    );
+
+    let pointer_graph = json_file(out_dir.join("l3-ip4-addr-fields-pointer-graph.json"));
+    assert_eq!(pointer_graph["status"], "recorded");
+    let addr = pointer_graph["pointer_graph"]["nodes"]
         .as_array()
         .unwrap()
         .iter()
         .find(|node| node["id"] == "addr")
-        .and_then(|node| node["boundary_decisions"].as_array())
+        .expect("addr pointer node");
+    let write_effects = addr["write_effects"]
+        .as_array()
+        .expect("addr write effects");
+    assert!(write_effects
+        .iter()
+        .any(|effect| effect == "addr->sin_family"));
+    assert!(write_effects
+        .iter()
+        .any(|effect| effect == "addr->sin_port"));
+
+    let cfg = json_file(out_dir.join("l3-ip4-addr-fields-cfg.json"));
+    let lvalue_kinds = cfg["cfg"]["functions"][0]["blocks"][0]["lvalue_kinds"]
+        .as_array()
+        .expect("lvalue kinds");
+    let addr_decisions = addr["boundary_decisions"]
+        .as_array()
         .expect("addr boundary decisions");
 
     assert!(lvalue_kinds.iter().any(|kind| kind == "pointer_field"));
@@ -29291,18 +29306,28 @@ fn unproven_input_buffer_read_blocks_without_false_success() {
         build_profile: profile(true),
         ..SliceSpec::default()
     };
+    let out_dir = unique_out_dir("bad-buffer-read");
 
-    let result = translate_slice(&spec);
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 
-    assert!(result.rust_code.is_empty());
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft = fs::read_to_string(out_dir.join("l3-bad-buffer-read-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-buffer-read-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
     assert!(
-        result
-            .errors
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
             .iter()
-            .any(|error| error.kind == "unsupported_syntax"),
+            .any(|error| error["kind"] == "unsupported_syntax"),
         "{:?}",
-        result.errors
+        plan["errors"]
     );
+    let events =
+        fs::read_to_string(out_dir.join("l3-bad-buffer-read-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
 }
 
 #[test]
@@ -29317,18 +29342,29 @@ fn unproven_pointer_arithmetic_read_blocks_without_false_success() {
         build_profile: profile(true),
         ..SliceSpec::default()
     };
+    let out_dir = unique_out_dir("bad-ptr-arith-read");
 
-    let result = translate_slice(&spec);
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 
-    assert!(result.rust_code.is_empty());
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-read-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-ptr-arith-read-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
     assert!(
-        result
-            .errors
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
             .iter()
-            .any(|error| error.kind == "unsupported_syntax"),
+            .any(|error| error["kind"] == "unsupported_syntax"),
         "{:?}",
-        result.errors
+        plan["errors"]
     );
+    let events =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-read-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
 }
 
 #[test]
@@ -29345,18 +29381,29 @@ fn unproven_pointer_arithmetic_output_write_blocks_without_false_success() {
         build_profile: profile(true),
         ..SliceSpec::default()
     };
+    let out_dir = unique_out_dir("bad-ptr-arith-out");
 
-    let result = translate_slice(&spec);
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 
-    assert!(result.rust_code.is_empty());
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-out-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-ptr-arith-out-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
     assert!(
-        result
-            .errors
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
             .iter()
-            .any(|error| error.kind == "unsupported_syntax"),
+            .any(|error| error["kind"] == "unsupported_syntax"),
         "{:?}",
-        result.errors
+        plan["errors"]
     );
+    let events =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-out-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
 }
 
 #[test]
@@ -29371,18 +29418,30 @@ fn complex_pointer_arithmetic_output_write_blocks_without_false_success() {
         build_profile: profile(true),
         ..SliceSpec::default()
     };
+    let out_dir = unique_out_dir("bad-ptr-arith-complex-out");
 
-    let result = translate_slice(&spec);
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
 
-    assert!(result.rust_code.is_empty());
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-complex-out-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-ptr-arith-complex-out-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
     assert!(
-        result
-            .errors
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
             .iter()
-            .any(|error| error.kind == "unsupported_lvalue"),
+            .any(|error| error["kind"] == "unsupported_lvalue"),
         "{:?}",
-        result.errors
+        plan["errors"]
     );
+    let events = fs::read_to_string(
+        out_dir.join("l3-bad-ptr-arith-complex-out-auto-translation-events.jsonl"),
+    )
+    .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
 }
 
 #[test]
