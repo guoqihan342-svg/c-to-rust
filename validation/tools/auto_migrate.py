@@ -1621,6 +1621,8 @@ def scalar_ub_contract(spec: dict[str, Any]) -> dict[str, Any]:
             ),
             "shift_count": str(c_contract.get("shift_count", "not_declared")),
             "signed_right_shift": str(c_contract.get("signed_right_shift", "not_declared")),
+            "signed_left_shift": str(c_contract.get("signed_left_shift", "not_declared")),
+            "signed_negation": str(c_contract.get("signed_negation", "not_declared")),
         },
         "fixture_contract": {
             "case_source": str(fixture_domain.get("case_source", "not_declared")),
@@ -1722,6 +1724,10 @@ def scalar_precondition_required_contract(code: str) -> tuple[str | None, str | 
         return "shift_count", "runtime_precondition_in_range"
     if code == "signed_right_shift_implementation_defined":
         return "signed_right_shift", "explicit_implementation_defined_contract"
+    if code == "signed_left_shift_no_overflow":
+        return "signed_left_shift", "runtime_precondition_no_overflow"
+    if code == "signed_negation_no_overflow":
+        return "signed_negation", "runtime_precondition_no_overflow"
     return None, None
 
 

@@ -1872,6 +1872,62 @@ class AutoMigrateTests(unittest.TestCase):
             ["c_boundary.scalar_arithmetic_contract.unknown"],
         )
 
+    def test_scalar_admission_fail_closes_signed_left_shift_and_negation(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "c_boundary": {
+                "scalar_arithmetic_contract": {
+                    "signed_left_shift": "runtime_precondition_no_overflow",
+                    "signed_negation": "runtime_precondition_no_overflow",
+                }
+            },
+            "fixture_contract": {
+                "scalar_input_domain": {
+                    "case_source": "unit-test",
+                    "parameters": [{"name": "value", "type": "int", "range": [-100, 100]}],
+                    "covers_overflow_boundaries": False,
+                }
+            },
+        }
+        preconditions = [
+            {"code": "signed_left_shift_no_overflow"},
+            {"code": "signed_negation_no_overflow"},
+        ]
+
+        covered = module.scalar_admission_from_runtime_preconditions(spec, preconditions)
+        self.assertEqual(covered["status"], "covered")
+        self.assertEqual(
+            covered["covered"][0]["covered_by"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_left_shift",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+        self.assertEqual(
+            covered["covered"][1]["covered_by"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_negation",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+
+        undeclared = module.scalar_admission_from_runtime_preconditions({}, preconditions)
+        self.assertEqual(undeclared["status"], "unresolved")
+        self.assertEqual(
+            undeclared["unresolved"][0]["missing"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_left_shift",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+        self.assertEqual(
+            undeclared["unresolved"][1]["missing"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_negation",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+
     def test_route_decision_records_primary_candidate_fallback_source(self) -> None:
         module = load_auto_migrate_module()
         spec = {

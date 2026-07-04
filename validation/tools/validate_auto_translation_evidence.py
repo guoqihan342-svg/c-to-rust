@@ -163,7 +163,10 @@ def validate_json(schema_path: Path, data_path: Path) -> None:
 def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
     pointer_graph_path = evidence_dir / f"{prefix}-pointer-graph.json"
     pointer_graph = load_json(pointer_graph_path)
-    if pointer_graph.get("status") == "not_applicable":
+    # not_applicable: pointer analysis ran and found no pointer surface.
+    # not_evaluated: translation was blocked before pointer analysis ran, so
+    # there is no pointer conclusion for the alias gate to check.
+    if pointer_graph.get("status") in {"not_applicable", "not_evaluated"}:
         return
 
     nodes = pointer_graph.get("pointer_nodes", [])
@@ -1732,6 +1735,10 @@ def scalar_precondition_required_contract(code: str) -> tuple[str | None, str | 
         return "shift_count", "runtime_precondition_in_range"
     if code == "signed_right_shift_implementation_defined":
         return "signed_right_shift", "explicit_implementation_defined_contract"
+    if code == "signed_left_shift_no_overflow":
+        return "signed_left_shift", "runtime_precondition_no_overflow"
+    if code == "signed_negation_no_overflow":
+        return "signed_negation", "runtime_precondition_no_overflow"
     return None, None
 
 

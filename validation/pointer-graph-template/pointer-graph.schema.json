@@ -40,11 +40,15 @@
       "enum": [
         "recorded",
         "not_applicable",
+        "not_evaluated",
         "stale",
         "incomplete"
       ]
     },
     "not_applicable_reason": {
+      "type": "string"
+    },
+    "not_evaluated_reason": {
       "type": "string"
     },
     "source_commit": {
@@ -242,32 +246,69 @@
       }
     }
   },
-  "if": {
-    "properties": {
-      "status": {
-        "const": "not_applicable"
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "not_applicable"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "not_applicable_reason"
+        ],
+        "properties": {
+          "not_applicable_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "not_evaluated"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "not_evaluated_reason"
+        ],
+        "properties": {
+          "not_evaluated_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "recorded",
+              "stale",
+              "incomplete"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "pointer_nodes",
+          "dependency_edges",
+          "rust_mapping",
+          "risk_summary"
+        ]
       }
     }
-  },
-  "then": {
-    "required": [
-      "not_applicable_reason"
-    ],
-    "properties": {
-      "not_applicable_reason": {
-        "type": "string",
-        "minLength": 1
-      }
-    }
-  },
-  "else": {
-    "required": [
-      "pointer_nodes",
-      "dependency_edges",
-      "rust_mapping",
-      "risk_summary"
-    ]
-  },
+  ],
   "definitions": {
     "callEdge": {
       "type": "object",

@@ -1,0 +1,122 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "signed_shift_negation",
+      "type": {
+        "qualType": "int (int, int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "+",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "BinaryOperator",
+                      "opcode": "<<",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "value"
+                              },
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "count"
+                              },
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "-",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "value"
+                              },
+                              "type": {
+                                "qualType": "int"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

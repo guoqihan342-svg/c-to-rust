@@ -10,7 +10,7 @@ Use this checklist before translating a pointer-bearing C slice or reporting L2/
 - [ ] Source commit and repo commit are recorded.
 - [ ] ContextPack reference is recorded.
 - [ ] Impact set and config profile references are recorded when available.
-- [ ] Pointer graph status is `recorded`, or status is `not_applicable` with a non-empty reason.
+- [ ] Pointer graph status is `recorded`, `not_applicable` with a non-empty reason, or `not_evaluated` with a non-empty reason when translation was blocked before pointer analysis ran.
 - [ ] Applicability decision covers pointer parameters, pointer returns, struct pointer fields, buffers, callbacks, opaque handles, globals, manual allocation, and external mutable state.
 
 ## Graph Content

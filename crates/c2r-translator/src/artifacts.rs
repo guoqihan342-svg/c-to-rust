@@ -25,6 +25,17 @@ pub(crate) fn write_core_translation_artifacts(
     prefix: &str,
     status: &str,
 ) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    // Pointer analysis only runs after translation clears the parse,
+    // control-flow, and syntax gates, so an empty node set is evidence of
+    // "no pointer surface" only when translation finished without blocking
+    // errors; a blocked translation must not claim any pointer conclusion.
+    let pointer_graph_status = if !result.pointer_graph.nodes.is_empty() {
+        "recorded"
+    } else if result.errors.is_empty() {
+        "not_applicable"
+    } else {
+        "not_evaluated"
+    };
     Ok(vec![
         write_json_file(
             out_dir,
@@ -78,9 +89,10 @@ pub(crate) fn write_core_translation_artifacts(
                 "target_id": spec.target_id,
                 "slice_id": spec.slice_id,
                 "source_commit": spec.source_commit,
-                "status": if result.pointer_graph.nodes.is_empty() { "not_applicable" } else { "recorded" },
+                "status": pointer_graph_status,
                 "pointer_graph": &result.pointer_graph,
-                "not_applicable_reason": if result.pointer_graph.nodes.is_empty() { Some("slice has no pointer surface") } else { None },
+                "not_applicable_reason": if pointer_graph_status == "not_applicable" { Some("slice has no pointer surface") } else { None },
+                "not_evaluated_reason": if pointer_graph_status == "not_evaluated" { Some("pointer analysis did not run (translation blocked)") } else { None },
             }),
         )?,
         write_json_file(
@@ -166,21 +178,28 @@ pub fn write_translation_artifacts(
 
 fn portable_artifact_path(path: &Path) -> String {
     if path.is_absolute() {
-        if let Ok(current_dir) = std::env::current_dir() {
-            if let Ok(relative) = path.strip_prefix(&current_dir) {
-                return path_to_manifest_string(relative);
-            }
-        }
-        if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-            let crate_dir = Path::new(manifest_dir);
-            if let Some(repo_root) = crate_dir.parent().and_then(Path::parent) {
-                if let Ok(relative) = path.strip_prefix(repo_root) {
-                    return path_to_manifest_string(relative);
-                }
-            }
+        if let Some(relative) = repo_relative_path(path) {
+            return relative;
         }
     }
     path_to_manifest_string(path)
+}
+
+fn repo_relative_path(path: &Path) -> Option<String> {
+    if let Ok(current_dir) = std::env::current_dir() {
+        if let Ok(relative) = path.strip_prefix(&current_dir) {
+            return Some(path_to_manifest_string(relative));
+        }
+    }
+    if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+        let crate_dir = Path::new(manifest_dir);
+        if let Some(repo_root) = crate_dir.parent().and_then(Path::parent) {
+            if let Ok(relative) = path.strip_prefix(repo_root) {
+                return Some(path_to_manifest_string(relative));
+            }
+        }
+    }
+    None
 }
 
 fn path_to_manifest_string(path: &Path) -> String {
@@ -278,7 +297,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
     out_dir: &Path,
     prefix: &str,
 ) -> Result<PathBuf, Box<dyn Error>> {
-    let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
+    let mut value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
         Ok(parse_spec) => {
             let source_file = parse_spec.source_root.join(&parse_spec.source_file);
             let environment = crate::clang_lowered_translation::collect_environment_lossy();
@@ -371,11 +390,79 @@ pub(crate) fn write_clang_lowering_report_artifact(
             ],
         }),
     };
+    sanitize_host_paths_json(&mut value);
     write_json_file(
         out_dir,
         &format!("{prefix}-clang-lowering-report.json"),
         &value,
     )
+}
+
+/// Public evidence must only contain repo-relative POSIX paths, but the
+/// serialized lowering report captures host details (`clang_path`, synthesized
+/// clang arguments, the resolved source root, diagnostics). Every string in
+/// the artifact JSON is therefore rewritten before writing: repo-internal
+/// paths become repo-relative and any remaining absolute host path collapses
+/// to a stable `<host>/<file-name>` placeholder. Only the serialized artifact
+/// is sanitized; the in-memory report keeps the real paths it lowered with.
+#[cfg(feature = "clang-lowering-report")]
+fn sanitize_host_paths_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) => {
+            if let Some(sanitized) = sanitize_host_path_text(text) {
+                *text = sanitized;
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                sanitize_host_paths_json(item);
+            }
+        }
+        serde_json::Value::Object(entries) => {
+            for item in entries.values_mut() {
+                sanitize_host_paths_json(item);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn sanitize_host_path_text(text: &str) -> Option<String> {
+    let start = absolute_host_path_start(text)?;
+    let (prefix, path_text) = text.split_at(start);
+    let replacement = repo_relative_path(Path::new(path_text)).unwrap_or_else(|| {
+        match path_text
+            .rsplit(['/', '\\'])
+            .find(|component| !component.is_empty())
+        {
+            Some(file_name) => format!("<host>/{file_name}"),
+            None => "<host>".to_string(),
+        }
+    });
+    Some(format!("{prefix}{replacement}"))
+}
+
+/// Returns the byte offset where an absolute host path begins, or `None` for
+/// strings that only contain relative (repo-portable) paths. Detected shapes:
+/// a leading POSIX root (`/usr/...`), a POSIX root embedded in a clang
+/// include/define flag (`-I/usr/include`), and a Windows drive-letter root
+/// (`C:/` or `C:\`) at any position. `X://` is skipped so URL schemes survive.
+#[cfg(feature = "clang-lowering-report")]
+fn absolute_host_path_start(text: &str) -> Option<usize> {
+    let bytes = text.as_bytes();
+    if bytes.first() == Some(&b'/') {
+        return Some(0);
+    }
+    if (text.starts_with("-I/") || text.starts_with("-D/")) && bytes.len() > 2 {
+        return Some(2);
+    }
+    (0..bytes.len().saturating_sub(2)).find(|&index| {
+        bytes[index].is_ascii_alphabetic()
+            && bytes[index + 1] == b':'
+            && (bytes[index + 2] == b'/' || bytes[index + 2] == b'\\')
+            && !(bytes[index + 2] == b'/' && bytes.get(index + 3) == Some(&b'/'))
+    })
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -517,8 +604,14 @@ fn collect_expr_runtime_preconditions(
             collect_expr_runtime_preconditions(rhs, preconditions);
             collect_binary_runtime_preconditions(op, ty, source_span, preconditions);
         }
-        typed_ir::IrExpr::Unary { operand, .. } => {
+        typed_ir::IrExpr::Unary {
+            op,
+            operand,
+            ty,
+            source_span,
+        } => {
             collect_expr_runtime_preconditions(operand, preconditions);
+            collect_unary_runtime_preconditions(op, ty, source_span, preconditions);
         }
         typed_ir::IrExpr::Conditional {
             condition,
@@ -652,6 +745,15 @@ fn collect_binary_runtime_preconditions(
                 ty,
                 source_span,
             ));
+            if matches!(op, typed_ir::IrBinOp::Shl) && signed {
+                preconditions.push(runtime_precondition(
+                    "signed_left_shift_no_overflow",
+                    "C signed left shift must not shift a negative value or overflow the result type (C11 6.5.7p4) unless the slice contract declares a wrapping profile",
+                    op,
+                    ty,
+                    source_span,
+                ));
+            }
             if matches!(op, typed_ir::IrBinOp::Shr) && signed {
                 preconditions.push(runtime_precondition(
                     "signed_right_shift_implementation_defined",
@@ -667,6 +769,27 @@ fn collect_binary_runtime_preconditions(
 }
 
 #[cfg(feature = "clang-lowering-report")]
+fn collect_unary_runtime_preconditions(
+    op: &typed_ir::IrUnOp,
+    ty: &typed_ir::IrType,
+    source_span: &Option<typed_ir::SourceSpan>,
+    preconditions: &mut Vec<serde_json::Value>,
+) {
+    if !is_signed_integer_type(ty) {
+        return;
+    }
+    if matches!(op, typed_ir::IrUnOp::Neg) {
+        preconditions.push(unary_runtime_precondition(
+            "signed_negation_no_overflow",
+            "C signed negation must not evaluate -MIN (C11 6.5) unless the slice contract models that UB boundary",
+            op,
+            ty,
+            source_span,
+        ));
+    }
+}
+
+#[cfg(feature = "clang-lowering-report")]
 fn runtime_precondition(
     code: &str,
     detail: &str,
@@ -674,10 +797,44 @@ fn runtime_precondition(
     ty: &typed_ir::IrType,
     source_span: &Option<typed_ir::SourceSpan>,
 ) -> serde_json::Value {
+    runtime_precondition_for_node(
+        code,
+        detail,
+        format!("IrExpr::Binary.{op:?}"),
+        ty,
+        source_span,
+    )
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn unary_runtime_precondition(
+    code: &str,
+    detail: &str,
+    op: &typed_ir::IrUnOp,
+    ty: &typed_ir::IrType,
+    source_span: &Option<typed_ir::SourceSpan>,
+) -> serde_json::Value {
+    runtime_precondition_for_node(
+        code,
+        detail,
+        format!("IrExpr::Unary.{op:?}"),
+        ty,
+        source_span,
+    )
+}
+
+#[cfg(feature = "clang-lowering-report")]
+fn runtime_precondition_for_node(
+    code: &str,
+    detail: &str,
+    ir_node: String,
+    ty: &typed_ir::IrType,
+    source_span: &Option<typed_ir::SourceSpan>,
+) -> serde_json::Value {
     json!({
         "code": code,
         "detail": detail,
-        "ir_node": format!("IrExpr::Binary.{op:?}"),
+        "ir_node": ir_node,
         "type": type_summary(ty),
         "source_span": source_span,
     })
@@ -1006,7 +1163,7 @@ mod clang_lowering_report_artifact_tests {
     use super::*;
     use crate::{
         typed_ir::{
-            EmitPolicy, IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind,
+            EmitPolicy, IrBinOp, IrExpr, IrFunction, IrParam, IrStmt, IrType, IrTypeKind, IrUnOp,
             SignedRightShiftPolicy,
         },
         BuildProfile,
@@ -1212,6 +1369,86 @@ mod clang_lowering_report_artifact_tests {
         assert_eq!(evidence["status"], "generated");
         assert!(codes.contains(&"shift_count_in_range"));
         assert!(codes.contains(&"signed_right_shift_implementation_defined"));
+    }
+
+    #[test]
+    fn sanitize_host_path_text_replaces_absolute_paths_with_stable_placeholders() {
+        assert_eq!(
+            sanitize_host_path_text("C:\\Program Files\\LLVM\\bin\\clang.exe").as_deref(),
+            Some("<host>/clang.exe")
+        );
+        assert_eq!(
+            sanitize_host_path_text("-IC:/src/FlashDB/inc").as_deref(),
+            Some("-I<host>/inc")
+        );
+        assert_eq!(
+            sanitize_host_path_text("/usr/bin/clang").as_deref(),
+            Some("<host>/clang")
+        );
+        assert_eq!(
+            sanitize_host_path_text("-I/usr/include").as_deref(),
+            Some("-I<host>/include")
+        );
+        assert_eq!(sanitize_host_path_text("src/fdb_utils.c"), None);
+        assert_eq!(sanitize_host_path_text("-Xclang"), None);
+        assert_eq!(
+            sanitize_host_path_text("https://json-schema.org/draft-07/schema#"),
+            None
+        );
+    }
+
+    #[test]
+    fn typed_ir_candidate_evidence_records_signed_left_shift_and_negation_preconditions() {
+        let i32_ty = int_type("int", true, 32);
+        let function = IrFunction {
+            name: "signed_shift_negation".to_string(),
+            return_type: i32_ty.clone(),
+            params: vec![
+                IrParam {
+                    name: "value".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                IrParam {
+                    name: "count".to_string(),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+            ],
+            body: vec![IrStmt::Return {
+                value: Some(binary(
+                    IrBinOp::Add,
+                    binary(
+                        IrBinOp::Shl,
+                        var("value", &i32_ty),
+                        var("count", &i32_ty),
+                        &i32_ty,
+                    ),
+                    IrExpr::Unary {
+                        op: IrUnOp::Neg,
+                        operand: Box::new(var("value", &i32_ty)),
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    &i32_ty,
+                )),
+                source_span: None,
+            }],
+            source_span: None,
+        };
+
+        let evidence = typed_ir_candidate_evidence(Some(&function), &[], EmitPolicy::default());
+        let codes = evidence["runtime_preconditions"]
+            .as_array()
+            .expect("runtime precondition evidence")
+            .iter()
+            .map(|item| item["code"].as_str().unwrap())
+            .collect::<Vec<_>>();
+
+        assert_eq!(evidence["status"], "generated");
+        assert!(codes.contains(&"shift_count_in_range"));
+        assert!(codes.contains(&"signed_left_shift_no_overflow"));
+        assert!(codes.contains(&"signed_negation_no_overflow"));
     }
 
     #[test]

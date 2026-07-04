@@ -545,6 +545,20 @@
             "explicit_implementation_defined_contract",
             "fail_closed_without_explicit_contract"
           ]
+        },
+        "signed_left_shift": {
+          "enum": [
+            "not_declared",
+            "runtime_precondition_no_overflow",
+            "fail_closed"
+          ]
+        },
+        "signed_negation": {
+          "enum": [
+            "not_declared",
+            "runtime_precondition_no_overflow",
+            "fail_closed"
+          ]
         }
       }
     },
