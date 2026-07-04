@@ -342,7 +342,11 @@ function Get-RoundSteps {
             '$changed = @(git diff --name-only HEAD -- validation/evidence); $untracked = @(git ls-files --others --exclude-standard -- validation/evidence); if ($changed) { $changed; git diff --exit-code HEAD -- validation/evidence }; if ($untracked) { $untracked }; if ($changed -or $untracked) { exit 1 }'
         )))
     }
-    $steps.Add((New-Step "openspec-validate-all" "openspec_gates" "." @("openspec", "validate", "--all")))
+    if (Get-Command "openspec" -ErrorAction SilentlyContinue) {
+        $steps.Add((New-Step "openspec-validate-all" "openspec_gates" "." @("openspec", "validate", "--all")))
+    } else {
+        Write-Host "Skipping openspec-validate-all: openspec CLI not found; OpenSpec is a historical governance archive, not a current development entrypoint or competition/CI gate."
+    }
     $steps.Add((New-Step "git-diff-check" "repository_integrity" "." @("git", "diff", "--check")))
     return $steps
 }
