@@ -523,6 +523,19 @@ def run_report_contract_blockers(run_report: dict[str, Any], *, entrypoints: lis
         blockers.append("run_report_validation_missing")
     elif validation.get("status") != "passed":
         blockers.append("run_report_validation_not_passed")
+    else:
+        validated_artifacts = validation_artifacts_by_entrypoint(validation)
+        for entry in entrypoints:
+            entrypoint_id = str(entry.get("id", "unknown"))
+            key_artifacts = entry.get("key_artifacts")
+            if not isinstance(key_artifacts, dict):
+                continue
+            expected_artifacts = validated_artifacts.get(entrypoint_id, {})
+            for artifact_name, artifact_value in sorted(key_artifacts.items()):
+                if artifact_value in (None, ""):
+                    continue
+                if artifact_name not in expected_artifacts:
+                    blockers.append(f"validated_artifact_binding_missing:{entrypoint_id}:{artifact_name}")
     return blockers
 
 

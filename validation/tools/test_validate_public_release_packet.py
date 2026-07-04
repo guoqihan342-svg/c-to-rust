@@ -1986,6 +1986,34 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_publication_archive_summary_projection_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-publication-summary-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        packet["publication_manifest"]["competition_config_archive"]["file_count"] += 1
+
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "publication_manifest.competition_config_archive.file_count must match competition_config_archive.file_count"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
     def test_validate_packet_requires_archive_manifest_listed_config_files(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-manifest-files-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"

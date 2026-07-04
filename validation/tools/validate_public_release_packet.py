@@ -210,6 +210,7 @@ def require_competition_config_archive_contract(packet: dict[str, Any], *, repo_
         publication.get("competition_config_archive"),
         "publication_manifest.competition_config_archive",
     )
+    require_publication_archive_summary_projection(publication_archive, archive)
     publication_bundle = require_object(
         publication_archive.get("bundle_manifest"),
         "publication_manifest.competition_config_archive.bundle_manifest",
@@ -294,6 +295,18 @@ def require_publication_archive_external_refs_projection(
             "publication_manifest.competition_config_archive.external_refs must match "
             "competition_config_archive.external_refs"
         )
+
+
+def require_publication_archive_summary_projection(
+    publication_archive: dict[str, Any],
+    archive: dict[str, Any],
+) -> None:
+    for field in ("status", "root", "report_kind", "file_count"):
+        if publication_archive.get(field) != archive.get(field):
+            raise ValueError(
+                f"publication_manifest.competition_config_archive.{field} must match "
+                f"competition_config_archive.{field}"
+            )
 
 
 def require_competition_config_archive_matches_run_report(packet: dict[str, Any], *, repo_root: Path) -> None:

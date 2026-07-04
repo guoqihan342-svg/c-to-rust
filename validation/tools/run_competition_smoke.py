@@ -174,6 +174,9 @@ def run_competition_smoke(
     command_log_path = logs_dir / "commands.jsonl"
     if command_log_path.exists():
         command_log_path.unlink()
+    summary_path_value = summary_dir / "competition-smoke-summary.json"
+    if summary_path_value.exists():
+        summary_path_value.unlink()
 
     started = time.monotonic()
     run_id = run_id or time.strftime("smoke-%Y%m%dT%H%M%SZ", time.gmtime())
@@ -357,7 +360,6 @@ def run_competition_smoke(
     }
     if opencode_model_availability is not None:
         summary["opencode_model_availability"] = opencode_model_availability
-    summary_path_value = summary_dir / "competition-smoke-summary.json"
     summary_path_value.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return CompetitionSmokeResult(
         exit_code=0 if status == "passed" else 1,

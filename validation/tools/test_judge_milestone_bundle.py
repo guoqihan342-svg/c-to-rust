@@ -27,6 +27,16 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def artifact_ref(path: Path) -> dict:
+    from validation.tools import judge_milestone_bundle as bundle
+
+    return {
+        "path": repo_relative(path),
+        "status": "present",
+        "sha256": bundle.validator.sha256_file(path),
+    }
+
+
 def opencode_runtime_env_contract(base_root: Path, *, scope: str) -> dict:
     from validation.tools import judge_milestone_bundle as bundle
 
@@ -934,6 +944,25 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "branch": "competition",
                         "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
                     },
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(before_metrics_path),
+                                "route_governance_metrics_report": artifact_ref(before_route_metrics_path),
+                                "evidence_governance_report": artifact_ref(evidence_governance_path),
+                                "judge_evidence_index": artifact_ref(before_index_path),
+                            },
+                        },
+                        {
+                            "id": "opencode_multi_worker_evaluate_profile",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(opencode_metrics_path),
+                                "route_governance_metrics_report": artifact_ref(opencode_route_metrics_path),
+                                "judge_evidence_index": artifact_ref(opencode_index_path),
+                            },
+                        },
+                    ],
                 },
             },
         )
@@ -2024,6 +2053,69 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["status"], "blocked")
         self.assertIn("run_report_validation_missing", report["blockers"])
 
+    def test_bundle_blocks_unvalidated_key_artifacts_without_validation_expected_refs(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-unvalidated-key-artifact-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "headline": "Judge entrypoints passed: 1/1 executed; semantic_gate=false",
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {
+                            "judge_evidence_index": "target/unvalidated/judge-evidence-index.json",
+                        },
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {},
+                        }
+                    ],
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn(
+            "validated_artifact_binding_missing:before_after_judge_demo:judge_evidence_index",
+            report["blockers"],
+        )
+
     def test_bundle_blocks_proof_class_escalation_without_validation_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
@@ -2593,7 +2685,17 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
                     }
                 ],
-                "validation": {"status": "passed"},
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "judge_evidence_index": artifact_ref(index_path),
+                            },
+                        }
+                    ],
+                },
             },
         )
 
@@ -2655,7 +2757,17 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"route_governance_metrics_report": repo_relative(route_metrics_path)},
                     }
                 ],
-                "validation": {"status": "passed"},
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "route_governance_metrics_report": artifact_ref(route_metrics_path),
+                            },
+                        }
+                    ],
+                },
             },
         )
 
@@ -2892,7 +3004,17 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
                     }
                 ],
-                "validation": {"status": "passed"},
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "judge_evidence_index": artifact_ref(index_path),
+                            },
+                        }
+                    ],
+                },
             },
         )
 
@@ -2978,7 +3100,17 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                         "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
                     }
                 ],
-                "validation": {"status": "passed"},
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "judge_evidence_index": artifact_ref(index_path),
+                            },
+                        }
+                    ],
+                },
             },
         )
 

@@ -940,10 +940,16 @@ def competition_config_archive_manifest_path(out_path: Path) -> Path:
 
 
 def candidate_config_files(root: Path) -> list[Path]:
+    allowed_relative_paths = {
+        Path(path_text).relative_to(COMPETITION_CONFIG_ROOT).as_posix()
+        for path_text in validator.COMPETITION_ENV_BUNDLE_FILE_ROLES
+    }
+    allowed_relative_paths.add("bundle-manifest.json")
     return [
         path
         for path in root.rglob("*")
         if path.is_file() and "__pycache__" not in path.parts
+        and path.relative_to(root).as_posix() in allowed_relative_paths
     ]
 
 

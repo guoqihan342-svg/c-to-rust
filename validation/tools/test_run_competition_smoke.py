@@ -683,6 +683,55 @@ class RunCompetitionSmokeTests(unittest.TestCase):
         self.assertEqual(fake_runner.commands[-1], ["opencode", "models"])
         self.assertFalse((out_root / "summary" / "competition-smoke-summary.json").exists())
 
+    def test_competition_exact_model_probe_failure_removes_stale_summary(self) -> None:
+        module = load_smoke_module()
+        profile = module.load_profile(REPO_ROOT)
+        expected_os = profile["os"]
+        expected_toolchain = profile["toolchain"]
+        original_detect = module.detect_execution_environment
+        try:
+            module.detect_execution_environment = lambda: {
+                "kind": "competition-host",
+                "detected_ci": False,
+                "detected_wsl": False,
+                "competition_exact_host_attested": True,
+                "system": expected_os["name"],
+                "release": expected_os["kernel"],
+                "version": "competition-host",
+                "machine": "x86_64",
+                "kernel": expected_os["kernel"],
+                "python_version": expected_toolchain["python"],
+                "runner_name": "competition",
+            }
+            with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                out_root = Path(tmp) / "competition-smoke"
+                stale_summary = out_root / "summary" / "competition-smoke-summary.json"
+                stale_summary.parent.mkdir(parents=True)
+                stale_summary.write_text(
+                    json.dumps(
+                        {
+                            "report_kind": "competition-smoke-summary",
+                            "final_gate": {"status": "passed"},
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaises(SystemExit):
+                    module.run_competition_smoke(
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        confirm_competition_exact=True,
+                        command_runner=FakeNonGlmCommandRunner(),
+                        repo_root=REPO_ROOT,
+                        run_id="smoke-exact-stale-summary-test",
+                    )
+                self.assertFalse(stale_summary.exists())
+        finally:
+            module.detect_execution_environment = original_detect
+
     def test_main_accepts_smoke_cli_args(self) -> None:
         module = load_smoke_module()
         calls: dict[str, object] = {}

@@ -264,10 +264,27 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
             path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
             return payload
 
+        validation_result = passed_validation_result()
+        validation_result["entrypoints"] = [
+            {
+                "id": "competition_environment_smoke",
+                "expected_artifacts": {"competition_smoke_summary": "target/out/smoke.json"},
+            },
+            {
+                "id": "opencode_multi_worker_evaluate_profile",
+                "expected_artifacts": {
+                    "judge_evidence_index": "target/out/index.json",
+                    "opencode_safety_transform_attempt": (
+                        "target/out/workers/worker-a/harness/opencode-safety-transform-attempt-1.json"
+                    ),
+                },
+            },
+        ]
+
         with patch.object(
             runner.validator,
             "validate_config",
-            side_effect=[passed_validation_result(), passed_validation_result()],
+            side_effect=[validation_result, validation_result],
         ):
             with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
                 report = runner.run_judge_entrypoints(
@@ -1496,6 +1513,25 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         ref = runner.artifact_ref(REPO_ROOT / "target" / "missing-judge-entrypoint-artifact.json", repo_root=REPO_ROOT)
         self.assertEqual(ref["status"], "missing")
         self.assertNotIn("sha256", ref)
+
+    def test_candidate_config_files_excludes_unmanifested_siblings(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-config-archive-allowlist-", dir=REPO_ROOT / "target"))
+        config_root = temp_dir / "config" / "competition-env"
+        config_root.mkdir(parents=True)
+        expected_manifest = config_root / "bundle-manifest.json"
+        expected_environment = config_root / "environment.json"
+        unexpected_scratch = config_root / "scratch.tmp"
+        expected_manifest.write_text("{}\n", encoding="utf-8")
+        expected_environment.write_text("{}\n", encoding="utf-8")
+        unexpected_scratch.write_text("diagnostic only\n", encoding="utf-8")
+
+        candidates = {path.relative_to(config_root).as_posix() for path in runner.candidate_config_files(config_root)}
+
+        self.assertIn("bundle-manifest.json", candidates)
+        self.assertIn("environment.json", candidates)
+        self.assertNotIn("scratch.tmp", candidates)
 
     def test_materialized_competition_config_archive_requires_summary_output(self) -> None:
         from validation.tools import run_judge_entrypoints as runner

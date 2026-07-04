@@ -39,6 +39,8 @@
 - **交接文档要短而可审计**：`CONTEXT.md` 只能作为当前状态、最近验证和下一步的 handoff；长会话日志要拆分或归档到 `docs/c2rust-migration-agent/archive/`，不能作为 release 文档、外部评估入口或能力证明。
 - **文档要双语同步**：维护型中文文档首行必须按格式写成：英文镜像见 `<对应文件>.en.md`。同目录必须有英文镜像；新增或修改文档时同步运行 `python3 -B -m unittest validation.tools.test_doc_mirror_contract`。本文件和 `future-vision-and-mvp.en.md` 必须一起更新。
 
+本轮补充（2026-07-04 harness 证据链收紧）：`run_judge_entrypoints.py` 的 competition config archive producer 现在只枚举 `bundle-manifest.json` 自身和已声明的 `COMPETITION_ENV_BUNDLE_FILE_ROLES` 文件，不会把同目录临时/诊断文件先夹带进 run report 再等待下游拒绝；`validate_public_release_packet.py` 会把 `publication_manifest.competition_config_archive.status/root/report_kind/file_count` 反向绑定到 run report 顶层 archive；`run_competition_smoke.py` 会在 host attestation 或 `opencode models` 早退前删除旧 `summary/competition-smoke-summary.json`；`judge_milestone_bundle.py` 也要求 `validation.status=passed` 时，所有会进入 bundle rollup / publication refs 的 `key_artifacts` 都必须有同 entrypoint 的 `validation.expected_artifacts` 绑定，缺失时以 `validated_artifact_binding_missing:<entrypoint>:<artifact>` 阻断。边界不变：这些都是配置归档、smoke 和 bundle 证据链防伪，不是 semantic gate，也不关闭缺真实 `OpenCode + GLM-5.1 + c2rust-migrator + max` host 的 H9。
+
 ## 1.2. 10 天 harness-first 活跃队列
 
 当前执行队列按“评委主要看核心翻译功能和 harness 架构”重排。P0 只保留能直接增强一键评测、OpenCode 多 agent 编排、上下文索引、repair/retry 和 before/after 证明链的事项。
