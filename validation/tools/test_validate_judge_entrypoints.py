@@ -6182,6 +6182,22 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertFalse(result["semantic_gate"])
         self.assertEqual(result["translation_coverage_numerator"], 0)
 
+    def test_opencode_safety_transform_attempt_rejects_retry_hint_without_bound_rollback_ids(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        payload["safety_transform_units"][0]["accepted_retry_hint"].pop("rollback_ids")
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"accepted_retry_hint\.rollback_ids"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
     def test_opencode_safety_transform_attempt_contract_rejects_shallow_contract_without_session_evidence(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)

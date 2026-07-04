@@ -1686,6 +1686,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "status": "revalidated_passed",
             "repair_rounds": 1,
             "auto_recovered": True,
+            "rollback_ids": [rollback["path"]],
             "rollback_evidence": [rollback],
             "patch_events_path": patch_events["path"],
             "patch_events_sha256": "0" * 64,

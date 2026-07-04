@@ -1585,6 +1585,8 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
         self.assertIn("opencode-safety-transform-attempt", skill)
         self.assertIn("handoff_contract", skill)
         self.assertIn("opencode_session_evidence", skill)
+        self.assertIn("rollback_ids", skill)
+        self.assertIn("rollback_evidence[].path", skill)
         self.assertIn("format=jsonl", skill)
         self.assertIn("parsed=true", skill)
         self.assertIn("process_returncode=0", skill)

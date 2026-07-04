@@ -4232,12 +4232,19 @@ def validate_opencode_accepted_retry_hint_contract(
     rollback_refs = retry_hint.get("rollback_evidence")
     if not isinstance(rollback_refs, list) or not rollback_refs:
         raise ValueError(f"{prefix}.rollback_evidence must be a non-empty list")
+    rollback_paths: list[str] = []
     for rollback_index, rollback_ref in enumerate(rollback_refs):
-        validate_artifact_binding_shape(
+        rollback_binding = validate_artifact_binding_shape(
             rollback_ref,
             f"{prefix}.rollback_evidence[{rollback_index}]",
             repo_root=repo_root,
         )
+        rollback_paths.append(str(rollback_binding["path"]))
+    rollback_ids = retry_hint.get("rollback_ids")
+    if not isinstance(rollback_ids, list) or not all(isinstance(item, str) and item for item in rollback_ids):
+        raise ValueError(f"{prefix}.rollback_ids must be a non-empty string list")
+    if rollback_ids != rollback_paths:
+        raise ValueError(f"{prefix}.rollback_ids must match rollback_evidence paths")
     patch_events_path = retry_hint.get("patch_events_path")
     patch_events_sha256 = retry_hint.get("patch_events_sha256")
     if (patch_events_path is None) != (patch_events_sha256 is None):
