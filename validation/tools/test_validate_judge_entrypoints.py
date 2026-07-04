@@ -1380,14 +1380,10 @@ def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *,
     if launch_policy.get("opencode_skip_permissions"):
         opencode_argv.append("--dangerously-skip-permissions")
     opencode_argv.append(opencode_prompt)
-    set_artifact_ref(
-        worker["summary"],
-        summary_path,
-        {
-            "report_kind": "test-artifact",
-            "final_gate": {"status": "passed"},
-        },
-    )
+    summary_payload = valid_competition_run_summary_payload(run_id=run_id)
+    write_competition_run_summary_with_workflow_metrics(summary_path, summary_payload)
+    worker["summary"]["path"] = repo_relative(summary_path)
+    worker["summary"]["sha256"] = validator.sha256_file(summary_path)
     set_artifact_ref(
         worker["worker_report"],
         worker_report_path,
@@ -4795,6 +4791,34 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         payload["opencode_agent_runtime"],
                         repo_root=REPO_ROOT,
                     )
+
+    def test_opencode_agent_runtime_rejects_invalid_worker_summary_contract(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-summary-contract-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+                "auto_retry": True,
+            },
+        )
+        worker = payload["opencode_agent_runtime"]["workers"][0]
+        summary_path = REPO_ROOT / worker["summary"]["path"]
+        write_json(summary_path, {"final_gate": {"status": "passed"}})
+        worker["summary"]["sha256"] = validator.sha256_file(summary_path)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"opencode_agent_runtime\.workers\[0\]\.summary must satisfy competition run summary contract",
+        ):
+            validator.validate_opencode_agent_runtime_contract(
+                payload["opencode_agent_runtime"],
+                repo_root=REPO_ROOT,
+            )
 
     def test_judge_evidence_index_rejects_worker_session_missing_workdir(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-missing-workdir-", dir=REPO_ROOT / "target"))

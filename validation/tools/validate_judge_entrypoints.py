@@ -3447,8 +3447,13 @@ def validate_opencode_worker_runtime(
         )
         if report_summary_path != bindings["summary"]["path"]:
             raise ValueError(f"{label}.worker_report.summary_path must match summary.path")
+        summary_path = repo_path(bindings["summary"]["path"], repo_root=repo_root)
+        try:
+            validate_competition_run_summary.validate_summary(summary_path, repo_root=repo_root)
+        except SystemExit as error:
+            raise ValueError(f"{label}.summary must satisfy competition run summary contract: {error}") from error
         summary_payload = require_object(
-            load_json(repo_path(bindings["summary"]["path"], repo_root=repo_root)),
+            load_json(summary_path),
             f"{label}.summary file",
         )
         summary_final_gate = (

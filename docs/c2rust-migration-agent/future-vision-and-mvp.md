@@ -63,6 +63,7 @@
 - `validate_public_release_packet.py` 现在会在打开 hash-bound `judge_milestone_bundle` 后，先保留 status/blocker 等身份校验，再按 `validation/judge-milestone-bundle.schema.json` 重新校验完整 bound bundle；删除 `retention_policy`、漏掉 `publication_manifest` 必填字段，或让 packet 与 bundle 一起自洽漂移，都不能再绕过 public packet gate。边界：这是公开包与里程碑 bundle 的 schema 防伪，不是 semantic gate，也不增加 `translation_coverage_numerator`。最新验证：`test_validate_public_release_packet` 72 tests OK、`test_judge_milestone_bundle + test_validate_public_release_packet + test_milestone_release_notes` 122 tests OK。
 - `validate_judge_entrypoints.py` 现在重开 hash-bound `run-worker-report.json` 后，除 `report_kind`、`worker_id`、`runner_kind`、`summary_path/status` 和 runtime env 外，还强制 `mode=opencode`、`recorded=true`、`exit_code=0`、`process_returncode=0`；worker report 不能再把失败或未记录的 worker 伪装成 passed runtime worker。边界：这是 OpenCode worker execution report 防伪，不是 semantic gate，也不增加 `translation_coverage_numerator`。
 - `validate_judge_entrypoints.py --require-local-artifacts` 现在会重开 competition smoke 旁边的三个报告 artifact，并校验最小 producer 合同：`evidence-governance.json` 必须有 `schema_version=1`、`status`、`policy_compliance`、`portability` 和 `inventory`；`translator-coverage-matrix.json` 必须是 passed coverage report 并带 `capability_delta_ledger`；`milestone-release-report.json` 必须是 `report_kind=milestone-release-metrics` 且 readiness/metrics 与 translation numerator 自洽。空 `{}` 或错类型报告不能再借 smoke summary / command log 自洽绕过 local-artifact deep validation。边界：这是 smoke 附属报告防伪，不是 semantic gate，也不关闭 H9。最新验证：`test_validate_judge_entrypoints` 242 tests OK。
+- OpenCode runtime worker summary 现在不再只比对 `worker_report.summary_status` 与 `summary.final_gate.status`；`validate_opencode_worker_runtime()` 会复用 `validate_competition_run_summary.validate_summary()` 深验 hash-bound `competition-run-summary.json`，因此只有 `final_gate` 的伪 summary 或缺 workflow metrics / slices / artifact roots 的 summary 都不能再作为有效 worker runtime evidence。测试 fixture 也改为写真实最小 competition summary + workflow metrics。边界：这是 worker runtime evidence 防伪，不是 semantic gate，也不增加 coverage。最新验证：`test_validate_judge_entrypoints` 243 tests OK。
 
 当前最小下一步：继续按 P0-H9 / P0-D 主线推进。若没有真实 `GLM-5.1` host，则不要声称 H9 关闭；优先补能在本地验证的 harness 证据合同、resume/replay 负例、public packet 防伪和 before/after 展品接线。若拿到真实或等价 `OpenCode + GLM-5.1 + c2rust-migrator + max` host，则第一优先级是在该 host 上重跑 preflight、multi-worker evaluate/profile、judge entrypoints 和 public packet gate。
 
@@ -79,7 +80,7 @@
 
 当前最小开发目标：
 
-1. 在真实 GLM host 不可用时，继续补 harness 负例和 public artifact 防伪：OpenCode runtime worker summary 深层契约校验、session evidence 与 raw stdout/stderr 反查、safety attempt 与 run-worker-report/ledger 反向绑定、command log canonical flag/run_id 绑定等浅信任入口，只要能用 focused 负例证明就补 fail-closed 测试。
+1. 在真实 GLM host 不可用时，继续补 harness 负例和 public artifact 防伪：session evidence 与 raw stdout/stderr 反查、safety attempt 与 run-worker-report/ledger 反向绑定、command log canonical flag/run_id 绑定等浅信任入口，只要能用 focused 负例证明就补 fail-closed 测试。
 2. 在有 `DEEPSEEK_API_KEY` 的本机环境中，只把 DeepSeek V4 Pro 当 rehearsal：可跑 focused 单 worker / 2-worker local rehearsal 证明 wiring，但所有报告必须保留 `local_simulation_closes_p0_h9=false`。
 3. harness 稳定后回到核心翻译 before/after：真实 C slice、raw C2Rust/unsafe baseline、accepted safe patch、oracle/diff/negative diff、unsafe before/after、workflow metrics、competition summary。
 
