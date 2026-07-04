@@ -15,9 +15,9 @@ use c2r_translator::clang_frontend::{
     lower_function_and_globals_from_clang_ast_json_value_with_target_abi,
     lower_function_from_clang_ast_dump, lower_function_from_clang_ast_dump_report,
     lower_function_from_clang_parse_spec_report, lower_function_skeleton,
-    lower_function_skeleton_report, ClangBinaryOperator, ClangExprSkeleton, ClangFunctionSkeleton,
-    ClangIncDecOperator, ClangParamSkeleton, ClangStmtSkeleton, ClangTypeKind, ClangTypeSkeleton,
-    ClangUnaryOperator,
+    lower_function_skeleton_report, resolve_clang_path, ClangBinaryOperator, ClangExprSkeleton,
+    ClangFunctionSkeleton, ClangIncDecOperator, ClangParamSkeleton, ClangStmtSkeleton,
+    ClangTypeKind, ClangTypeSkeleton, ClangUnaryOperator,
 };
 #[cfg(feature = "typed-ir")]
 use c2r_translator::translation_route::{CandidateGenerator, CandidateRoute};
@@ -57,6 +57,77 @@ fn unique_out_dir(name: &str) -> PathBuf {
 
 fn json_file(path: PathBuf) -> Value {
     serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+}
+
+#[test]
+fn real_clang_ast_tests_use_shared_visible_gate() {
+    let source = include_str!("bounded_translation.rs");
+    let run_env = concat!("C2R_RUN_", "CLANG_AST_TESTS");
+    let old_gate_message = concat!("set C2R_RUN_", "CLANG_AST_TESTS=1 to run");
+    let windows_clang_default = concat!("C:/Program Files", "/LLVM/bin/clang.exe");
+    let windows_llvm_prefix = concat!("C:/Program Files", "/LLVM");
+
+    assert!(
+        !source.contains(old_gate_message),
+        "real clang tests must not early-return as successful tests when the opt-in env is unset"
+    );
+    assert!(
+        !source.contains(windows_clang_default),
+        "real clang tests must use the shared Linux-first clang resolver instead of a Windows fallback"
+    );
+    assert!(
+        !source.contains(windows_llvm_prefix),
+        "real clang tests must not carry hardcoded Windows LLVM host paths"
+    );
+    assert_eq!(
+        source.matches(run_env).count(),
+        1,
+        "real clang opt-in env should be declared once in the shared helper"
+    );
+    assert_eq!(
+        source
+            .matches("#[ignore = \"requires real clang AST smoke test opt-in\"]")
+            .count(),
+        source
+            .lines()
+            .filter(|line| line.trim() == "let clang_path = real_clang_ast_test_setup();")
+            .count(),
+        "every real clang test calling the setup helper must be visibly ignored by default"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+const REAL_CLANG_AST_TEST_ENV: &str = "C2R_RUN_CLANG_AST_TESTS";
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+fn real_clang_ast_test_setup() -> PathBuf {
+    if std::env::var(REAL_CLANG_AST_TEST_ENV).ok().as_deref() != Some("1") {
+        panic!(
+            "real clang AST smoke tests are ignored by default; rerun ignored tests with the opt-in env set to 1"
+        );
+    }
+
+    let environment = std::env::vars_os()
+        .filter_map(|(key, value)| {
+            Some((
+                key.into_string().ok()?,
+                value
+                    .into_string()
+                    .unwrap_or_else(|value| value.to_string_lossy().into_owned()),
+            ))
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let (clang_path, source) = resolve_clang_path(&environment).unwrap_or_else(|| {
+        panic!(
+            "real clang AST smoke tests require CLANG_PATH or a vendored clang under tools/llvm/bin or tools/clang/bin"
+        )
+    });
+    assert!(
+        clang_path.exists(),
+        "resolved clang path from {source} does not exist: {}",
+        clang_path.display()
+    );
+    clang_path
 }
 
 #[cfg(feature = "clang-lowering-report")]
@@ -23327,19 +23398,9 @@ fn clang_lowering_report_maps_unsupported_skeleton_without_ir() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-add-one");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("add_one.c");
@@ -23358,7 +23419,7 @@ fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
         ),
         (
             "LIBCLANG_PATH".to_string(),
-            "C:/Program Files/LLVM/bin/libclang.dll".to_string(),
+            "tools/llvm/bin/libclang.so".to_string(),
         ),
     ]);
     let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "add_one");
@@ -23390,19 +23451,9 @@ fn clang_ast_dump_lowers_real_add_one_translation_unit_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_real_scalar_subtraction_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-sub-one");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("sub_one.c");
@@ -23443,19 +23494,9 @@ fn clang_ast_dump_emits_real_scalar_subtraction_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mul-div-mod");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mul_div_mod.c");
@@ -23494,19 +23535,9 @@ fn clang_ast_dump_emits_real_scalar_mul_div_mod_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_real_signed_unary_minus_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-neg-value");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("neg_value.c");
@@ -23545,19 +23576,9 @@ fn clang_ast_dump_emits_real_signed_unary_minus_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let source_root = unique_out_dir("clang-parse-spec-include-path");
     let include_dir = source_root.join("inc");
     let source_dir = source_root.join("src");
@@ -23629,19 +23650,9 @@ fn clang_parse_spec_report_uses_include_paths_for_real_ast_dump_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_uint32_integer_type_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-uint32-add-one");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("add_one.c");
@@ -23677,19 +23688,9 @@ fn clang_ast_dump_lowers_uint32_integer_type_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-const-void-size");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_identity.c");
@@ -23728,19 +23729,9 @@ fn clang_ast_dump_lowers_const_void_pointer_and_size_t_params_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-const-u8-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_decl.c");
@@ -23785,19 +23776,9 @@ fn clang_ast_dump_lowers_const_uint8_pointer_decl_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_assignment_statement_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-assignment-stmt");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_assign.c");
@@ -23829,19 +23810,9 @@ fn clang_ast_dump_lowers_assignment_statement_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_pointer_cast_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-pointer-cast-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_assign_ptr.c");
@@ -23887,19 +23858,9 @@ fn clang_ast_dump_lowers_pointer_cast_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_pointer_deref_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-pointer-deref");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_byte.c");
@@ -23936,19 +23897,9 @@ fn clang_ast_dump_lowers_pointer_deref_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_pointer_deref_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-pointer-deref-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_byte.c");
@@ -23977,19 +23928,9 @@ fn clang_ast_dump_emits_pointer_deref_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_pointer_add_deref_return_values_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-pointer-add-deref-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_offset.c");
@@ -24050,19 +23991,9 @@ fn clang_ast_dump_emits_pointer_add_deref_return_values_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_pointer_add_deref_logical_not_if_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-pointer-add-deref-logical-not-if");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("offset_is_zero_not.c");
@@ -24101,19 +24032,9 @@ fn clang_ast_dump_emits_pointer_add_deref_logical_not_if_condition_when_enabled(
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-postfix-increment-deref");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_byte_inc.c");
@@ -24153,19 +24074,9 @@ fn clang_ast_dump_lowers_postfix_increment_deref_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-deref-bitand-array-index");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_index_deref.c");
@@ -24215,19 +24126,9 @@ fn clang_ast_dump_lowers_deref_in_bitand_array_index_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-postfix-increment-deref-bitand-array-index");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_index_postinc.c");
@@ -24286,19 +24187,9 @@ fn clang_ast_dump_lowers_postfix_increment_deref_in_bitand_array_index_expr_when
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_shift_right_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-shift-right");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_shift.c");
@@ -24335,19 +24226,9 @@ fn clang_ast_dump_lowers_shift_right_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_bit_or_and_left_shift_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-bit-or-left-shift");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("pack_flags.c");
@@ -24395,19 +24276,9 @@ fn clang_ast_dump_emits_bit_or_and_left_shift_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-crc-update-postinc-shift");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_update_expr.c");
@@ -24451,19 +24322,9 @@ fn clang_ast_dump_lowers_crc_update_expr_with_postinc_and_shift_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_const_pointer_table_index_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-const-pointer-table-index-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_table.c");
@@ -24490,19 +24351,9 @@ fn clang_ast_dump_emits_const_pointer_table_index_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_const_void_byte_cursor_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-const-void-byte-cursor-read-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_byte_from_void.c");
@@ -24535,19 +24386,9 @@ fn clang_ast_dump_emits_const_void_byte_cursor_read_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_nested_const_void_byte_cursor_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-nested-const-void-byte-cursor-read-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_xor_byte.c");
@@ -24580,19 +24421,9 @@ fn clang_ast_dump_emits_nested_const_void_byte_cursor_read_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_nested_const_u8_byte_cursor_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-nested-const-u8-byte-cursor-read-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_xor_byte_from_u8.c");
@@ -24628,19 +24459,9 @@ fn clang_ast_dump_emits_nested_const_u8_byte_cursor_read_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-crc-update-assignment-pointer-table-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("update_crc_step_from_clang.c");
@@ -24685,19 +24506,9 @@ fn clang_ast_dump_emits_crc_update_assignment_with_pointer_table_when_enabled() 
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-flashdb-crc32-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("fdb_utils.c");
@@ -24739,19 +24550,9 @@ fn clang_ast_dump_emits_flashdb_crc32_from_lowered_ir_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let real_spec_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../validation/slice-specs/flashdb-real-fdb-calc-crc32.json");
     let real_spec: Value = serde_json::from_str(
@@ -24834,19 +24635,9 @@ fn clang_parse_spec_emits_real_flashdb_crc32_from_lowered_ir_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_array_subscript_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-array-subscript");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_table.c");
@@ -24887,19 +24678,9 @@ fn clang_ast_dump_lowers_array_subscript_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_global_const_array_subscript_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-global-array-subscript");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_global_table.c");
@@ -24938,19 +24719,9 @@ fn clang_ast_dump_lowers_global_const_array_subscript_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_records_static_const_integer_array_global_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-global-array-initializer");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_global_table_init.c");
@@ -24984,19 +24755,9 @@ fn clang_ast_dump_records_static_const_integer_array_global_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_for_loop_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-loop");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("sum_to_limit.c");
@@ -25036,19 +24797,9 @@ fn clang_ast_dump_emits_typed_ir_for_loop_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_for_continue_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-continue");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_for_continue.c");
@@ -25098,19 +24849,9 @@ fn clang_ast_dump_emits_typed_ir_for_continue_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_while_break_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-while-break");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("stop_at_limit.c");
@@ -25154,19 +24895,9 @@ fn clang_ast_dump_emits_typed_ir_while_break_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_while_continue_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-while-continue");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("skip_once.c");
@@ -25205,19 +24936,9 @@ fn clang_ast_dump_emits_typed_ir_while_continue_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_do_while_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-do-while");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("do_countdown.c");
@@ -25257,19 +24978,9 @@ fn clang_ast_dump_emits_typed_ir_do_while_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_typed_ir_for_missing_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-missing-condition");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_for_missing_condition.c");
@@ -25302,19 +25013,9 @@ fn clang_ast_dump_rejects_typed_ir_for_missing_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-missing-step");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_for_missing_step.c");
@@ -25347,19 +25048,9 @@ fn clang_ast_dump_rejects_typed_ir_for_missing_step_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-multi-var-decl-init");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("sum_pair_for.c");
@@ -25421,19 +25112,9 @@ fn clang_ast_dump_emits_typed_ir_for_multi_var_decl_init_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_for_prefix_increment_step_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-prefix-step");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("sum_prefix_for.c");
@@ -25468,19 +25149,9 @@ fn clang_ast_dump_emits_typed_ir_for_prefix_increment_step_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typed_ir_for_prefix_decrement_step_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typed-ir-for-prefix-dec-step");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("sum_prefix_down_for.c");
@@ -25518,19 +25189,9 @@ fn clang_ast_dump_emits_typed_ir_for_prefix_decrement_step_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-standalone-inc-dec-statements");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("standalone_inc_dec.c");
@@ -25576,19 +25237,9 @@ fn clang_ast_dump_emits_standalone_inc_dec_statements_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-record-field-inc-dec-statements");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("record_field_inc_dec.c");
@@ -25634,19 +25285,9 @@ fn clang_ast_dump_emits_record_field_inc_dec_statements_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-inc-dec");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_record_pointer_field_inc_dec.c");
@@ -25704,19 +25345,9 @@ fn clang_ast_dump_emits_mutable_record_pointer_field_inc_dec_statement_when_enab
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_record_field_inc_dec_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-record-field-inc-dec-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_record_field_inc_dec_return.c");
@@ -25746,19 +25377,9 @@ fn clang_ast_dump_rejects_record_field_inc_dec_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-record-field-inc-dec-for-step");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_record_field_inc_dec_for_step.c");
@@ -25790,19 +25411,9 @@ fn clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_nested_record_field_inc_dec_statement_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-nested-record-field-inc-dec");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_nested_record_field_inc_dec.c");
@@ -25834,19 +25445,9 @@ fn clang_ast_dump_rejects_nested_record_field_inc_dec_statement_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_static_const_integer_array_global_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-global-array-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_global_table_emit.c");
@@ -25882,19 +25483,9 @@ fn clang_ast_dump_emits_static_const_integer_array_global_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_records_static_const_incomplete_array_initializer_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-incomplete-global-array-init");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_incomplete_global_table_init.c");
@@ -25927,19 +25518,9 @@ fn clang_ast_dump_records_static_const_incomplete_array_initializer_when_enabled
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_does_not_synthesize_uninitialized_static_const_global_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-uninitialized-global-array");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_uninitialized_global_table.c");
@@ -25967,19 +25548,9 @@ fn clang_ast_dump_does_not_synthesize_uninitialized_static_const_global_when_ena
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_bitand_array_index_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-bitand-array-index");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_index.c");
@@ -26028,19 +25599,9 @@ fn clang_ast_dump_lowers_bitand_array_index_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-bitxor-bitnot-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_xor_not.c");
@@ -26090,19 +25651,9 @@ fn clang_ast_dump_lowers_bitxor_bitnot_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-parenthesized-bitxor-bitnot-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_xor_not_paren.c");
@@ -26138,19 +25689,9 @@ fn clang_ast_dump_lowers_parenthesized_bitxor_bitnot_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_simple_while_statement_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-simple-while");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_while.c");
@@ -26185,19 +25726,9 @@ fn clang_ast_dump_lowers_simple_while_statement_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_while_without_braces_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-while-without-braces");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("countdown_no_braces.c");
@@ -26249,19 +25780,9 @@ fn clang_ast_dump_emits_while_without_braces_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_simple_if_statement_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-simple-if");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("adjust_if.c");
@@ -26314,19 +25835,9 @@ fn clang_ast_dump_emits_simple_if_statement_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_if_without_braces_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-if-without-braces");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("adjust_if_no_braces.c");
@@ -26379,19 +25890,9 @@ fn clang_ast_dump_emits_if_without_braces_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_comparison_if_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-comparison-if");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("adjust_positive.c");
@@ -26433,19 +25934,9 @@ fn clang_ast_dump_emits_comparison_if_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_comparison_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-comparison-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("positive_as_int.c");
@@ -26482,19 +25973,9 @@ fn clang_ast_dump_emits_comparison_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-null-pointer-comparison-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("has_values.c");
@@ -26539,19 +26020,9 @@ fn clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-record-null-pointer-comparison-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("has_point.c");
@@ -26609,19 +26080,9 @@ fn clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_comparison_decl_initializer_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-comparison-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("cmp_init.c");
@@ -26662,19 +26123,9 @@ fn clang_ast_dump_emits_comparison_decl_initializer_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_comparison_assignment_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-comparison-assign");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("cmp_assign.c");
@@ -26715,19 +26166,9 @@ fn clang_ast_dump_emits_comparison_assignment_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_conditional_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-conditional-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("pick.c");
@@ -26761,19 +26202,9 @@ fn clang_ast_dump_emits_conditional_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_conditional_decl_initializer_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-conditional-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("pick_init.c");
@@ -26812,19 +26243,9 @@ fn clang_ast_dump_emits_conditional_decl_initializer_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_conditional_assignment_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-conditional-assign");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("pick_assign.c");
@@ -26864,19 +26285,9 @@ fn clang_ast_dump_emits_conditional_assignment_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_unsigned_conditional_branch_integral_cast_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-unsigned-conditional-cast");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("choose_u32.c");
@@ -26919,19 +26330,9 @@ fn clang_ast_dump_emits_unsigned_conditional_branch_integral_cast_when_enabled()
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_binary_conditional_operator_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-binary-conditional");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_gnu_conditional.c");
@@ -26969,19 +26370,9 @@ fn clang_ast_dump_rejects_binary_conditional_operator_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_unsigned_assignment_rhs_integral_cast_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-unsigned-assignment-rhs-cast");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("set_unsigned_one.c");
@@ -27020,19 +26411,9 @@ fn clang_ast_dump_emits_unsigned_assignment_rhs_integral_cast_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_unsigned_decl_and_return_integral_casts_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-unsigned-decl-return-casts");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("unsigned_decl_return.c");
@@ -27078,19 +26459,9 @@ fn clang_ast_dump_emits_unsigned_decl_and_return_integral_casts_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_logical_not_if_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-logical-not-if");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("is_zero.c");
@@ -27131,19 +26502,9 @@ fn clang_ast_dump_emits_logical_not_if_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_short_circuit_if_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-short-circuit-if");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("both_nonzero.c");
@@ -27184,19 +26545,9 @@ fn clang_ast_dump_emits_short_circuit_if_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_short_circuit_value_positions_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-short-circuit-values");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("short_circuit_values.c");
@@ -27254,19 +26605,9 @@ fn clang_ast_dump_emits_short_circuit_value_positions_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-compound-assignment-family");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("compound_family.c");
@@ -27331,19 +26672,9 @@ fn clang_ast_dump_emits_scalar_compound_assignment_family_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_compound_assignment_integer_promotion_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-compound-assignment-integer-promotion");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("inc8.c");
@@ -27410,19 +26741,9 @@ fn clang_ast_dump_emits_compound_assignment_integer_promotion_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_logical_not_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-logical-not-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("is_zero_value.c");
@@ -27459,19 +26780,9 @@ fn clang_ast_dump_emits_logical_not_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_logical_not_decl_initializer_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-logical-not-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("init_is_zero.c");
@@ -27513,19 +26824,9 @@ fn clang_ast_dump_emits_logical_not_decl_initializer_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_logical_not_assignment_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-logical-not-assign");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("normalize_zero.c");
@@ -27567,19 +26868,9 @@ fn clang_ast_dump_emits_logical_not_assignment_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-unsigned-comparison-if");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("adjust_unsigned_positive.c");
@@ -27632,19 +26923,9 @@ fn clang_ast_dump_emits_unsigned_comparison_if_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_signed_char_binary_promotion_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-signed-char-binary-promotion");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("signed_char_add_one.c");
@@ -27690,19 +26971,9 @@ fn clang_ast_dump_emits_signed_char_binary_promotion_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_postfix_increment_if_condition_in_scalar_emitter_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-postfix-increment-if-reject");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_if_postinc.c");
@@ -27729,19 +27000,9 @@ fn clang_ast_dump_rejects_postfix_increment_if_condition_in_scalar_emitter_when_
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-postfix-decrement-while");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_while_size.c");
@@ -27777,19 +27038,9 @@ fn clang_ast_dump_lowers_postfix_decrement_while_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-postfix-decrement-while-emit");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_while_size.c");
@@ -27822,19 +27073,9 @@ fn clang_ast_dump_emits_postfix_decrement_while_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_prefix_decrement_while_condition_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-prefix-decrement-while");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_while_prefix_size.c");
@@ -27869,19 +27110,9 @@ fn clang_ast_dump_emits_prefix_decrement_while_condition_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_prefix_increment_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-prefix-increment-return");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_prefix_return.c");
@@ -27916,19 +27147,9 @@ fn clang_ast_dump_rejects_prefix_increment_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-prefix-increment-call-arg");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("bad_prefix_call_arg.c");
@@ -27966,19 +27187,9 @@ fn clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-prefix-increment-deref");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("read_byte_prefix_inc.c");
@@ -28016,19 +27227,9 @@ fn clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_integral_c_style_cast_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-integral-cast");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("narrow.c");
@@ -28054,19 +27255,9 @@ fn clang_ast_dump_emits_integral_c_style_cast_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_fixed_width_integer_types_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-fixed-width-integers");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("fixed_width.c");
@@ -28122,19 +27313,9 @@ uint64_t id_u64(uint64_t value) { return value; }\n",
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_pointer_index_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-pointer-index-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_pointer_store.c");
@@ -28172,19 +27353,9 @@ fn clang_ast_dump_emits_mutable_pointer_index_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_pointer_add_deref_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-pointer-add-deref-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_pointer_store.c");
@@ -28223,19 +27394,9 @@ fn clang_ast_dump_emits_mutable_pointer_add_deref_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_struct_field_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-field-read");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_field_read.c");
@@ -28264,19 +27425,9 @@ fn clang_ast_dump_emits_struct_field_read_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_struct_field_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-field-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_field_assignment.c");
@@ -28311,19 +27462,9 @@ fn clang_ast_dump_emits_struct_field_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-arrow-member-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_arrow_member_assignment.c");
@@ -28371,19 +27512,9 @@ fn clang_ast_dump_emits_mutable_record_pointer_arrow_member_assignment_when_enab
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_typedef_record_pointer_opaque_field_write_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-typedef-record-pointer-opaque-field-write");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("typedef_record_pointer_opaque_field_write.c");
@@ -28477,19 +27608,9 @@ fdb_blob_t make_blob_typedef(fdb_blob_t blob, const void *value, size_t len) {\n
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-read-after-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_record_pointer_field_read_after_assignment.c");
@@ -28533,19 +27654,9 @@ fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_if_else_return_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir =
         unique_out_dir("clang-real-mutable-record-pointer-field-read-after-if-else-return");
     fs::create_dir_all(&out_dir).unwrap();
@@ -28600,19 +27711,9 @@ fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_if_else_return_w
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-read-before-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_record_pointer_field_read_before_assignment.c");
@@ -28647,19 +27748,9 @@ fn clang_ast_dump_rejects_mutable_record_pointer_field_read_before_assignment_wh
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-compound-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("mutable_record_pointer_field_compound_assignment.c");
@@ -28702,20 +27793,10 @@ fn clang_ast_dump_emits_mutable_record_pointer_field_compound_assignment_when_en
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_complex_rhs_when_enabled(
 ) {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir =
         unique_out_dir("clang-real-mutable-record-pointer-field-compound-assignment-complex-rhs");
     fs::create_dir_all(&out_dir).unwrap();
@@ -28746,19 +27827,9 @@ fn clang_ast_dump_rejects_mutable_record_pointer_field_compound_assignment_compl
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_struct_field_compound_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-field-compound-assignment");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_field_compound_assignment.c");
@@ -28796,19 +27867,9 @@ fn clang_ast_dump_emits_struct_field_compound_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-field-compound-assignment-complex-rhs");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_field_compound_assignment_complex_rhs.c");
@@ -28849,19 +27910,9 @@ fn clang_ast_dump_rejects_struct_field_compound_assignment_complex_rhs_when_enab
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_struct_local_copy_field_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-local-copy-field-read");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_local_copy_field_read.c");
@@ -28896,19 +27947,9 @@ fn clang_ast_dump_emits_struct_local_copy_field_read_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-local-assignment-value-copy");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_local_assignment_value_copy.c");
@@ -28950,19 +27991,9 @@ fn clang_ast_dump_emits_struct_local_assignment_value_copy_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_struct_return_value_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-value");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_value.c");
@@ -28997,19 +28028,9 @@ fn clang_ast_dump_emits_struct_return_value_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_return_value_with_bitfield_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-bitfield");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_bitfield.c");
@@ -29040,19 +28061,9 @@ fn clang_ast_dump_rejects_struct_return_value_with_bitfield_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_return_value_with_volatile_field_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-volatile-field");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_volatile_field.c");
@@ -29083,19 +28094,9 @@ fn clang_ast_dump_rejects_struct_return_value_with_volatile_field_when_enabled()
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_return_value_with_packed_record_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-packed");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_packed.c");
@@ -29127,19 +28128,9 @@ fn clang_ast_dump_rejects_struct_return_value_with_packed_record_when_enabled() 
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_return_value_with_packed_field_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-packed-field");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_packed_field.c");
@@ -29178,19 +28169,9 @@ fn clang_ast_dump_rejects_struct_return_value_with_packed_field_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_return_value_with_duplicate_tag_name_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-duplicate-tag");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_duplicate_tag.c");
@@ -29225,19 +28206,9 @@ fn clang_ast_dump_rejects_struct_return_value_with_duplicate_tag_name_when_enabl
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_struct_return_value_with_self_pointer_field_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-struct-return-self-pointer");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("struct_return_self_pointer.c");
@@ -29270,19 +28241,9 @@ fn clang_ast_dump_rejects_struct_return_value_with_self_pointer_field_when_enabl
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-arrow-member-read");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("arrow_member_read.c");
@@ -29338,19 +28299,9 @@ fn clang_ast_dump_emits_readonly_record_pointer_arrow_member_read_when_enabled()
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-null-guarded-arrow-member-read");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("null_guarded_arrow_member_read.c");
@@ -29415,19 +28366,9 @@ fn clang_ast_dump_emits_null_guarded_readonly_record_pointer_arrow_member_read_w
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_initialized_decl_stmt_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-initialized-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("crc_init.c");
@@ -29470,19 +28411,9 @@ fn clang_ast_dump_emits_initialized_decl_stmt_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_uninitialized_local_decl_assigned_before_read_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-uninitialized-local-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("assign_after_decl.c");
@@ -29536,19 +28467,9 @@ fn clang_ast_dump_emits_uninitialized_local_decl_assigned_before_read_when_enabl
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_local_fixed_array_initializer_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-local-array-init");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("lookup_local_table.c");
@@ -29595,19 +28516,9 @@ fn clang_ast_dump_emits_local_fixed_array_initializer_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-local-array-index-assign");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("replace_local_table_slot.c");
@@ -29650,19 +28561,9 @@ fn clang_ast_dump_emits_local_fixed_array_index_assignment_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_local_array_initializer_call_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-local-array-call-init-reject");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("lookup_local_table_call_init.c");
@@ -29698,19 +28599,9 @@ fn clang_ast_dump_rejects_local_array_initializer_call_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_initialized_decl_with_direct_call_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-initialized-decl-call-lower");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("init_call.c");
@@ -29757,19 +28648,9 @@ fn clang_ast_dump_lowers_initialized_decl_with_direct_call_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_strlen_model_with_target_abi_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let source_root = unique_out_dir("clang-real-strlen-target-abi-lower");
     let source_dir = source_root.join("src");
     fs::create_dir_all(&source_dir).unwrap();
@@ -29860,19 +28741,9 @@ fn clang_ast_dump_lowers_strlen_model_with_target_abi_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_nested_direct_call_expr_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-nested-direct-call-lower");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("nested_direct_call.c");
@@ -29927,19 +28798,9 @@ fn clang_ast_dump_lowers_nested_direct_call_expr_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_rejects_multiple_nested_direct_call_args_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-multiple-nested-direct-call-reject");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("multiple_nested_direct_call.c");
@@ -29973,19 +28834,9 @@ fn clang_ast_dump_rejects_multiple_nested_direct_call_args_when_enabled() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_multi_var_decl_stmt_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-multi-var-decl");
     fs::create_dir_all(&out_dir).unwrap();
     let source_file = out_dir.join("multi_decl.c");
@@ -31548,19 +30399,9 @@ fn clang_lowering_report_feature_blocks_retired_legacy_fallback_when_unavailable
 
 #[cfg(feature = "clang-lowering-report")]
 #[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled() {
-    if std::env::var("C2R_RUN_CLANG_AST_TESTS").ok().as_deref() != Some("1") {
-        eprintln!("set C2R_RUN_CLANG_AST_TESTS=1 to run the real clang AST smoke test");
-        return;
-    }
-    let clang_path = std::env::var("CLANG_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("C:/Program Files/LLVM/bin/clang.exe"));
-    assert!(
-        clang_path.exists(),
-        "clang path does not exist: {}",
-        clang_path.display()
-    );
+    let clang_path = real_clang_ast_test_setup();
     let _clang_path_guard = EnvVarGuard::set_path("CLANG_PATH", &clang_path);
     let source_root = unique_out_dir("clang-lowered-rust-draft-source");
     fs::create_dir_all(source_root.join("src")).unwrap();
