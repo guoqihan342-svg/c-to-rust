@@ -62,6 +62,7 @@
 - `judge_milestone_bundle.known_gaps` 现在只有在所有 before/after unit 都带非空 `path`、64 位 `sha256`、`status=passed`、`semantic_pass=true`、`semantic_claim_source=verified_unsafe_baseline_gates`、`generated_draft_semantic_pass=false` 的 baseline verification 时，才移除 `c2rust_baseline_output_still_not_verified_here`；单个 unit 绑定不能掩盖其它 unit 缺失、hash 形状错误或非语义通过的 verified baseline。`before_after_repair_exhibit.rollup` 会直接暴露并由 bundle/public packet schema 强制要求 `verified_baseline_unit_count`、`missing_verified_baseline_unit_count` 和 `all_units_verified_baseline_bound`，且 bundle/public validator 会校验 `verified + missing == bound_unit_count` 与 all-bound flag 等价，便于 public packet 和评委阅读。
 - `validate_public_release_packet.py` 现在会在打开 hash-bound `judge_milestone_bundle` 后，先保留 status/blocker 等身份校验，再按 `validation/judge-milestone-bundle.schema.json` 重新校验完整 bound bundle；删除 `retention_policy`、漏掉 `publication_manifest` 必填字段，或让 packet 与 bundle 一起自洽漂移，都不能再绕过 public packet gate。边界：这是公开包与里程碑 bundle 的 schema 防伪，不是 semantic gate，也不增加 `translation_coverage_numerator`。最新验证：`test_validate_public_release_packet` 72 tests OK、`test_judge_milestone_bundle + test_validate_public_release_packet + test_milestone_release_notes` 122 tests OK。
 - `validate_judge_entrypoints.py` 现在重开 hash-bound `run-worker-report.json` 后，除 `report_kind`、`worker_id`、`runner_kind`、`summary_path/status` 和 runtime env 外，还强制 `mode=opencode`、`recorded=true`、`exit_code=0`、`process_returncode=0`；worker report 不能再把失败或未记录的 worker 伪装成 passed runtime worker。边界：这是 OpenCode worker execution report 防伪，不是 semantic gate，也不增加 `translation_coverage_numerator`。
+- `validate_judge_entrypoints.py --require-local-artifacts` 现在会重开 competition smoke 旁边的三个报告 artifact，并校验最小 producer 合同：`evidence-governance.json` 必须有 `schema_version=1`、`status`、`policy_compliance`、`portability` 和 `inventory`；`translator-coverage-matrix.json` 必须是 passed coverage report 并带 `capability_delta_ledger`；`milestone-release-report.json` 必须是 `report_kind=milestone-release-metrics` 且 readiness/metrics 与 translation numerator 自洽。空 `{}` 或错类型报告不能再借 smoke summary / command log 自洽绕过 local-artifact deep validation。边界：这是 smoke 附属报告防伪，不是 semantic gate，也不关闭 H9。最新验证：`test_validate_judge_entrypoints` 242 tests OK。
 
 当前最小下一步：继续按 P0-H9 / P0-D 主线推进。若没有真实 `GLM-5.1` host，则不要声称 H9 关闭；优先补能在本地验证的 harness 证据合同、resume/replay 负例、public packet 防伪和 before/after 展品接线。若拿到真实或等价 `OpenCode + GLM-5.1 + c2rust-migrator + max` host，则第一优先级是在该 host 上重跑 preflight、multi-worker evaluate/profile、judge entrypoints 和 public packet gate。
 
@@ -78,7 +79,7 @@
 
 当前最小开发目标：
 
-1. 在真实 GLM host 不可用时，继续补 harness 负例和 public artifact 防伪：resume-manifest worker id 漂移、worker report/session/safety attempt cross-binding、public packet published refs、competition smoke command log 只要有浅信任入口就补 fail-closed 测试。
+1. 在真实 GLM host 不可用时，继续补 harness 负例和 public artifact 防伪：OpenCode runtime worker summary 深层契约校验、session evidence 与 raw stdout/stderr 反查、safety attempt 与 run-worker-report/ledger 反向绑定、command log canonical flag/run_id 绑定等浅信任入口，只要能用 focused 负例证明就补 fail-closed 测试。
 2. 在有 `DEEPSEEK_API_KEY` 的本机环境中，只把 DeepSeek V4 Pro 当 rehearsal：可跑 focused 单 worker / 2-worker local rehearsal 证明 wiring，但所有报告必须保留 `local_simulation_closes_p0_h9=false`。
 3. harness 稳定后回到核心翻译 before/after：真实 C slice、raw C2Rust/unsafe baseline、accepted safe patch、oracle/diff/negative diff、unsafe before/after、workflow metrics、competition summary。
 

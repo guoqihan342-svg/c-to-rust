@@ -807,6 +807,91 @@ def valid_vendored_clang_verification_payload() -> dict:
     }
 
 
+def valid_evidence_governance_report_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "evidence_root": "validation/evidence",
+        "failed_gates": [],
+        "policy_compliance": {
+            "policy_tier": "dev",
+            "status": "passed",
+            "failed_gates": [],
+            "gates": [],
+        },
+        "portability": {
+            "status": "passed",
+            "claim_anchor_issue_count": 0,
+            "profile_hash_issue_count": 0,
+        },
+        "inventory": {
+            "file_count": 0,
+            "total_bytes": 0,
+        },
+    }
+
+
+def valid_translator_coverage_matrix_report_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "matrix": {
+            "path": "validation/translator-coverage-matrix.json",
+            "capability_count": 0,
+        },
+        "capability_count": 0,
+        "dimensions": {},
+        "capabilities": [],
+        "capability_delta_ledger": {
+            "schema_version": 1,
+            "status": "recorded",
+            "ledger_count": 0,
+            "delta_count": 0,
+            "semantic_pass_count": 0,
+            "translator_generated_semantic_pass_count": 0,
+            "accepted_evidence_semantic_pass_count": 0,
+            "generated_candidate_status": {},
+            "route_levels": {},
+            "route_statuses": {},
+            "by_construct": {},
+            "ledgers": [],
+        },
+        "claim_boundary": "translator coverage report fixture; not semantic acceptance evidence",
+    }
+
+
+def valid_milestone_release_report_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "internal_preview",
+        "report_kind": "milestone-release-metrics",
+        "inputs": {},
+        "harness_architecture": {},
+        "core_translation_quality": {
+            "translation_coverage_numerator": 0,
+        },
+        "metrics": {
+            "translation_coverage_numerator": 0,
+        },
+        "readiness": {
+            "status": "internal_preview",
+            "blockers": ["fixture"],
+        },
+        "release_note_inputs": {},
+        "claim_boundary": "milestone release report fixture; not semantic acceptance evidence",
+    }
+
+
+def write_valid_competition_smoke_report_artifacts(
+    evidence_governance: Path,
+    coverage_matrix: Path,
+    milestone: Path,
+) -> None:
+    write_json(evidence_governance, valid_evidence_governance_report_payload())
+    write_json(coverage_matrix, valid_translator_coverage_matrix_report_payload())
+    write_json(milestone, valid_milestone_release_report_payload())
+
+
 def write_exact_competition_smoke_fixture(
     root: Path,
     *,
@@ -886,9 +971,7 @@ def write_exact_competition_smoke_fixture(
             "clang_required": True,
         },
     )
-    write_json(evidence_governance, {})
-    write_json(coverage_matrix, {})
-    write_json(milestone, {})
+    write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
     command_log.parent.mkdir(parents=True, exist_ok=True)
     command_log.write_text(
         "".join(
@@ -5201,6 +5284,46 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     },
                 )
 
+    def test_require_local_artifacts_rejects_malformed_competition_smoke_report_artifacts(self) -> None:
+        cases = [
+            (
+                "evidence_governance_report",
+                "evidence_governance_report.schema_version must be 1",
+            ),
+            (
+                "translator_coverage_matrix",
+                "translator_coverage_matrix.schema_version must be 1",
+            ),
+            (
+                "milestone_release_report",
+                "milestone_release_report.schema_version must be 1",
+            ),
+        ]
+        for artifact_key, expected_error in cases:
+            with self.subTest(artifact_key=artifact_key):
+                with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+                    root = Path(tmp)
+                    artifacts, _payload = write_exact_competition_smoke_fixture(
+                        root,
+                        run_id=f"smoke-report-artifacts-{artifact_key}-contract-test",
+                    )
+                    write_json(REPO_ROOT / artifacts[artifact_key], {})
+
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        validator.validate_harness_artifact_contracts(
+                            artifacts,
+                            require_local_artifacts=True,
+                            repo_root=REPO_ROOT,
+                            environment_profile={
+                                "profile_id": "huawei-competition-ubuntu-24.04",
+                                "sha256": "a" * 64,
+                            },
+                            smoke_contract={
+                                "proof_class": "competition-exact",
+                                "run_id": f"smoke-report-artifacts-{artifact_key}-contract-test",
+                            },
+                        )
+
     def test_require_local_artifacts_rejects_missing_command_log(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
             root = Path(tmp)
@@ -5231,9 +5354,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
             write_json(summary_path, payload)
             write_json(vendored_path, valid_vendored_clang_verification_payload())
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -5322,9 +5443,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
             write_json(summary_path, payload)
             write_json(vendored_path, valid_vendored_clang_verification_payload())
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
             write_valid_command_log(command_log)
 
             with self.assertRaisesRegex(
@@ -5375,9 +5494,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
             write_json(summary_path, payload)
             write_json(vendored_path, valid_vendored_clang_verification_payload())
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
             command_log.parent.mkdir(parents=True, exist_ok=True)
             command_log.write_text(
                 json.dumps(
@@ -5445,9 +5562,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
             write_json(summary_path, payload)
             write_json(vendored_path, valid_vendored_clang_verification_payload())
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
             drifted_steps = [dict(step) for step in payload["steps"]]
             for step in drifted_steps:
                 if step["step"] == "environment-check":
@@ -5549,9 +5664,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "clang_required": True,
                 },
             )
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
             command_log.parent.mkdir(parents=True, exist_ok=True)
             command_log_entries = []
             for step in payload["steps"]:
@@ -5672,9 +5785,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "clang_required": True,
                 },
             )
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
             command_log.parent.mkdir(parents=True, exist_ok=True)
             command_log.write_text(
                 "".join(
@@ -5805,9 +5916,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
 
             write_json(summary_path, payload)
             write_json(vendored_path, valid_vendored_clang_verification_payload())
-            write_json(evidence_governance, {})
-            write_json(coverage_matrix, {})
-            write_json(milestone, {})
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
             command_log.parent.mkdir(parents=True, exist_ok=True)
             command_log.write_text(
                 json.dumps(

@@ -1139,6 +1139,89 @@ def validate_competition_smoke_summary_contract(
     }
 
 
+def validate_evidence_governance_report_contract(payload: Any) -> dict[str, Any]:
+    report = require_object(payload, "evidence_governance_report")
+    if report.get("schema_version") != 1:
+        raise ValueError("evidence_governance_report.schema_version must be 1")
+    status = report.get("status")
+    if status not in {"passed", "failed"}:
+        raise ValueError("evidence_governance_report.status must be passed or failed")
+    require_string(report.get("evidence_root"), "evidence_governance_report.evidence_root")
+    failed_gates = report.get("failed_gates")
+    if not isinstance(failed_gates, list) or not all(isinstance(item, str) for item in failed_gates):
+        raise ValueError("evidence_governance_report.failed_gates must be a string list")
+    policy = require_object(report.get("policy_compliance"), "evidence_governance_report.policy_compliance")
+    if policy.get("status") not in {"passed", "failed"}:
+        raise ValueError("evidence_governance_report.policy_compliance.status must be passed or failed")
+    if not isinstance(policy.get("gates"), list):
+        raise ValueError("evidence_governance_report.policy_compliance.gates must be a list")
+    portability = require_object(report.get("portability"), "evidence_governance_report.portability")
+    if portability.get("status") not in {"passed", "failed"}:
+        raise ValueError("evidence_governance_report.portability.status must be passed or failed")
+    require_object(report.get("inventory"), "evidence_governance_report.inventory")
+    return {"status": status, "failed_gate_count": len(failed_gates)}
+
+
+def validate_translator_coverage_matrix_report_contract(payload: Any) -> dict[str, Any]:
+    report = require_object(payload, "translator_coverage_matrix")
+    if report.get("schema_version") != 1:
+        raise ValueError("translator_coverage_matrix.schema_version must be 1")
+    if report.get("status") != "passed":
+        raise ValueError("translator_coverage_matrix.status must be passed")
+    matrix = require_object(report.get("matrix"), "translator_coverage_matrix.matrix")
+    require_string(matrix.get("path"), "translator_coverage_matrix.matrix.path")
+    capability_count = matrix.get("capability_count")
+    if not isinstance(capability_count, int) or capability_count < 0:
+        raise ValueError("translator_coverage_matrix.matrix.capability_count must be a non-negative integer")
+    if report.get("capability_count") != capability_count:
+        raise ValueError("translator_coverage_matrix.capability_count must match matrix.capability_count")
+    require_object(report.get("dimensions"), "translator_coverage_matrix.dimensions")
+    if not isinstance(report.get("capabilities"), list):
+        raise ValueError("translator_coverage_matrix.capabilities must be a list")
+    ledger = require_object(
+        report.get("capability_delta_ledger"),
+        "translator_coverage_matrix.capability_delta_ledger",
+    )
+    if ledger.get("schema_version") != 1:
+        raise ValueError("translator_coverage_matrix.capability_delta_ledger.schema_version must be 1")
+    if ledger.get("status") != "recorded":
+        raise ValueError("translator_coverage_matrix.capability_delta_ledger.status must be recorded")
+    require_string(report.get("claim_boundary"), "translator_coverage_matrix.claim_boundary")
+    return {"status": "passed", "capability_count": capability_count}
+
+
+def validate_milestone_release_report_contract(payload: Any) -> dict[str, Any]:
+    report = require_object(payload, "milestone_release_report")
+    if report.get("schema_version") != 1:
+        raise ValueError("milestone_release_report.schema_version must be 1")
+    if report.get("report_kind") != "milestone-release-metrics":
+        raise ValueError("milestone_release_report.report_kind must be milestone-release-metrics")
+    status = report.get("status")
+    if status not in {"internal_preview", "release_candidate"}:
+        raise ValueError("milestone_release_report.status must be internal_preview or release_candidate")
+    require_object(report.get("inputs"), "milestone_release_report.inputs")
+    require_object(report.get("harness_architecture"), "milestone_release_report.harness_architecture")
+    core_quality = require_object(
+        report.get("core_translation_quality"),
+        "milestone_release_report.core_translation_quality",
+    )
+    numerator = core_quality.get("translation_coverage_numerator")
+    if not isinstance(numerator, int) or numerator < 0:
+        raise ValueError(
+            "milestone_release_report.core_translation_quality.translation_coverage_numerator "
+            "must be a non-negative integer"
+        )
+    metrics = require_object(report.get("metrics"), "milestone_release_report.metrics")
+    if metrics.get("translation_coverage_numerator") != numerator:
+        raise ValueError("milestone_release_report.metrics.translation_coverage_numerator must match core_translation_quality")
+    readiness = require_object(report.get("readiness"), "milestone_release_report.readiness")
+    if readiness.get("status") != status:
+        raise ValueError("milestone_release_report.readiness.status must match status")
+    require_object(report.get("release_note_inputs"), "milestone_release_report.release_note_inputs")
+    require_string(report.get("claim_boundary"), "milestone_release_report.claim_boundary")
+    return {"status": status, "translation_coverage_numerator": numerator}
+
+
 def validate_competition_smoke_artifact_roots(payload: dict[str, Any]) -> dict[str, Any]:
     roots = payload.get("artifact_roots", [])
     if roots is None:
@@ -5869,6 +5952,21 @@ def validate_harness_artifact_contracts(
                 load_json(vendored_clang_path),
                 smoke_summary=smoke_summary_payload,
                 environment_profile=environment_profile,
+            )
+        if "evidence_governance_report" in artifacts:
+            evidence_governance_path = repo_path(str(artifacts["evidence_governance_report"]), repo_root=repo_root)
+            result["evidence_governance_report"] = validate_evidence_governance_report_contract(
+                load_json(evidence_governance_path),
+            )
+        if "translator_coverage_matrix" in artifacts:
+            coverage_matrix_path = repo_path(str(artifacts["translator_coverage_matrix"]), repo_root=repo_root)
+            result["translator_coverage_matrix"] = validate_translator_coverage_matrix_report_contract(
+                load_json(coverage_matrix_path),
+            )
+        if "milestone_release_report" in artifacts:
+            milestone_report_path = repo_path(str(artifacts["milestone_release_report"]), repo_root=repo_root)
+            result["milestone_release_report"] = validate_milestone_release_report_contract(
+                load_json(milestone_report_path),
             )
     return result
 
