@@ -4831,6 +4831,21 @@ def validate_resume_manifest_contract(
         raise ValueError("resume_manifest.workers must be a list")
     if payload.get("worker_count") != len(workers):
         raise ValueError("resume_manifest.worker_count must match workers length")
+    actual_worker_ids = [
+        require_string(
+            require_object(worker, f"resume_manifest.workers[{index}]").get("worker_id"),
+            f"resume_manifest.workers[{index}].worker_id",
+        )
+        for index, worker in enumerate(workers)
+    ]
+    declared_worker_ids = payload.get("worker_ids")
+    if declared_worker_ids is not None:
+        if not isinstance(declared_worker_ids, list) or not all(
+            isinstance(worker_id, str) and worker_id for worker_id in declared_worker_ids
+        ):
+            raise ValueError("resume_manifest.worker_ids must be a non-empty string list when declared")
+        if declared_worker_ids != actual_worker_ids:
+            raise ValueError("resume_manifest.worker_ids must match workers")
     for index, worker in enumerate(workers):
         worker_payload = require_object(worker, f"resume_manifest.workers[{index}]")
         require_string(worker_payload.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
@@ -4856,6 +4871,7 @@ def validate_resume_manifest_contract(
         "status": "passed",
         "checkpoint_backend": "sqlite",
         "worker_count": len(workers),
+        "worker_ids": actual_worker_ids,
         "worker_consistency": worker_consistency,
         **({"verified_unsafe_baseline": verified_baseline_contract} if verified_baseline_contract is not None else {}),
         "local_absolute_path_scan": local_path_scan,

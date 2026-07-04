@@ -3813,6 +3813,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
             self.assertEqual(manifest["verified_unsafe_baseline"], verified_baseline_ref)
             self.assertEqual(manifest["entrypoints"]["verified_unsafe_baseline"], verified_baseline_ref["path"])
+            self.assertEqual(manifest["worker_ids"], ["worker-001"])
             worker = manifest["workers"][0]
             replay = worker["replay_commands"]
             run_worker = replay["run_worker"]
@@ -3858,6 +3859,90 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 "c2rust-migrator",
             )
             self.assertEqual(retry_worker["command"], shlex.join(retry_worker["argv"]))
+
+    def test_build_resume_manifest_records_stable_worker_ids_for_multi_worker_resume(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = out_root / "state" / "opencode-agent-harness.sqlite3"
+            evaluate_report = out_root / "harness" / "evaluate-report.json"
+            judge_index = out_root / "harness" / "judge-evidence-index.json"
+            resume_manifest = out_root / "harness" / "resume-manifest.json"
+            verified_baseline_ref = verified_unsafe_baseline_ref_for_tests()
+
+            workers = []
+            agents = []
+            agents_by_worker_id = {}
+            for index, worker_id in enumerate(["worker-a", "worker-b"], start=1):
+                worker_root = out_root / "workers" / worker_id
+                assignment = out_root / "harness" / "assignments" / f"{worker_id}.json"
+                request = out_root / "harness" / "assignments" / f"{worker_id}-request.json"
+                summary = worker_root / "summary" / "competition-run-summary.json"
+                report = worker_root / "harness" / "run-worker-report.json"
+                worker = {
+                    "worker_id": worker_id,
+                    "slice_id": f"demo-unit-{index}",
+                    "function": f"demo_unit_{index}",
+                    "assignment_path": repo_rel(assignment),
+                    "request_path": repo_rel(request),
+                    "summary_path": repo_rel(summary),
+                    "report_path": repo_rel(report),
+                    "out_root": repo_rel(worker_root),
+                    "source_commit": f"abc12{index}",
+                    "source_sha256": str(index) * 64,
+                    "summary_status": "failed",
+                }
+                workers.append(worker)
+                agent = {**worker, "isolated_out_root": repo_rel(worker_root), "mode": "deterministic"}
+                agents.append(agent)
+                agents_by_worker_id[worker_id] = agent
+
+            manifest = harness.build_resume_manifest(
+                db_path=db_path,
+                run_id="run-resume-two-workers",
+                out_root=out_root,
+                status="failed",
+                context_pack={
+                    "mode": "deterministic",
+                    "entrypoints": {},
+                    "attempt_evidence_policy": {
+                        "baseline_attempt": {
+                            "verified_unsafe_baseline": verified_baseline_ref,
+                        }
+                    },
+                    "workers": workers,
+                },
+                context_pack_ref={"path": "target/context-pack.json", "sha256": "a" * 64},
+                agent_index={
+                    "mode": "deterministic",
+                    "attempt_evidence_policy": {
+                        "baseline_attempt": {
+                            "verified_unsafe_baseline": verified_baseline_ref,
+                        }
+                    },
+                    "agents": agents,
+                    "agents_by_worker_id": agents_by_worker_id,
+                },
+                agent_index_ref={"path": "target/agent-index.json", "sha256": "b" * 64},
+                evaluate_report_path=evaluate_report,
+                batch_profile_report_path="target/batch-profile-report.json",
+                judge_evidence_index_path=judge_index,
+                resume_manifest_path=resume_manifest,
+                repair_hints={"source": "sqlite repair_hints", "open_count": 0, "hints": []},
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(manifest["worker_count"], 2)
+            self.assertEqual(manifest["worker_ids"], ["worker-a", "worker-b"])
+            self.assertEqual([worker["worker_id"] for worker in manifest["workers"]], manifest["worker_ids"])
+            for worker in manifest["workers"]:
+                run_worker = worker["replay_commands"]["run_worker"]
+                flags = {
+                    argument: run_worker["argv"][index + 1]
+                    for index, argument in enumerate(run_worker["argv"][:-1])
+                    if argument.startswith("--") and not run_worker["argv"][index + 1].startswith("--")
+                }
+                self.assertEqual(flags["--worker-id"], worker["worker_id"])
+                self.assertEqual(run_worker["replay_safety"]["status"], "ready")
 
     def test_resume_manifest_blocks_opencode_replay_when_preflight_model_is_missing(self) -> None:
         with temp_repo_dir() as tmp:

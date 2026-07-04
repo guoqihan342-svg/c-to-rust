@@ -2708,6 +2708,7 @@ def build_resume_manifest(
         "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
         "repair_hints": repair_hints,
         "worker_count": len(workers),
+        "worker_ids": [str(worker["worker_id"]) for worker in workers],
         "workers": workers,
     }
     if policy is not None:

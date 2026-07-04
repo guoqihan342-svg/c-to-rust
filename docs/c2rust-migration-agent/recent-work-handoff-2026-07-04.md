@@ -2,12 +2,12 @@
 
 # 最近开发接力摘要（给其他 Agent）
 
-生成时间：2026-07-04
+生成时间：2026-07-05
 工作目录：`F:\agent\crustpaper\0630`
 当前分支：`codex/flashdb-rust-skeleton`
-当前 HEAD：`a070b9437e59a8dbe1e63a6fd8f376bee5176cad`
+接手基线 HEAD：`3cafbfe9 Record verified two-worker DeepSeek orchestration in handoff`
 远端状态：`origin/codex/flashdb-rust-skeleton` 与本地 HEAD 一致
-最新 CI：GitHub Actions `Core Translator Validation CI` run `28705610245` 已通过
+最新已知 CI：GitHub Actions `Core Translator Validation CI` run `28705610245` 已通过；后续提交后需重新看 Actions。
 
 ## 文件边界
 
@@ -35,14 +35,14 @@
 
 ## 当前工作区状态
 
-最近核对：
+接手时最近核对：
 
 ```text
 git rev-parse HEAD
-a070b9437e59a8dbe1e63a6fd8f376bee5176cad
+3cafbfe9c6e30c2bf1f0cf3ad121ee3b311b15a6
 
 git rev-parse origin/codex/flashdb-rust-skeleton
-a070b9437e59a8dbe1e63a6fd8f376bee5176cad
+3cafbfe9c6e30c2bf1f0cf3ad121ee3b311b15a6
 ```
 
 旧的未跟踪聊天导出和 7 月 2 日 harness 审查稿已清理；后续 agent 继续只看本文件和 `future-vision-and-mvp.md`。提交前仍要重新看 `git status --short`，确认没有夹带其它 agent 的改动。
@@ -52,12 +52,35 @@ a070b9437e59a8dbe1e63a6fd8f376bee5176cad
 最新提交：
 
 ```text
+3cafbfe9 Record verified two-worker DeepSeek orchestration in handoff
+2db4e3f7 Record python3-only portability finding in handoff
 3a46f5c2 Probe python version via sys.executable in evidence metadata
 00f85d04 Use sys.executable for test subprocesses, not bare python
 75b2655b Lock WSL/host-path drift combinations in command-log tests
 ad7052d2 Resync bundle manifest to v4-pro rehearsal profile sha
 ddde7415 Actually flip rehearsal profile model to v4-pro
+2ad9b769 Switch DeepSeek rehearsal profile to v4-pro
+3fca4f41 Record DeepSeek rehearsal results in handoff
+1b00b131 docs: remove obsolete handoff scratch refs
+13a6212b docs: tighten harness handoff and roadmap
 a070b943 Add DeepSeek OpenCode local rehearsal profile
+```
+
+### 2026-07-05 本轮接力增量
+
+已补 `resume-manifest` 多 worker 续跑索引的机器可读身份集合：`opencode_agent_harness.build_resume_manifest()` 现在写出顶层 `worker_ids`，顺序与 `workers[]` 完全一致；`validate_judge_entrypoints.validate_resume_manifest_contract()` 在 `worker_ids` 存在时会校验它必须等于 `workers[].worker_id`，否则 fail-closed。该增量让评委或后续 agent 不必只钻进 `workers[]` 才能判断多 agent 续跑集合，也防止 stale manifest 自述的 worker 集合与可重放命令集合漂移。
+
+本轮 focused RED/GREEN 验证已过：
+
+```text
+python -B -m unittest validation.tools.test_opencode_agent_harness.OpenCodeAgentHarnessTest.test_build_resume_manifest_records_worker_replay_commands validation.tools.test_opencode_agent_harness.OpenCodeAgentHarnessTest.test_build_resume_manifest_records_stable_worker_ids_for_multi_worker_resume validation.tools.test_validate_judge_entrypoints.JudgeEntrypointsValidatorTests.test_resume_manifest_worker_ids_must_match_workers_when_declared -q
+```
+
+本轮相关模块回归已过：
+
+```text
+python -B -m unittest validation.tools.test_opencode_agent_harness -q
+python -B -m unittest validation.tools.test_validate_judge_entrypoints -q
 ```
 
 ### 比赛环境可移植性发现（2026-07-04）：裸 `python` vs `python3`
