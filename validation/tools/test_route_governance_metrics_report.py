@@ -591,6 +591,11 @@ class RouteGovernanceMetricsReportTests(unittest.TestCase):
                 {
                     "unit_id": "demo/demo-add-one",
                     "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
                     "repair_rounds": 1,
                     "auto_recovered": True,
                     "repair_history": {

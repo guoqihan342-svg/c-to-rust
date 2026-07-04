@@ -856,6 +856,11 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 {
                     "unit_id": "demo/a",
                     "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
                     "repair_rounds": 2,
                     "auto_recovered": True,
                     "repair_history": {
@@ -870,6 +875,11 @@ class MilestoneReleaseReportTests(unittest.TestCase):
                 {
                     "unit_id": "demo/b",
                     "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
                     "auto_recovered": False,
                 },
             ],
