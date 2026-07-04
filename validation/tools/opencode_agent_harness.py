@@ -7705,14 +7705,20 @@ def opencode_accepted_retry_hint(
     rollback_ids = repair_history.get("rollback_ids") if isinstance(repair_history.get("rollback_ids"), list) else []
     verified = bool(repair_history.get("verified"))
     auto_recovered = bool(unit.get("auto_recovered", False))
-    status = "revalidated_passed" if verified and auto_recovered else ("verified" if verified else "recorded")
+    rollback_evidence = opencode_rollback_evidence_refs(rollback_ids, repo_root=repo_root)
+    rollback_evidence_complete = bool(rollback_evidence) and [
+        ref.get("path") for ref in rollback_evidence
+    ] == rollback_ids and all(is_sha256_hex(ref.get("sha256")) for ref in rollback_evidence)
+    status = "revalidated_passed" if verified and auto_recovered and rollback_evidence_complete else (
+        "verified" if verified else "recorded"
+    )
     hint = {
         "status": status,
         "repair_rounds": int(unit.get("repair_rounds", 0) or 0),
         "auto_recovered": auto_recovered,
         "statuses": json.loads(json.dumps(statuses)),
         "rollback_ids": json.loads(json.dumps(rollback_ids)),
-        "rollback_evidence": opencode_rollback_evidence_refs(rollback_ids, repo_root=repo_root),
+        "rollback_evidence": rollback_evidence,
     }
     for field in ("patch_events_path", "patch_events_sha256"):
         value = repair_history.get(field)

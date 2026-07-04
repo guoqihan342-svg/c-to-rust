@@ -6099,6 +6099,59 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(safety_unit["repair_history"]["patch_events_sha256"], harness.sha256_file(history_path))
             self.assertEqual(safety_unit["root_cause_key"], "rustc_compile_failed")
 
+    def test_opencode_safety_transform_attempt_does_not_accept_missing_rollback_evidence(self) -> None:
+        with temp_repo_dir() as tmp:
+            worker_out_root = Path(tmp) / "competition-out" / "workers" / "worker-a"
+            summary_path = worker_out_root / "summary" / "competition-run-summary.json"
+            metrics = before_after_worker_metrics(worker_out_root, "run-test")
+            missing_rollback_path = worker_out_root / "harness" / "missing-rollback.json"
+            history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                json.dumps({"attempt": 1, "status": "failed", "root_cause_key": "rustc_compile_failed"})
+                + "\n"
+                + json.dumps({"attempt": 2, "status": "verified", "summary_status": "passed"})
+                + "\n",
+                encoding="utf-8",
+            )
+            unit = metrics["per_unit_statuses"][0]
+            unit["repair_rounds"] = 1
+            unit["auto_recovered"] = True
+            unit["repair_history"] = {
+                "patch_events_path": repo_rel(history_path),
+                "patch_events_sha256": harness.sha256_file(history_path),
+                "statuses": ["failed", "verified"],
+                "rollback_ids": [repo_rel(missing_rollback_path)],
+                "verified": True,
+            }
+            write_worker_summary(
+                summary_path,
+                "run-test",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=metrics,
+            )
+
+            binding = harness.write_opencode_safety_transform_attempt(
+                run_id="run-test",
+                worker_id="worker-a",
+                attempt_number=2,
+                attempt_path=worker_out_root / "harness" / "opencode-safety-transform-attempt.json",
+                summary_path=summary_path,
+                summary_payload=json.loads(summary_path.read_text(encoding="utf-8")),
+                handoff_contract=None,
+                opencode_session_evidence=None,
+                opencode_contract_verification={"status": "executed"},
+                repo_root=REPO_ROOT,
+            )
+
+            attempt = json.loads((REPO_ROOT / binding["path"]).read_text(encoding="utf-8"))
+            retry_hint = attempt["safety_transform_units"][0]["accepted_retry_hint"]
+            self.assertEqual(retry_hint["status"], "verified")
+            self.assertEqual(retry_hint["rollback_ids"], [repo_rel(missing_rollback_path)])
+            self.assertEqual(retry_hint["rollback_evidence"], [{"path": repo_rel(missing_rollback_path)}])
+
     def test_opencode_run_worker_classifies_wrong_shell_command_as_contract_not_executed(self) -> None:
         with temp_repo_dir() as tmp:
             out_root = Path(tmp) / "competition-out"
