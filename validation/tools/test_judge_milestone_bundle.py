@@ -3341,6 +3341,48 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn("repair_accounting_verified_baseline_counts_mismatch", blockers)
         self.assertIn("repair_accounting_verified_baseline_all_bound_mismatch", blockers)
 
+    def test_repair_accounting_blocks_unsafe_delta_rollup_drift_from_units(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        inconsistent = {
+            "sources": [
+                {
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 1,
+                                "reduced_by": 1,
+                            },
+                        }
+                    ]
+                }
+            ],
+            "rollup": {
+                "bound_unit_count": 1,
+                "verified_baseline_unit_count": 1,
+                "missing_verified_baseline_unit_count": 0,
+                "all_units_verified_baseline_bound": True,
+                "measured_unsafe_unit_count": 1,
+                "observed_repair_unit_count": 0,
+                "auto_recovered_unit_count": 0,
+                "rollback_evidence_count": 0,
+                "unsafe_reduced_by": 2,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+            },
+        }
+
+        blockers = bundle.repair_accounting_consistency_blockers(inconsistent)
+
+        self.assertIn("repair_accounting_unsafe_reduction_rollup_mismatch", blockers)
+
     def test_bundle_repair_accounting_does_not_require_final_gate_passed(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

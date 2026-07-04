@@ -493,10 +493,23 @@ def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str
     all_units_verified_baseline_bound = rollup.get("all_units_verified_baseline_bound")
     unsafe_reduction = rollup.get("unsafe_reduction", {}) if isinstance(rollup.get("unsafe_reduction"), dict) else {}
     baseline_total_unsafe = int_or_none(unsafe_reduction.get("baseline_total_unsafe"))
+    unit_unsafe_totals = before_after_unit_unsafe_reduction_totals(before_after_repair_exhibit)
     if auto_recovered > observed:
         blockers.append("repair_accounting_auto_recovered_exceeds_observed")
     if baseline_total_unsafe is not None and unsafe_reduced_by > baseline_total_unsafe:
         blockers.append("repair_accounting_unsafe_reduced_by_exceeds_measured_baseline")
+    if unit_unsafe_totals is not None:
+        unit_rollup_matches = (
+            unit_unsafe_totals["complete"]
+            and int_or_zero(rollup.get("measured_unsafe_unit_count")) == unit_unsafe_totals["unit_count"]
+            and unsafe_reduction.get("status") == "measured"
+            and baseline_total_unsafe == unit_unsafe_totals["baseline_total_unsafe"]
+            and int_or_none(unsafe_reduction.get("current_total_unsafe")) == unit_unsafe_totals["current_total_unsafe"]
+            and int_or_none(unsafe_reduction.get("reduced_by")) == unit_unsafe_totals["reduced_by"]
+            and unsafe_reduced_by == unit_unsafe_totals["reduced_by"]
+        )
+        if not unit_rollup_matches:
+            blockers.append("repair_accounting_unsafe_reduction_rollup_mismatch")
     if observed > 0 and rollback_evidence_count == 0:
         blockers.append("repair_accounting_rollback_evidence_missing_for_observed_repairs")
     if verified_baseline_units + missing_verified_baseline_units != bound_units:
@@ -507,6 +520,38 @@ def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str
     if all_units_verified_baseline_bound is not expected_all_units_verified:
         blockers.append("repair_accounting_verified_baseline_all_bound_mismatch")
     return blockers
+
+
+def before_after_unit_unsafe_reduction_totals(before_after_repair_exhibit: dict[str, Any]) -> dict[str, Any] | None:
+    unit_count = 0
+    baseline_total = 0
+    current_total = 0
+    reduced_total = 0
+    complete = True
+    for source in object_list(before_after_repair_exhibit.get("sources")):
+        for unit in object_list(source.get("before_after_units")):
+            unsafe_reduction = unit.get("unsafe_reduction")
+            if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+                continue
+            unit_count += 1
+            baseline = int_or_none(unsafe_reduction.get("baseline_total_unsafe"))
+            current = int_or_none(unsafe_reduction.get("current_total_unsafe"))
+            reduced_by = int_or_none(unsafe_reduction.get("reduced_by"))
+            if baseline is None or current is None or reduced_by is None:
+                complete = False
+                continue
+            baseline_total += baseline
+            current_total += current
+            reduced_total += reduced_by
+    if unit_count == 0:
+        return None
+    return {
+        "unit_count": unit_count,
+        "complete": complete,
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": reduced_total,
+    }
 
 
 def blocked_repairs_rollup_blockers(blocked_repairs_rollup: dict[str, Any]) -> list[str]:
