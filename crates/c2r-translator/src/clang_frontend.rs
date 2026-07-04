@@ -3966,15 +3966,15 @@ fn is_named_function_decl(node: &Value, function_name: &str) -> bool {
 
 #[cfg(feature = "typed-ir")]
 fn function_return_type(qual_type: &str) -> Result<ClangTypeSkeleton, ClangFrontendError> {
-    if qual_type.contains("(*") {
-        return Err(ClangFrontendError {
-            kind: "unsupported_function_type".to_string(),
-            message: format!(
-                "function pointer return type requires explicit function-pointer return lowering evidence: {qual_type}"
-            ),
-        });
-    }
     let Some((return_type, _)) = split_function_qual_type(qual_type) else {
+        if qual_type.contains("(*") {
+            return Err(ClangFrontendError {
+                kind: "unsupported_function_type".to_string(),
+                message: format!(
+                    "function pointer return type requires explicit function-pointer return lowering evidence: {qual_type}"
+                ),
+            });
+        }
         return Err(ClangFrontendError {
             kind: "unsupported_function_type".to_string(),
             message: format!("unsupported function qualType: {qual_type}"),
@@ -9923,6 +9923,26 @@ mod tests {
 
         assert_eq!(ty.spelled, "struct fdb_blob *");
         assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+    }
+
+    #[test]
+    fn function_return_type_from_type_object_allows_function_pointer_parameter() {
+        let type_object = serde_json::json!({
+            "qualType": "int (int (*)(int), int)"
+        });
+
+        let ty = function_return_type_from_type_object(&type_object).expect(
+            "function pointer parameter should not be mistaken for function pointer return",
+        );
+
+        assert_eq!(ty.spelled, "int");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
     }
 
     #[test]
