@@ -102,6 +102,11 @@ deepseek/deepseek-v4-pro
 
 注意：普通 `opencode models` 与 harness repo-local isolated runtime 下的 `opencode models` 结果可能不同。切换到 `deepseek/deepseek-v4-pro` 后，必须先跑 focused `opencode-preflight`，不能直接改 profile 后假设可用。
 
+实测已证实上述差异（2026-07-04 本会话 run-batch-profile 演练）：
+- `opencode/deepseek-v4-flash-free` lane 端到端跑通：preflight passed、worker `summary_status=passed`、`process_returncode=0`，产出完整 `run-worker-report`、`opencode-session-evidence`、`opencode-safety-transform-attempt-1.json` 证据链，batch `status=completed`。证明 harness → OpenCode → worker → evidence 全链路 wiring 正确。
+- `deepseek/deepseek-v4-pro` lane 在 preflight 阶段被正确 fail-closed（batch `status=blocked`，`root_cause_key=opencode_model_unavailable`）：harness 隔离 runtime env（`opencode-runtime/<scope>/{config,data,cache,tmp}`）里的 `opencode models` 只列出零鉴权的 `flash-free`，未列出需要 deepseek 供应商 API key 的 `v4-pro`（捕获 stdout 5 行、`model_listed=false`），而交互式 `opencode models` 能列出 `v4-pro`。这是隔离 runtime env 刻意不继承全局鉴权（ledger 加固锁定的 env 契约）导致的诚实环境事实，不是匹配 bug。
+- 结论：本机开发演练用零鉴权的 `flash-free` lane 即可覆盖 wiring 回归（且所有非 GLM 模型都 `local_simulation_closes_p0_h9=false`，模型选择不影响 H9 边界）；若确需在隔离 env 用 `v4-pro`/`GLM-5.1`，需把供应商鉴权安全传入 isolated runtime env，且必须设计成不破坏 `env_sha256` / 无本机路径泄漏契约、不把凭证写进 evidence——这是独立 harness 任务，不应盲改。committed profile 保持 `flash-free`。
+
 ## 当前最小下一步
 
 按 harness-first 继续开发，优先级如下。
