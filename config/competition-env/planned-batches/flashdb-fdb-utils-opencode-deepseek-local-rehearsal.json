@@ -10,7 +10,7 @@
   "worker_prefix": "flashdb-deepseek-worker",
   "mode": "opencode",
   "opencode_command": "opencode",
-  "opencode_model": "opencode/deepseek-v4-flash-free",
+  "opencode_model": "deepseek/deepseek-v4-pro",
   "opencode_agent": "c2rust-migrator",
   "opencode_variant": "max",
   "opencode_skip_permissions": true,
