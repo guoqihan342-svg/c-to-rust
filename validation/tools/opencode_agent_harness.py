@@ -2931,6 +2931,21 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root:
                 missing.append("opencode_preflight_report.path_missing")
             elif sha256_file(preflight_file) != preflight_sha256:
                 missing.append("opencode_preflight_report.sha256_mismatch")
+            else:
+                try:
+                    preflight_payload = load_json(preflight_file)
+                except (OSError, ValueError, json.JSONDecodeError):
+                    missing.append("opencode_preflight_report.file_readable")
+                else:
+                    if preflight_payload.get("status") != "passed":
+                        missing.append("opencode_preflight_report.file_status")
+                    file_contract = (
+                        preflight_payload.get("contract_verification")
+                        if isinstance(preflight_payload.get("contract_verification"), dict)
+                        else {}
+                    )
+                    if file_contract.get("status") != "executed":
+                        missing.append("opencode_preflight_report.file_contract_status")
     if preflight.get("contract_status") != "executed":
         missing.append("opencode_preflight_report.contract_status")
     policy = preflight.get("launch_policy")
