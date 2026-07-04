@@ -670,6 +670,16 @@ def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], pub
             )
 
 
+def require_passed_bundle_publishes_judge_evidence_index(bundle: dict[str, Any], publication: dict[str, Any]) -> None:
+    if bundle.get("status") != "passed":
+        return
+    for ref in published_artifact_refs(publication):
+        ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
+        if ref_obj.get("artifact_name") == "judge_evidence_index" and ref_obj.get("status") == "present":
+            return
+    raise ValueError("passed bundle must publish a present judge_evidence_index artifact ref")
+
+
 def require_published_judge_evidence_indexes_are_deep_validated(
     publication: dict[str, Any],
     *,
@@ -1101,6 +1111,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
     require_published_artifact_refs_are_hash_bound(publication, repo_root=repo_root)
     require_passed_bundle_published_refs_are_healthy(bundle, publication)
+    require_passed_bundle_publishes_judge_evidence_index(bundle, publication)
     require_published_judge_evidence_indexes_are_deep_validated(publication, repo_root=repo_root)
     for field in ("judge_entrypoints_run_report", "readiness_report"):
         if packet.get(field) != bundle.get(field):
@@ -1302,6 +1313,7 @@ def require_before_after_rollup_matches_sources(value: dict[str, Any], rollup: d
     verified_units = sum(1 for unit in before_after_units if before_after_unit_has_verified_unsafe_baseline(unit))
     measured_unsafe_units = sum(1 for unit in before_after_units if before_after_unit_has_measured_unsafe_reduction(unit))
     accepted_patch_units = sum(1 for unit in before_after_units if isinstance(unit.get("accepted_patch"), dict))
+    unsafe_reduction_totals = before_after_unit_unsafe_reduction_totals(before_after_units)
     expected = {
         "source_count": len(sources),
         "bound_unit_count": bound_unit_count,
@@ -1314,6 +1326,42 @@ def require_before_after_rollup_matches_sources(value: dict[str, Any], rollup: d
     for field, expected_value in expected.items():
         if rollup.get(field) != expected_value:
             raise ValueError("before_after_repair_exhibit rollup must match sources")
+    if unsafe_reduction_totals is not None:
+        unsafe_reduction = rollup.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            raise ValueError("before_after_repair_exhibit unsafe reduction rollup must match sources")
+        expected_unsafe_reduction = {
+            "baseline_total_unsafe": unsafe_reduction_totals["baseline_total_unsafe"],
+            "current_total_unsafe": unsafe_reduction_totals["current_total_unsafe"],
+            "reduced_by": unsafe_reduction_totals["reduced_by"],
+        }
+        for field, expected_value in expected_unsafe_reduction.items():
+            if unsafe_reduction.get(field) != expected_value:
+                raise ValueError("before_after_repair_exhibit unsafe reduction rollup must match sources")
+        if rollup.get("unsafe_reduced_by") != unsafe_reduction_totals["reduced_by"]:
+            raise ValueError("before_after_repair_exhibit unsafe reduction rollup must match sources")
+
+
+def before_after_unit_unsafe_reduction_totals(before_after_units: list[dict[str, Any]]) -> dict[str, int] | None:
+    measured_units = [
+        unit.get("unsafe_reduction")
+        for unit in before_after_units
+        if isinstance(unit.get("unsafe_reduction"), dict) and unit.get("unsafe_reduction", {}).get("status") == "measured"
+    ]
+    if not measured_units:
+        return None
+    totals = {
+        "baseline_total_unsafe": 0,
+        "current_total_unsafe": 0,
+        "reduced_by": 0,
+    }
+    for unsafe_reduction in measured_units:
+        for field in totals:
+            value = unsafe_reduction.get(field)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("before_after_repair_exhibit unsafe reduction units must be complete")
+            totals[field] += value
+    return totals
 
 
 def before_after_unit_has_verified_unsafe_baseline(unit: dict[str, Any]) -> bool:

@@ -161,12 +161,12 @@
     {
       "path": "config/competition-env/README.md",
       "role": "competition-env-readme",
-      "sha256": "14ae69e02559388aaf7c3c9df2cbf55f1dd7257a10a1037de9945179fb2a984e"
+      "sha256": "fc7fac817c7b4cd0bd95847fad4ac61f1817ceeb5c03b0e51ef9fab836b8cee0"
     },
     {
       "path": "config/competition-env/README.en.md",
       "role": "competition-env-readme",
-      "sha256": "c4e2375b411f0cc4bcc2c2c60a8652fd675fd315a14b4a649046f86c87e9ddbf"
+      "sha256": "49811c58efc39cb67577a14ceb73526d94709c1637a8a45818c436407bc7feb5"
     }
   ],
   "report_kind": "competition-env-bundle",

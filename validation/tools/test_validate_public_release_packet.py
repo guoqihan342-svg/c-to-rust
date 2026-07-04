@@ -43,6 +43,52 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def bind_json_ref(ref: dict, path: Path, payload: dict) -> None:
+    write_json(path, payload)
+    ref.update(
+        {
+            "path": repo_relative(path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(path),
+        }
+    )
+
+
+def write_published_judge_evidence_index_fixture(root: Path) -> dict:
+    payload = judge_entrypoint_fixtures.valid_deterministic_judge_index_payload()
+    refs = payload["evidence_artifact_refs"]
+    artifact_root = root / "harness" / "judge-evidence-index-artifacts"
+    bind_json_ref(
+        refs["competition_run_summary"],
+        artifact_root / "summary" / "competition-run-summary.json",
+        {"report_kind": "competition-run-summary", "status": "passed"},
+    )
+    bind_json_ref(
+        refs["workflow_metrics"],
+        artifact_root / "summary" / "workflow-metrics.json",
+        {"report_kind": "workflow-metrics", "status": "passed"},
+    )
+    bind_json_ref(
+        refs["worker_plan"],
+        artifact_root / "harness" / "plans" / "workers.json",
+        {"report_kind": "worker-plan", "status": "passed"},
+    )
+    bind_json_ref(
+        refs["profile"],
+        artifact_root / "profile.json",
+        {"schema_version": 1, "profile_id": "public-packet-deterministic-fixture", "mode": "deterministic"},
+    )
+    index_path = root / "harness" / "judge-evidence-index.json"
+    write_json(index_path, payload)
+    return {
+        "artifact_name": "judge_evidence_index",
+        "entrypoint_id": "opencode_multi_worker_evaluate_profile",
+        "path": repo_relative(index_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(index_path),
+    }
+
+
 def opencode_session_stdout_jsonl(events: list) -> str:
     return "".join(json.dumps(event, sort_keys=True) + "\n" for event in events)
 
@@ -1202,12 +1248,14 @@ def valid_packet(root: Path) -> dict:
             "run_id": "fixture-run",
         }
     ]
+    judge_evidence_index_ref = write_published_judge_evidence_index_fixture(root)
     publication_manifest["published_artifact_refs"] = [
         {
             "artifact_name": "judge_entrypoints_run_report",
             "entrypoint_id": "opencode_multi_worker_evaluate_profile",
             **json.loads(json.dumps(run_report)),
-        }
+        },
+        judge_evidence_index_ref,
     ]
     publication_manifest["published_artifact_count"] = len(publication_manifest["published_artifact_refs"])
     known_gaps = [{"gap_id": "competition-exact-not-run", "status": "open"}]
@@ -1820,6 +1868,38 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("passed bundle must publish at least one hash-bound artifact ref" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_passed_bundle_without_published_judge_evidence_index(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-no-judge-index-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        refs = [
+            ref
+            for ref in packet["publication_manifest"]["published_artifact_refs"]
+            if ref.get("artifact_name") != "judge_evidence_index"
+        ]
+        packet["publication_manifest"]["published_artifact_refs"] = refs
+        packet["publication_manifest"]["published_artifact_count"] = len(refs)
+        packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+            packet["publication_manifest"]
+        )
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("passed bundle must publish a present judge_evidence_index artifact ref" in error for error in result["errors"]),
             result["errors"],
         )
 
@@ -3144,6 +3224,51 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
                 self.assertEqual(result["status"], "failed")
                 self.assertTrue(
                     any("before_after_repair_exhibit rollup must match sources" in error for error in result["errors"]),
+                    result["errors"],
+                )
+
+    def test_validate_packet_rejects_before_after_unsafe_reduction_total_source_mismatch(self) -> None:
+        drift_cases = (
+            ("unsafe_reduced_by", 99),
+            ("unsafe_reduction.baseline_total_unsafe", 99),
+            ("unsafe_reduction.current_total_unsafe", 99),
+            ("unsafe_reduction.reduced_by", 99),
+        )
+        for field, spoofed_value in drift_cases:
+            with self.subTest(field=field):
+                temp_dir = Path(
+                    tempfile.mkdtemp(
+                        prefix=f"public-release-packet-before-after-{field.replace('.', '-').replace('_', '-')}-",
+                        dir=REPO_ROOT / "target",
+                    )
+                )
+                packet_path = temp_dir / "summary" / "public-release-packet.json"
+                packet = valid_packet(temp_dir)
+                mutated = json.loads(json.dumps(packet["before_after_repair_exhibit"]))
+                if field == "unsafe_reduced_by":
+                    mutated["rollup"][field] = spoofed_value
+                else:
+                    _, nested_field = field.split(".", maxsplit=1)
+                    mutated["rollup"]["unsafe_reduction"][nested_field] = spoofed_value
+                packet["before_after_repair_exhibit"] = mutated
+                bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+                bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+                bundle_payload["before_after_repair_exhibit"] = mutated
+                write_json(bundle_path, bundle_payload)
+                packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+                notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+                notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+                packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+                write_json(packet_path, packet)
+
+                result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(
+                    any(
+                        "before_after_repair_exhibit unsafe reduction rollup must match sources" in error
+                        for error in result["errors"]
+                    ),
                     result["errors"],
                 )
 
