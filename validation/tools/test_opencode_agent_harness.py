@@ -3368,14 +3368,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+            run_plan_detail = result.get("run_plan") or {}
             self.assertEqual(
                 result["status"],
                 "completed",
                 json.dumps(
                     {
-                        "failed_workers": result.get("failed_workers"),
-                        "workers": result.get("workers"),
-                        "merge_execution": result.get("merge_execution"),
+                        "failed_workers": run_plan_detail.get("failed_workers"),
+                        "workers": run_plan_detail.get("workers"),
+                        "merge_execution": run_plan_detail.get("merge_execution"),
                     },
                     ensure_ascii=False,
                     default=str,
