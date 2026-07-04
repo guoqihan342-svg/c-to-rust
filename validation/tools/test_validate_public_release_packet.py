@@ -1072,6 +1072,9 @@ def valid_packet(root: Path) -> dict:
             "verified_repair_source_count": 1,
             "observed_repair_unit_count": 1,
             "auto_recovered_unit_count": 1,
+            "verified_baseline_unit_count": 1,
+            "missing_verified_baseline_unit_count": 0,
+            "all_units_verified_baseline_bound": True,
             "rollback_evidence_count": 1,
             "repair_round_cap": 5,
             "unsafe_reduced_by": 2,
@@ -1540,6 +1543,31 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertIn("opencode_variant", preflight_summary["required"])
         self.assertEqual(preflight_summary["properties"]["opencode_agent"]["const"], "c2rust-migrator")
         self.assertEqual(preflight_summary["properties"]["opencode_variant"]["const"], "max")
+        before_after_rollup = schema["properties"]["before_after_repair_exhibit"]["properties"]["rollup"]
+        self.assertIn("verified_baseline_unit_count", before_after_rollup["required"])
+        self.assertIn("missing_verified_baseline_unit_count", before_after_rollup["required"])
+        self.assertIn("all_units_verified_baseline_bound", before_after_rollup["required"])
+
+    def test_public_release_packet_schema_requires_before_after_verified_baseline_rollup(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-baseline-rollup-", dir=REPO_ROOT / "target"))
+        packet = valid_packet(temp_dir)
+        schema = judge_validator.load_json(packet_validator.PACKET_SCHEMA)
+
+        for field in (
+            "verified_baseline_unit_count",
+            "missing_verified_baseline_unit_count",
+            "all_units_verified_baseline_bound",
+        ):
+            with self.subTest(field=field):
+                missing_rollup = json.loads(json.dumps(packet))
+                missing_rollup["before_after_repair_exhibit"]["rollup"].pop(field)
+                with self.assertRaises(jsonschema.ValidationError):
+                    jsonschema.validate(missing_rollup, schema)
+
+        invalid_rollup = json.loads(json.dumps(packet))
+        invalid_rollup["before_after_repair_exhibit"]["rollup"]["all_units_verified_baseline_bound"] = "true"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(invalid_rollup, schema)
 
     def test_validate_packet_rejects_harness_contract_matrix_missing_report_stage(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-harness-matrix-", dir=REPO_ROOT / "target"))

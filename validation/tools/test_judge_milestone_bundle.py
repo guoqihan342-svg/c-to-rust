@@ -1656,6 +1656,29 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
 
         jsonschema.validate(report, schema)
 
+        for field in (
+            "verified_baseline_unit_count",
+            "missing_verified_baseline_unit_count",
+            "all_units_verified_baseline_bound",
+        ):
+            with self.subTest(missing_before_after_rollup_field=field):
+                missing_baseline_rollup = json.loads(json.dumps(report))
+                missing_baseline_rollup["before_after_repair_exhibit"]["rollup"].pop(field)
+                with self.assertRaises(jsonschema.exceptions.ValidationError):
+                    jsonschema.validate(missing_baseline_rollup, schema)
+
+        invalid_baseline_rollup_values = {
+            "verified_baseline_unit_count": -1,
+            "missing_verified_baseline_unit_count": -1,
+            "all_units_verified_baseline_bound": "true",
+        }
+        for field, value in invalid_baseline_rollup_values.items():
+            with self.subTest(invalid_before_after_rollup_field=field):
+                invalid_baseline_rollup = json.loads(json.dumps(report))
+                invalid_baseline_rollup["before_after_repair_exhibit"]["rollup"][field] = value
+                with self.assertRaises(jsonschema.exceptions.ValidationError):
+                    jsonschema.validate(invalid_baseline_rollup, schema)
+
         expanded = json.loads(json.dumps(report))
         expanded["claim_scope"]["semantic_acceptance_ready"] = True
         with self.assertRaises(jsonschema.exceptions.ValidationError):
