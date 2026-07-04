@@ -52,12 +52,22 @@ a070b9437e59a8dbe1e63a6fd8f376bee5176cad
 最新提交：
 
 ```text
+3a46f5c2 Probe python version via sys.executable in evidence metadata
+00f85d04 Use sys.executable for test subprocesses, not bare python
+75b2655b Lock WSL/host-path drift combinations in command-log tests
+ad7052d2 Resync bundle manifest to v4-pro rehearsal profile sha
+ddde7415 Actually flip rehearsal profile model to v4-pro
 a070b943 Add DeepSeek OpenCode local rehearsal profile
-d528f5e8 Update coverage ledger expectation for blocked callees
-82690bb1 Bind refreshed baseline manifests to env profile
-cb8aff59 Split typed IR definitions into module
-1bb4f44f Close the real-slice evidence refresh item in both mirrors
 ```
+
+### 比赛环境可移植性发现（2026-07-04）：裸 `python` vs `python3`
+
+坐实一个 CI 掩盖的真实比赛主机 bug。比赛环境（`config/competition-env/environment.json`）与任何 `python3`-only 主机（含开发用 WSL Ubuntu）都没有裸 `python` 别名；CI 的 ubuntu-latest 恰好提供 `python`，所以下述问题在 CI 上一直是绿的、只在比赛主机暴露：
+
+- **测试套件（已修，`00f85d04`）**：`test_auto_migrate.py`（31 处）、`test_validate_auto_translation_evidence.py`（85 处）的 `subprocess.run(["python", str(SCRIPT), ...])` 在 `python3`-only 主机上全部 `FileNotFoundError: 'python'`——整套测试在比赛主机跑不起来。已统一改为 `sys.executable`（同文件既有模式），命令合同断言（断言产出的 portable `python3 -B` 命令串）不动。实测：`python3`-only WSL 上 `FileNotFoundError` 从 102 → 0，Windows 仍 214 OK。
+- **生产元数据（已修，`3a46f5c2`）**：`auto_migrate.py` 的 `tool_versions()` 用 `["python","--version"]` 探测，在比赛主机上落到 `"unavailable"`，导致证据里记录的 python 版本对不上目标主机；改为 `sys.executable`。
+- **生产 launcher（本就正确）**：`opencode_agent_harness.py`、`run_judge_entrypoints.py` 的 python 解析器是 `python3 -B` 优先、`python` 兜底，无需改。
+- 复查规则：新增测试或工具子进程调用解释器时用 `sys.executable`（或既有 portable `python3 -B` 合同），不要写裸 `python`；验证要在 `python3`-only 环境（WSL）跑，别只信 CI。
 
 `a070b943` 的重点：
 
