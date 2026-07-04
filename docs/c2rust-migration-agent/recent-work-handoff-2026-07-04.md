@@ -105,7 +105,13 @@ deepseek/deepseek-v4-pro
 实测已证实上述差异（2026-07-04 本会话 run-batch-profile 演练）：
 - `opencode/deepseek-v4-flash-free` lane 端到端跑通：preflight passed、worker `summary_status=passed`、`process_returncode=0`，产出完整 `run-worker-report`、`opencode-session-evidence`、`opencode-safety-transform-attempt-1.json` 证据链，batch `status=completed`。证明 harness → OpenCode → worker → evidence 全链路 wiring 正确。
 - `deepseek/deepseek-v4-pro` lane 在 preflight 阶段被正确 fail-closed（batch `status=blocked`，`root_cause_key=opencode_model_unavailable`）：harness 隔离 runtime env（`opencode-runtime/<scope>/{config,data,cache,tmp}`）里的 `opencode models` 只列出零鉴权的 `flash-free`，未列出需要 deepseek 供应商 API key 的 `v4-pro`（捕获 stdout 5 行、`model_listed=false`），而交互式 `opencode models` 能列出 `v4-pro`。这是隔离 runtime env 刻意不继承全局鉴权（ledger 加固锁定的 env 契约）导致的诚实环境事实，不是匹配 bug。
-- 结论：本机开发演练用零鉴权的 `flash-free` lane 即可覆盖 wiring 回归（且所有非 GLM 模型都 `local_simulation_closes_p0_h9=false`，模型选择不影响 H9 边界）；若确需在隔离 env 用 `v4-pro`/`GLM-5.1`，需把供应商鉴权安全传入 isolated runtime env，且必须设计成不破坏 `env_sha256` / 无本机路径泄漏契约、不把凭证写进 evidence——这是独立 harness 任务，不应盲改。committed profile 保持 `flash-free`。
+- 结论：本机开发演练用零鉴权的 `flash-free` lane 即可覆盖 wiring 回归（且所有非 GLM 模型都 `local_simulation_closes_p0_h9=false`，模型选择不影响 H9 边界）。
+
+`deepseek/deepseek-v4-pro` lane 已跑通（2026-07-04 本会话，用户提供 DeepSeek key）：
+- 机制：deepseek 是 opencode 内建供应商，隔离 runtime env 只需 `DEEPSEEK_API_KEY` 环境变量即可解析出 `v4-pro`；harness 的 `opencode_runtime_process_env` 从 `dict(os.environ)` 起步、继承父进程 env，所以 `DEEPSEEK_API_KEY=<key> python3 -B -m validation.tools.opencode_agent_harness run-batch-profile ...` 即可，无需改任何代码，隔离 env 只覆盖 XDG/TMP 不动 API key 变量。
+- 验证：committed profile 已切到 `deepseek/deepseek-v4-pro`，`DEEPSEEK_API_KEY` 环境变量下 run-batch-profile → preflight passed、worker `summary_status=passed`、`process_returncode=0`、batch `status=completed`。
+- **凭证安全（硬约束）**：API key 只作环境变量，绝不写进任何被 git 跟踪的文件（config/evidence/代码）。已对 `target/competition-out-deepseek-pro-key` 全量扫描确认：密钥值（`sk-...`）在所有证据 artifact 中零出现；证据里只有 model 名 `deepseek/deepseek-v4-pro` 和 provider 鉴权字段引用的变量**名** `DEEPSEEK_API_KEY`（非密钥值）。下一位 agent 不要把 key 落盘到 config 或 evidence；缺 key 时该 profile 会在 preflight 正确 fail-closed（`opencode_model_unavailable`）。
+- 边界不变：这仍是 `local-simulation`，`local_simulation_closes_p0_h9=false`；v4-pro 只是本机演练模型，不替代真实比赛的 `GLM-5.1` host。
 
 ## 当前最小下一步
 
