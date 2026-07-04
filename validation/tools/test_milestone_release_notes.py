@@ -371,6 +371,27 @@ class MilestoneReleaseNotesTests(unittest.TestCase):
                 ),
             ),
             (
+                "opencode_runtime.preflight_proof_summary.preflight_report.path",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"]["preflight_report"].pop(
+                    "path",
+                    None,
+                ),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.preflight_report.sha256",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"]["preflight_report"].__setitem__(
+                    "sha256",
+                    "not-a-sha",
+                ),
+            ),
+            (
+                "opencode_runtime.preflight_proof_summary.model_probe_logs.stdout.path",
+                lambda payload: payload["opencode_runtime"]["preflight_proof_summary"]["model_probe_logs"]["stdout"].pop(
+                    "path",
+                    None,
+                ),
+            ),
+            (
                 "opencode_runtime.preflight_proof_summary.semantic_gate",
                 lambda payload: payload["opencode_runtime"]["preflight_proof_summary"].__setitem__(
                     "semantic_gate",

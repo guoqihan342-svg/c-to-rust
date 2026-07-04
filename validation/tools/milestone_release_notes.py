@@ -499,12 +499,28 @@ def require_opencode_preflight_proof_summary_contract(
             allow_competition_exact,
             f"{label}.proof_class must not claim competition-exact without host attestation",
         )
-    require(isinstance(summary.get("preflight_report"), dict), f"{label}.preflight_report must be an object")
+    require_hash_bound_ref(summary.get("preflight_report"), f"{label}.preflight_report")
     logs = summary.get("model_probe_logs")
     require(isinstance(logs, dict), f"{label}.model_probe_logs must be an object")
-    require(isinstance(logs.get("stdout"), dict), f"{label}.model_probe_logs.stdout must be an object")
-    require(isinstance(logs.get("stderr"), dict), f"{label}.model_probe_logs.stderr must be an object")
+    require_hash_bound_ref(logs.get("stdout"), f"{label}.model_probe_logs.stdout")
+    require_hash_bound_ref(logs.get("stderr"), f"{label}.model_probe_logs.stderr")
     require(isinstance(summary.get("boundary"), str) and bool(summary.get("boundary")), f"{label}.boundary must be present")
+
+
+def require_hash_bound_ref(ref: Any, label: str) -> None:
+    require(isinstance(ref, dict), f"{label} must be an object")
+    path = ref.get("path")
+    require(isinstance(path, str) and bool(path), f"{label}.path must be present")
+    require("\\" not in path, f"{label}.path must be POSIX relative")
+    require(not path.startswith("/") and not (len(path) >= 2 and path[1] == ":"), f"{label}.path must be repo-relative")
+    require(".." not in path.split("/"), f"{label}.path must not contain parent traversal")
+    sha = ref.get("sha256")
+    require(
+        isinstance(sha, str) and len(sha) == 64 and all(char in "0123456789abcdefABCDEF" for char in sha),
+        f"{label}.sha256 must be a sha256",
+    )
+    status = ref.get("status")
+    require(isinstance(status, str) and bool(status), f"{label}.status must be present")
 
 
 def require_opencode_evidence_policy_contract(bundle: dict[str, Any]) -> None:
