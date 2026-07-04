@@ -6450,6 +6450,113 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(verification["executed_shell_commands"], [expected_command, extra_command])
         self.assertEqual(verification["contract_failure_reason"], "extra_shell_command_after_contract")
 
+    def test_opencode_preflight_contract_accepts_post_contract_marker_inspection(self) -> None:
+        with temp_repo_dir() as tmp:
+            marker_path = Path(tmp) / "harness" / "opencode-preflight-marker.json"
+            write_valid_preflight_marker(marker_path, run_id="preflight-run")
+            worker_command = [
+                "python3",
+                "-B",
+                "validation/tools/opencode_agent_harness.py",
+                "write-preflight-marker",
+                "--marker",
+                repo_rel(marker_path),
+                "--run-id",
+                "preflight-run",
+            ]
+            expected_command = harness.shell_command_line(worker_command)
+            inspection_command = (
+                f'Get-Item -LiteralPath "{repo_rel(marker_path)}" | '
+                "Select-Object FullName, Length, LastWriteTime"
+            )
+            session_evidence = {
+                "session_events": [
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": expected_command, "workdir": str(REPO_ROOT)}},
+                        },
+                    },
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": inspection_command, "workdir": str(REPO_ROOT)}},
+                        },
+                    },
+                ],
+            }
+
+            verification = harness.verify_opencode_contract_execution(
+                session_evidence=session_evidence,
+                worker_command=worker_command,
+                summary_path=marker_path,
+                repo_root=REPO_ROOT,
+                allow_post_contract_artifact_inspection=True,
+            )
+
+        self.assertEqual(verification["status"], "executed")
+        self.assertEqual(verification["contract_failure_reason"], "")
+        self.assertEqual(verification["post_contract_shell_command_count"], 1)
+        self.assertTrue(verification["post_contract_artifact_inspection_only"])
+
+    def test_opencode_preflight_contract_rejects_non_inspection_extra_shell_command(self) -> None:
+        with temp_repo_dir() as tmp:
+            marker_path = Path(tmp) / "harness" / "opencode-preflight-marker.json"
+            write_valid_preflight_marker(marker_path, run_id="preflight-run")
+            worker_command = [
+                "python3",
+                "-B",
+                "validation/tools/opencode_agent_harness.py",
+                "write-preflight-marker",
+                "--marker",
+                repo_rel(marker_path),
+                "--run-id",
+                "preflight-run",
+            ]
+            expected_command = harness.shell_command_line(worker_command)
+            session_evidence = {
+                "session_events": [
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": expected_command, "workdir": str(REPO_ROOT)}},
+                        },
+                    },
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {
+                                    "command": (
+                                        "python3 -B validation/tools/opencode_agent_harness.py "
+                                        "init-run --run-id unexpected"
+                                    ),
+                                    "workdir": str(REPO_ROOT),
+                                },
+                            },
+                        },
+                    },
+                ],
+            }
+
+            verification = harness.verify_opencode_contract_execution(
+                session_evidence=session_evidence,
+                worker_command=worker_command,
+                summary_path=marker_path,
+                repo_root=REPO_ROOT,
+                allow_post_contract_artifact_inspection=True,
+            )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertEqual(
+            verification["contract_failure_reason"],
+            "non_artifact_inspection_shell_command_after_contract",
+        )
+
     def test_opencode_contract_uses_posix_shell_join_for_prompt_and_verification(self) -> None:
         worker_command = [
             "python3",
@@ -6554,6 +6661,53 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
         self.assertEqual(verification["contract_failure_reason"], "opencode_workdir_mismatch")
         self.assertEqual(verification["first_shell_workdir_status"], "non_repo_root")
         self.assertEqual(verification["expected_workdir_status"], "repo_root")
+
+    def test_opencode_contract_accepts_missing_workdir_when_expected_artifact_exists(self) -> None:
+        with temp_repo_dir() as tmp:
+            summary_path = Path(tmp) / "harness" / "opencode-preflight-marker.json"
+            write_json(
+                summary_path,
+                {
+                    "schema_version": 1,
+                    "report_kind": "opencode-preflight-marker",
+                    "status": "written",
+                },
+            )
+            worker_command = [
+                "python3",
+                "-B",
+                "validation/tools/opencode_agent_harness.py",
+                "write-preflight-marker",
+                "--marker",
+                repo_rel(summary_path),
+                "--run-id",
+                "run-test",
+            ]
+            session_evidence = {
+                "session_events": [
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": harness.shell_command_line(worker_command)}},
+                        },
+                    },
+                ],
+            }
+
+            verification = harness.verify_opencode_contract_execution(
+                session_evidence=session_evidence,
+                worker_command=worker_command,
+                summary_path=summary_path,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(verification["status"], "executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "")
+        self.assertEqual(verification["first_shell_workdir_status"], "repo_root_inferred_from_expected_artifact")
+        self.assertTrue(verification["first_shell_workdir_matches_repo_root"])
 
     def test_opencode_contract_rejects_shell_command_without_workdir(self) -> None:
         worker_command = [
@@ -7137,6 +7291,48 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 contract_path=Path("target/opencode-preflight/harness/opencode-preflight-contract.json"),
                 repo_root=REPO_ROOT,
             )
+
+    def test_opencode_preflight_allows_deepseek_for_local_rehearsal_only(self) -> None:
+        argv = harness.build_opencode_preflight_argv(
+            opencode_command="opencode",
+            opencode_model="deepseek/deepseek-chat",
+            opencode_agent="c2rust-migrator",
+            opencode_variant="max",
+            opencode_skip_permissions=False,
+            opencode_allow_non_competition_model=True,
+            marker_command=["python3", "-B", "validation/tools/opencode_agent_harness.py", "write-preflight-marker"],
+            marker_path=Path("target/opencode-preflight/harness/opencode-preflight-marker.json"),
+            contract_path=Path("target/opencode-preflight/harness/opencode-preflight-contract.json"),
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertIn("--model", argv)
+        self.assertEqual(argv[argv.index("--model") + 1], "deepseek/deepseek-chat")
+        self.assertIn("--agent", argv)
+        self.assertEqual(argv[argv.index("--agent") + 1], "c2rust-migrator")
+
+    def test_opencode_model_probe_allows_deepseek_for_local_rehearsal_only(self) -> None:
+        with temp_repo_dir() as tmp:
+            logs_dir = Path(tmp) / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                return subprocess.CompletedProcess(argv, 0, stdout="deepseek/deepseek-chat\n", stderr="")
+
+            result = harness.run_opencode_model_availability_probe(
+                opencode_command="opencode",
+                opencode_model="deepseek/deepseek-chat",
+                opencode_allow_non_competition_model=True,
+                logs_dir=logs_dir,
+                opencode_process_env={},
+                timeout_seconds=5,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["required_model"], "deepseek/deepseek-chat")
+        self.assertTrue(result["model_listed"])
 
     def test_opencode_preflight_rejects_non_max_variant(self) -> None:
         with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):

@@ -44,6 +44,7 @@ COMPETITION_ENV_BUNDLE_FILE_ROLES = {
     "config/competition-env/planned-batches/demo-store-add-one-before-after.json": "planned-batch-profile",
     "config/competition-env/planned-batches/flashdb-fdb-utils-accepted-evidence.json": "planned-batch-profile",
     "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json": "planned-batch-profile",
+    "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-deepseek-local-rehearsal.json": "planned-batch-profile",
     "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json": "planned-batch-profile",
     "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json": "planned-batch-profile",
     "config/competition-env/review-checklists/flashdb-harness-internal-review.json": "review-gate",

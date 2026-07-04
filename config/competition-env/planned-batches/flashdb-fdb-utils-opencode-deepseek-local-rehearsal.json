@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "profile_id": "flashdb-fdb-utils-opencode-deepseek-local-rehearsal",
+  "proof_class": "local-simulation",
+  "target_id": "flashdb",
+  "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+  "source_branch": "competition",
+  "reuse_accepted_evidence": true,
+  "accepted_evidence_root": "validation/evidence",
+  "worker_prefix": "flashdb-deepseek-worker",
+  "mode": "opencode",
+  "opencode_command": "opencode",
+  "opencode_model": "opencode/deepseek-v4-flash-free",
+  "opencode_agent": "c2rust-migrator",
+  "opencode_variant": "max",
+  "opencode_skip_permissions": true,
+  "opencode_allow_non_competition_model": true,
+  "execute_merge": true,
+  "auto_retry": false,
+  "max_workers": 1,
+  "emit_route_governance_metrics_report": true,
+  "acceptance_boundary": {
+    "semantic_claim_source": "accepted_evidence_binding",
+    "generated_draft_semantic_pass": false,
+    "claim": "Local OpenCode DeepSeek rehearsal over one accepted-evidence FlashDB slice; this is runtime and harness wiring evidence only and does not close the GLM-5.1 competition host gate"
+  },
+  "workers": [
+    {
+      "worker_id": "flashdb-deepseek-worker-001-fdb-blob-make",
+      "target_id": "flashdb",
+      "source_repo_root": "sources/FlashDB",
+      "source_file": "src/fdb_utils.c",
+      "function": "fdb_blob_make",
+      "slice_id": "real-fdb-blob-make",
+      "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "require_source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+      "slice_spec": "validation/slice-specs/flashdb-real-fdb-blob-make.json"
+    }
+  ]
+}

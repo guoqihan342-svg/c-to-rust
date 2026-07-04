@@ -119,6 +119,11 @@
       "sha256": "2a9c40505ea2f7b20ba0efce0a52deae4a20821f4b603ef152a329ce0dd1a06b"
     },
     {
+      "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-deepseek-local-rehearsal.json",
+      "role": "planned-batch-profile",
+      "sha256": "2123b8a9ffe0f86287f68ff3173f85c3438eed9ba845c3e128d4646f45b4fe5c"
+    },
+    {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
       "role": "planned-batch-profile",
       "sha256": "1502657c70112e6a585c9f7c6edd8240a8cea8c4bd37d497f5f7a9e0ac1f735c"
@@ -156,12 +161,12 @@
     {
       "path": "config/competition-env/README.md",
       "role": "competition-env-readme",
-      "sha256": "0127398587363fa554ff2dc7a18d0cf552a59dc6636940a150491982b08a0d45"
+      "sha256": "14ae69e02559388aaf7c3c9df2cbf55f1dd7257a10a1037de9945179fb2a984e"
     },
     {
       "path": "config/competition-env/README.en.md",
       "role": "competition-env-readme",
-      "sha256": "2f1b75ef2aa8278a770e8ce469f9c3956695f3802db9c4e405bc14a6d7e0f5fc"
+      "sha256": "c4e2375b411f0cc4bcc2c2c60a8652fd675fd315a14b4a649046f86c87e9ddbf"
     }
   ],
   "report_kind": "competition-env-bundle",

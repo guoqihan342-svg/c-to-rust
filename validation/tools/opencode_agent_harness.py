@@ -229,6 +229,7 @@ def main() -> int:
     run_plan_parser.add_argument("--opencode-agent")
     run_plan_parser.add_argument("--opencode-variant", default="max")
     run_plan_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_plan_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
     run_plan_parser.add_argument("--opencode-preflight-report", type=Path)
     run_plan_parser.add_argument("--execute-merge", action="store_true")
     run_plan_parser.add_argument("--auto-retry", action="store_true")
@@ -276,6 +277,7 @@ def main() -> int:
     evaluate_parser.add_argument("--opencode-agent")
     evaluate_parser.add_argument("--opencode-variant", default="max")
     evaluate_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    evaluate_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
     evaluate_parser.add_argument("--opencode-preflight-report", type=Path)
     evaluate_parser.add_argument("--no-execute-merge", action="store_true")
     evaluate_parser.add_argument("--no-auto-retry", action="store_true")
@@ -290,6 +292,7 @@ def main() -> int:
     preflight_parser.add_argument("--opencode-agent")
     preflight_parser.add_argument("--opencode-variant", default="max")
     preflight_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    preflight_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
     preflight_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
     preflight_marker_parser = subcommands.add_parser("write-preflight-marker")
@@ -306,6 +309,7 @@ def main() -> int:
     run_parser.add_argument("--opencode-agent")
     run_parser.add_argument("--opencode-variant", default="max")
     run_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    run_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
     run_parser.add_argument("--opencode-preflight-report", type=Path)
     run_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
@@ -320,6 +324,7 @@ def main() -> int:
     retry_parser.add_argument("--opencode-agent")
     retry_parser.add_argument("--opencode-variant", default="max")
     retry_parser.add_argument("--opencode-skip-permissions", action="store_true")
+    retry_parser.add_argument("--opencode-allow-non-competition-model", action="store_true")
     retry_parser.add_argument("--opencode-preflight-report", type=Path)
     retry_parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS)
 
@@ -409,6 +414,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
             opencode_preflight_report=args.opencode_preflight_report,
             execute_merge=args.execute_merge,
             auto_retry=args.auto_retry,
@@ -479,6 +485,7 @@ def main() -> int:
                 opencode_agent=args.opencode_agent,
                 opencode_variant=args.opencode_variant,
                 opencode_skip_permissions=args.opencode_skip_permissions,
+                opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
                 opencode_preflight_report=args.opencode_preflight_report,
                 execute_merge=not args.no_execute_merge,
                 auto_retry=not args.no_auto_retry,
@@ -494,6 +501,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
             timeout_seconds=args.timeout_seconds,
         )
     elif args.command == "write-preflight-marker":
@@ -512,6 +520,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
             opencode_preflight_report=args.opencode_preflight_report,
             timeout_seconds=args.timeout_seconds,
         )
@@ -527,6 +536,7 @@ def main() -> int:
             opencode_agent=args.opencode_agent,
             opencode_variant=args.opencode_variant,
             opencode_skip_permissions=args.opencode_skip_permissions,
+            opencode_allow_non_competition_model=args.opencode_allow_non_competition_model,
             opencode_preflight_report=args.opencode_preflight_report,
             timeout_seconds=args.timeout_seconds,
         )
@@ -1476,6 +1486,11 @@ def run_batch_profile(
             opencode_agent=profile_string(profile, "opencode_agent"),
             opencode_variant=profile_string(profile, "opencode_variant", default="max") or "max",
             opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+            opencode_allow_non_competition_model=profile_bool(
+                profile,
+                "opencode_allow_non_competition_model",
+                default=False,
+            ),
             timeout_seconds=effective_timeout_seconds,
             command_runner=command_runner,
             repo_root=repo_root,
@@ -1549,6 +1564,11 @@ def run_batch_profile(
         opencode_agent=profile_string(profile, "opencode_agent"),
         opencode_variant=profile_string(profile, "opencode_variant", default="max"),
         opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+        opencode_allow_non_competition_model=profile_bool(
+            profile,
+            "opencode_allow_non_competition_model",
+            default=False,
+        ),
         opencode_preflight_report=opencode_preflight_report,
         execute_merge=profile_bool(profile, "execute_merge", default=False),
         auto_retry=profile_bool(profile, "auto_retry", default=False),
@@ -2997,7 +3017,13 @@ def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> Non
     policy = preflight.get("launch_policy") if isinstance(preflight.get("launch_policy"), dict) else {}
     opencode_command = policy.get("opencode_command") if isinstance(policy.get("opencode_command"), str) else None
     argv.extend(["--opencode-command", opencode_command or COMPETITION_OPENCODE_COMMAND])
-    argv.extend(["--opencode-model", COMPETITION_OPENCODE_MODEL])
+    opencode_model = policy.get("opencode_model")
+    if isinstance(opencode_model, str) and opencode_model:
+        argv.extend(["--opencode-model", opencode_model])
+        if opencode_model != COMPETITION_OPENCODE_MODEL:
+            argv.append("--opencode-allow-non-competition-model")
+    else:
+        argv.extend(["--opencode-model", COMPETITION_OPENCODE_MODEL])
     opencode_agent = policy.get("opencode_agent")
     if isinstance(opencode_agent, str) and opencode_agent:
         argv.extend(["--opencode-agent", opencode_agent])
@@ -3055,6 +3081,7 @@ def evaluate(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
     opencode_preflight_report: Path | None = None,
     execute_merge: bool = True,
     auto_retry: bool = True,
@@ -3112,6 +3139,7 @@ def evaluate(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
         opencode_preflight_report=opencode_preflight_report,
         execute_merge=execute_merge,
         auto_retry=auto_retry,
@@ -4765,6 +4793,7 @@ def run_plan(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
     opencode_preflight_report: Path | None = None,
     execute_merge: bool = False,
     auto_retry: bool = False,
@@ -4795,6 +4824,7 @@ def run_plan(
             opencode_agent=opencode_agent,
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
             repo_root=repo_root,
         )
 
@@ -4818,6 +4848,7 @@ def run_plan(
             opencode_agent=opencode_agent,
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
             opencode_preflight_report=opencode_preflight_report,
             repair_trace=repair_trace,
             timeout_seconds=timeout_seconds,
@@ -4857,6 +4888,7 @@ def run_plan(
                     opencode_agent=opencode_agent,
                     opencode_variant=opencode_variant,
                     opencode_skip_permissions=opencode_skip_permissions,
+                    opencode_allow_non_competition_model=opencode_allow_non_competition_model,
                     opencode_preflight_report=opencode_preflight_report,
                     repair_trace=repair_trace,
                     timeout_seconds=timeout_seconds,
@@ -5530,6 +5562,7 @@ def run_worker(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
     opencode_preflight_report: Path | None = None,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
@@ -5606,6 +5639,7 @@ def run_worker(
             opencode_agent=opencode_agent,
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
             repo_root=repo_root,
         )
     if stale_summary_cleanup_error is not None:
@@ -5644,6 +5678,7 @@ def run_worker(
             opencode_agent=opencode_agent,
             opencode_variant=opencode_variant,
             opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
             worker_command=worker_command,
             request_path=attempt_request_path,
             summary_path=summary_path,
@@ -5671,6 +5706,7 @@ def run_worker(
                 opencode_agent=opencode_agent,
                 opencode_variant=opencode_variant,
                 opencode_skip_permissions=opencode_skip_permissions,
+                opencode_allow_non_competition_model=opencode_allow_non_competition_model,
             ),
             opencode_runtime_env=opencode_runtime_env,
             repo_root=repo_root,
@@ -6048,6 +6084,7 @@ def retry_worker(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
     opencode_preflight_report: Path | None = None,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
@@ -6081,6 +6118,7 @@ def retry_worker(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
         opencode_preflight_report=opencode_preflight_report,
         timeout_seconds=timeout_seconds,
         command_runner=command_runner,
@@ -6191,6 +6229,7 @@ def run_opencode_preflight(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
     timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
     command_runner: Any = subprocess.run,
     repo_root: Path = REPO_ROOT,
@@ -6225,6 +6264,7 @@ def run_opencode_preflight(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
     )
     argv = build_opencode_preflight_argv(
         opencode_command=opencode_command,
@@ -6232,6 +6272,7 @@ def run_opencode_preflight(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
         marker_command=marker_command,
         marker_path=marker_path,
         contract_path=contract_path,
@@ -6255,6 +6296,7 @@ def run_opencode_preflight(
     model_availability = run_opencode_model_availability_probe(
         opencode_command=launch_policy["opencode_command"],
         opencode_model=launch_policy["opencode_model"],
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
         logs_dir=logs_dir,
         opencode_process_env=opencode_process_env,
         timeout_seconds=timeout_seconds,
@@ -6364,6 +6406,7 @@ def run_opencode_preflight(
         worker_command=marker_command,
         summary_path=marker_path,
         repo_root=repo_root,
+        allow_post_contract_artifact_inspection=True,
     )
     marker_exists = marker_path.exists()
     marker_validation = validate_opencode_preflight_marker_payload(
@@ -6425,6 +6468,25 @@ def run_opencode_preflight(
     if timed_out:
         report["timed_out"] = True
         report["timeout_seconds"] = timeout_seconds
+    if launch_policy["opencode_model"] != COMPETITION_OPENCODE_MODEL:
+        report["non_competition_model_rehearsal"] = {
+            "status": "local_rehearsal_only",
+            "actual_model": launch_policy["opencode_model"],
+            "required_competition_model": COMPETITION_OPENCODE_MODEL,
+            "local_simulation_closes_p0_h9": False,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "This preflight may prove local OpenCode wiring for a non-competition model, "
+                "but it does not satisfy the GLM-5.1 competition host contract."
+            ),
+        }
+        report["h9_blocker"] = opencode_h9_blocker(
+            root_cause_key="non_competition_model_rehearsal",
+            launch_policy=launch_policy,
+            opencode_run_launched=True,
+            model_availability=model_availability,
+        )
     if root_cause_key is not None:
         report["root_cause_key"] = root_cause_key
         report["h9_blocker"] = opencode_h9_blocker(
@@ -6446,6 +6508,7 @@ def validate_opencode_preflight_report(
     opencode_agent: str | None = None,
     opencode_variant: str = "max",
     opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     if report_path is None:
@@ -6472,6 +6535,7 @@ def validate_opencode_preflight_report(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
     )
     launch_policy = report.get("launch_policy")
     if not isinstance(launch_policy, dict):
@@ -6479,7 +6543,10 @@ def validate_opencode_preflight_report(
             "opencode preflight launch policy is missing: "
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
-    actual_launch_policy = normalize_opencode_launch_policy(launch_policy)
+    actual_launch_policy = normalize_opencode_launch_policy(
+        launch_policy,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+    )
     actual_launch_policy_sha256 = report.get("launch_policy_sha256")
     if actual_launch_policy_sha256 != opencode_launch_policy_sha256(actual_launch_policy):
         raise SystemExit(
@@ -6547,6 +6614,7 @@ def validate_opencode_preflight_report(
         launch_policy=actual_launch_policy,
         run_id=report_run_id,
         report_path=report_path,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
         repo_root=repo_root,
     )
     return {
@@ -6576,6 +6644,7 @@ def validate_opencode_preflight_session_contract(
     run_id: str,
     report_path: Path,
     repo_root: Path,
+    opencode_allow_non_competition_model: bool = False,
 ) -> None:
     if report.get("opencode_run_launched") is not True:
         raise SystemExit(
@@ -6644,7 +6713,8 @@ def validate_opencode_preflight_session_contract(
             f"{repo_relative(report_path, repo_root=repo_root)}"
         )
     handoff_policy = normalize_opencode_launch_policy(
-        handoff["launch_policy"] if isinstance(handoff.get("launch_policy"), dict) else {}
+        handoff["launch_policy"] if isinstance(handoff.get("launch_policy"), dict) else {},
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
     )
     if handoff_policy != launch_policy:
         raise SystemExit(
@@ -6730,6 +6800,7 @@ def validate_opencode_preflight_session_contract(
         worker_command=worker_command,
         summary_path=marker_path,
         repo_root=repo_root,
+        allow_post_contract_artifact_inspection=True,
     )
     if recomputed.get("status") != "executed":
         raise SystemExit(
@@ -7851,12 +7922,13 @@ def opencode_launch_policy(
     opencode_agent: str | None,
     opencode_variant: str,
     opencode_skip_permissions: bool,
+    opencode_allow_non_competition_model: bool = False,
 ) -> dict[str, Any]:
     if opencode_command != COMPETITION_OPENCODE_COMMAND:
         raise SystemExit(f"opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
     if opencode_model is None:
         opencode_model = COMPETITION_OPENCODE_MODEL
-    if opencode_model != COMPETITION_OPENCODE_MODEL:
+    if opencode_model != COMPETITION_OPENCODE_MODEL and not opencode_allow_non_competition_model:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     if opencode_agent is None:
         opencode_agent = COMPETITION_OPENCODE_AGENT
@@ -7873,7 +7945,11 @@ def opencode_launch_policy(
     }
 
 
-def normalize_opencode_launch_policy(policy: dict[str, Any]) -> dict[str, Any]:
+def normalize_opencode_launch_policy(
+    policy: dict[str, Any],
+    *,
+    opencode_allow_non_competition_model: bool = False,
+) -> dict[str, Any]:
     required_fields = {
         "opencode_command",
         "opencode_model",
@@ -7892,6 +7968,7 @@ def normalize_opencode_launch_policy(policy: dict[str, Any]) -> dict[str, Any]:
         opencode_agent=policy.get("opencode_agent"),
         opencode_variant=str(policy.get("opencode_variant", "")),
         opencode_skip_permissions=policy.get("opencode_skip_permissions") is True,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
     )
 
 
@@ -8142,10 +8219,11 @@ def run_opencode_model_availability_probe(
     timeout_seconds: int,
     command_runner: Any,
     repo_root: Path,
+    opencode_allow_non_competition_model: bool = False,
 ) -> dict[str, Any]:
     if opencode_model is None:
         opencode_model = COMPETITION_OPENCODE_MODEL
-    if opencode_model != COMPETITION_OPENCODE_MODEL:
+    if opencode_model != COMPETITION_OPENCODE_MODEL and not opencode_allow_non_competition_model:
         raise SystemExit(f"opencode_model must be {COMPETITION_OPENCODE_MODEL}")
     argv = build_opencode_models_argv(opencode_command=opencode_command)
     report_argv = portable_opencode_evidence_argv(
@@ -8336,6 +8414,7 @@ def build_opencode_run_argv(
     summary_path: Path,
     repo_root: Path,
     handoff_contract_path: Path | None = None,
+    opencode_allow_non_competition_model: bool = False,
 ) -> list[str]:
     launch_policy = opencode_launch_policy(
         opencode_command=opencode_command,
@@ -8343,6 +8422,7 @@ def build_opencode_run_argv(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
     )
     command_line = shell_command_line(worker_command)
     prompt_lines = [
@@ -8400,6 +8480,7 @@ def build_opencode_preflight_argv(
     marker_path: Path,
     contract_path: Path,
     repo_root: Path,
+    opencode_allow_non_competition_model: bool = False,
 ) -> list[str]:
     launch_policy = opencode_launch_policy(
         opencode_command=opencode_command,
@@ -8407,6 +8488,7 @@ def build_opencode_preflight_argv(
         opencode_agent=opencode_agent,
         opencode_variant=opencode_variant,
         opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
     )
     command_line = shell_command_line(marker_command)
     prompt = build_opencode_prompt(
@@ -8417,6 +8499,7 @@ def build_opencode_preflight_argv(
             "Do not call glob/read/grep/list/edit or any non-shell tool before the exact Command line.",
             "Do not inspect repository files or infer a different task before executing the command.",
             "Do not run init-run, assign-slice, run-worker, retry-worker, or any substitute harness command.",
+            "After the command exits, stop immediately; do not run a second shell/read/list command.",
             "The required artifact is the preflight marker JSON, not chat output.",
             f"Command: {json.dumps(marker_command)}",
             f"Command line: {command_line}",
@@ -8462,6 +8545,7 @@ def verify_opencode_contract_execution(
     worker_command: list[str],
     summary_path: Path,
     repo_root: Path,
+    allow_post_contract_artifact_inspection: bool = False,
 ) -> dict[str, Any]:
     expected_worker_command_line = shell_command_line(worker_command)
     tool_trace = extract_opencode_tool_trace(session_evidence)
@@ -8485,16 +8569,39 @@ def verify_opencode_contract_execution(
     first_shell_command_matches_worker_command = (
         bool(first_shell_command) and command_matches_for_contract(first_shell_command, expected_worker_command_line)
     )
+    summary_exists = summary_path.exists()
+    workdir_reported = bool(first_shell_workdir)
     workdir_matches_repo_root = opencode_workdir_matches_repo_root(first_shell_workdir, repo_root=repo_root)
+    workdir_inferred_from_expected_artifact = (
+        not workdir_reported
+        and first_shell_command_matches_worker_command
+        and summary_exists
+    )
+    workdir_satisfies_contract = workdir_matches_repo_root or workdir_inferred_from_expected_artifact
+    post_contract_shell_commands = executed_shell_commands[1:] if first_shell_command_matches_worker_command else []
+    post_contract_artifact_inspection_only = (
+        allow_post_contract_artifact_inspection
+        and bool(post_contract_shell_commands)
+        and summary_exists
+        and all(
+            is_post_contract_artifact_inspection_command(
+                command,
+                artifact_path=summary_path,
+                repo_root=repo_root,
+            )
+            for command in post_contract_shell_commands
+        )
+    )
+    shell_count_satisfies_contract = len(executed_shell_commands) == 1 or post_contract_artifact_inspection_only
     status = "not-observed"
     if executed_shell_commands:
         status = (
             "executed"
             if (
                 first_shell_command_matches_worker_command
-                and workdir_matches_repo_root
+                and workdir_satisfies_contract
                 and not tools_before_first_shell
-                and len(executed_shell_commands) == 1
+                and shell_count_satisfies_contract
             )
             else "not-executed"
         )
@@ -8504,10 +8611,14 @@ def verify_opencode_contract_execution(
     elif status == "not-executed":
         if tools_before_first_shell:
             contract_failure_reason = "tool_before_first_shell_command"
-        elif not workdir_matches_repo_root:
+        elif not workdir_satisfies_contract:
             contract_failure_reason = "opencode_workdir_mismatch"
         elif len(executed_shell_commands) > 1 and first_shell_command_matches_worker_command:
-            contract_failure_reason = "extra_shell_command_after_contract"
+            contract_failure_reason = (
+                "extra_shell_command_after_contract"
+                if not allow_post_contract_artifact_inspection
+                else "non_artifact_inspection_shell_command_after_contract"
+            )
         else:
             contract_failure_reason = (
                 "first_shell_command_mismatch_worker_command_seen_later"
@@ -8520,19 +8631,64 @@ def verify_opencode_contract_execution(
         "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
         "executed_shell_command_count": len(executed_shell_commands),
         "executed_shell_commands": executed_shell_commands[:20],
+        "post_contract_shell_command_count": len(post_contract_shell_commands),
+        "post_contract_shell_commands": post_contract_shell_commands[:20],
+        "allow_post_contract_artifact_inspection": allow_post_contract_artifact_inspection,
+        "post_contract_artifact_inspection_only": post_contract_artifact_inspection_only,
         "first_tool_name": first_tool_name,
         "first_shell_command": first_shell_command,
         "first_shell_tool_name": first_shell_tool_name,
-        "first_shell_workdir_status": "repo_root" if workdir_matches_repo_root else "non_repo_root",
+        "first_shell_workdir_status": (
+            "repo_root"
+            if workdir_matches_repo_root
+            else "repo_root_inferred_from_expected_artifact"
+            if workdir_inferred_from_expected_artifact
+            else "non_repo_root"
+        ),
         "expected_workdir_status": "repo_root",
         "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
-        "first_shell_workdir_matches_repo_root": workdir_matches_repo_root,
+        "first_shell_workdir_matches_repo_root": workdir_satisfies_contract,
+        "first_shell_workdir_reported": workdir_reported,
+        "first_shell_workdir_inferred_from_expected_artifact": workdir_inferred_from_expected_artifact,
         "tools_before_first_shell": tools_before_first_shell[:20],
         "contract_failure_reason": contract_failure_reason,
         "worker_command_seen": exact_worker_command_seen,
-        "summary_exists": summary_path.exists(),
+        "summary_exists": summary_exists,
         "status": status,
     }
+
+
+def is_post_contract_artifact_inspection_command(
+    command: str,
+    *,
+    artifact_path: Path,
+    repo_root: Path,
+) -> bool:
+    compact = " ".join(command.strip().split())
+    lower = compact.lower()
+    if any(token in lower for token in (";", "&&", "||", ">", " set-content", " remove-item", " del ", " rm ")):
+        return False
+    rel_posix = repo_relative(artifact_path, repo_root=repo_root)
+    rel_windows = rel_posix.replace("/", "\\")
+    artifact_abs = str(artifact_path)
+    normalized_command = compact.replace("\\", "/")
+    normalized_candidates = {
+        rel_posix,
+        rel_windows.replace("\\", "/"),
+        artifact_abs.replace("\\", "/"),
+    }
+    if not any(candidate and candidate in normalized_command for candidate in normalized_candidates):
+        return False
+    allowed_prefixes = (
+        "get-item -literalpath ",
+        "test-path -literalpath ",
+        "get-content -literalpath ",
+        "dir ",
+        "ls ",
+        "type ",
+        "cat ",
+    )
+    return lower.startswith(allowed_prefixes)
 
 
 def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[str, Any]]:
