@@ -3123,18 +3123,29 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             out_root = Path(tmp) / "competition-out"
             summary_path = out_root / "summary" / "competition-run-summary.json"
             profile_path = Path(tmp) / "planned-batch.json"
+            verified_baseline_ref = verified_unsafe_baseline_ref_for_tests()
             profile = {
                 "schema_version": 1,
                 "profile_id": "demo-before-after-repair",
                 "emit_before_after_exhibit_report": True,
                 "require_repair_trace": True,
+                "attempt_evidence_policy": {
+                    "mode": "baseline_repair_gate",
+                    "baseline_attempt": {
+                        "verified_unsafe_baseline": verified_baseline_ref,
+                    },
+                },
                 "acceptance_boundary": {
                     "semantic_claim_source": "accepted_evidence_binding",
                     "generated_draft_semantic_pass": False,
                 },
             }
             profile_path.write_text(json.dumps(profile), encoding="utf-8")
-            workflow_metrics = before_after_worker_metrics(out_root, "run-before-after-repair")
+            workflow_metrics = before_after_worker_metrics(
+                out_root,
+                "run-before-after-repair",
+                baseline_verification=verified_baseline_ref,
+            )
             history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
             history_path.parent.mkdir(parents=True, exist_ok=True)
             history_path.write_text(
@@ -3185,6 +3196,7 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             unit_exhibit = exhibit["units"][0]
             self.assertEqual(unit_exhibit["repair_rounds"], 1)
             self.assertTrue(unit_exhibit["auto_recovered"])
+            self.assertEqual(unit_exhibit["baseline_verification"], verified_baseline_ref)
             self.assertEqual(unit_exhibit["repair_history"]["patch_events_sha256"], harness.sha256_file(history_path))
             self.assertEqual(unit_exhibit["root_cause_key"], "rustc_compile_failed")
             self.assertEqual(unit_exhibit["patch_origin"]["source"], "accepted_safe_evidence")
@@ -3209,6 +3221,235 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(repairer["auto_recovery_rate"], 1.0)
             self.assertEqual(repairer["root_cause_counts"], {"rustc_compile_failed": 1})
             self.assertEqual(repairer["histories"][0]["unit_id"], "demo/store-add-one")
+
+    def test_before_after_exhibit_requires_verified_baseline_when_repair_trace_is_required(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = Path(tmp) / "planned-batch.json"
+            verified_baseline = verified_unsafe_baseline_ref_for_tests()
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after-strict-baseline",
+                "emit_before_after_exhibit_report": True,
+                "require_repair_trace": True,
+                "attempt_evidence_policy": {
+                    "mode": "baseline_repair_gate",
+                    "baseline_attempt": {
+                        "verified_unsafe_baseline": verified_baseline,
+                    },
+                },
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            workflow_metrics = before_after_worker_metrics(out_root, "run-before-after-strict-baseline")
+            history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                json.dumps({"attempt": 1, "status": "failed", "root_cause_key": "rustc_compile_failed"})
+                + "\n"
+                + json.dumps({"attempt": 2, "status": "verified", "summary_status": "passed"})
+                + "\n",
+                encoding="utf-8",
+            )
+            unit = workflow_metrics["per_unit_statuses"][0]
+            unit["repair_rounds"] = 1
+            unit["auto_recovered"] = True
+            unit["root_cause_key"] = "rustc_compile_failed"
+            unit["repair_history"] = {
+                "patch_events_path": history_path.name,
+                "patch_events_sha256": harness.sha256_file(history_path),
+                "statuses": ["failed", "verified"],
+                "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback-before-retry.json"],
+                "verified": True,
+            }
+            workflow_metrics["avg_repair_rounds"] = 1.0
+            workflow_metrics["auto_recovery_rate"] = 1.0
+            workflow_metrics["root_cause_counts"] = {"rustc_compile_failed": 1}
+            write_worker_summary(
+                summary_path,
+                "run-before-after-strict-baseline",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=workflow_metrics,
+            )
+
+            with self.assertRaisesRegex(SystemExit, "requires baseline_verification"):
+                harness.write_before_after_exhibit_profile_report(
+                    profile=profile,
+                    profile_path=profile_path,
+                    run_id="run-before-after-strict-baseline",
+                    proof_class="local-simulation",
+                    mode="deterministic",
+                    plan={"status": "planned", "units": [{"slice_id": "store-add-one"}]},
+                    run_result={"workers": [{"worker_id": "worker-a", "exit_code": 0}]},
+                    route_metrics_artifact=None,
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_before_after_exhibit_requires_declared_verified_baseline_when_repair_trace_is_required(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after-missing-baseline-policy",
+                "emit_before_after_exhibit_report": True,
+                "require_repair_trace": True,
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            workflow_metrics = before_after_worker_metrics(out_root, "run-before-after-missing-baseline-policy")
+            history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                json.dumps({"attempt": 1, "status": "failed", "root_cause_key": "rustc_compile_failed"})
+                + "\n"
+                + json.dumps({"attempt": 2, "status": "verified", "summary_status": "passed"})
+                + "\n",
+                encoding="utf-8",
+            )
+            unit = workflow_metrics["per_unit_statuses"][0]
+            unit["repair_rounds"] = 1
+            unit["auto_recovered"] = True
+            unit["root_cause_key"] = "rustc_compile_failed"
+            unit["repair_history"] = {
+                "patch_events_path": history_path.name,
+                "patch_events_sha256": harness.sha256_file(history_path),
+                "statuses": ["failed", "verified"],
+                "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback-before-retry.json"],
+                "verified": True,
+            }
+            workflow_metrics["avg_repair_rounds"] = 1.0
+            workflow_metrics["auto_recovery_rate"] = 1.0
+            workflow_metrics["root_cause_counts"] = {"rustc_compile_failed": 1}
+            write_worker_summary(
+                summary_path,
+                "run-before-after-missing-baseline-policy",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=workflow_metrics,
+            )
+
+            with self.assertRaisesRegex(SystemExit, "requires verified unsafe baseline"):
+                harness.write_before_after_exhibit_profile_report(
+                    profile=profile,
+                    profile_path=profile_path,
+                    run_id="run-before-after-missing-baseline-policy",
+                    proof_class="local-simulation",
+                    mode="deterministic",
+                    plan={"status": "planned", "units": [{"slice_id": "store-add-one"}]},
+                    run_result={"workers": [{"worker_id": "worker-a", "exit_code": 0}]},
+                    route_metrics_artifact=None,
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_before_after_exhibit_rejects_baseline_verification_drift(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            summary_path = out_root / "summary" / "competition-run-summary.json"
+            profile_path = Path(tmp) / "planned-batch.json"
+            verified_baseline = verified_unsafe_baseline_ref_for_tests()
+            drifted_baseline_path = summary_path.parent / "drifted-baseline-verification.json"
+            drifted_baseline_path.parent.mkdir(parents=True, exist_ok=True)
+            drifted_baseline_path.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "semantic_pass": True,
+                        "semantic_claim_source": "verified_unsafe_baseline_gates",
+                        "generated_draft_semantic_pass": False,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            drifted_baseline = {
+                "path": drifted_baseline_path.name,
+                "sha256": harness.sha256_file(drifted_baseline_path),
+                "status": "passed",
+                "semantic_pass": True,
+                "semantic_claim_source": "verified_unsafe_baseline_gates",
+                "generated_draft_semantic_pass": False,
+            }
+            profile = {
+                "schema_version": 1,
+                "profile_id": "demo-before-after-drifted-baseline",
+                "emit_before_after_exhibit_report": True,
+                "require_repair_trace": True,
+                "attempt_evidence_policy": {
+                    "mode": "baseline_repair_gate",
+                    "baseline_attempt": {
+                        "verified_unsafe_baseline": verified_baseline,
+                    },
+                },
+                "acceptance_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                },
+            }
+            profile_path.write_text(json.dumps(profile), encoding="utf-8")
+            workflow_metrics = before_after_worker_metrics(
+                out_root,
+                "run-before-after-drifted-baseline",
+                baseline_verification=drifted_baseline,
+            )
+            history_path = summary_path.parent / "retry-repair-history-demo.jsonl"
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            history_path.write_text(
+                json.dumps({"attempt": 1, "status": "failed", "root_cause_key": "rustc_compile_failed"})
+                + "\n"
+                + json.dumps({"attempt": 2, "status": "verified", "summary_status": "passed"})
+                + "\n",
+                encoding="utf-8",
+            )
+            unit = workflow_metrics["per_unit_statuses"][0]
+            unit["repair_rounds"] = 1
+            unit["auto_recovered"] = True
+            unit["root_cause_key"] = "rustc_compile_failed"
+            unit["repair_history"] = {
+                "patch_events_path": history_path.name,
+                "patch_events_sha256": harness.sha256_file(history_path),
+                "statuses": ["failed", "verified"],
+                "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback-before-retry.json"],
+                "verified": True,
+            }
+            workflow_metrics["avg_repair_rounds"] = 1.0
+            workflow_metrics["auto_recovery_rate"] = 1.0
+            workflow_metrics["root_cause_counts"] = {"rustc_compile_failed": 1}
+            write_worker_summary(
+                summary_path,
+                "run-before-after-drifted-baseline",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=workflow_metrics,
+            )
+
+            with self.assertRaisesRegex(SystemExit, "baseline_verification must match verified unsafe baseline"):
+                harness.write_before_after_exhibit_profile_report(
+                    profile=profile,
+                    profile_path=profile_path,
+                    run_id="run-before-after-drifted-baseline",
+                    proof_class="local-simulation",
+                    mode="deterministic",
+                    plan={"status": "planned", "units": [{"slice_id": "store-add-one"}]},
+                    run_result={"workers": [{"worker_id": "worker-a", "exit_code": 0}]},
+                    route_metrics_artifact=None,
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
 
     def test_before_after_exhibit_requires_verified_repair_trace_when_profile_demands_it(self) -> None:
         with temp_repo_dir() as tmp:
@@ -3476,6 +3717,11 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             exhibit = json.loads((out_root / "summary" / "before-after-exhibit.json").read_text(encoding="utf-8"))
             repairer = exhibit["stage_contracts"]["repairer"]
             self.assertEqual(repairer["status"], "verified")
+            self.assertTrue(repairer["verified_baseline_required"])
+            self.assertEqual(repairer["verified_baseline"]["path"], verified_baseline_ref["path"])
+            self.assertEqual(repairer["verified_baseline"]["sha256"], verified_baseline_ref["sha256"])
+            self.assertEqual(repairer["baseline_verification_unit_count"], 1)
+            self.assertEqual(repairer["baseline_verification_status"], "verified")
             self.assertEqual(repairer["observed_repair_unit_count"], 1)
             self.assertEqual(repairer["histories"][0]["repair_rounds"], 1)
             self.assertTrue(repairer["histories"][0]["auto_recovered"])

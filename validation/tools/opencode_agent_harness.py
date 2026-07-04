@@ -4219,6 +4219,25 @@ def write_before_after_exhibit_profile_report(
         raise SystemExit(
             "before-after exhibit requires verified repair trace when profile require_repair_trace is true"
         )
+    verified_baseline = verified_unsafe_baseline_ref_from_sources(profile)
+    if profile_bool(profile, "require_repair_trace", default=False) and status == "passed":
+        if verified_baseline is None:
+            raise SystemExit(
+                "before-after exhibit requires verified unsafe baseline when profile require_repair_trace is true"
+            )
+        before_after_require_verified_baseline(
+            units=units,
+            verified_baseline=verified_baseline,
+        )
+        repairer_contract = stage_contracts.setdefault("repairer", {})
+        repairer_contract["verified_baseline_required"] = True
+        repairer_contract["verified_baseline"] = {
+            key: verified_baseline[key]
+            for key in ("path", "sha256", "status")
+            if isinstance(verified_baseline.get(key), str)
+        }
+        repairer_contract["baseline_verification_unit_count"] = len(units)
+        repairer_contract["baseline_verification_status"] = "verified"
     reproduction = before_after_reproduction_commands(
         profile_path=profile_path,
         run_id=run_id,
@@ -4423,6 +4442,28 @@ def before_after_exhibit_units(workflow_metrics: dict[str, Any]) -> list[dict[st
             exhibit_unit["claim_boundary"] = evidence["claim_boundary"]
         units.append(exhibit_unit)
     return units
+
+
+def before_after_require_verified_baseline(
+    *,
+    units: list[dict[str, Any]],
+    verified_baseline: dict[str, Any],
+) -> None:
+    expected_path = str(verified_baseline.get("path", ""))
+    expected_sha = str(verified_baseline.get("sha256", ""))
+    if not expected_path or not expected_sha:
+        raise SystemExit("before-after exhibit requires verified unsafe baseline path and sha256")
+    for unit in units:
+        baseline_verification = unit.get("baseline_verification")
+        if not isinstance(baseline_verification, dict):
+            raise SystemExit(
+                "before-after exhibit requires baseline_verification to match verified unsafe baseline "
+                "when profile require_repair_trace is true"
+            )
+        if baseline_verification.get("path") != expected_path or baseline_verification.get("sha256") != expected_sha:
+            raise SystemExit(
+                "before-after exhibit baseline_verification must match verified unsafe baseline path and sha256"
+            )
 
 
 def before_after_patch_origin(*, evidence: dict[str, Any], unit: dict[str, Any]) -> dict[str, Any]:
