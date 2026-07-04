@@ -1409,18 +1409,31 @@ def blocked_repairs_source_has_entries(source: dict[str, Any]) -> bool:
 
 
 def before_after_exhibit_has_verified_unsafe_baseline(before_after_repair_exhibit: dict[str, Any]) -> bool:
+    observed_unit = False
     for source in object_list(before_after_repair_exhibit.get("sources")):
         for unit in object_list(source.get("before_after_units")):
-            baseline = unit.get("baseline_verification")
-            if not isinstance(baseline, dict):
-                continue
-            if (
-                baseline.get("status") == "passed"
-                and baseline.get("semantic_claim_source") == "verified_unsafe_baseline_gates"
-                and baseline.get("generated_draft_semantic_pass") is False
-            ):
-                return True
-    return False
+            observed_unit = True
+            if not before_after_unit_has_verified_unsafe_baseline(unit):
+                return False
+    return observed_unit
+
+
+def before_after_unit_has_verified_unsafe_baseline(unit: dict[str, Any]) -> bool:
+    baseline = unit.get("baseline_verification")
+    if not isinstance(baseline, dict):
+        return False
+    path = baseline.get("path")
+    sha256 = baseline.get("sha256")
+    return (
+        isinstance(path, str)
+        and bool(path)
+        and isinstance(sha256, str)
+        and len(sha256) == 64
+        and baseline.get("status") == "passed"
+        and baseline.get("semantic_pass") is True
+        and baseline.get("semantic_claim_source") == "verified_unsafe_baseline_gates"
+        and baseline.get("generated_draft_semantic_pass") is False
+    )
 
 
 def build_known_gaps(

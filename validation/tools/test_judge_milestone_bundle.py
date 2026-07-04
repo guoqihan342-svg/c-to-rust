@@ -2046,6 +2046,97 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
 
         self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
 
+    def test_known_gaps_keep_c2rust_baseline_gap_when_only_some_units_have_verified_baseline(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "unit_id": "demo/verified",
+                                "baseline_verification": {
+                                    "path": "validation/evidence/verified-baseline.json",
+                                    "sha256": "a" * 64,
+                                    "status": "passed",
+                                    "semantic_pass": True,
+                                    "semantic_claim_source": "verified_unsafe_baseline_gates",
+                                    "generated_draft_semantic_pass": False,
+                                },
+                            },
+                            {
+                                "unit_id": "demo/missing",
+                                "repair_history": {"verified": True},
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
+    def test_known_gaps_require_verified_baseline_semantic_pass(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "unit_id": "demo/not-semantic-pass",
+                                "baseline_verification": {
+                                    "path": "validation/evidence/verified-baseline.json",
+                                    "sha256": "a" * 64,
+                                    "status": "passed",
+                                    "semantic_pass": False,
+                                    "semantic_claim_source": "verified_unsafe_baseline_gates",
+                                    "generated_draft_semantic_pass": False,
+                                },
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
+    def test_known_gaps_require_verified_baseline_hash_binding_shape(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "unit_id": "demo/bad-binding",
+                                "baseline_verification": {
+                                    "path": "",
+                                    "sha256": "short",
+                                    "status": "passed",
+                                    "semantic_pass": True,
+                                    "semantic_claim_source": "verified_unsafe_baseline_gates",
+                                    "generated_draft_semantic_pass": False,
+                                },
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
     def test_bundle_blocks_malformed_run_report_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
