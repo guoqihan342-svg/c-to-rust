@@ -57,7 +57,8 @@ These estimates are only for planning, not acceptance criteria. Competition and 
 | 8 | Schema-aware diff + negative diff | < 2 min |
 | 9 | Unsafe scan + unsafe ledger | < 1 min |
 | 10 | Full evidence validation (`--require-semantic-pass`) | < 3 min |
-| 11 | OpenSpec validate + CI checks | < 2 min |
+| 11 | Summary validation (`validate_competition_run_summary.py`) | < 1 min |
+| optional | OpenSpec historical governance check (explicit `--run-optional-governance-checks` only) | < 2 min |
 | **Total estimate** | | **< 20 min / slice** |
 
 For FlashDB crc32 (the proven case): typed IR candidate generation to validation profile generation takes ~5-8 minutes.
@@ -189,9 +190,10 @@ Run the environment check first, then process real C slices. Independent slices 
    — Direct arguments and JSON extract specs are both parameterized inputs used by the runner to invoke `extract_source_slice.py`; do not hand-write `c_source`.
 
 3. python3 -B validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
-   — Use the unified runner for slice extraction, environment checks, typed-IR migration, evidence validation, unsafe, OpenSpec, and `competition-run-summary.json` generation; the runner writes generated slice specs under `target/competition-out/slice-specs/`.
+   — Use the unified runner for slice extraction, environment checks, typed-IR migration, evidence validation, unsafe, summary validation, and `competition-run-summary.json` generation; the runner writes generated slice specs under `target/competition-out/slice-specs/`.
    — For batch or reusable inputs, use `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` instead of the direct source arguments.
    — If independent workers have already produced summaries, pass each one with repeated `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json`; the aggregate runner does not reprocess those slices, merges their counts, and fails the final gate when any worker is failed or blocked.
+   — OpenSpec is a historical governance check, not part of the default competition gate. The runner calls it only when developers explicitly add `--run-optional-governance-checks`. A missing OpenSpec CLI is treated as an optional skip; a present but failing CLI fails that optional gate.
 
 4. python3 -B validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — Manual expanded real C source function slice extraction. When using runner `--extract-spec`, the runner invokes this step.
@@ -203,7 +205,7 @@ Run the environment check first, then process real C slices. Independent slices 
    — Manual expanded full evidence validation. When using the runner, this step is called by the runner.
 
 7. openspec validate --all --strict
-   — Manual expanded OpenSpec validation. When using the runner, this step is called by the runner.
+   — Manual expanded OpenSpec historical governance validation. The default runner does not call this step; it is called by the runner only when `--run-optional-governance-checks` is set.
 
 8. To improve coverage and accuracy, repeat steps 2-3 for additional real C source functions. Independent slices may run in parallel, but the final aggregate must be merged by the unified runner with `--worker-summary` and pass the same summary validator.
 

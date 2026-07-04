@@ -188,13 +188,15 @@ python3 -B -m validation.tools.run_judge_entrypoints --config config/competition
 cargo fmt --manifest-path crates/c2r-translator/Cargo.toml -- --check
 python3 -B -m unittest validation.tools.test_auto_migrate validation.tools.test_validate_auto_translation_evidence
 python3 -B validation/tools/unsafe_budget.py --max-ratio 0.10
-# OpenSpec 历史治理归档校验（可选）：不是当前开发必经入口；缺少 openspec CLI 不阻塞比赛/CI gate，merge gate 已对退出码 127 豁免
+# OpenSpec 历史治理归档校验（可选）：不是当前开发必经入口；默认比赛 runner 不会执行。
+# 如需把它纳入本地治理检查，给 run_competition.py 显式追加 --run-optional-governance-checks；
+# 缺少 openspec CLI 时按 optional skip 处理，CLI 存在但校验失败时该 optional gate 会失败。
 openspec validate --all --strict
 ```
 
 ## 设计原则
 
-1. **OpenSpec 治理**：`openspec/` 保留为历史治理归档，用于追溯需求 → 设计 → 任务 → 验收；它不是当前开发的必经入口，缺少 openspec CLI 不阻塞任何比赛/CI gate（merge gate 已对退出码 127 豁免）。
+1. **OpenSpec 治理**：`openspec/` 保留为历史治理归档，用于追溯需求 → 设计 → 任务 → 验收；它不是当前开发的必经入口，也不是默认比赛 gate。默认 `run_competition.py` 不执行 OpenSpec；只有显式追加 `--run-optional-governance-checks` 才把它作为 optional governance check 运行。
 2. **Candidate ≠ Correctness**：C2Rust、LLM、手写规则都只提供候选；正确性由 C oracle + evidence gates 决定。
 3. **Fail-closed**：不确定时拒绝翻译并记录原因，不可假装成功。
 4. **真实源码优先**：从真实 C 源文件抽取 slice/context，不能继续堆手写 `c_source` demo。

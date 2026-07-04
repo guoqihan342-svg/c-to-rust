@@ -72,13 +72,15 @@ python3 -B -m validation.tools.run_judge_entrypoints --config config/competition
 python3 -B -m validation.tools.validate_public_release_packet --packet target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json
 # Evaluate resume index: target/competition-out-flashdb-*-evaluate-profile-20260701/harness/resume-manifest.json
 python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --entrypoint-id before_after_judge_demo --out target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json
-# Optional historical OpenSpec archive validation: not a required current development entrypoint; missing openspec CLI does not block competition or CI gates because the merge gate exempts exit code 127.
+# Optional historical OpenSpec archive validation: not a required current development entrypoint; the default competition runner does not execute it.
+# To include it in local governance checks, pass --run-optional-governance-checks to run_competition.py explicitly.
+# A missing openspec CLI is treated as an optional skip; a present but failing CLI fails that optional gate.
 openspec validate --all --strict
 ```
 
 ## Design Principles
 
-1. **OpenSpec governance**: `openspec/` is kept as a historical governance archive for the requirements -> design -> tasks -> acceptance trail. It is not the required current development entrypoint, and a missing `openspec` CLI does not block any competition or CI gate because the merge gate exempts exit code 127.
+1. **OpenSpec governance**: `openspec/` is kept as a historical governance archive for the requirements -> design -> tasks -> acceptance trail. It is not the required current development entrypoint and is not part of the default competition gate. The default `run_competition.py` path does not execute OpenSpec; only an explicit `--run-optional-governance-checks` opt-in runs it as an optional governance check.
 
 ## Maintenance Notes
 

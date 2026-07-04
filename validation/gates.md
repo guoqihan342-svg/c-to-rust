@@ -131,7 +131,7 @@ Pass criteria:
 - `validate_flashdb_l3_evidence.py` validates consumable FlashDB L3 packages with final verification and negative diff evidence; older summaries without those entry points are reported as `legacy_incomplete` and cannot be used as full-regression manifest claims.
 - FlashDB L3 package validation reads positive diff and final verification report content, rejects failed or mismatched evidence, and verifies summary-declared evidence `sha256` values when present.
 - When `scripts/run-full-regression.ps1 -RequireCleanEvidence` is used, `evidence-cleanliness-check` verifies that tracked files under `validation/evidence/**` do not differ from `HEAD` and that no untracked files exist under `validation/evidence/**`.
-- OpenSpec validation and `git diff --check` still run after the evidence gates.
+- `git diff --check` still runs after the evidence gates. OpenSpec validation is limited to full-regression or historical-governance runs when explicitly enabled; it is not part of the default competition semantic gate.
 
 Evidence:
 

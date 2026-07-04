@@ -71,6 +71,46 @@ class AutoMigrateTests(unittest.TestCase):
 
             self.assertEqual(output_path.read_bytes(), b'{\n  "status": "recorded"\n}\n')
 
+    def test_incomplete_manifest_does_not_make_openspec_a_semantic_gate(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            root = Path(tmp)
+            evidence_dir = root / "evidence"
+            evidence_dir.mkdir()
+            slice_spec_path = root / "slice.json"
+            spec = {
+                "target_id": "demo",
+                "slice_id": "store-add-one",
+                "source_commit": "abc123",
+                "fixture_contract": {"path": "fixtures/demo.json", "hash": "fixture-sha"},
+            }
+            slice_spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            manifest = module.emit_manifest(
+                spec,
+                evidence_dir,
+                slice_spec_path,
+                translator_summary={"status": "generated"},
+                oracle={"status": "draft"},
+                replay={"status": "not_run"},
+                rust_check={"status": "blocked"},
+                patch={"status": "not_run"},
+                cache={"status": "recorded"},
+                c2rust_baseline={"status": "skipped"},
+                route_decision={
+                    "level": "L1",
+                    "status": "recorded",
+                    "translator": {"candidate_generation_allowed": True},
+                },
+                validation_profile={"status": "blocked", "skipped_gates": ["rust_check"]},
+            )
+
+            self.assertNotIn("OpenSpec validation", manifest["claim_boundary"]["must_still_pass"])
+            l3_manifest = json.loads(
+                (evidence_dir / "l3-store-add-one-evidence-manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("OpenSpec", l3_manifest["claim_boundary"]["scope"])
+
     def test_real_fdb_crc32_fixture_includes_non_empty_check_vector(self) -> None:
         fixture_path = REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json"
         fixture = json.loads(fixture_path.read_text(encoding="utf-8"))

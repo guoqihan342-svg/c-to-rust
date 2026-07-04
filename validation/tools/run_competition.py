@@ -92,6 +92,11 @@ def main() -> int:
         help="evidence root used with --reuse-accepted-evidence",
     )
     parser.add_argument(
+        "--run-optional-governance-checks",
+        action="store_true",
+        help="also run historical governance checks such as OpenSpec; not part of the default competition gate",
+    )
+    parser.add_argument(
         "--proof-class",
         default="local-simulation",
         choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
@@ -118,6 +123,7 @@ def main() -> int:
         repo_root=REPO_ROOT,
         reuse_accepted_evidence=args.reuse_accepted_evidence,
         accepted_evidence_root=args.accepted_evidence_root,
+        run_optional_governance_checks=args.run_optional_governance_checks,
     )
     print(json.dumps(result.summary, indent=2, sort_keys=True))
     return result.exit_code
@@ -135,6 +141,7 @@ def run_competition(
     run_id: str | None = None,
     reuse_accepted_evidence: bool = False,
     accepted_evidence_root: Path | None = None,
+    run_optional_governance_checks: bool = False,
 ) -> CompetitionRunResult:
     extraction_specs = extraction_specs or []
     worker_summaries = worker_summaries or []
@@ -343,24 +350,24 @@ def run_competition(
         out_root=out_root,
         run_id=run_id,
     )
-    openspec_result = run_logged_step(
-        "openspec-validate",
-        ["bash", "-lc", "openspec validate --all --strict"],
-        command_runner=command_runner,
-        repo_root=repo_root,
-        logs_dir=logs_dir,
-        out_root=out_root,
-        run_id=run_id,
-    )
-
     unsafe_summary = unsafe_budget_summary(unsafe_result)
-    # bash exits 127 when the OpenSpec CLI is not installed. OpenSpec is
-    # repository governance tooling, not competition evidence: judge CI and
-    # the competition host are not required to provide it, mirroring its
-    # demotion to an optional governance check in the OpenCode preflight.
-    # The commands.jsonl record keeps the skip auditable; a present-but-
-    # failing openspec validate still fails the gate.
-    openspec_gate_failed = openspec_result.returncode not in (0, 127)
+    openspec_gate_failed = False
+    if run_optional_governance_checks:
+        openspec_result = run_logged_step(
+            "openspec-validate",
+            ["bash", "-lc", "openspec validate --all --strict"],
+            command_runner=command_runner,
+            repo_root=repo_root,
+            logs_dir=logs_dir,
+            out_root=out_root,
+            run_id=run_id,
+        )
+        # bash exits 127 when the OpenSpec CLI is not installed. OpenSpec is
+        # repository governance tooling, not competition evidence: judge CI and
+        # the competition host are not required to provide it. A present-but-
+        # failing OpenSpec validation remains a failure only when this optional
+        # governance check is explicitly requested.
+        openspec_gate_failed = openspec_result.returncode not in (0, 127)
     if unsafe_summary["status"] != "passed" or openspec_gate_failed:
         gate_failures += 1
 

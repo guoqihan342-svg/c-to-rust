@@ -452,7 +452,7 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertTrue(any("auto_migrate.py" in text and "--competition-clang-lane" in text for text in command_texts))
             self.assertTrue(any("validate_auto_translation_evidence.py" in text for text in command_texts))
             self.assertTrue(any("unsafe_budget.py" in text for text in command_texts))
-            self.assertTrue(any("openspec validate --all --strict" in text for text in command_texts))
+            self.assertFalse(any("openspec validate --all --strict" in text for text in command_texts))
             self.assertTrue(any("validate_competition_run_summary.py" in text for text in command_texts))
 
             summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
@@ -461,18 +461,16 @@ class RunCompetitionTests(unittest.TestCase):
             self.assertEqual(summary["slices"]["semantic_pass"], 1)
             self.assertEqual(summary["final_gate"]["status"], "passed")
 
-    def test_missing_openspec_cli_does_not_fail_final_gate(self) -> None:
-        # bash exits 127 when the optional OpenSpec CLI is absent (judge CI,
-        # competition host). OpenSpec is repository governance tooling, not
-        # competition evidence, so its absence must not fail the merge final
-        # gate; the logged command record keeps the skip auditable.
+    def test_default_runner_does_not_launch_openspec_governance_check(self) -> None:
+        # OpenSpec is repository governance history, not competition evidence.
+        # The judge path must not launch it unless explicitly requested.
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
             tmp_path = Path(tmp)
             out_root = tmp_path / "competition-out"
             spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
             write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
-            fake_runner = FakeCommandRunner(missing_commands_containing={"openspec validate"})
+            fake_runner = FakeCommandRunner()
 
             result = module.run_competition(
                 slice_specs=[spec_path],
@@ -480,15 +478,17 @@ class RunCompetitionTests(unittest.TestCase):
                 proof_class="local-simulation",
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
-                run_id="run-test-openspec-missing",
+                run_id="run-test-openspec-default-skipped",
             )
 
             self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
             self.assertEqual(result.summary["final_gate"]["status"], "passed")
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("openspec validate --all --strict" in text for text in command_texts))
 
-    def test_failing_openspec_validation_still_fails_final_gate(self) -> None:
-        # A present-but-failing openspec validate remains a governance gate
-        # failure; only the missing-CLI 127 envelope is exempt.
+    def test_optional_openspec_governance_check_failure_fails_final_gate(self) -> None:
+        # Developers may opt into the historical governance check; when they
+        # do, a present-but-failing OpenSpec validation remains a failure.
         module = load_runner_module()
         with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
             tmp_path = Path(tmp)
@@ -504,10 +504,38 @@ class RunCompetitionTests(unittest.TestCase):
                 command_runner=fake_runner,
                 repo_root=REPO_ROOT,
                 run_id="run-test-openspec-failed",
+                run_optional_governance_checks=True,
             )
 
             self.assertEqual(result.exit_code, 1)
             self.assertEqual(result.summary["final_gate"]["status"], "failed")
+
+    def test_optional_missing_openspec_cli_does_not_fail_final_gate(self) -> None:
+        # Even when the optional governance check is requested, a missing CLI
+        # remains a skip because the competition host is not required to
+        # provide OpenSpec.
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(missing_commands_containing={"openspec validate"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test-openspec-missing",
+                run_optional_governance_checks=True,
+            )
+
+            self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
+            self.assertEqual(result.summary["final_gate"]["status"], "passed")
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertTrue(any("openspec validate --all --strict" in text for text in command_texts))
 
     def test_runner_writes_machine_readable_workflow_metrics_artifact(self) -> None:
         module = load_runner_module()
@@ -833,6 +861,38 @@ class RunCompetitionTests(unittest.TestCase):
         self.assertEqual(extraction["include_paths"], ["include"])
         self.assertEqual(extraction["defines"], ["DIRECT=1"])
 
+    def test_main_accepts_optional_governance_check_cli_arg(self) -> None:
+        module = load_runner_module()
+        calls: dict[str, object] = {}
+
+        def fake_run_competition(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionRunResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_run_competition = module.run_competition
+        try:
+            module.run_competition = fake_run_competition
+            sys.argv = [
+                "run_competition.py",
+                "--slice-spec",
+                "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+                "--run-optional-governance-checks",
+            ]
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition = original_run_competition
+
+        self.assertEqual(calls["slice_specs"], [Path("validation/slice-specs/flashdb-real-fdb-calc-crc32.json")])
+        self.assertTrue(calls["run_optional_governance_checks"])
+
     def test_main_accepts_worker_summary_cli_args(self) -> None:
         module = load_runner_module()
         calls: dict[str, object] = {}
@@ -994,7 +1054,18 @@ class RunCompetitionTests(unittest.TestCase):
             log_path = out_root / "logs" / "commands.jsonl"
             self.assertTrue(log_path.exists())
             entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
-            self.assertGreaterEqual(len(entries), 6)
+            steps = [entry["step"] for entry in entries]
+            self.assertEqual(
+                steps,
+                [
+                    "environment-check",
+                    "auto-migrate-store-add-one",
+                    "validate-evidence-store-add-one",
+                    "unsafe-budget",
+                    "validate-competition-summary",
+                ],
+            )
+            self.assertNotIn("openspec-validate", steps)
             self.assertEqual(entries[0]["step"], "environment-check")
             self.assertIn("config/competition-env/env.sh", " ".join(entries[0]["command"]))
             self.assertEqual(entries[0]["returncode"], 0)

@@ -59,7 +59,8 @@ Standalone handoff files such as `CONTEXT.md` are not maintained; current state 
 | 8 | Schema-aware diff + negative diff | < 2 min |
 | 9 | unsafe scan + unsafe ledger | < 1 min |
 | 10 | 全量 evidence validation (`--require-semantic-pass`) | < 3 min |
-| 11 | OpenSpec validate + ci checks | < 2 min |
+| 11 | summary validation (`validate_competition_run_summary.py`) | < 1 min |
+| optional | OpenSpec 历史治理检查（仅显式 `--run-optional-governance-checks`） | < 2 min |
 | **总计预估** | | **< 20 min / slice** |
 
 对 FlashDB crc32（已通过的案例）：typed IR 候选生成到 validation profile 生成约 5-8 分钟。
@@ -191,9 +192,10 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
    — 直接参数和 JSON extract spec 都是 runner 调用 `extract_source_slice.py` 的参数化输入；不要手写 `c_source`。
 
 3. python3 -B validation/tools/run_competition.py --source-repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --include-path include --define DEMO=1 --out-root target/competition-out --proof-class <competition-exact|ci-approximation|wsl-local-simulation|local-simulation>
-   — 使用统一 runner 执行 slice 抽取、环境检查、typed-IR 迁移、证据验证、unsafe、OpenSpec 和 `competition-run-summary.json` 生成；runner 会把生成的 slice spec 写入 `target/competition-out/slice-specs/`。
+   — 使用统一 runner 执行 slice 抽取、环境检查、typed-IR 迁移、证据验证、unsafe、summary validation 和 `competition-run-summary.json` 生成；runner 会把生成的 slice spec 写入 `target/competition-out/slice-specs/`。
    — 批量或可复用输入用 `--extract-spec target/competition-out/extract-specs/<id>-<slice>.json` 替代直接 source 参数。
    — 若多个独立 worker 已分别产出 summary，可用 `--worker-summary target/competition-out/workers/<worker>/summary/competition-run-summary.json` 重复传入汇总；汇总 runner 不会重新处理这些 slice，会合并计数并在任一 worker failed/blocked 时让最终 gate 失败。
+   — OpenSpec 是历史治理检查，不属于默认比赛 gate；仅在开发者显式追加 `--run-optional-governance-checks` 时由 runner 调用。缺少 OpenSpec CLI 时按 optional skip 处理；CLI 存在但校验失败时该 optional gate 会失败。
 
 4. python3 -B validation/tools/extract_source_slice.py --repo-root <C_REPO> --source-file <file> --function <name> --target-id <id> --slice-id <slice> --source-repository https://gitcode.com/xwxf/FlashDB.git --source-branch competition --source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --require-source-commit f9d0421315c564fb890a1b14eee77b290e0d7bbe --compiler-command-source compile_commands.json --out target/competition-out/slice-specs/<id>-<slice>.json
    — 手动展开版的真实 C 源函数切片抽取。使用 runner 的 `--extract-spec` 时该步骤由 runner 调用。
@@ -205,7 +207,7 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
    — 手动展开版的全量证据验证。使用 runner 时该步骤由 runner 调用。
 
 7. openspec validate --all --strict
-   — 手动展开版的 OpenSpec 全量校验。使用 runner 时该步骤由 runner 调用。
+   — 手动展开版的 OpenSpec 历史治理校验。默认 runner 不调用该步骤；只有加 `--run-optional-governance-checks` 时才由 runner 作为 optional governance check 调用。
 
 8. 为提高覆盖面和准确性，可对额外的真实 C 源函数重复步骤 2-3；互不依赖的 slice 可并行运行，但最终汇总必须用统一 runner + `--worker-summary` 合并并通过同一 summary validator。
 

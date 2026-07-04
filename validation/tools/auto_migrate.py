@@ -6606,7 +6606,6 @@ def emit_manifest(
                 "negative diff",
                 "unsafe scan",
                 "version/config binding",
-                "OpenSpec validation",
             ],
             "non_goals": spec.get("non_goals", []),
             "alias_gate": alias_gate,
@@ -6788,7 +6787,7 @@ def emit_l3_evidence_manifest(
             "version_or_config_binding": evidence_ref(evidence_dir / f"{prefix}-version-manifest.json", "recorded"),
         },
         "claim_boundary": {
-            "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and OpenSpec gates pass."
+            "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, and version/cache gates pass."
             if not semantic_pass
             else "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft.",
             "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
@@ -7109,7 +7108,6 @@ def write_l3_candidate_supporting_evidence(
                 "negative diff",
                 "unsafe scan",
                 "version/config binding",
-                "OpenSpec validation",
             ],
         },
     )

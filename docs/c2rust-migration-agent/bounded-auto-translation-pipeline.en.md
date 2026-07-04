@@ -8,7 +8,7 @@ This guide is for OpenCode, Codex, and other executable agents working on OpenSp
 - Start from OpenSpec: read `openspec status --change "add-bounded-auto-translation-pipeline" --json` and `openspec instructions apply --change "add-bounded-auto-translation-pipeline" --json`.
 - Start from a slice spec: automatic translation must not consume raw `c_source` alone. The input must include target id, slice id, source commit, C files, function signatures, L1 evidence, build profile, fixture contract, Rust output boundary, accepted metadata differences, and non-goals.
 - Emit evidence before code: `context-pack`, `type-map`, `cfg`, and `pointer-graph` must be persisted before any Rust draft is accepted.
-- Treat AI as candidate generation only: AI may propose a draft or PatchPlan, but AI output is never correctness evidence and cannot bypass local compile, C oracle, Rust replay, schema-aware diff, negative diff, unsafe scan, version/cache, or OpenSpec validation.
+- Treat AI as candidate generation only: AI may propose a draft or PatchPlan, but AI output is never correctness evidence and cannot bypass local compile, C oracle, Rust replay, schema-aware diff, negative diff, unsafe scan, or version/cache semantic gates. OpenSpec validation is historical governance/change-management only and is not part of the default competition semantic gate.
 - Parallel agents may split read-only analysis or disjoint writes only. Slice specs, public APIs, fixtures, oracle contracts, unsafe ledgers, schemas, and files under active self-healing must not be edited concurrently.
 
 ## Workflow
@@ -20,7 +20,7 @@ This guide is for OpenCode, Codex, and other executable agents working on OpenSp
 5. Generate a C oracle harness draft and Rust replay test draft from the same fixture contract. If inputs or outputs cannot be mapped, mark the run blocked.
 6. Run `cargo check --message-format=json`. On failure, write `l3-<slice>-rust-check.json`, generate a PatchPlan, and run at most five bounded repair rounds by default.
 7. Run Rust replay, schema-aware diff, negative diff, unsafe scan, version/cache gates, and evidence manifest gates.
-8. Promote the candidate to an accepted slice only when C oracle, Rust replay, diff, unsafe, version/cache, and OpenSpec validation pass for the same source commit, fixture hash, slice spec hash, and build profile hash.
+8. Promote the candidate to an accepted slice only when the C oracle, Rust replay, diff, unsafe, and version/cache semantic gates pass for the same source commit, fixture hash, slice spec hash, and build profile hash. OpenSpec validation is only a historical governance/change-management check and cannot replace those evidence gates.
 
 ## Supported C Subset
 
@@ -256,4 +256,4 @@ An agent may report an auto-translated slice complete only when all evidence is 
 - Context pack, type map, CFG, and pointer graph were generated before the Rust draft.
 - Unsupported constructs or blocked repairs are explicitly recorded.
 - C oracle, Rust replay, schema-aware diff, negative diff, rust check, unsafe scan, unsafe ledger, and final verification are referenced from the L3 evidence manifest.
-- OpenSpec change validation and `git diff --check` pass.
+- If the local governance flow explicitly requires it, OpenSpec change validation passes; `git diff --check` passes.
