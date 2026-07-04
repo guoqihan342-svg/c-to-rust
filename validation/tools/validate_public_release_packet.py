@@ -23,6 +23,7 @@ from validation.tools import validate_judge_entrypoints as judge_validator
 
 DEFAULT_PACKET = Path("target/competition-out-flashdb-judge-entrypoints/summary/public-release-packet.json")
 PACKET_SCHEMA = REPO_ROOT / "validation" / "public-release-packet.schema.json"
+JUDGE_MILESTONE_BUNDLE_SCHEMA = REPO_ROOT / "validation" / "judge-milestone-bundle.schema.json"
 CORE_ARTIFACT_REFS = (
     "judge_entrypoints_run_report",
     "readiness_report",
@@ -1052,6 +1053,7 @@ def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> No
     bundle_path = judge_validator.repo_path(str(bundle_ref.get("path")), repo_root=repo_root)
     bundle = judge_validator.load_json(bundle_path)
     require_bound_bundle_identity_contract(packet, bundle)
+    require_bound_bundle_schema_contract(bundle)
     publication = require_object(packet.get("publication_manifest"), "publication_manifest")
     require_published_artifact_refs_are_hash_bound(publication, repo_root=repo_root)
     require_passed_bundle_published_refs_are_healthy(bundle, publication)
@@ -1165,6 +1167,18 @@ def require_competition_host_readiness_matches_proof_class_rollup(
                 "competition_host_readiness.status=ready requires "
                 "judge_milestone_bundle.proof_class_rollup.competition_exact_host_verified=true"
             )
+
+
+def require_bound_bundle_schema_contract(bundle: dict[str, Any]) -> None:
+    schema = judge_validator.load_json(JUDGE_MILESTONE_BUNDLE_SCHEMA)
+    try:
+        jsonschema.validate(bundle, schema)
+    except jsonschema.ValidationError as error:
+        path = judge_validator.jsonschema_error_path(error)
+        raise ValueError(
+            "judge_milestone_bundle must match validation/judge-milestone-bundle.schema.json: "
+            f"{path}: {error.message}"
+        ) from error
 
 
 def require_bound_bundle_identity_contract(packet: dict[str, Any], bundle: dict[str, Any]) -> None:

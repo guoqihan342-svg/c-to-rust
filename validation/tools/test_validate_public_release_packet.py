@@ -740,7 +740,9 @@ def attach_opencode_safety_attempt(packet: dict, attempt_ref: dict) -> None:
 
 def append_published_artifact_ref(packet: dict, ref: dict) -> None:
     refs = packet["publication_manifest"].setdefault("published_artifact_refs", [])
-    refs.append(json.loads(json.dumps(ref)))
+    next_ref = json.loads(json.dumps(ref))
+    next_ref.setdefault("entrypoint_id", "opencode_multi_worker_evaluate_profile")
+    refs.append(next_ref)
     packet["publication_manifest"]["published_artifact_count"] = len(refs)
     packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
         packet["publication_manifest"]
@@ -874,6 +876,40 @@ def evidence_cost_retention_fixture() -> dict:
     }
 
 
+def c2rust_baseline_milestone_rollup_fixture() -> dict:
+    return {
+        "report_kind": "c2rust-baseline-milestone-rollup",
+        "status": "observed",
+        "source_report_count": 2,
+        "unique_evidence_root_count": 1,
+        "unique_manifest_count": 2,
+        "generated_output_count": 0,
+        "skipped_without_output_count": 2,
+        "compile_attempted_count": 0,
+        "compile_passed_count": 0,
+        "compile_semantic_pass_count": 0,
+        "status_counts": {"skipped": 2},
+        "output_status_counts": {"missing": 2},
+        "compile_status_counts": {"missing": 2},
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline status is candidate context only.",
+    }
+
+
+def comparison_row_fixture(status: str, evidence_role: str, boundary: str, **extra: object) -> dict:
+    return {
+        "status": status,
+        "evidence_role": evidence_role,
+        "semantic_acceptance_claimed": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": boundary,
+        **extra,
+    }
+
+
 def valid_packet(root: Path) -> dict:
     run_report_path = root / "summary" / "judge-entrypoints-run-report.json"
     readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
@@ -943,6 +979,7 @@ def valid_packet(root: Path) -> dict:
     bundle_self_ref = {
         "path": repo_relative(bundle_path),
         "status": "self",
+        "hash_boundary": "self-hash-bound-after-write",
     }
     repo_commit_ref = {
         "status": "present",
@@ -951,7 +988,7 @@ def valid_packet(root: Path) -> dict:
     publication_manifest = {
         "report_kind": "publication-manifest",
         "bundle_version": 1,
-        "publication_scope": "all-entrypoints",
+        "publication_scope": "internal_preview_full",
         "source_commit": repo_commit_ref,
         "repo_commit": json.loads(json.dumps(repo_commit_ref)),
         "target_source_pin": {
@@ -982,6 +1019,10 @@ def valid_packet(root: Path) -> dict:
         "judge_entrypoints_run_report": run_report,
         "readiness_report": readiness,
         "judge_milestone_bundle": bundle_self_ref,
+        "judge_config": {
+            "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
+            "status": "present",
+        },
         "competition_config_archive": {
             "report_kind": "competition-config-archive",
             "status": "present",
@@ -1003,7 +1044,7 @@ def valid_packet(root: Path) -> dict:
         "supported_subset": {
             "claims": ["public packet validator fixture"],
         },
-        "known_non_goals": ["semantic translation gate"],
+        "known_non_goals": ["semantic acceptance", "semantic translation gate"],
         "claim_boundary": {
             "semantic_gate": False,
             "publication_manifest_is_semantic_gate": False,
@@ -1011,6 +1052,14 @@ def valid_packet(root: Path) -> dict:
             "translation_coverage_numerator": 0,
         },
     }
+    publication_manifest["published_entrypoints"] = [
+        {
+            "id": "opencode_multi_worker_evaluate_profile",
+            "status": "passed",
+            "proof_class": "local-simulation",
+            "run_id": "fixture-run",
+        }
+    ]
     publication_manifest["published_artifact_refs"] = [
         {
             "artifact_name": "judge_entrypoints_run_report",
@@ -1020,11 +1069,28 @@ def valid_packet(root: Path) -> dict:
     ]
     publication_manifest["published_artifact_count"] = len(publication_manifest["published_artifact_refs"])
     known_gaps = [{"gap_id": "competition-exact-not-run", "status": "open"}]
-    bundle_must_not_claim = ["bundle_status_is_not_project_level_translation_success"]
+    bundle_must_not_claim = [
+        "accepted_evidence_is_not_translator_generated_coverage",
+        "blocked_repairs_are_not_translation_success",
+        "before_after_exhibit_is_not_new_semantic_gate",
+        "bundle_status_passed_is_not_project_level_translation_success",
+        "local_simulation_is_not_competition_exact",
+        "bundle_status_is_not_project_level_translation_success",
+    ]
     packet_must_not_claim = [*bundle_must_not_claim, "public_release_packet_is_not_semantic_gate"]
     reproduction_commands = {
-        "run_judge_entrypoints": "python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json"
+        "run_judge_entrypoints": "python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json",
+        "build_bundle": "python3 -B -m validation.tools.judge_milestone_bundle",
+        "entrypoints": [
+            {
+                "id": "opencode_multi_worker_evaluate_profile",
+                "command": "python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/profiles/flashdb-opencode-local-simulation.json",
+            }
+        ],
     }
+    publication_manifest["reproduction_commands"] = reproduction_commands
+    publication_manifest["known_gaps"] = known_gaps
+    publication_manifest["must_not_claim"] = bundle_must_not_claim
     before_after_repair_exhibit = {
         "report_kind": "before-after-repair-exhibit-rollup",
         "sources": [
@@ -1094,17 +1160,82 @@ def valid_packet(root: Path) -> dict:
         "accepted_evidence_counts_as_translator_coverage": False,
         "boundary": "Before/after repair exhibit is a review rollup, not a semantic gate.",
     }
+    claim_scope = {
+        "external_review_index_ready": True,
+        "semantic_acceptance_ready": False,
+        "competition_exact_ready": False,
+        "translator_generated_coverage_ready": False,
+    }
+    unsafe_reduction = {
+        "status": "measured",
+        "baseline_total_unsafe": 2,
+        "current_total_unsafe": 0,
+        "reduced_by": 2,
+    }
+    c2rust_baseline_rollup = c2rust_baseline_milestone_rollup_fixture()
+    blocked_repairs_rollup = {
+        "report_kind": "blocked-repairs-rollup",
+        "sources": [],
+        "rollup": {
+            "source_count": 0,
+            "slice_count": 0,
+            "recorded_source_count": 0,
+            "blocked_repair_count": 0,
+            "human_action_required_count": 0,
+            "status_counts": {},
+            "human_intervention_points": [],
+            "blocked_callees": [],
+            "ir_feature_gap_kinds": {},
+            "forbidden_change_counts": {},
+            "blocked_reason_counts": {},
+            "source_span_kind_counts": {},
+            "smallest_next_tests": [],
+            "next_actions": [],
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "No blocked repair is counted as translation success in this fixture.",
+        },
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": "Blocked repairs are review context only.",
+    }
+    repair_activity = {
+        "source_count": 1,
+        "observed_source_count": 1,
+        "repair_history_unit_count": 1,
+        "auto_recovered_unit_count": 1,
+        "avg_repair_rounds": 1.0,
+        "auto_recovery_rate": 1.0,
+        "human_interventions": 0,
+        "boundary": "Workflow metrics are review-only and not semantic acceptance.",
+    }
     bundle_payload = {
         "schema_version": 1,
         "report_kind": "judge-milestone-bundle",
         "status": "passed",
         "blockers": [],
+        "summary": {
+            "report_kind": "judge-milestone-bundle-summary",
+            "external_milestone_claim_ready": False,
+            "claim_scope": claim_scope,
+            "blockers": [],
+            "readiness": {
+                "all_entrypoints_executed": True,
+                "executed_count": 4,
+                "configured_count": 4,
+                "validation_status": "passed",
+            },
+        },
         "claim_boundary": {
             "semantic_gate": False,
             "generated_draft_semantic_pass": False,
             "translation_coverage_numerator": 0,
             "bundle_is_semantic_gate": False,
+            "source_semantic_gate": False,
         },
+        "claim_scope": claim_scope,
         "publishability": {
             "status": "internal_preview",
             "scope": "full",
@@ -1162,12 +1293,32 @@ def valid_packet(root: Path) -> dict:
                 {
                     "id": "opencode_multi_worker_evaluate_profile",
                     "proof_class": "local-simulation",
+                    "run_id": "fixture-run",
                     "competition_exact_host_attested": False,
                 }
             ],
             "non_exact_entrypoints": ["opencode_multi_worker_evaluate_profile"],
             "host_attestation_missing_entrypoints": [],
         },
+        "semantic_evidence_rollup": {
+            "accepted_evidence_semantic_pass_count": 1,
+            "translator_generated_semantic_pass_count": 0,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "source_generated_draft_semantic_pass": False,
+            "source_translation_coverage_numerator": 0,
+            "accepted_evidence_counts_as_translator_coverage": False,
+        },
+        "core_translation_quality": {
+            "report_kind": "core-translation-quality-rollup",
+            "sources": [],
+            "final_gate_statuses": ["passed"],
+            "semantic_pass_count": 1,
+            "translation_coverage_numerator": 0,
+            "generated_draft_semantic_pass": False,
+            "unsafe_reduction": unsafe_reduction,
+        },
+        "blocked_repairs_rollup": blocked_repairs_rollup,
         "harness_architecture_summary": {
             "report_kind": "harness-architecture-summary",
             "sources": [],
@@ -1187,14 +1338,43 @@ def valid_packet(root: Path) -> dict:
                 "roles": ["planner", "worker", "verifier", "repairer", "reporter"],
             }
         },
-        "evidence_cost_retention": evidence_cost_retention_fixture(),
-        "workflow_metrics": {
+        "route_governance_metrics": {
+            "report_kind": "route-governance-metrics-rollup",
+            "sources": [],
             "rollup": {
-                "repair_activity": {
-                    "repair_history_unit_count": 1,
-                    "auto_recovered_unit_count": 1,
-                }
+                "source_count": 1,
+                "translation_coverage_numerator": 0,
+                "accepted_evidence_semantic_pass_count": 1,
+                "tracked_route_decision_artifacts": 1,
+                "tracked_slice_gate_contexts": 1,
+                "s2_workflow_run_count": 1,
+                "s2_unsafe_reduction": unsafe_reduction,
+                "c2rust_baseline": c2rust_baseline_rollup,
+                "all_retention_policies_present": True,
+                "all_target_artifacts_reproducible": True,
+            },
+            "boundary": "Route governance metrics do not create semantic acceptance.",
+        },
+        "evidence_cost_retention": evidence_cost_retention_fixture(),
+        "entrypoints": [
+            {
+                "id": "opencode_multi_worker_evaluate_profile",
+                "status": "passed",
+                "proof_class": "local-simulation",
             }
+        ],
+        "workflow_metrics": {
+            "report_kind": "workflow-metrics-rollup",
+            "sources": [],
+            "rollup": {
+                "repair_activity": repair_activity,
+            }
+        },
+        "unsafe_reduction_scope": {
+            "scope": "all",
+            "all_sources_measured": True,
+            "measured_units": 1,
+            "total_units": 1,
         },
         "progress_delta_ledger": {
             "report_kind": "progress-delta-ledger",
@@ -1212,6 +1392,7 @@ def valid_packet(root: Path) -> dict:
                 "verification_command_count": 3,
                 "route_decision_artifacts": 1,
                 "slice_gate_contexts": 1,
+                "blocked_callee_count": 0,
             },
             "workflow_delta": {
                 "workflow_source_count": 1,
@@ -1224,17 +1405,24 @@ def valid_packet(root: Path) -> dict:
                 "before_after_repair_source_count": 1,
                 "repair_delta_source_count": 1,
                 "human_interventions": 0,
+                "llm_calls": 1,
             },
             "boundary": "Progress deltas are copied from the bound bundle for review only.",
         },
         "quantitative_evaluation": {
+            "report_kind": "quantitative-evaluation-scorecard",
+            "evaluation_scope": "bounded-mvp",
             "semantic_gate": False,
             "generated_draft_semantic_pass": False,
             "translation_coverage_numerator": 0,
             "project_slice_counts": {
+                "entrypoint_count": 4,
+                "workflow_source_count": 1,
                 "workflow_units_total": 1,
                 "workflow_units_converged": 1,
                 "before_after_bound_unit_count": 1,
+                "tracked_route_decision_artifacts": 1,
+                "tracked_slice_gate_contexts": 1,
             },
             "outcome_counts": {
                 "accepted_evidence_semantic_pass_count": 1,
@@ -1244,6 +1432,14 @@ def valid_packet(root: Path) -> dict:
                 "blocked_repair_count": 0,
                 "human_interventions": 0,
             },
+            "unsafe_reduction": {
+                **unsafe_reduction,
+                "scope": "all",
+                "all_sources_measured": True,
+                "measured_units": 1,
+                "total_units": 1,
+            },
+            "repair_activity": repair_activity,
             "self_heal_classification": {
                 "report_kind": "self-heal-classification",
                 "source": "blocked_repairs_rollup",
@@ -1268,27 +1464,41 @@ def valid_packet(root: Path) -> dict:
             },
             "baseline_comparison": {
                 "raw_c2rust": {
-                    "status": "manifest_status_observed",
-                    "evidence_role": "baseline_or_candidate_context_only",
-                    "semantic_acceptance_claimed": False,
-                    "generated_draft_semantic_pass": False,
-                    "translation_coverage_numerator": 0,
-                    "c2rust_baseline_rollup": {
-                        "report_kind": "c2rust-baseline-milestone-rollup",
-                        "status": "observed",
-                        "source_report_count": 2,
-                        "unique_evidence_root_count": 1,
-                        "unique_manifest_count": 2,
-                        "compile_passed_count": 0,
-                        "translation_coverage_numerator": 0,
-                        "semantic_gate": False,
-                    },
-                    "boundary": "Raw C2Rust baseline manifests are candidate context only.",
-                }
+                    **comparison_row_fixture(
+                        "manifest_status_observed",
+                        "baseline_or_candidate_context_only",
+                        "Raw C2Rust baseline manifests are candidate context only.",
+                    ),
+                    "c2rust_baseline_rollup": c2rust_baseline_rollup,
+                },
+                "c2rust_repair": comparison_row_fixture(
+                    "not_run",
+                    "not_semantic_acceptance",
+                    "C2Rust repair is not a semantic acceptance row in this fixture.",
+                ),
+                "typed_ir_route": comparison_row_fixture(
+                    "observed",
+                    "route_governance_only",
+                    "Typed IR route data is diagnostic and not semantic acceptance.",
+                    tracked_route_decision_artifacts=1,
+                ),
+                "opencode_llm_worker": comparison_row_fixture(
+                    "preflight_only",
+                    "command_contract_audit_only",
+                    "OpenCode worker output is not semantic evidence without oracle gates.",
+                    chat_output_is_evidence=False,
+                ),
+                "handwritten_reference": comparison_row_fixture(
+                    "accepted_evidence_bound",
+                    "accepted_reference_evidence",
+                    "Accepted reference evidence is not translator-generated coverage.",
+                    counts_as_translator_generated_coverage=False,
+                ),
             },
             "claim_boundary": {
                 "semantic_gate": False,
                 "scorecard_is_semantic_gate": False,
+                "baseline_comparison_is_semantic_acceptance": False,
                 "generated_draft_semantic_pass": False,
                 "translation_coverage_numerator": 0,
             },
@@ -1303,9 +1513,12 @@ def valid_packet(root: Path) -> dict:
             "preflight_proof_summary": opencode_preflight_proof,
         },
         "opencode_evidence_policy": {
+            "enabled": True,
             "boundary_fields_explicit": True,
             "chat_output_is_evidence_false": True,
             "semantic_gate_false": True,
+            "session_evidence_role": "command_contract_audit_only",
+            "logs_evidence_role": "diagnostic_only",
             "semantic_gate": False,
         },
         "judge_entrypoints_run_report": run_report,
@@ -1315,6 +1528,17 @@ def valid_packet(root: Path) -> dict:
         "known_gaps": known_gaps,
         "must_not_claim": bundle_must_not_claim,
         "reproduction_commands": reproduction_commands,
+        "retention_policy": {
+            "report_kind": "milestone-retention-policy",
+            "bundle_role": "external-review-index",
+            "target_artifacts": ["summary/judge-milestone-bundle.json"],
+            "committed_manifests": ["validation/judge-milestone-bundle.schema.json"],
+            "claim_boundary": {
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+                "boundary": "Retention policy is evidence packaging only.",
+            },
+        },
     }
     bundle_payload["proof_class_rollup"] = bundle_payload["proof_classes"]
     write_json(bundle_path, bundle_payload)
@@ -1340,15 +1564,7 @@ def valid_packet(root: Path) -> dict:
                 **packet_validator.expected_published_artifact_ref_status(publication_manifest),
             },
             "proof_class_rollup": bundle_payload["proof_class_rollup"],
-            "workflow_metrics": {
-                "repair_activity": bundle_payload["workflow_metrics"]["rollup"]["repair_activity"],
-                "semantic_gate": False,
-                "translation_coverage_numerator": 0,
-                "boundary": (
-                    "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
-                    "They are not a semantic gate and do not increase translation coverage."
-                ),
-            },
+            "workflow_metrics": packet_validator.expected_workflow_metrics_summary(bundle_payload),
             "progress_delta_ledger": bundle_payload["progress_delta_ledger"],
         },
         "claim_boundary": {
@@ -1713,6 +1929,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
                     {
                         "id": "opencode_multi_worker_evaluate_profile",
                         "proof_class": "competition-exact",
+                        "run_id": "fixture-run",
                         "competition_exact_host_attested": True,
                     }
                 ],
@@ -2428,6 +2645,32 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("publication_manifest.report_kind must be publication-manifest" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_bound_bundle_schema_drift(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-bundle-schema-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload.pop("retention_policy")
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "judge_milestone_bundle must match validation/judge-milestone-bundle.schema.json" in error
+                and "retention_policy" in error
+                for error in result["errors"]
+            ),
             result["errors"],
         )
 
