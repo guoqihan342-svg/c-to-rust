@@ -221,6 +221,7 @@ def run_competition_smoke(
             repo_root=repo_root,
             logs_dir=logs_dir,
             out_root=out_root,
+            run_id=run_id,
             timeout_seconds=timeout_seconds,
         )
         timed_out = bool(getattr(result, "timed_out", False))
@@ -513,6 +514,7 @@ def run_logged_step(
     repo_root: Path,
     logs_dir: Path,
     out_root: Path,
+    run_id: str,
     timeout_seconds: int,
 ) -> subprocess.CompletedProcess[str]:
     timed_out = False
@@ -546,6 +548,8 @@ def run_logged_step(
         "stderr": output_text_for_log(result.stderr),
         "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
         "workdir": summary_path(repo_root, repo_root=repo_root, out_root=out_root),
+        "run_id": run_id,
+        "canonical": True,
         **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
         **({"failure_class": failure_class} if failure_class else {}),
     }

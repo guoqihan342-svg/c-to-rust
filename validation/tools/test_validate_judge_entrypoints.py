@@ -128,7 +128,12 @@ def resume_replay_commands(
     }
 
 
-def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
+def write_valid_command_log(
+    path: Path,
+    steps: list[dict] | None = None,
+    *,
+    run_id: str = "competition-flashdb-environment-smoke-20260701",
+) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     command_steps = steps or [
         {
@@ -147,6 +152,8 @@ def write_valid_command_log(path: Path, steps: list[dict] | None = None) -> str:
                     "stdout": "",
                     "stderr": "",
                     "workdir": ".",
+                    "run_id": run_id,
+                    "canonical": True,
                     **({"timed_out": True} if step.get("timed_out") is True else {}),
                     **({"timeout_seconds": step["timeout_seconds"]} if "timeout_seconds" in step else {}),
                     **({"failure_class": step["failure_class"]} if "failure_class" in step else {}),
@@ -995,6 +1002,8 @@ def write_exact_competition_smoke_fixture(
                     "stdout": command_log_stdout if step["step"] == "opencode-glm-model-probe" else "",
                     "stderr": "",
                     "workdir": ".",
+                    "run_id": run_id,
+                    "canonical": True,
                 },
                 sort_keys=True,
             )
@@ -5386,7 +5395,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "final_gate": {"status": "passed"},
                 },
             )
-            payload["command_log"]["sha256"] = write_valid_command_log(command_log, payload["steps"])
+            payload["command_log"]["sha256"] = write_valid_command_log(
+                command_log,
+                payload["steps"],
+                run_id=payload["run_id"],
+            )
             write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
@@ -5454,7 +5467,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     "final_gate": {"status": "passed"},
                 },
             )
-            payload["command_log"]["sha256"] = write_valid_command_log(command_log, payload["steps"])
+            payload["command_log"]["sha256"] = write_valid_command_log(
+                command_log,
+                payload["steps"],
+                run_id=payload["run_id"],
+            )
             write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
@@ -5635,7 +5652,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             write_json(summary_path, payload)
             write_json(vendored_path, valid_vendored_clang_verification_payload())
             write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
-            write_valid_command_log(command_log)
+            write_valid_command_log(command_log, run_id=payload["run_id"])
 
             with self.assertRaisesRegex(
                 ValueError,
@@ -5652,6 +5669,79 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                     smoke_contract={
                         "proof_class": "local-simulation",
                         "run_id": "smoke-command-log-sha-drift-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_command_log_run_id_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            artifacts, payload = write_exact_competition_smoke_fixture(
+                root,
+                run_id="smoke-command-log-run-binding-test",
+            )
+            command_log = REPO_ROOT / artifacts["command_log"]
+            entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(entries)
+            entries[0]["run_id"] = "stale-smoke-run"
+            entries[0]["canonical"] = True
+            command_log.write_text(
+                "".join(json.dumps(entry, sort_keys=True) + "\n" for entry in entries),
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(REPO_ROOT / artifacts["competition_smoke_summary"], payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log line 1 run_id must match smoke summary run_id",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-command-log-run-binding-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_noncanonical_command_log_record(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            artifacts, payload = write_exact_competition_smoke_fixture(
+                root,
+                run_id="smoke-command-log-canonical-binding-test",
+            )
+            command_log = REPO_ROOT / artifacts["command_log"]
+            entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(entries)
+            entries[0]["canonical"] = False
+            command_log.write_text(
+                "".join(json.dumps(entry, sort_keys=True) + "\n" for entry in entries),
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(REPO_ROOT / artifacts["competition_smoke_summary"], payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log line 1 canonical must be true",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-command-log-canonical-binding-test",
                     },
                 )
 
@@ -5696,6 +5786,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "stdout": "",
                         "stderr": "",
                         "workdir": ".",
+                        "run_id": payload["run_id"],
+                        "canonical": True,
                     },
                     sort_keys=True,
                 )
@@ -5758,7 +5850,11 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             for step in drifted_steps:
                 if step["step"] == "environment-check":
                     step["returncode"] = 0
-            payload["command_log"]["sha256"] = write_valid_command_log(command_log, drifted_steps)
+            payload["command_log"]["sha256"] = write_valid_command_log(
+                command_log,
+                drifted_steps,
+                run_id=payload["run_id"],
+            )
             write_json(summary_path, payload)
 
             with self.assertRaisesRegex(
@@ -5875,6 +5971,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                             "stdout": stdout,
                             "stderr": "",
                             "workdir": ".",
+                            "run_id": payload["run_id"],
+                            "canonical": True,
                         },
                         sort_keys=True,
                     )
@@ -5992,6 +6090,8 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                             "stdout": "provider/GLM-5.1\n" if step["step"] == "opencode-glm-model-probe" else "",
                             "stderr": "",
                             "workdir": ".",
+                            "run_id": payload["run_id"],
+                            "canonical": True,
                         },
                         sort_keys=True,
                     )
@@ -6117,6 +6217,9 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                         "returncode": 0,
                         "stdout": "",
                         "stderr": "",
+                        "workdir": ".",
+                        "run_id": payload["run_id"],
+                        "canonical": True,
                     },
                     sort_keys=True,
                 )

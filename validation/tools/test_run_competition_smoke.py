@@ -1091,6 +1091,28 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             self.assertTrue(all(kwargs.get("cwd") == REPO_ROOT for kwargs in fake_runner.kwargs))
             assert_no_local_absolute_command_log_text(self, command_entries)
 
+    def test_command_log_records_run_id_and_canonical_flag(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-run-binding-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertTrue(command_entries)
+            self.assertTrue(all(entry.get("run_id") == "smoke-command-log-run-binding-test" for entry in command_entries))
+            self.assertTrue(all(entry.get("canonical") is True for entry in command_entries))
+
     def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
         module = load_smoke_module()
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:

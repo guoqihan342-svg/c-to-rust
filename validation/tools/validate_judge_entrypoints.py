@@ -1238,6 +1238,8 @@ def validate_competition_smoke_command_log_contract(
     *,
     expected_steps: list[str] | None = None,
     expected_step_results: dict[str, dict[str, Any]] | None = None,
+    expected_run_id: str | None = None,
+    require_canonical: bool = False,
     require_opencode_glm_model: bool = False,
 ) -> dict[str, Any]:
     if not command_log_path.is_file():
@@ -1262,6 +1264,18 @@ def validate_competition_smoke_command_log_contract(
                 raise ValueError(
                     f"competition_smoke_command_log line {line_number} step must be a non-empty string"
                 )
+            if expected_run_id is not None:
+                run_id = entry.get("run_id")
+                if not isinstance(run_id, str) or not run_id:
+                    raise ValueError(
+                        f"competition_smoke_command_log line {line_number} run_id must be a non-empty string"
+                    )
+                if run_id != expected_run_id:
+                    raise ValueError(
+                        f"competition_smoke_command_log line {line_number} run_id must match smoke summary run_id"
+                    )
+            if require_canonical and entry.get("canonical") is not True:
+                raise ValueError(f"competition_smoke_command_log line {line_number} canonical must be true")
             observed_steps.add(step)
             observed_step_counts[step] = observed_step_counts.get(step, 0) + 1
             command = entry.get("command")
@@ -6165,6 +6179,8 @@ def validate_harness_artifact_contracts(
                 command_log_path,
                 expected_steps=expected_log_steps,
                 expected_step_results=expected_step_results,
+                expected_run_id=require_string(smoke_summary_payload.get("run_id"), "competition_smoke_summary.run_id"),
+                require_canonical=True,
                 require_opencode_glm_model=smoke_summary_payload.get("proof_class") == "competition-exact",
             )
         if "vendored_clang_verification" in artifacts:
