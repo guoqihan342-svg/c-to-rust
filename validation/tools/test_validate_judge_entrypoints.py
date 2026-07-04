@@ -4915,6 +4915,50 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_opencode_agent_runtime_rejects_safety_attempt_not_bound_to_worker_report(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-attempt-report-drift-", dir=REPO_ROOT / "target"))
+        payload = valid_opencode_judge_index_payload()
+        materialize_opencode_judge_index_artifacts(
+            payload,
+            temp_dir / "out",
+            profile_payload={
+                "schema_version": 1,
+                "profile_id": "opencode-profile",
+                "mode": "opencode",
+                **opencode_launch_policy(),
+                "auto_retry": True,
+            },
+        )
+        worker = payload["opencode_agent_runtime"]["workers"][0]
+        worker_report_path = REPO_ROOT / worker["worker_report"]["path"]
+        attempt_path = temp_dir / "out" / "workers" / "worker-a" / "harness" / "opencode-safety-transform-attempt.json"
+        other_attempt_path = (
+            temp_dir / "out" / "workers" / "worker-a" / "harness" / "other-opencode-safety-transform-attempt.json"
+        )
+        write_json(attempt_path, {"report_kind": "test-opencode-safety-transform-attempt", "id": "expected"})
+        write_json(other_attempt_path, {"report_kind": "test-opencode-safety-transform-attempt", "id": "drifted"})
+        worker["opencode_safety_transform_attempt"] = {
+            "path": repo_relative(attempt_path),
+            "sha256": validator.sha256_file(attempt_path),
+        }
+        worker_report = json.loads(worker_report_path.read_text(encoding="utf-8"))
+        worker_report["opencode_safety_transform_attempt"] = {
+            "path": repo_relative(other_attempt_path),
+            "sha256": validator.sha256_file(other_attempt_path),
+        }
+        write_json(worker_report_path, worker_report)
+        worker["worker_report"]["sha256"] = validator.sha256_file(worker_report_path)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"opencode_agent_runtime\.workers\[0\]\.worker_report\.opencode_safety_transform_attempt "
+            r"must match opencode_safety_transform_attempt",
+        ):
+            validator.validate_opencode_agent_runtime_contract(
+                payload["opencode_agent_runtime"],
+                repo_root=REPO_ROOT,
+            )
+
     def test_opencode_agent_runtime_rejects_invalid_worker_summary_contract(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-opencode-worker-summary-contract-", dir=REPO_ROOT / "target"))
         payload = valid_opencode_judge_index_payload()
@@ -8699,6 +8743,139 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         self.assertIn(f"ledger_path={repo_relative(ledger)}", message)
         self.assertIn("expected kind=run-worker-report", message)
         self.assertIn("regenerate OpenCode artifacts", message)
+
+    def test_context_ledger_opencode_safety_attempt_requires_artifact_row(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="ledger-safety-attempt-row-", dir=target_dir))
+        case = write_context_ledger_case(temp_dir)
+        worker = case["agent_payload"]["agents_by_worker_id"]["worker-001"]
+        report_path = REPO_ROOT / worker["report_path"]
+        attempt_path = temp_dir / "out" / "workers" / "worker-001" / "harness" / "opencode-safety-transform-attempt.json"
+        write_json(
+            attempt_path,
+            {
+                "report_kind": "opencode-safety-transform-attempt",
+                "run_id": case["context_payload"]["run_id"],
+                "worker_id": "worker-001",
+            },
+        )
+        attempt_ref = {
+            "path": repo_relative(attempt_path),
+            "sha256": validator.sha256_file(attempt_path),
+        }
+        worker["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+        write_json(case["agent_index"], case["agent_payload"])
+        report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+        report_payload["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+        write_json(report_path, report_payload)
+        with closing(sqlite3.connect(case["ledger"])) as connection:
+            connection.execute(
+                "update artifacts set sha256=?, payload_json=? where kind='agent-index'",
+                (
+                    validator.sha256_file(case["agent_index"]),
+                    json.dumps(case["agent_payload"], sort_keys=True),
+                ),
+            )
+            connection.execute(
+                "update artifacts set sha256=?, payload_json=? where kind='run-worker-report'",
+                (
+                    validator.sha256_file(report_path),
+                    json.dumps(report_payload, sort_keys=True),
+                ),
+            )
+            connection.commit()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "context ledger missing artifacts row for opencode safety transform attempt",
+        ):
+            validate_context_ledger_case(case)
+
+    def test_context_ledger_opencode_safety_attempt_requires_worker_executed_event_binding(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="ledger-safety-attempt-event-", dir=target_dir))
+        case = write_context_ledger_case(temp_dir)
+        run_id = case["context_payload"]["run_id"]
+        worker = case["agent_payload"]["agents_by_worker_id"]["worker-001"]
+        report_path = REPO_ROOT / worker["report_path"]
+        attempt_path = temp_dir / "out" / "workers" / "worker-001" / "harness" / "opencode-safety-transform-attempt.json"
+        other_attempt_path = temp_dir / "out" / "workers" / "worker-001" / "harness" / "other-opencode-safety-transform-attempt.json"
+        write_json(attempt_path, {"report_kind": "opencode-safety-transform-attempt", "run_id": run_id, "worker_id": "worker-001"})
+        write_json(
+            other_attempt_path,
+            {"report_kind": "opencode-safety-transform-attempt", "run_id": run_id, "worker_id": "worker-001"},
+        )
+        attempt_ref = {"path": repo_relative(attempt_path), "sha256": validator.sha256_file(attempt_path)}
+        other_attempt_ref = {"path": repo_relative(other_attempt_path), "sha256": validator.sha256_file(other_attempt_path)}
+        worker["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+        write_json(case["agent_index"], case["agent_payload"])
+        report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+        report_payload["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+        write_json(report_path, report_payload)
+        report_ref = {"path": repo_relative(report_path), "sha256": validator.sha256_file(report_path)}
+        with closing(sqlite3.connect(case["ledger"])) as connection:
+            connection.execute(
+                "update artifacts set sha256=?, payload_json=? where kind='agent-index'",
+                (validator.sha256_file(case["agent_index"]), json.dumps(case["agent_payload"], sort_keys=True)),
+            )
+            connection.execute(
+                "update artifacts set sha256=?, payload_json=? where kind='run-worker-report'",
+                (validator.sha256_file(report_path), json.dumps(report_payload, sort_keys=True)),
+            )
+            connection.execute(
+                """
+                insert into artifacts(
+                  run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    "worker-001",
+                    "opencode-safety-transform-attempt",
+                    attempt_ref["path"],
+                    attempt_ref["sha256"],
+                    "passed",
+                    "agent-safety-transform-attempt",
+                    json.dumps({"report_kind": "opencode-safety-transform-attempt"}, sort_keys=True),
+                    "2026-07-01T00:00:00Z",
+                ),
+            )
+            connection.execute(
+                """
+                create table events(
+                  event_id integer primary key autoincrement,
+                  run_id text not null,
+                  event_type text not null,
+                  payload_json text not null,
+                  created_at text not null
+                )
+                """
+            )
+            connection.execute(
+                "insert into events(run_id, event_type, payload_json, created_at) values (?, ?, ?, ?)",
+                (
+                    run_id,
+                    "worker_executed",
+                    json.dumps(
+                        {
+                            "worker_id": "worker-001",
+                            "worker_report": report_ref,
+                            "opencode_safety_transform_attempt": other_attempt_ref,
+                        },
+                        sort_keys=True,
+                    ),
+                    "2026-07-01T00:00:00Z",
+                ),
+            )
+            connection.commit()
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "context ledger worker_executed event opencode_safety_transform_attempt must match",
+        ):
+            validate_context_ledger_case(case)
 
     def test_context_ledger_agent_index_payload_json_drift_fails(self) -> None:
         target_dir = REPO_ROOT / "target"

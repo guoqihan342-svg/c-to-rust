@@ -3458,6 +3458,12 @@ def validate_opencode_worker_runtime(
     logs = require_object(worker.get("logs"), f"{label}.logs")
     bindings["logs_stdout"] = validate_artifact_binding_shape(logs.get("stdout"), f"{label}.logs.stdout", repo_root=repo_root)
     bindings["logs_stderr"] = validate_artifact_binding_shape(logs.get("stderr"), f"{label}.logs.stderr", repo_root=repo_root)
+    if worker.get("opencode_safety_transform_attempt") is not None:
+        bindings["opencode_safety_transform_attempt"] = validate_artifact_binding_shape(
+            worker.get("opencode_safety_transform_attempt"),
+            f"{label}.opencode_safety_transform_attempt",
+            repo_root=repo_root,
+        )
     worker_preflight = validate_opencode_preflight_binding(
         worker.get("opencode_preflight_report"),
         f"{label}.opencode_preflight_report",
@@ -3536,6 +3542,17 @@ def validate_opencode_worker_runtime(
         )
         if report_summary_status != summary_final_gate_status:
             raise ValueError(f"{label}.worker_report.summary_status must match summary final_gate.status")
+        if "opencode_safety_transform_attempt" in bindings:
+            report_attempt = validate_artifact_binding_shape(
+                worker_report_payload.get("opencode_safety_transform_attempt"),
+                f"{label}.worker_report.opencode_safety_transform_attempt",
+                repo_root=repo_root,
+            )
+            if report_attempt != bindings["opencode_safety_transform_attempt"]:
+                raise ValueError(
+                    f"{label}.worker_report.opencode_safety_transform_attempt "
+                    "must match opencode_safety_transform_attempt"
+                )
         handoff_payload = require_object(
             load_json(repo_path(bindings["handoff_contract"]["path"], repo_root=repo_root)),
             f"{label}.handoff_contract file",
@@ -5653,6 +5670,130 @@ def validate_context_ledger_contract(
                         raise ValueError(f"context ledger worker report agent_id must match worker_id: {worker_id}")
                     if report_row[4] != ledger_run_id:
                         raise ValueError(f"context ledger worker report run_id must match context_packs run_id: {worker_id}")
+                    report_payload = require_object(load_json(report_path), f"context ledger worker report file: {worker_id}")
+                    agent_attempt_value = agent_entry.get("opencode_safety_transform_attempt")
+                    report_attempt_value = report_payload.get("opencode_safety_transform_attempt")
+                    if agent_attempt_value is not None or report_attempt_value is not None:
+                        agent_attempt_ref = validate_artifact_binding_shape(
+                            agent_attempt_value,
+                            f"agents_by_worker_id.{worker_id}.opencode_safety_transform_attempt",
+                            repo_root=repo_root,
+                        )
+                        report_attempt_ref = validate_artifact_binding_shape(
+                            report_attempt_value,
+                            f"context ledger worker report file.{worker_id}.opencode_safety_transform_attempt",
+                            repo_root=repo_root,
+                        )
+                        if report_attempt_ref != agent_attempt_ref:
+                            raise ValueError(
+                                "context ledger worker report opencode_safety_transform_attempt "
+                                f"must match agent_index: {worker_id}"
+                            )
+                        attempt_row = connection.execute(
+                            """
+                            select sha256, status, semantic_role, agent_id, run_id
+                            from artifacts
+                            where kind='opencode-safety-transform-attempt' and repo_rel_path=?
+                            """,
+                            (agent_attempt_ref["path"],),
+                        ).fetchone()
+                        if attempt_row is None:
+                            raise ValueError(
+                                "context ledger missing artifacts row for opencode safety transform attempt: "
+                                f"worker_id={worker_id}; repo_rel_path={agent_attempt_ref['path']}"
+                            )
+                        if attempt_row[0] != agent_attempt_ref["sha256"]:
+                            raise ValueError(f"context ledger opencode safety transform attempt sha256 must match file: {worker_id}")
+                        if attempt_row[1] != report_row[1] or attempt_row[2] != "agent-safety-transform-attempt":
+                            raise ValueError(
+                                "context ledger opencode safety transform attempt row must match worker report status "
+                                f"and semantic_role=agent-safety-transform-attempt: {worker_id}"
+                            )
+                        if attempt_row[3] != worker_id:
+                            raise ValueError(
+                                f"context ledger opencode safety transform attempt agent_id must match worker_id: {worker_id}"
+                            )
+                        if attempt_row[4] != ledger_run_id:
+                            raise ValueError(
+                                "context ledger opencode safety transform attempt run_id must match context_packs run_id: "
+                                f"{worker_id}"
+                            )
+                        attempt_payload = require_object(
+                            load_json(repo_path(agent_attempt_ref["path"], repo_root=repo_root)),
+                            f"context ledger opencode safety transform attempt file: {worker_id}",
+                        )
+                        if attempt_payload.get("run_id") != ledger_run_id:
+                            raise ValueError(
+                                "context ledger opencode safety transform attempt file run_id must match context_packs run_id: "
+                                f"{worker_id}"
+                            )
+                        if attempt_payload.get("worker_id") != worker_id:
+                            raise ValueError(
+                                "context ledger opencode safety transform attempt file worker_id must match worker_id: "
+                                f"{worker_id}"
+                            )
+                        expected_worker_report_ref = {"path": report_path_text, "sha256": report_sha}
+                        try:
+                            event_rows = connection.execute(
+                                """
+                                select payload_json
+                                from events
+                                where run_id=? and event_type='worker_executed'
+                                """,
+                                (ledger_run_id,),
+                            ).fetchall()
+                        except sqlite3.OperationalError as error:
+                            if "no such table" in str(error).lower():
+                                raise ValueError(
+                                    "context ledger missing events table for worker_executed opencode safety transform attempt"
+                                ) from error
+                            raise
+                        worker_event_count = 0
+                        matching_report_event_count = 0
+                        matching_attempt_event_seen = False
+                        for event_index, event_row in enumerate(event_rows):
+                            try:
+                                event_payload = require_object(
+                                    json.loads(event_row[0]),
+                                    f"context ledger worker_executed event[{event_index}]",
+                                )
+                            except json.JSONDecodeError as error:
+                                raise ValueError("context ledger worker_executed payload_json must be valid JSON") from error
+                            if event_payload.get("worker_id") != worker_id:
+                                continue
+                            worker_event_count += 1
+                            event_report_ref = validate_artifact_binding_shape(
+                                event_payload.get("worker_report"),
+                                f"context ledger worker_executed event[{event_index}].worker_report",
+                                repo_root=repo_root,
+                            )
+                            if event_report_ref != expected_worker_report_ref:
+                                continue
+                            matching_report_event_count += 1
+                            event_attempt_ref = validate_artifact_binding_shape(
+                                event_payload.get("opencode_safety_transform_attempt"),
+                                f"context ledger worker_executed event[{event_index}].opencode_safety_transform_attempt",
+                                repo_root=repo_root,
+                            )
+                            if event_attempt_ref != agent_attempt_ref:
+                                raise ValueError(
+                                    "context ledger worker_executed event opencode_safety_transform_attempt must match: "
+                                    f"{worker_id}"
+                                )
+                            matching_attempt_event_seen = True
+                            break
+                        if worker_event_count == 0:
+                            raise ValueError(
+                                f"context ledger missing worker_executed event for opencode safety transform attempt: {worker_id}"
+                            )
+                        if matching_report_event_count == 0:
+                            raise ValueError(
+                                f"context ledger worker_executed event worker_report must match current report: {worker_id}"
+                            )
+                        if not matching_attempt_event_seen:
+                            raise ValueError(
+                                f"context ledger missing worker_executed event opencode safety transform attempt: {worker_id}"
+                            )
                 summary_count += 1
     except sqlite3.DatabaseError as error:
         raise ValueError(f"context ledger sqlite validation failed: {ledger_path_text}: {error}") from error
