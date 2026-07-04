@@ -631,10 +631,7 @@ def attach_opencode_safety_attempt(packet: dict, attempt_ref: dict) -> None:
         "unit_count": 1,
     }
     packet["opencode_patch_boundary"]["opencode_safety_transform_attempt"] = attempt_summary
-    packet["publication_manifest"].setdefault("published_artifact_refs", []).append(json.loads(json.dumps(attempt_ref)))
-    packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
-        packet["publication_manifest"]
-    )
+    append_published_artifact_ref(packet, attempt_ref)
 
     bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
     bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
@@ -645,6 +642,15 @@ def attach_opencode_safety_attempt(packet: dict, attempt_ref: dict) -> None:
     notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
     notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
     packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
+def append_published_artifact_ref(packet: dict, ref: dict) -> None:
+    refs = packet["publication_manifest"].setdefault("published_artifact_refs", [])
+    refs.append(json.loads(json.dumps(ref)))
+    packet["publication_manifest"]["published_artifact_count"] = len(refs)
+    packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+        packet["publication_manifest"]
+    )
 
 
 def packet_preflight_path(packet: dict) -> Path:
@@ -911,6 +917,14 @@ def valid_packet(root: Path) -> dict:
             "translation_coverage_numerator": 0,
         },
     }
+    publication_manifest["published_artifact_refs"] = [
+        {
+            "artifact_name": "judge_entrypoints_run_report",
+            "entrypoint_id": "opencode_multi_worker_evaluate_profile",
+            **json.loads(json.dumps(run_report)),
+        }
+    ]
+    publication_manifest["published_artifact_count"] = len(publication_manifest["published_artifact_refs"])
     known_gaps = [{"gap_id": "competition-exact-not-run", "status": "open"}]
     bundle_must_not_claim = ["bundle_status_is_not_project_level_translation_success"]
     packet_must_not_claim = [*bundle_must_not_claim, "public_release_packet_is_not_semantic_gate"]
@@ -1321,6 +1335,34 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         notes_text = (REPO_ROOT / packet["milestone_release_notes"]["path"]).read_text(encoding="utf-8")
         self.assertIn("| raw C2Rust | manifest_status_observed | no | 0 | 2 manifests / 2 sources / 0 compile-pass |", notes_text)
 
+    def test_validate_packet_rejects_passed_bundle_without_published_artifact_refs(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-empty-published-refs-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+
+        packet["publication_manifest"]["published_artifact_refs"] = []
+        packet["publication_manifest"]["published_artifact_count"] = 0
+        bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+        write_json(bundle_path, bundle_payload)
+        packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+        packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+            packet["publication_manifest"]
+        )
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("passed bundle must publish at least one hash-bound artifact ref" in error for error in result["errors"]),
+            result["errors"],
+        )
+
     def test_validate_packet_rejects_competition_config_archive_drift_from_bound_run_report(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-archive-drift-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"
@@ -1339,6 +1381,9 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         }
         packet["judge_entrypoints_run_report"] = run_report_ref
         packet["publication_manifest"]["judge_entrypoints_run_report"] = run_report_ref
+        for ref in packet["publication_manifest"]["published_artifact_refs"]:
+            if ref.get("artifact_name") == "judge_entrypoints_run_report":
+                ref.update(run_report_ref)
 
         bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
         bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
@@ -2262,7 +2307,16 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
     def test_public_release_packet_schema_requires_publication_manifest_identity(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-schema-identity-", dir=REPO_ROOT / "target"))
         packet = valid_packet(temp_dir)
-        for field in ("report_kind", "bundle_version", "source_commit", "repo_commit", "target_source_pin", "release_tag_readiness"):
+        for field in (
+            "report_kind",
+            "bundle_version",
+            "source_commit",
+            "repo_commit",
+            "target_source_pin",
+            "published_artifact_refs",
+            "published_artifact_count",
+            "release_tag_readiness",
+        ):
             del packet["publication_manifest"][field]
         schema = judge_validator.load_json(packet_validator.PACKET_SCHEMA)
 
@@ -2557,7 +2611,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "status": "sha256_mismatch",
             "sha256": "0" * 64,
         }
-        packet["publication_manifest"].setdefault("published_artifact_refs", []).append(bad_ref)
+        append_published_artifact_ref(packet, bad_ref)
         bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
         bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
@@ -2585,10 +2639,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "path": "target/competition-out/summary/judge-evidence-index.json",
             "status": "missing",
         }
-        packet["publication_manifest"].setdefault("published_artifact_refs", []).append(missing_ref)
-        packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
-            packet["publication_manifest"]
-        )
+        append_published_artifact_ref(packet, missing_ref)
         bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
         bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
@@ -2621,10 +2672,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "artifact_name": "judge_evidence_index",
             "sha256": "0" * 64,
         }
-        packet["publication_manifest"].setdefault("published_artifact_refs", []).append(bad_ref)
-        packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
-            packet["publication_manifest"]
-        )
+        append_published_artifact_ref(packet, bad_ref)
         bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
         bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))

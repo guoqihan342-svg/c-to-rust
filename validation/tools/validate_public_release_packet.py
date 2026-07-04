@@ -611,12 +611,27 @@ def opencode_safety_transform_attempt_refs(publication: dict[str, Any]) -> list[
     ]
 
 
+def published_artifact_refs(publication: dict[str, Any]) -> list[Any]:
+    refs = publication.get("published_artifact_refs")
+    if not isinstance(refs, list):
+        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    count = publication.get("published_artifact_count")
+    if not isinstance(count, int) or isinstance(count, bool):
+        raise ValueError("publication_manifest.published_artifact_count must be an integer")
+    if count != len(refs):
+        raise ValueError(
+            "publication_manifest.published_artifact_count must match "
+            "publication_manifest.published_artifact_refs length"
+        )
+    return refs
+
+
 def require_passed_bundle_published_refs_are_healthy(bundle: dict[str, Any], publication: dict[str, Any]) -> None:
     if bundle.get("status") != "passed":
         return
-    refs = publication.get("published_artifact_refs", [])
-    if not isinstance(refs, list):
-        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    refs = published_artifact_refs(publication)
+    if not refs:
+        raise ValueError("passed bundle must publish at least one hash-bound artifact ref")
     bad_statuses = {"sha256_mismatch", "status_mismatch", "missing_expected_sha256"}
     for ref in refs:
         ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
@@ -706,9 +721,7 @@ def require_publishability_publication_scope_contract(
 
 
 def require_published_artifact_refs_are_hash_bound(publication: dict[str, Any], *, repo_root: Path) -> None:
-    refs = publication.get("published_artifact_refs", [])
-    if not isinstance(refs, list):
-        raise ValueError("publication_manifest.published_artifact_refs must be a list")
+    refs = published_artifact_refs(publication)
     for ref in refs:
         ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
         if ref_obj.get("status") not in {"present", "passed"}:

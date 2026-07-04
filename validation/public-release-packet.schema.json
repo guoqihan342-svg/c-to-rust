@@ -120,6 +120,8 @@
         "source_commit",
         "repo_commit",
         "target_source_pin",
+        "published_artifact_refs",
+        "published_artifact_count",
         "release_tag_readiness"
       ],
       "properties": {
@@ -139,6 +141,11 @@
             "canonical_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
           }
         },
+        "published_artifact_refs": {
+          "type": "array",
+          "items": {"type": "object", "additionalProperties": true}
+        },
+        "published_artifact_count": {"type": "integer", "minimum": 0},
         "release_tag_readiness": {"$ref": "#/$defs/releaseTagReadiness"}
       }
     },
