@@ -1006,6 +1006,10 @@ def require_opencode_preflight_session_contract(
         judge_validator.load_json(judge_validator.repo_path(session_ref["path"], repo_root=repo_root)),
         f"{label}.opencode_session_evidence file",
     )
+    judge_validator.validate_opencode_session_evidence_contract(
+        session_evidence,
+        f"{label}.opencode_session_evidence",
+    )
     session_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
         session_evidence.get("opencode_runtime_env"),
         f"{label}.opencode_session_evidence",

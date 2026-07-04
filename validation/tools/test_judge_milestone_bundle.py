@@ -563,6 +563,44 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
 
         self.assertNotEqual(summary["status"], "passed")
 
+    def test_opencode_preflight_proof_summary_rejects_failed_session_evidence_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}),
+            ("unparsed_session", {"parsed": False}),
+            ("non_jsonl_format", {"format": "text"}),
+        ]
+        for case_name, updates in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-session-contract-", dir=REPO_ROOT / "target"))
+                fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+                preflight_path = Path(fixture["preflight_path"])
+                session_path = Path(fixture["session_path"])
+                preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                write_json(session_path, session_payload)
+                preflight_payload["opencode_session_evidence"]["sha256"] = bundle.validator.sha256_file(session_path)
+                write_json(preflight_path, preflight_payload)
+
+                summary = bundle.opencode_preflight_proof_summary_from_index(
+                    {
+                        "opencode_agent_runtime": {
+                            "opencode_preflight_report": {
+                                "path": repo_relative(preflight_path),
+                                "sha256": bundle.validator.sha256_file(preflight_path),
+                                "status": "present",
+                            }
+                        }
+                    },
+                    entrypoint_id="opencode_multi_worker_evaluate_profile",
+                    proof_class="local-simulation",
+                    repo_root=REPO_ROOT,
+                )
+
+                self.assertNotEqual(summary["status"], "passed")
+
     def test_opencode_preflight_proof_summary_requires_opencode_run_argv(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

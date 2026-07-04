@@ -1732,6 +1732,33 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             result["errors"],
         )
 
+    def test_validate_packet_rejects_failed_preflight_session_evidence_contract(self) -> None:
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}, "process_returncode must be 0"),
+            ("unparsed_session", {"parsed": False}, "parsed must be true"),
+            ("non_jsonl_format", {"format": "text"}, "format must be jsonl"),
+        ]
+        for case_name, updates, expected_error in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-session-contract-", dir=REPO_ROOT / "target"))
+                packet_path = temp_dir / "summary" / "public-release-packet.json"
+                packet = valid_packet(temp_dir)
+                preflight_payload = json.loads(packet_preflight_path(packet).read_text(encoding="utf-8"))
+                session_path = REPO_ROOT / preflight_payload["opencode_session_evidence"]["path"]
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                rewrite_packet_preflight_session(packet, session_payload)
+                sync_packet_bound_bundle(packet)
+                write_json(packet_path, packet)
+
+                result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+                self.assertEqual(result["status"], "failed")
+                self.assertTrue(
+                    any(f"opencode_session_evidence.{expected_error}" in error for error in result["errors"]),
+                    result["errors"],
+                )
+
     def test_validate_packet_rejects_preflight_first_shell_mismatch_even_if_marker_runs_later(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-late-marker-", dir=REPO_ROOT / "target"))
         packet_path = temp_dir / "summary" / "public-release-packet.json"

@@ -2497,6 +2497,10 @@ def opencode_preflight_session_contract_passed(
             validator.load_json(validator.repo_path(session_binding["path"], repo_root=repo_root)),
             "opencode_preflight_proof_summary.opencode_session_evidence file",
         )
+        validator.validate_opencode_session_evidence_contract(
+            session_evidence,
+            "opencode_preflight_proof_summary.opencode_session_evidence",
+        )
         session_runtime_env = validator.validate_opencode_runtime_env_contract(
             session_evidence.get("opencode_runtime_env"),
             "opencode_preflight_proof_summary.opencode_session_evidence",
