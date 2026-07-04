@@ -3369,14 +3369,23 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             )
 
             run_plan_detail = result.get("run_plan") or {}
+            merge_execution = run_plan_detail.get("merge_execution") or {}
+            merge_logs = {}
+            for stream, log_path in (merge_execution.get("logs") or {}).items():
+                try:
+                    merge_logs[stream] = (REPO_ROOT / str(log_path)).read_text(
+                        encoding="utf-8", errors="replace"
+                    )[-4000:]
+                except OSError as error:
+                    merge_logs[stream] = f"<unreadable: {error}>"
             self.assertEqual(
                 result["status"],
                 "completed",
                 json.dumps(
                     {
                         "failed_workers": run_plan_detail.get("failed_workers"),
-                        "workers": run_plan_detail.get("workers"),
-                        "merge_execution": run_plan_detail.get("merge_execution"),
+                        "merge_execution": merge_execution,
+                        "merge_logs": merge_logs,
                     },
                     ensure_ascii=False,
                     default=str,
