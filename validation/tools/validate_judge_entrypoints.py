@@ -1175,9 +1175,12 @@ def validate_competition_smoke_command_log_contract(
             if not isinstance(entry, dict):
                 raise ValueError(f"competition_smoke_command_log line {line_number} must be an object")
             step = entry.get("step")
-            if isinstance(step, str) and step:
-                observed_steps.add(step)
-                observed_step_counts[step] = observed_step_counts.get(step, 0) + 1
+            if not isinstance(step, str) or not step:
+                raise ValueError(
+                    f"competition_smoke_command_log line {line_number} step must be a non-empty string"
+                )
+            observed_steps.add(step)
+            observed_step_counts[step] = observed_step_counts.get(step, 0) + 1
             command = entry.get("command")
             if not isinstance(command, list) or not command:
                 raise ValueError(f"competition_smoke_command_log line {line_number} command must be a non-empty list")
@@ -1190,8 +1193,7 @@ def validate_competition_smoke_command_log_contract(
                     raise ValueError(
                         "competition_smoke_command_log command contains forbidden local absolute path"
                     )
-            if isinstance(step, str):
-                validate_competition_smoke_step_command(step, command)
+            validate_competition_smoke_step_command(step, command)
             validate_competition_smoke_command_repo_inputs(command)
             for field in ("stdout", "stderr"):
                 value = entry.get(field)

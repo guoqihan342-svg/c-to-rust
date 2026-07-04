@@ -9210,6 +9210,25 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "command repo input --slice-spec must be repo-relative POSIX"):
                 validator.validate_competition_smoke_command_log_contract(command_log)
 
+    def test_competition_smoke_command_log_requires_step(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            command_log = Path(tmp) / "commands.jsonl"
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "command": ["python3", "-B", "-c", "print('bypassed step contract')"],
+                        "returncode": 0,
+                        "workdir": ".",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "step must be a non-empty string"):
+                validator.validate_competition_smoke_command_log_contract(command_log)
+
     def test_competition_smoke_command_log_rejects_python_step_without_python3_b(self) -> None:
         with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
             command_log = Path(tmp) / "commands.jsonl"
