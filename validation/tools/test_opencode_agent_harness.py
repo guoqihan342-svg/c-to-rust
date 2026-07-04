@@ -3368,7 +3368,19 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
-            self.assertEqual(result["status"], "completed")
+            self.assertEqual(
+                result["status"],
+                "completed",
+                json.dumps(
+                    {
+                        "failed_workers": result.get("failed_workers"),
+                        "workers": result.get("workers"),
+                        "merge_execution": result.get("merge_execution"),
+                    },
+                    ensure_ascii=False,
+                    default=str,
+                ),
+            )
             self.assertEqual(worker_attempts, 2)
             self.assertEqual(
                 seen_requests[0]["harness_repair_trace"]["baseline_attempt"]["verified_unsafe_baseline"],
