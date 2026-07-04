@@ -6910,6 +6910,126 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_resume_manifest_worker_ids_must_be_unique_without_context_payloads(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-duplicate-worker-ids-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root_1 = out_root / "workers" / "worker-001-a"
+        worker_root_2 = out_root / "workers" / "worker-001-b"
+        assignment_1 = out_root / "harness" / "assignments" / "worker-001-a.json"
+        assignment_2 = out_root / "harness" / "assignments" / "worker-001-b.json"
+        request_1 = out_root / "harness" / "assignments" / "worker-001-a-request.json"
+        request_2 = out_root / "harness" / "assignments" / "worker-001-b-request.json"
+        summary_1 = worker_root_1 / "summary" / "competition-run-summary.json"
+        summary_2 = worker_root_2 / "summary" / "competition-run-summary.json"
+        report_1 = worker_root_1 / "harness" / "run-worker-report.json"
+        report_2 = worker_root_2 / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment_1, assignment_2, request_1, request_2, summary_1, summary_2, report_1, report_2]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        write_json(context_pack, {"entrypoints": {"resume_manifest": repo_relative(resume_manifest)}})
+        write_json(agent_index, {"reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}}})
+
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-duplicate-worker-ids",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": repo_relative(assignment_1),
+                    "request_path": repo_relative(request_1),
+                    "summary_path": repo_relative(summary_1),
+                    "report_path": repo_relative(report_1),
+                    "isolated_out_root": repo_relative(worker_root_1),
+                    "slice_id": "demo-unit-a",
+                    "function": "demo_unit_a",
+                    "source_commit": "abc123",
+                    "source_sha256": "f" * 64,
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-duplicate-worker-ids",
+                        worker_id="worker-001",
+                        assignment=assignment_1,
+                        request=request_1,
+                        summary=summary_1,
+                        report=report_1,
+                        worker_root=worker_root_1,
+                    ),
+                },
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": repo_relative(assignment_2),
+                    "request_path": repo_relative(request_2),
+                    "summary_path": repo_relative(summary_2),
+                    "report_path": repo_relative(report_2),
+                    "isolated_out_root": repo_relative(worker_root_2),
+                    "slice_id": "demo-unit-b",
+                    "function": "demo_unit_b",
+                    "source_commit": "abc123",
+                    "source_sha256": "f" * 64,
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-duplicate-worker-ids",
+                        worker_id="worker-001",
+                        assignment=assignment_2,
+                        request=request_2,
+                        summary=summary_2,
+                        report=report_2,
+                        worker_root=worker_root_2,
+                    ),
+                },
+            ],
+            "worker_count": 2,
+            "worker_ids": ["worker-001", "worker-001"],
+        }
+
+        expected_artifacts = {
+            "context_pack": repo_relative(context_pack),
+            "agent_index": repo_relative(agent_index),
+            "resume_manifest": repo_relative(resume_manifest),
+        }
+        with self.subTest(case="declared_worker_ids"):
+            with self.assertRaisesRegex(ValueError, "resume_manifest.worker_ids must be unique"):
+                validator.validate_resume_manifest_contract(
+                    payload,
+                    path_text=repo_relative(resume_manifest),
+                    expected_artifacts=expected_artifacts,
+                    context_payload=None,
+                    agent_payload=None,
+                    repo_root=REPO_ROOT,
+                )
+        with self.subTest(case="workers"):
+            draft = dict(payload)
+            draft.pop("worker_ids")
+            with self.assertRaisesRegex(ValueError, "resume_manifest.workers worker_id values must be unique"):
+                validator.validate_resume_manifest_contract(
+                    draft,
+                    path_text=repo_relative(resume_manifest),
+                    expected_artifacts=expected_artifacts,
+                    context_payload=None,
+                    agent_payload=None,
+                    repo_root=REPO_ROOT,
+                )
+
     def test_resume_manifest_worker_consistency_rejects_context_out_root_drift(self) -> None:
         canonical_root = "target/out/workers/worker-001"
         stale_context_root = "target/out/stale-workers/worker-001"

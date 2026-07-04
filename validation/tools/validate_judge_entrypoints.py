@@ -4844,8 +4844,12 @@ def validate_resume_manifest_contract(
             isinstance(worker_id, str) and worker_id for worker_id in declared_worker_ids
         ):
             raise ValueError("resume_manifest.worker_ids must be a non-empty string list when declared")
+        if len(set(declared_worker_ids)) != len(declared_worker_ids):
+            raise ValueError("resume_manifest.worker_ids must be unique")
         if declared_worker_ids != actual_worker_ids:
             raise ValueError("resume_manifest.worker_ids must match workers")
+    if len(set(actual_worker_ids)) != len(actual_worker_ids):
+        raise ValueError("resume_manifest.workers worker_id values must be unique")
     for index, worker in enumerate(workers):
         worker_payload = require_object(worker, f"resume_manifest.workers[{index}]")
         require_string(worker_payload.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
