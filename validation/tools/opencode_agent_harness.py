@@ -2796,7 +2796,7 @@ def resume_worker_replay_command(
     payload = {
         "argv": argv,
         "command": shell_command_line(argv),
-        "replay_safety": resume_worker_replay_safety(worker, mode=mode),
+        "replay_safety": resume_worker_replay_safety(worker, mode=mode, repo_root=repo_root),
         "assignment_path": worker.get("assignment_path"),
         "request_path": worker.get("request_path"),
         "summary_path": worker.get("summary_path"),
@@ -2806,7 +2806,7 @@ def resume_worker_replay_command(
     return {key: value for key, value in payload.items() if value is not None}
 
 
-def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[str, Any]:
+def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
     if mode != "opencode":
         return {
             "status": "ready",
@@ -2825,6 +2825,16 @@ def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str) -> dict[st
     preflight_sha256 = preflight.get("sha256")
     if not is_sha256_hex(preflight_sha256):
         missing.append("opencode_preflight_report.sha256")
+    if isinstance(preflight_path, str) and preflight_path and is_sha256_hex(preflight_sha256):
+        try:
+            preflight_file = repo_path(Path(preflight_path), repo_root=repo_root)
+        except SystemExit:
+            missing.append("opencode_preflight_report.path")
+        else:
+            if not preflight_file.is_file():
+                missing.append("opencode_preflight_report.path_missing")
+            elif sha256_file(preflight_file) != preflight_sha256:
+                missing.append("opencode_preflight_report.sha256_mismatch")
     if preflight.get("contract_status") != "executed":
         missing.append("opencode_preflight_report.contract_status")
     policy = preflight.get("launch_policy")
