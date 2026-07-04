@@ -22,6 +22,7 @@ from validation.tools import validate_judge_entrypoints as validator
 DEFAULT_RUN_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
 DEFAULT_BUNDLE = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-milestone-bundle.json")
 SELF_HEAL_SAMPLE_NEXT_ACTION_LIMIT = 5
+BEFORE_AFTER_ARTIFACT_REF_FIELDS = ("baseline", "final", "accepted_patch", "oracle_evidence")
 
 
 def main() -> int:
@@ -142,6 +143,7 @@ def build_judge_milestone_bundle(
         evidence_cost_retention=evidence_cost_retention,
         opencode_runtime=opencode_runtime,
     )
+    blockers.extend(before_after_workflow_metrics_ref_blockers(core_quality_sources, workflow_sources))
     blockers.extend(validated_artifact_contract_errors)
     blockers.extend(publication_artifact_ref_blockers(entrypoint_reports))
     status = "passed" if not blockers else "blocked"
@@ -530,6 +532,63 @@ def nested_artifact_ref_blockers(before_after_repair_exhibit: dict[str, Any]) ->
             if isinstance(blocker, str) and blocker:
                 blockers.append(blocker)
     return blockers
+
+
+def before_after_workflow_metrics_ref_blockers(
+    core_sources: list[dict[str, Any]],
+    workflow_sources: list[dict[str, Any]],
+) -> list[str]:
+    workflow_by_entrypoint = {
+        source["entrypoint_id"]: source
+        for source in workflow_sources
+        if isinstance(source.get("entrypoint_id"), str)
+    }
+    blockers: list[str] = []
+    for core_source in core_sources:
+        entrypoint_id = core_source.get("entrypoint_id")
+        if not isinstance(entrypoint_id, str):
+            continue
+        workflow_source = workflow_by_entrypoint.get(entrypoint_id)
+        if workflow_source is None:
+            continue
+        workflow_units = before_after_units_by_id(workflow_source.get("before_after_units"))
+        if not workflow_units:
+            continue
+        for core_unit in object_list(core_source.get("before_after_units")):
+            unit_id = core_unit.get("unit_id")
+            if not isinstance(unit_id, str):
+                continue
+            workflow_unit = workflow_units.get(unit_id)
+            if workflow_unit is None:
+                continue
+            for field in BEFORE_AFTER_ARTIFACT_REF_FIELDS:
+                workflow_ref = workflow_unit.get(field)
+                if not isinstance(workflow_ref, dict):
+                    continue
+                core_ref = core_unit.get(field)
+                if not isinstance(core_ref, dict):
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_ref_missing:{entrypoint_id}:{unit_id}:{field}"
+                    )
+                    continue
+                if ref_binding_tuple(core_ref) != ref_binding_tuple(workflow_ref):
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_ref_mismatch:{entrypoint_id}:{unit_id}:{field}"
+                    )
+    return blockers
+
+
+def before_after_units_by_id(value: object) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for unit in object_list(value):
+        unit_id = unit.get("unit_id")
+        if isinstance(unit_id, str) and unit_id and unit_id not in result:
+            result[unit_id] = unit
+    return result
+
+
+def ref_binding_tuple(value: dict[str, Any]) -> tuple[object, object]:
+    return value.get("path"), value.get("sha256")
 
 
 def before_after_unit_unsafe_reduction_totals(before_after_repair_exhibit: dict[str, Any]) -> dict[str, Any] | None:
@@ -2189,6 +2248,7 @@ def workflow_source_from_artifact(
         "baseline_total_unsafe": int_or_none(unsafe_reduction.get("baseline_total_unsafe")),
         "current_total_unsafe": int_or_none(unsafe_reduction.get("current_total_unsafe")),
         "reduced_by": int_or_none(unsafe_reduction.get("reduced_by")),
+        "before_after_units": workflow_before_after_unit_summaries(per_unit_statuses),
     }
 
 
@@ -2969,6 +3029,30 @@ def before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
         if safety_loop_provenance is not None:
             unit["safety_loop_provenance"] = safety_loop_provenance
         result.append(unit)
+    return result
+
+
+def workflow_before_after_unit_summaries(value: object) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in object_list(value):
+        source = item.get("translation_before_after")
+        if not isinstance(source, dict):
+            source = item
+        unit: dict[str, Any] = {
+            "unit_id": item.get("unit_id") if isinstance(item.get("unit_id"), str) else "unknown",
+        }
+        status = source.get("status")
+        if isinstance(status, str):
+            unit["status"] = status
+        for key in BEFORE_AFTER_ARTIFACT_REF_FIELDS:
+            binding = artifact_binding_summary(source.get(key))
+            if binding is not None:
+                unit[key] = binding
+        unsafe_reduction = unsafe_reduction_summary(source.get("unsafe_reduction"))
+        if unsafe_reduction is not None:
+            unit["unsafe_reduction"] = unsafe_reduction
+        if any(key in unit for key in BEFORE_AFTER_ARTIFACT_REF_FIELDS) or "unsafe_reduction" in unit:
+            result.append(unit)
     return result
 
 
