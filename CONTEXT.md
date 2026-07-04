@@ -35,7 +35,7 @@
 
 - Candidate generation 不等于 semantic pass；typed IR、C2Rust、LLM 和手写规则都只是候选来源。
 - `real-fdb-calc-crc32` 和 `real-fdb-blob-make` 当前通过的是 L4 accepted-evidence authoritative 语义证据绑定；generated Rust draft 仍保持 `generated_draft_semantic_pass=false`。
-- `real-fdb-calc-crc32` 的真实 C2Rust baseline 已能生成并 compile-only 通过；direct replay evidence 已刷新为 `status=passed` / `observable_replay_pass=true` / `semantic_pass=false`，但 `verified unsafe baseline` 仍正确 blocked 在 `c2rust_bound_gate_refs_not_implemented`，下一步是同一 C2Rust output 的 C oracle/Rust replay/diff/negative diff/unsafe/final 绑定。
+- `real-fdb-calc-crc32` 的真实 C2Rust baseline 已能生成并 compile-only 通过；direct replay evidence 为 `status=passed` / `observable_replay_pass=true` / `semantic_pass=false`；`verified unsafe baseline` 已通过 `same_output_gate_refs` 把 C oracle/direct replay/diff/negative diff/unsafe/final 绑定到同一 C2Rust output 并 `passed`（P0-C/P0-D0 已关闭），但 OpenCode 证据需在真实 GLM-5.1/OpenCode host 重新生成（P0-H9）。
 - `fdb_kv_set` 当前只有 source/signature provenance 和 L4 refused/blocked evidence；external callee shim/model/oracle 语义未关闭。
 - OpenCode harness 当前已有 `run-worker --mode deterministic` 最小执行器和 `--mode opencode --opencode-variant max` 包装入口；SQLite 只做调度账本，不能替代落盘 evidence。
 - FlashDB 只是回归用例，不能恢复 FlashDB/crc32 专用 recognizer、模板或特判路径。
@@ -59,9 +59,8 @@ python validation/tools/unsafe_budget.py --max-ratio 0.10
 
 ## 最近交接
 
-- 2026-06-28：将长 `CONTEXT.md` 归档，根文件收敛为短 handoff。
-- 2026-06-28：开始整理文档分类索引，并补核心 translator/validation 注释。
 - 2026-06-29：在 `codex/agent-harness-flashdb-mvp` 分支同步 docs 到当前 harness/FlashDB MVP 状态：`run-worker`、accepted-evidence 复用、`real-fdb-blob-make` L4 accepted evidence、`fdb_kv_set` blocked callee 边界。
 - 2026-07-01：H4 harness 已接入真实 FlashDB `baseline_repair_gate`：`real-fdb-calc-crc32` 第 1 轮产出 baseline unsafe gate 失败证据，root cause 为 `unsafe_baseline_requires_repair`；第 2 轮必须携带 repair hint 并复验 accepted safe evidence。最新验证产物：`target/competition-out-h4-flashdb-context-index-20260701`，其中 `context-pack.json` 和 `agent-index.json` 都索引 `attempt_evidence_policy`。
 - 2026-07-02：结合 `opencode-agent-harness-逐行稳定性审查.md` 复核：审查方向有道理，但当前分支已吸收 timeout、atomic write、portable python、retry cap、SQLite lock、fencing audit、`BEGIN IMMEDIATE` 和 POSIX command contract；H7 只保留为回归门禁。待办主线收敛到 P0-C verified unsafe baseline 和 P0-D safety loop。
 - `opencode.json` 已是 git 跟踪文件，并进入 CI path filter 与 `config/competition-env/bundle-manifest.json` 归档合同；修改它必须同步 resync hash 绑定。
+- 2026-07-04：当前 HEAD `4adbd918`（Bind ledger payloads and worker summary claims to disk evidence），CI 绿。完成外部逐行评审吸收：P0-R1/R2/R9 与 P1-R3/R4/R5/R7 已关闭，详见 `docs/c2rust-migration-agent/future-vision-and-mvp.md` 的「2026-07-04 外部逐行评审吸收与 CI 红灯修复」小节。CI 从连续红灯修复到全绿，根因四类：evidence 哈希级联遗漏、raw/LF 哈希口径分叉、merge gate 依赖未安装的 openspec CLI（127 已豁免）、fresh-checkout 测试状态依赖。legacy 八进制字面量与裸 `char` 已 fail-closed；harness 新增 ledger `payload_json`/`run_id`/`agent_id`/`isolated_out_root` 一致性与 worker `summary_status` 复算防伪。剩余主 blocker 不变：P0-H9（真实 GLM-5.1/OpenCode host）。
