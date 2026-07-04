@@ -5311,6 +5311,14 @@ def record_worker_summary(
                 f"worker summary path {summary_rel} does not match assigned out_root summary {expected_summary_rel}"
             )
         summary = load_json(summary_path)
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        request = load_json(request_path)
+        expected_worker_run_id = worker_request_run_id(request, worker_id=worker_id)
+        summary_run_id = summary.get("run_id")
+        if summary_run_id != expected_worker_run_id:
+            raise SystemExit(
+                f"worker summary run_id {summary_run_id} does not match assigned worker run_id {expected_worker_run_id}"
+            )
         status = str(summary.get("final_gate", {}).get("status", "failed"))
         summary_hash = sha256_file(summary_path)
         connection.execute(
@@ -5419,6 +5427,13 @@ def worker_attempt_request(
     if repair_trace is not None:
         attempt_request["harness_repair_trace"] = repair_trace
     return attempt_request
+
+
+def worker_request_run_id(request: dict[str, Any], *, worker_id: str) -> str:
+    run_id = str(request.get("run_id", ""))
+    if not run_id:
+        raise SystemExit(f"worker request missing run_id for {worker_id}")
+    return run_id
 
 
 def run_worker_process(
@@ -8937,6 +8952,7 @@ def write_blocked_worker_summary(
     opencode_session_evidence: dict[str, Any] | None,
     repo_root: Path,
 ) -> None:
+    worker_run_id = worker_request_run_id(request, worker_id=worker_id)
     target_id = str(request.get("target_id", "unknown"))
     slice_id = str(request.get("slice_id", "unknown"))
     unit_status = {
@@ -8962,7 +8978,7 @@ def write_blocked_worker_summary(
 
     metrics = {
         "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
+        "run_id": worker_run_id,
         "proof_class": proof_class,
         "units_total": 1,
         "units_converged": 0,
@@ -8991,7 +9007,7 @@ def write_blocked_worker_summary(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary = {
         "schema_version": SCHEMA_VERSION,
-        "run_id": run_id,
+        "run_id": worker_run_id,
         "proof_class": proof_class,
         "profile_id": PROFILE_ID,
         "profile_sha256": sha256_file(repo_root / "config" / "competition-env" / "environment.json"),

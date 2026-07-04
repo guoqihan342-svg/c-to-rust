@@ -2526,8 +2526,9 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 handoff_paths = list(out_root.glob("workers/*/harness/opencode-handoff-contract.json"))
                 self.assertEqual(len(handoff_paths), 1)
                 contract = json.loads(handoff_paths[0].read_text(encoding="utf-8"))
+                request = json.loads((REPO_ROOT / contract["request_path"]).read_text(encoding="utf-8"))
                 summary_path = REPO_ROOT / contract["expected_summary_path"]
-                write_worker_summary(summary_path, "run-profile-opencode-hostless", status="passed", failed=0, semantic_pass=1)
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
                 stdout = json.dumps(
                     {
                         "type": "tool_use",
@@ -5426,13 +5427,15 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                 out_root=out_root / "workers" / "worker-a",
                 repo_root=REPO_ROOT,
             )
+            request_path = harness.assignment_file_path(db_path, "worker-a").with_name("worker-a-request.json")
+            worker_request = json.loads(request_path.read_text(encoding="utf-8"))
             summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
             summary_path.parent.mkdir(parents=True, exist_ok=True)
             summary_path.write_text(
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "run_id": "run-worker-a",
+                        "run_id": worker_request["run_id"],
                         "proof_class": "local-simulation",
                         "final_gate": {"status": "passed", "validator": "validate_auto_translation_evidence.py --require-semantic-pass"},
                         "slices": {"attempted": 1, "typed_ir_generated": 1, "compiled": 1, "semantic_pass": 1, "refused": 0, "blocked": 0, "failed": 0},
@@ -5470,6 +5473,55 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
             self.assertEqual(merge_plan["argv"][run_id_idx + 1], "run-test")
             artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, semantic_role from artifacts")
             self.assertEqual(artifact_rows, [("competition-run-summary", repo_rel(summary_path), "run-summary")])
+
+    def test_record_worker_summary_rejects_summary_run_id_mismatch_with_assignment(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            request_path = harness.assignment_file_path(db_path, "worker-a").with_name("worker-a-request.json")
+            worker_request = json.loads(request_path.read_text(encoding="utf-8"))
+            summary_path = out_root / "workers" / "worker-a" / "summary" / "competition-run-summary.json"
+            write_worker_summary(
+                summary_path,
+                "stale-run",
+                status="passed",
+                failed=0,
+                semantic_pass=1,
+                workflow_metrics=measured_unsafe_worker_metrics("stale-run"),
+            )
+
+            with self.assertRaisesRegex(
+                SystemExit,
+                f"worker summary run_id stale-run does not match assigned worker run_id {worker_request['run_id']}",
+            ):
+                harness.record_worker_summary(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    summary_path=summary_path,
+                    repo_root=REPO_ROOT,
+                )
+
+            artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path from artifacts")
+            self.assertEqual(artifact_rows, [])
 
     def test_record_artifact_conflict_refreshes_identity_metadata(self) -> None:
         with temp_repo_dir() as tmp:
@@ -6222,7 +6274,8 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     )
                 )
                 summary_path = REPO_ROOT / contract["expected_summary_path"]
-                write_worker_summary(summary_path, "run-test", status="passed", failed=0, semantic_pass=1)
+                request = json.loads((REPO_ROOT / contract["request_path"]).read_text(encoding="utf-8"))
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
                 stdout = json.dumps(
                     {
                         "type": "tool_use",
@@ -6310,13 +6363,14 @@ class OpenCodeAgentHarnessTest(unittest.TestCase):
                     (worker_out_root / "harness" / "opencode-handoff-contract.json").read_text(encoding="utf-8")
                 )
                 summary_path = REPO_ROOT / contract["expected_summary_path"]
+                request = json.loads((REPO_ROOT / contract["request_path"]).read_text(encoding="utf-8"))
                 write_worker_summary(
                     summary_path,
-                    "run-test",
+                    request["run_id"],
                     status="passed",
                     failed=0,
                     semantic_pass=1,
-                    workflow_metrics=before_after_worker_metrics(worker_out_root, "run-test"),
+                    workflow_metrics=before_after_worker_metrics(worker_out_root, request["run_id"]),
                 )
                 stdout = json.dumps(
                     {
