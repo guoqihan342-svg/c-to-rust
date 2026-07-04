@@ -1,5 +1,3 @@
-#[cfg(feature = "clang-lowering-report")]
-use std::collections::BTreeMap;
 use std::{
     error::Error,
     fs,
@@ -283,7 +281,7 @@ pub(crate) fn write_clang_lowering_report_artifact(
     let value = match clang_frontend::ClangParseSpec::from_slice_spec(spec) {
         Ok(parse_spec) => {
             let source_file = parse_spec.source_root.join(&parse_spec.source_file);
-            let environment = std::env::vars().collect::<BTreeMap<_, _>>();
+            let environment = crate::clang_lowered_translation::collect_environment_lossy();
             let report =
                 crate::clang_lowered_translation::lower_parse_spec_report_with_optional_ast_fixture(
                     &environment,
@@ -424,22 +422,7 @@ fn typed_ir_candidate_evidence(
 }
 
 #[cfg(feature = "clang-lowering-report")]
-fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
-    let signed_right_shift = if spec
-        .c_boundary
-        .scalar_arithmetic_contract
-        .signed_right_shift
-        == "explicit_implementation_defined_contract"
-    {
-        typed_ir::SignedRightShiftPolicy::ImplementationDefinedArithmetic
-    } else {
-        typed_ir::SignedRightShiftPolicy::FailClosed
-    };
-    typed_ir::EmitPolicy {
-        signed_right_shift,
-        ..Default::default()
-    }
-}
+use crate::clang_lowered_translation::emit_policy_from_spec;
 
 #[cfg(feature = "clang-lowering-report")]
 fn runtime_precondition_summary(function_ir: &typed_ir::IrFunction) -> Vec<serde_json::Value> {

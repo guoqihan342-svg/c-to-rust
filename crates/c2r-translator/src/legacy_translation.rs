@@ -1202,6 +1202,38 @@ fn contains_inc_dec_operator(text: &str) -> bool {
     text.contains("++") || text.contains("--")
 }
 
+/// Detects standalone integer literals with a leading zero (C octal syntax).
+///
+/// Rust parses `010` as decimal ten while C parses it as octal eight, so
+/// passing such literals through unchanged would be a silent semantic
+/// mistranslation; the legacy path must refuse them instead. Hex literals
+/// (`0x..`) do not trigger because the character after `0` is not a digit.
+fn contains_leading_zero_integer_literal(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte.is_ascii_alphanumeric() || byte == b'_' {
+            let token_starts_with_zero = byte == b'0';
+            let next_is_digit = matches!(bytes.get(index + 1), Some(b'0'..=b'9'));
+            if token_starts_with_zero && next_is_digit {
+                return true;
+            }
+            index += 1;
+            while index < bytes.len()
+                && (bytes[index].is_ascii_alphanumeric()
+                    || bytes[index] == b'_'
+                    || bytes[index] == b'.')
+            {
+                index += 1;
+            }
+            continue;
+        }
+        index += 1;
+    }
+    false
+}
+
 fn push_unsupported_expression_value(
     statement: &ParsedStatement,
     expression: &str,
@@ -1221,6 +1253,15 @@ fn push_unsupported_expression_value(
             kind: "unsupported_syntax".to_string(),
             message: format!(
                 "expression `{expression}` uses increment/decrement value semantics outside the bounded MVP C subset"
+            ),
+            source_span: Some(statement.text.clone()),
+        });
+    }
+    if contains_leading_zero_integer_literal(expression) {
+        result.errors.push(TranslationError {
+            kind: "unsupported_syntax".to_string(),
+            message: format!(
+                "expression `{expression}` contains a leading-zero integer literal; C octal syntax would be silently reinterpreted as decimal by Rust and is outside the bounded MVP C subset"
             ),
             source_span: Some(statement.text.clone()),
         });
@@ -1754,8 +1795,11 @@ fn map_c_type(c_type: &str) -> Option<&'static str> {
         "uint32_t" => Some("u32"),
         "uint8_t" => Some("u8"),
         "size_t" => Some("usize"),
+        // Bare `char` is intentionally absent: its signedness is
+        // implementation-defined (signed on the x86-64 Linux gcc target), so
+        // mapping it to `u8` would silently flip sign-sensitive comparisons.
+        // It falls through to the fail-closed type_uncertainty path instead.
         "unsigned char" => Some("u8"),
-        "char" => Some("u8"),
         "const char*" => Some("&str"),
         "const void*" => Some("&[u8]"),
         "const uint8_t*" => Some("&[u8]"),

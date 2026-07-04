@@ -31728,3 +31728,116 @@ fn clang_frontend_dry_run_artifact_records_metadata_errors_and_legacy_retired_st
         .unwrap()
         .starts_with("legacy_"));
 }
+
+#[test]
+fn legacy_translation_rejects_leading_zero_octal_integer_literals() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "octal-literal-reject".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "add_octal".to_string(),
+        c_source: "int add_octal(int value) { int base = 010; return value + base; }"
+            .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.kind == "unsupported_syntax"
+                && error.message.contains("leading-zero integer literal")),
+        "{:?}",
+        result.errors
+    );
+    assert!(!result.rust_code.contains("010"));
+}
+
+#[test]
+fn legacy_translation_rejects_leading_zero_octal_literal_in_return_expression() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "octal-return-reject".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "permission_bits".to_string(),
+        c_source: "int permission_bits(int value) { return value + 0644; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.kind == "unsupported_syntax"
+                && error.message.contains("leading-zero integer literal")),
+        "{:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn legacy_translation_accepts_hex_and_plain_zero_literals() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "hex-zero-accept".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "mask_low_bits".to_string(),
+        c_source: "int mask_low_bits(int value) { int mask = 0xFF; if (value == 0) { return 0; } return value & mask; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(
+        !result
+            .errors
+            .iter()
+            .any(|error| error.message.contains("leading-zero integer literal")),
+        "{:?}",
+        result.errors
+    );
+}
+
+#[test]
+fn legacy_translation_rejects_bare_char_type_as_type_uncertainty() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bare-char-reject".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "is_negative_char".to_string(),
+        c_source: "int is_negative_char(char value) { if (value < 0) { return 1; } return 0; }"
+            .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+
+    let result = translate_slice(&spec);
+
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|error| error.kind == "type_uncertainty"),
+        "{:?}",
+        result.errors
+    );
+    assert!(result
+        .type_map
+        .uncertainties
+        .iter()
+        .any(|uncertainty| uncertainty.c_type == "char"));
+    assert!(!result
+        .rust_code
+        .contains("pub fn is_negative_char(value: u8)"));
+}

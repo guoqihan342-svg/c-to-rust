@@ -18,11 +18,25 @@ use crate::{
     TranslationSource, TypeMapping, TypeUncertainty,
 };
 
+/// Collects process environment variables without panicking on non-Unicode
+/// entries; `std::env::vars()` panics on the first non-UTF-8 key or value,
+/// which on Linux hosts would crash artifact writing instead of failing closed.
+pub(crate) fn collect_environment_lossy() -> BTreeMap<String, String> {
+    std::env::vars_os()
+        .map(|(key, value)| {
+            (
+                key.to_string_lossy().into_owned(),
+                value.to_string_lossy().into_owned(),
+            )
+        })
+        .collect()
+}
+
 pub(crate) fn try_translate_slice_with_clang_lowered_ir(
     spec: &SliceSpec,
 ) -> Option<TranslationResult> {
     let parse_spec = clang_frontend::ClangParseSpec::from_slice_spec(spec).ok()?;
-    let environment = std::env::vars().collect::<BTreeMap<_, _>>();
+    let environment = collect_environment_lossy();
     let report = lower_parse_spec_report_with_optional_ast_fixture(
         &environment,
         &parse_spec,
@@ -189,7 +203,7 @@ fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
+pub(crate) fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
     let signed_right_shift = if spec
         .c_boundary
         .scalar_arithmetic_contract
