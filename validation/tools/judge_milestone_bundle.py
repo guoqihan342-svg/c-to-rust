@@ -144,6 +144,7 @@ def build_judge_milestone_bundle(
         opencode_runtime=opencode_runtime,
     )
     blockers.extend(before_after_workflow_metrics_ref_blockers(core_quality_sources, workflow_sources))
+    blockers.extend(c2rust_baseline_manifest_ref_blockers(route_governance_sources, repo_root=repo_root))
     blockers.extend(validated_artifact_contract_errors)
     blockers.extend(publication_artifact_ref_blockers(entrypoint_reports))
     status = "passed" if not blockers else "blocked"
@@ -576,6 +577,39 @@ def before_after_workflow_metrics_ref_blockers(
                     blockers.append(
                         f"before_after_exhibit_workflow_metrics_ref_mismatch:{entrypoint_id}:{unit_id}:{field}"
                     )
+    return blockers
+
+
+def c2rust_baseline_manifest_ref_blockers(
+    route_governance_sources: list[dict[str, Any]],
+    *,
+    repo_root: Path,
+) -> list[str]:
+    blockers: list[str] = []
+    for source in route_governance_sources:
+        entrypoint_id = str(source.get("entrypoint_id", "unknown"))
+        baseline = source.get("c2rust_baseline")
+        if not isinstance(baseline, dict) or baseline.get("report_kind") != "c2rust-baseline-rollup":
+            continue
+        manifest_count = int_or_zero(baseline.get("manifest_count"))
+        manifests = object_list(baseline.get("manifests"))
+        if manifest_count > 0 and not manifests:
+            blockers.append(f"c2rust_baseline_manifest_count_without_bound_refs:{entrypoint_id}")
+        if manifests and manifest_count != len(manifests):
+            blockers.append(f"c2rust_baseline_manifest_count_mismatch:{entrypoint_id}")
+        for index, manifest in enumerate(manifests):
+            manifest_path = manifest.get("path") if isinstance(manifest.get("path"), str) else f"manifest:{index}"
+            ref = artifact_ref_from_existing(manifest, repo_root=repo_root)
+            if ref is None:
+                blockers.append(f"c2rust_baseline_manifest_ref_not_present:{entrypoint_id}:{manifest_path}")
+                continue
+            status = ref.get("status")
+            if status == "sha256_mismatch":
+                blockers.append(f"c2rust_baseline_manifest_ref_sha256_mismatch:{entrypoint_id}:{manifest_path}")
+            elif status == "missing_expected_sha256":
+                blockers.append(f"c2rust_baseline_manifest_ref_missing_sha256:{entrypoint_id}:{manifest_path}")
+            elif status != "present":
+                blockers.append(f"c2rust_baseline_manifest_ref_not_present:{entrypoint_id}:{manifest_path}")
     return blockers
 
 

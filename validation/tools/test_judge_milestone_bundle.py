@@ -423,7 +423,46 @@ def route_metrics_payload(
     }
 
 
-def c2rust_baseline_rollup_fixture() -> dict:
+def c2rust_baseline_rollup_fixture(manifest_root: Path | None = None) -> dict:
+    manifests = [
+        {
+            "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
+            "sha256": "1" * 64,
+            "status": "present",
+        },
+        {
+            "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
+            "sha256": "2" * 64,
+            "status": "present",
+        },
+    ]
+    if manifest_root is not None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        manifest_specs = [
+            ("real-fdb-calc-crc32", "l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json"),
+            ("real-fdb-blob-make", "l3-real-fdb-blob-make-c2rust-baseline-manifest.json"),
+        ]
+        manifests = []
+        for unit_id, file_name in manifest_specs:
+            manifest_path = manifest_root / unit_id / file_name
+            write_json(
+                manifest_path,
+                {
+                    "report_kind": "c2rust-baseline-manifest",
+                    "unit_id": f"flashdb/{unit_id}",
+                    "status": "skipped",
+                    "candidate_context_only": True,
+                    "semantic_gate": False,
+                },
+            )
+            manifests.append(
+                {
+                    "path": repo_relative(manifest_path),
+                    "sha256": bundle.validator.sha256_file(manifest_path),
+                    "status": "present",
+                }
+            )
     return {
         "report_kind": "c2rust-baseline-rollup",
         "status": "observed",
@@ -436,18 +475,7 @@ def c2rust_baseline_rollup_fixture() -> dict:
         "status_counts": {"skipped": 2},
         "output_status_counts": {"missing": 2},
         "compile_status_counts": {"missing": 2},
-        "manifests": [
-            {
-                "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-                "sha256": "1" * 64,
-                "status": "present",
-            },
-            {
-                "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-                "sha256": "2" * 64,
-                "status": "present",
-            },
-        ],
+        "manifests": manifests,
         "semantic_gate": False,
         "generated_draft_semantic_pass": False,
         "translation_coverage_numerator": 0,
@@ -687,7 +715,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
         opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
         opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
-        c2rust_baseline = c2rust_baseline_rollup_fixture()
+        c2rust_baseline = c2rust_baseline_rollup_fixture(temp_dir / "c2rust-baseline")
 
         write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
         preflight_fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
@@ -1388,6 +1416,132 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
         self.assertTrue(out_path.is_file())
         self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
+
+    def test_bundle_blocks_c2rust_baseline_manifest_ref_drift_or_unbound_count(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-c2rust-baseline-refs-", dir=REPO_ROOT / "target"))
+        route_metrics_path = temp_dir / "route" / "route-governance-metrics-report.json"
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        manifest_path = temp_dir / "c2rust-baseline" / "real-fdb-calc-crc32" / "c2rust-baseline-manifest.json"
+        write_json(
+            manifest_path,
+            {
+                "report_kind": "c2rust-baseline-manifest",
+                "unit_id": "flashdb/real-fdb-calc-crc32",
+                "status": "skipped",
+                "candidate_context_only": True,
+                "semantic_gate": False,
+            },
+        )
+
+        def build_with(c2rust_baseline: dict, suffix: str) -> dict:
+            write_json(
+                route_metrics_path,
+                route_metrics_payload(
+                    accepted_evidence_semantic_pass_count=0,
+                    tracked_route_decision_artifacts=0,
+                    tracked_slice_gate_contexts=0,
+                    s2_workflow_run_count=0,
+                    s2_reduced_by=0,
+                    c2rust_baseline=c2rust_baseline,
+                ),
+            )
+            write_json(
+                run_report_path,
+                {
+                    "schema_version": 1,
+                    "report_kind": "judge-entrypoints-run-report",
+                    "status": "passed",
+                    "entrypoint_count": 1,
+                    "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                    "summary": {
+                        "readiness": {
+                            "all_entrypoints_executed": True,
+                            "executed_count": 1,
+                            "configured_count": 1,
+                            "validation_status": "passed",
+                        },
+                        "claim_boundary": {
+                            "semantic_gate": False,
+                            "generated_draft_semantic_pass": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                    },
+                    "entrypoints": [
+                        {
+                            "id": "route_demo",
+                            "status": "passed",
+                            "exit_code": 0,
+                            "proof_class": "local-simulation",
+                            "key_artifacts": {
+                                "route_governance_metrics_report": repo_relative(route_metrics_path),
+                            },
+                        }
+                    ],
+                    "validation": {
+                        "status": "passed",
+                        "entrypoints": [
+                            {
+                                "id": "route_demo",
+                                "expected_artifacts": {
+                                    "route_governance_metrics_report": artifact_ref(route_metrics_path),
+                                },
+                            }
+                        ],
+                    },
+                },
+            )
+            return bundle.build_judge_milestone_bundle(
+                run_report_path=run_report_path,
+                out_path=out_path.with_name(f"judge-milestone-bundle-{suffix}.json"),
+                repo_root=REPO_ROOT,
+            )
+
+        bad_sha_baseline = empty_c2rust_baseline_rollup()
+        bad_sha_baseline.update(
+            {
+                "status": "observed",
+                "manifest_count": 1,
+                "skipped_without_output_count": 1,
+                "status_counts": {"skipped": 1},
+                "output_status_counts": {"missing": 1},
+                "compile_status_counts": {"missing": 1},
+                "manifests": [
+                    {"path": repo_relative(manifest_path), "sha256": "0" * 64, "status": "present"},
+                ],
+            }
+        )
+        bad_sha_report = build_with(bad_sha_baseline, "bad-sha")
+        self.assertEqual(bad_sha_report["status"], "blocked")
+        self.assertIn(
+            f"c2rust_baseline_manifest_ref_sha256_mismatch:route_demo:{repo_relative(manifest_path)}",
+            bad_sha_report["blockers"],
+        )
+
+        unbound_count_baseline = dict(bad_sha_baseline)
+        unbound_count_baseline["manifests"] = []
+        unbound_count_report = build_with(unbound_count_baseline, "unbound-count")
+        self.assertIn(
+            "c2rust_baseline_manifest_count_without_bound_refs:route_demo",
+            unbound_count_report["blockers"],
+        )
+
+        count_mismatch_baseline = dict(bad_sha_baseline)
+        count_mismatch_baseline["manifest_count"] = 2
+        count_mismatch_baseline["manifests"] = [
+            {
+                "path": repo_relative(manifest_path),
+                "sha256": bundle.validator.sha256_file(manifest_path),
+                "status": "present",
+            }
+        ]
+        count_mismatch_report = build_with(count_mismatch_baseline, "count-mismatch")
+        self.assertIn(
+            "c2rust_baseline_manifest_count_mismatch:route_demo",
+            count_mismatch_report["blockers"],
+        )
 
     def test_publication_archive_ref_preserves_external_refs_for_release_notes(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
