@@ -36,6 +36,7 @@
     ]
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "must_not_claim": [
       "full zlib-ng migration",

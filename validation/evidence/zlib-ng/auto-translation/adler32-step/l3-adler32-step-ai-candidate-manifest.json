@@ -1,17 +1,34 @@
 {
   "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-    "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "slice_spec_sha256=de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
     "fixture_hash=zlib-adler32-fixture",
     "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "candidates": [],
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
+    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "status": "refused"
+  },
   "schema_version": 1,
   "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
   "slice_id": "adler32-step",
   "status": "not_used",
-  "target_id": "zlib-ng"
+  "target_id": "zlib-ng",
+  "validation_profile": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
+    "profile": "L4-accepted-evidence",
+    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
+    "status": "passed"
+  }
 }

@@ -1,0 +1,57 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+  "capability_delta": [
+    {
+      "blocked_callees": [
+        "uv_inet_pton"
+      ],
+      "construct_id": "external_direct_callee_context",
+      "delta_id": "cap-ip4-addr-external_direct_callee_context",
+      "evidence_refs": [
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-translation-plan.json",
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-context-pack.json",
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json"
+      ],
+      "generated_candidate_status": "refused",
+      "kind": "refusal_classification",
+      "negative_coverage": [
+        {
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim",
+          "kind": "external_callee_context_regression"
+        }
+      ],
+      "real_c_slice": "ip4-addr",
+      "semantic_pass": false
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "external_direct_callee_context",
+      "delta_id": "gov-ip4-addr-external_direct_callee_context-evidence",
+      "evidence_refs": [
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-translation-plan.json",
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-context-pack.json",
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+        "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L4",
+  "route_status": "refused",
+  "schema_version": 1,
+  "slice_id": "ip4-addr",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_identity": {
+    "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "source_root": "<pinned-libuv-root>"
+  },
+  "status": "recorded",
+  "target_id": "libuv",
+  "verification_commands": [
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim"
+  ]
+}

@@ -1,50 +1,251 @@
 {
-  "level": "L1",
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+        "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": false,
+        "semantic_pass": false,
+        "status": "missing"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+          "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": false,
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": false,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "candidate_id": "compat:legacy-string-translator",
+          "fallback": false,
+          "selected_as_primary": false,
+          "status": "compatibility_only"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L4",
+        "status": "refused"
+      },
+      "route_level": "L4",
+      "route_status": "refused",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:unknown",
+      "fallback": false,
+      "selected": "unknown",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": null,
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": null,
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": false,
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-clang-lowering-report.json",
+        "status": "missing"
+      },
+      "status": "missing"
+    }
+  },
+  "level": "L4",
   "misroute": null,
   "policy": {
+    "accepted_evidence_authoritative": true,
     "fixed_loop_count_required": false,
+    "generated_draft_semantic_pass": false,
     "goal": "dev",
     "repair_budget_source": "run_policy"
   },
   "rationale": [
     {
-      "feature": "bounded_pointer_surface",
-      "weight": "low"
+      "feature": "blocked_artifact",
+      "values": {
+        "cfg": "recorded",
+        "plan": "blocked",
+        "translator": "blocked",
+        "type_map": "recorded"
+      },
+      "weight": "hard_refuse"
+    },
+    {
+      "feature": "accepted_evidence_authoritative",
+      "weight": "override"
     }
   ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full libuv migration",
+        "event-loop migration",
+        "IPv6 behavior",
+        "whole-program alias safety"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
-      "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+      "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-cfg.json",
-      "sha256": "8654a9569be2b763b8ac8e33fee72b10fa3844a286cbfe0da94c0a5857531d0f",
+      "sha256": "af9ca41dc22f91df17d9d6f05949cd08739eb822eb5d744d29f9f239bbb21228",
       "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-pointer-graph.json",
-      "sha256": "1f7d949a17a3aa2f882361e20f21fe8cd818811b4ddd458209d4c8c6f3411b68",
+      "sha256": "2dc98277202a09e9dda712df1ce8997ab199f8063db116b441f2dafb16a6125c",
       "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-auto-translation-plan.json",
-      "status": "draft_generated"
+      "status": "blocked"
     },
     "type_map": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-type-map.json",
-      "sha256": "546970675f522887892306c9407e1c81dd2714a7f56df0ac989c7b1306943c91",
+      "sha256": "d71536587a9861ab402ab9252bd8f5dd1b6f47ee3459e7148d55cae7a95389fa",
       "status": "recorded"
     }
   },
-  "status": "recorded",
+  "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_identity": {
+    "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+    "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+    "source_root": "<pinned-libuv-root>"
+  },
+  "status": "refused",
   "target_id": "libuv",
   "translator": {
-    "candidate_generation_allowed": true,
-    "kind": "tier1"
+    "candidate_generation_allowed": false,
+    "kind": "refuse"
   },
-  "verification_profile": "L1-dev"
+  "verification_profile": "L4-accepted-evidence"
 }

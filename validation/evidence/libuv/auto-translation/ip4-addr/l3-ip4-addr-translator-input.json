@@ -10,6 +10,13 @@
     "include_paths": [
       "<pinned-libuv-root>/include"
     ],
+    "target": {
+      "endianness": "big",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
     "target_triple": "x86_64-unknown-linux-gnu"
   },
   "c_source": "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; return 0; }",
@@ -17,5 +24,31 @@
   "function_name": "uv_ip4_addr",
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
+  "source_file": "src/uv-common.c",
+  "source_file_hashes": {
+    "include/uv.h": "missing",
+    "src/inet.c": "missing",
+    "src/uv-common.c": "missing",
+    "validation/l2_slices/fixtures/libuv-ip4-addr-input.json": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea"
+  },
+  "source_files": [
+    {
+      "path": "include/uv.h",
+      "role": "header"
+    },
+    {
+      "path": "src/uv-common.c",
+      "role": "source"
+    },
+    {
+      "path": "src/inet.c",
+      "role": "source"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": "<pinned-libuv-root>",
   "target_id": "libuv"
 }

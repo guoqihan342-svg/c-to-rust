@@ -7,17 +7,20 @@
   },
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-    "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "slice_spec_sha256=de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
     "fixture_hash=zlib-adler32-fixture",
     "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
     "translator_version=0.1.0",
-    "schema_version=1"
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
   ],
   "context_pack_ref": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-context-pack.json",
   "level": "L3",
   "not_applicable_reason": "slice has no pointer surface",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
-  "schema_version": 1,
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
+  "schema_version": 2,
   "slice_id": "adler32-step",
   "source_boundary": {
     "direct_call_edges": [],

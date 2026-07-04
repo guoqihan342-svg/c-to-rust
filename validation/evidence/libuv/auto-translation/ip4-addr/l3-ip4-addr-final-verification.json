@@ -1,4 +1,5 @@
 {
+  "accepted_evidence_authoritative": true,
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
@@ -7,12 +8,12 @@
     "path_sha256": {
       "c_oracle": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
       "diff": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
-      "final_verification": "637743f452075252d87b3c75888011876da93414041983dcbebca0ba504cb3c0",
+      "final_verification": "f9b7302935f8aa60c8fbfa9931dd7319036e3a1fb77530a70d6d6e5365f1b347",
       "negative_diff": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
       "rust_report": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
       "unsafe_ledger": "aeb4190b6ab38ff982f5bc036fa12acf94f3b1f21b3eda0b111215938bec6168",
       "unsafe_scan": "4d27beb39d6ba7cbad8187329662442e111bacb5fddbe5b0fb7505251f9c2693",
-      "version_manifest": "1dd2f8c4e9523400788a63a3b7ee1efcfeaa7c404dc47f70810297a99f3c3237"
+      "version_manifest": "cd02ee8f0a725f73150918e328c9cbe6567c1e727e7cfb7227cab369eb1a7909"
     },
     "paths": {
       "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
@@ -40,21 +41,105 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
-    "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+    "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
+  "external_callee_scope": {
+    "blocked_count": 1,
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "semantics_verified": false,
+    "status": "blocked",
+    "stub_kind": "none"
+  },
   "fixture": {
     "path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
-    "sha256": "ceb8e948d4307af98b1688c272e91b762712a0e965079a959c2cb89c32c73710"
+    "sha256": "ecd004fbb142a04f68ae3f0465d1282a86f8a0146c4d314aeba27a18c76d96ea"
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/evidence/libuv/l1-native-build.json",
+      "compile_commands": null,
+      "defines": [
+        "_GNU_SOURCE",
+        "AF_INET=2"
+      ],
+      "flags": [],
+      "include_paths": [
+        "<pinned-libuv-root>/include"
+      ],
+      "tool_versions": {
+        "clang": "NOT_REQUIRED_FOR_MVP",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 7,
+      "case_source": "fixture_contract",
+      "declared_case_count": 2,
+      "fixture_hash": "libuv-ip4-addr-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "family",
+      "port_host",
+      "port_bytes_hex",
+      "addr_bytes_hex"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "none_recorded",
+      "diagnostics": [],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
+      "endianness": "big",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
+      "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
-    "level": "L1",
+    "level": "L4",
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
-    "sha256": "097a6aa2dc6b95ad22d0bbfce1c4e999ae64b48ae4c71b3b496b78db179d3e05",
-    "status": "recorded"
+    "sha256": "2f84ea8be339b025fa2e0dee86eb29b16fe3ddf327d5bfdce9564c94723a0e3d",
+    "status": "refused"
   },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
@@ -70,10 +155,15 @@
   "unsafe_status": "passed",
   "validation_profile": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
-    "profile": "L1-dev",
-    "sha256": "70ffee3dfed7b7427f5a704de72d1beab50d37d515e5adffcf15fb84af389625",
+    "profile": "L4-accepted-evidence",
+    "sha256": "26aa85430e20f554f87b2cbe46485adb1b4ae3f36bf6a7f7014a1477912dde4e",
     "status": "passed"
   },
   "validation_profile_status": "passed",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-verified-unsafe-baseline.json",
+    "sha256": "3e6c84096a00eeeafeccfee338c7d054734b3013aa86fe7e3795f1c887a67680",
+    "status": "blocked"
+  },
   "version_config_status": "recorded"
 }

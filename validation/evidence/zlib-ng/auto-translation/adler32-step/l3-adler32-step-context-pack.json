@@ -1,12 +1,13 @@
 {
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-    "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "slice_spec_sha256=de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
     "fixture_hash=zlib-adler32-fixture",
     "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "call_edge_to_callee_binding": [],
   "call_edges": [
     {
       "kind": "type",
@@ -14,23 +15,45 @@
       "source": "stdint.h"
     }
   ],
+  "callee_sources": [],
   "direct_c_files": [
     "adler32.c",
     "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json"
   ],
+  "direct_call_edges": [],
   "direct_rust_files": [
     "validation/l2_slices/src/zlib_adler32.rs"
   ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
   "fixture": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+  "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
   "schema_version": 1,
+  "signature_bindings": [],
   "slice_id": "adler32-step",
   "slice_spec": {
     "path": "validation/slice-specs/zlib-adler32-step.json",
-    "sha256": "c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d"
+    "sha256": "de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "adler32.c",
+      "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json"
+    ],
+    "functions": [
+      "adler32_step"
+    ],
+    "globals": [],
+    "structs": [
+      "uint32_t"
+    ]
   },
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
   "status": "recorded",
+  "stub_boundaries": [],
   "target_id": "zlib-ng"
 }

@@ -4,12 +4,29 @@
     "sha256": "bcb004bfbdf0e342901c02c32ce0ad7e4e2c84af3fbff5022ea4a45580a6b611",
     "status": "passed"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+    "status": "skipped"
+  },
   "first_party_non_test_unsafe_count": 0,
   "first_party_non_test_unsafe_ratio": 0.0,
   "generated_draft_unsafe_count": 0,
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
+    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "status": "refused"
+  },
   "schema_version": 1,
   "semantic_pass": true,
   "slice_id": "adler32-step",
   "status": "passed",
-  "target_id": "zlib-ng"
+  "target_id": "zlib-ng",
+  "validation_profile": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
+    "profile": "L4-accepted-evidence",
+    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
+    "status": "passed"
+  }
 }

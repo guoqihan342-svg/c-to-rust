@@ -1,14 +1,31 @@
 {
   "accepted_unsafe_ledger": {
     "path": "validation/evidence/l2-slices/unsafe-ledger.json",
-    "sha256": "c6fc8c023f37fef8ad75383f35256e83de91a1bad1da673b45ea4aada94dda97",
+    "sha256": "8ff91c6e3f5382a78fe3522e84b0a0c3c5560d3f8fa1818788342916bdf41201",
     "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+    "status": "skipped"
   },
   "entries": [],
   "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
+    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "status": "refused"
+  },
   "schema_version": 1,
   "slice_id": "adler32-step",
   "status": "passed",
-  "target_id": "zlib-ng"
+  "target_id": "zlib-ng",
+  "validation_profile": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
+    "profile": "L4-accepted-evidence",
+    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
+    "status": "passed"
+  }
 }

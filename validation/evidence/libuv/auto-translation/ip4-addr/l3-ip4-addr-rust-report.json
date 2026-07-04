@@ -12,7 +12,7 @@
   "generated_draft": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-draft.rs",
     "sha256": "1a8f6d7a56925f8d883461c2121e19367503f1c6ee8d6ce89fda93f7d9902f99",
-    "status": "candidate"
+    "status": "blocked"
   },
   "generated_draft_semantic_pass": false,
   "replay": {
@@ -26,7 +26,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-      "slice_spec_sha256=6edff2164a9bfd9af9a81956c2f8fd9d80b9845cd2eca28d55ee1a31c81e1b5a",
+      "slice_spec_sha256=6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
       "fixture_hash=libuv-ip4-addr-fixture",
       "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
       "translator_version=0.1.0",
@@ -59,7 +59,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-rust-draft.rs",
-        "status": "candidate"
+        "status": "blocked"
       },
       "rust_report": {
         "path": "validation/evidence/libuv/l3-ip4-addr-rust-report.json",
@@ -73,12 +73,13 @@
       }
     },
     "fixture": "validation/l2_slices/fixtures/libuv-ip4-addr-input.json",
+    "generated_draft_semantic_pass": false,
     "known_gaps": [
       "Generated replay draft is not itself the accepted replay implementation.",
       "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
     ],
     "level": "L3",
-    "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+    "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml ip4_addr",

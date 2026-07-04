@@ -7,6 +7,13 @@
     "include_paths": [
       "<pinned-zlib-ng-root>"
     ],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
     "target_triple": "x86_64-unknown-linux-gnu"
   },
   "c_source": "uint32_t adler32_step(uint32_t s1) { return s1 + 1; }",
@@ -14,5 +21,21 @@
   "function_name": "adler32_step",
   "slice_id": "adler32-step",
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "source_file": "adler32.c",
+  "source_file_hashes": {
+    "adler32.c": "missing",
+    "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324"
+  },
+  "source_files": [
+    {
+      "path": "adler32.c",
+      "role": "source"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": "<pinned-zlib-ng-root>",
   "target_id": "zlib-ng"
 }

@@ -1,17 +1,18 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-translator-input.json",
-    "sha256": "6edff2164a9bfd9af9a81956c2f8fd9d80b9845cd2eca28d55ee1a31c81e1b5a",
+    "sha256": "3dd9dfac34378f264776a6bcfb01269ab6c31a009d1c19a44c7c3bc5f4f63dc4",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-    "slice_spec_sha256=9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "slice_spec_sha256=6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "fixture_hash=libuv-ip4-addr-fixture",
     "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "global_dependencies": [],
   "level": "L3",
   "mappings": [
     {
@@ -55,12 +56,12 @@
       "translation_rule_id": "supported MVP C subset mapping"
     }
   ],
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "slice_spec_ref": {
     "path": "validation/slice-specs/libuv-ip4-addr.json",
-    "sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "sha256": "6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "status": "ready"
   },
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",

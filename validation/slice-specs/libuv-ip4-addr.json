@@ -111,6 +111,7 @@
     "test_file": "validation/l2_slices/tests/libuv_ip4_addr.rs"
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "non_goals": [
       "No full libuv migration claim.",

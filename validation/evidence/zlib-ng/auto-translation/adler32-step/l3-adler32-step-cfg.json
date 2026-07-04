@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-    "slice_spec_sha256=c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "slice_spec_sha256=de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
     "fixture_hash=zlib-adler32-fixture",
     "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
     "translator_version=0.1.0",
@@ -13,14 +13,22 @@
         {
           "id": "entry",
           "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [
+            "none"
+          ],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
             "line_start": 1
           },
+          "statement_kinds": [
+            "return"
+          ],
           "statements": [
             "return s1 + 1"
-          ]
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
@@ -33,7 +41,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-0"
         }
       ],
       "entry_block": "entry",
@@ -63,17 +71,21 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 0,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "5ea134269754662608534f7b7b99cc601e6a57c7",
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
   "schema_version": 1,
   "slice_id": "adler32-step",
   "slice_spec_ref": {
     "path": "validation/slice-specs/zlib-adler32-step.json",
-    "sha256": "c57ba7b42e35dd2674347a3b6caf08613b83a3d35ef867077ab0f816b380d61d",
+    "sha256": "de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
     "status": "ready"
   },
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",

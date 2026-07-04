@@ -90,6 +90,7 @@
     "test_file": "validation/l2_slices/tests/oracle_fixtures.rs"
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": true,
     "accepted_metadata_differences": [],
     "non_goals": [
       "This is a pure-value translator regression slice and does not claim full adler32_z coverage.",

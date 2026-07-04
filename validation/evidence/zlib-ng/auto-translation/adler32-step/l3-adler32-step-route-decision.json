@@ -1,50 +1,250 @@
 {
-  "level": "L0",
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+        "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "kind": "legacy-string-translator",
+        "role": "compatibility_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": false,
+        "semantic_pass": false,
+        "status": "missing"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+          "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [
+      {
+        "candidate_id": "compat:legacy-string-translator",
+        "compatibility_only": true,
+        "correctness_role": "compatibility_only",
+        "fallback": false,
+        "selected": "legacy-string-translator",
+        "semantic_pass": false
+      }
+    ],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": false,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "candidate_id": "compat:legacy-string-translator",
+          "fallback": false,
+          "selected_as_primary": false,
+          "status": "compatibility_only"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L4",
+        "status": "refused"
+      },
+      "route_level": "L4",
+      "route_status": "refused",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:unknown",
+      "fallback": false,
+      "selected": "unknown",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": null,
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": null,
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": false,
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-clang-lowering-report.json",
+        "status": "missing"
+      },
+      "status": "missing"
+    }
+  },
+  "level": "L4",
   "misroute": null,
   "policy": {
+    "accepted_evidence_authoritative": true,
     "fixed_loop_count_required": false,
+    "generated_draft_semantic_pass": false,
     "goal": "dev",
     "repair_budget_source": "run_policy"
   },
   "rationale": [
     {
-      "feature": "scalar_only",
-      "weight": "low"
+      "feature": "blocked_artifact",
+      "values": {
+        "cfg": "recorded",
+        "plan": "blocked",
+        "translator": "blocked",
+        "type_map": "recorded"
+      },
+      "weight": "hard_refuse"
+    },
+    {
+      "feature": "accepted_evidence_authoritative",
+      "weight": "override"
     }
   ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full zlib-ng migration",
+        "full adler32_z coverage",
+        "buffer ownership proof"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "adler32-step",
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
-      "sha256": "4f70c186913a4053c9f936fffa55b221b9a14da5abb3a0248395b5bb1c32192d",
+      "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-cfg.json",
-      "sha256": "e067c588bd3a1f64cb6abe465d08e43f2fc1827a139fedb6b27e1594735cefdf",
+      "sha256": "7770acb678218f731e3e78a96322505aa43906e4bdaa2757d4bf1be6f99f323a",
       "status": "recorded"
     },
     "pointer_graph": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-pointer-graph.json",
-      "sha256": "8c3bf250bd54bf7c36f2e34647616e436b4b3e6d7c37a583f7f82b1acfe9f9f2",
+      "sha256": "e8e82eb9ed9c10ea1d52dbf092879df5bf89a46ec67396552e35bb5973289be6",
       "status": "not_applicable"
     },
     "translation_plan": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-auto-translation-plan.json",
-      "status": "draft_generated"
+      "status": "blocked"
     },
     "type_map": {
       "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-type-map.json",
-      "sha256": "14bb5095fcfd760062f9237a6739608deb298c0f4ea76f3f671e0d061072f838",
+      "sha256": "b96aef63f4b5881d7d4d9026db9426b2b9a37e583c03a04473b3ea200b7e664c",
       "status": "recorded"
     }
   },
-  "status": "recorded",
+  "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+  "source_identity": {
+    "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
+    "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "source_root": "<pinned-zlib-ng-root>"
+  },
+  "status": "refused",
   "target_id": "zlib-ng",
   "translator": {
-    "candidate_generation_allowed": true,
-    "kind": "tier1"
+    "candidate_generation_allowed": false,
+    "kind": "refuse"
   },
-  "verification_profile": "L0-dev"
+  "verification_profile": "L4-accepted-evidence"
 }

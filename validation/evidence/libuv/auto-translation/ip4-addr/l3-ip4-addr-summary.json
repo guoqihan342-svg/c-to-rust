@@ -7,12 +7,12 @@
     "path_sha256": {
       "c_oracle": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
       "diff": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
-      "final_verification": "637743f452075252d87b3c75888011876da93414041983dcbebca0ba504cb3c0",
+      "final_verification": "f9b7302935f8aa60c8fbfa9931dd7319036e3a1fb77530a70d6d6e5365f1b347",
       "negative_diff": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
       "rust_report": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
       "unsafe_ledger": "aeb4190b6ab38ff982f5bc036fa12acf94f3b1f21b3eda0b111215938bec6168",
       "unsafe_scan": "4d27beb39d6ba7cbad8187329662442e111bacb5fddbe5b0fb7505251f9c2693",
-      "version_manifest": "1dd2f8c4e9523400788a63a3b7ee1efcfeaa7c404dc47f70810297a99f3c3237"
+      "version_manifest": "cd02ee8f0a725f73150918e328c9cbe6567c1e727e7cfb7227cab369eb1a7909"
     },
     "paths": {
       "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",

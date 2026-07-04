@@ -7,12 +7,12 @@
     "path_sha256": {
       "c_oracle": "4e37f1cf60d3366a750e203737158effe0c07377827ea7996355e829b5ee4ce5",
       "diff": "cf8bca54cce2d24f7b950d9e2c4c33624721cfa26dffe3f62921d3d2a5e50e9e",
-      "final_verification": "637743f452075252d87b3c75888011876da93414041983dcbebca0ba504cb3c0",
+      "final_verification": "f9b7302935f8aa60c8fbfa9931dd7319036e3a1fb77530a70d6d6e5365f1b347",
       "negative_diff": "640b8ed7148d3834636e646ac9b642ff4b14b9fbbbf059da66d73f3d4ec21e48",
       "rust_report": "639290ddfe032467348a0cc48df91ab21584739bccbfe527c8a5f5b44289266a",
       "unsafe_ledger": "aeb4190b6ab38ff982f5bc036fa12acf94f3b1f21b3eda0b111215938bec6168",
       "unsafe_scan": "4d27beb39d6ba7cbad8187329662442e111bacb5fddbe5b0fb7505251f9c2693",
-      "version_manifest": "1dd2f8c4e9523400788a63a3b7ee1efcfeaa7c404dc47f70810297a99f3c3237"
+      "version_manifest": "cd02ee8f0a725f73150918e328c9cbe6567c1e727e7cfb7227cab369eb1a7909"
     },
     "paths": {
       "c_oracle": "validation/evidence/libuv/l3-ip4-addr-c-oracle.json",
@@ -41,19 +41,37 @@
       "risk_level": "none"
     },
     "build_profile_hash": "27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
+    "c2rust_baseline_identity": {
+      "sha256": "caa81013cdff371a657ff9acc8e479b4e26265180dd59911ee945d8c7196b5be",
+      "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c-oracle-harness-draft.c",
+      "sha256": "9d1208c0f1025fabf079474e6fa5f45a149b455beb2a38b63da2b58e4b567e9b",
+      "status": "draft"
+    },
     "cache_input_fields": [
       "source_commit",
       "source_file_hashes",
       "slice_spec_sha256",
       "fixture_hash",
       "build_profile_hash",
+      "competition_environment_identity",
       "cargo_lock_hash",
       "tool_versions",
       "schema_versions",
       "translator_version",
       "translator_manifest_sha256",
       "command_arguments",
-      "alias_gate_identity"
+      "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
+      "c2rust_baseline_identity",
+      "route_decision_identity",
+      "validation_profile_identity",
+      "global_dependency_identity",
+      "c_oracle_harness_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
     "command_arguments": [
@@ -62,12 +80,54 @@
       "validation/slice-specs/libuv-ip4-addr.json",
       "--accept-existing-evidence"
     ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "dependent_artifacts": {
+      "c2rust_baseline": {
+        "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+        "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+        "status": "skipped"
+      },
+      "route_decision": {
+        "level": "L4",
+        "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+        "sha256": "2f84ea8be339b025fa2e0dee86eb29b16fe3ddf327d5bfdce9564c94723a0e3d",
+        "status": "refused"
+      },
+      "validation_profile": {
+        "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
+        "profile": "L4-accepted-evidence",
+        "sha256": "26aa85430e20f554f87b2cbe46485adb1b4ae3f36bf6a7f7014a1477912dde4e",
+        "status": "passed"
+      }
+    },
+    "effect_graph_identity": {
+      "alias_gate_decision": "not_applicable",
+      "alias_sensitive": false,
+      "read_effect_count": 0,
+      "read_nodes": [],
+      "schema_version": 2,
+      "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+      "write_effect_count": 0,
+      "write_nodes": []
+    },
     "fixture_hash": "libuv-ip4-addr-fixture",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
     "invalidates": [
       "context_pack",
       "type_map",
       "cfg",
       "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
       "rust_draft",
       "patch_plan",
       "ai_candidate",
@@ -77,19 +137,32 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
+      "auto_translation_manifest",
       "summary"
     ],
+    "oracle_boundary_contract_identity": {
+      "sha256": "97d817bdeaa9db8911c5b63d7bf83251e74901871feb6dbfc8a65d362f970675",
+      "status": "sufficient_for_semantic_pass"
+    },
+    "route_decision_identity": {
+      "sha256": "8bd5b45d1527664df900103d2d45ead2e77becb0bbcf3115b18b79eb49fbc9e6",
+      "status": "refused"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "2996ae1895e2d5414fd17bb8251e6d15b8664e10cfb8e0ac4625b66430863e9e",
+      "status": "recorded"
+    },
     "schema_version": 1,
     "schema_versions": {
       "auto_cache_metadata": 1,
       "auto_translation_plan": 1,
       "cfg": 1,
       "evidence_manifest": 1,
-      "pointer_graph": 1,
+      "pointer_graph": 2,
       "type_map": 1
     },
     "slice_id": "ip4-addr",
-    "slice_spec_sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "slice_spec_sha256": "6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
     "source_file_hashes": {
       "include/uv.h": "missing",
@@ -104,10 +177,14 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
-    "translator_version": "0.1.0"
+    "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+    "translator_version": "0.1.0",
+    "validation_profile_identity": {
+      "sha256": "91ea1e18d01f234e0cadf7fae326e6439cb6f6d021c1aa6f06486eb61c1c9cfc",
+      "status": "passed"
+    }
   },
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
   "repo_commit_note": "Accepted source reports may have been generated at an earlier repo commit; this manifest binds their file hashes for drift review.",
   "schema_version": 1,
   "semantic_pass": true,

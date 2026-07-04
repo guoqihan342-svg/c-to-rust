@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-    "slice_spec_sha256=9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "slice_spec_sha256=6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "fixture_hash=libuv-ip4-addr-fixture",
     "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "translator_version=0.1.0",
@@ -43,7 +43,8 @@
           "statements": [
             "addr->sin_family = AF_INET",
             "return 0"
-          ]
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
@@ -56,7 +57,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-1"
         }
       ],
       "entry_block": "entry",
@@ -86,17 +87,21 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 0,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "slice_spec_ref": {
     "path": "validation/slice-specs/libuv-ip4-addr.json",
-    "sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "sha256": "6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "status": "ready"
   },
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",

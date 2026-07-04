@@ -1,4 +1,5 @@
 {
+  "accepted_evidence_authoritative": true,
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
@@ -9,7 +10,7 @@
       "diff": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
       "negative_diff": "601b79c2325e7ccaa455a56442d253bf143ddab9316e60ded91fbdcd9408d24a",
       "rust_report": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
-      "unsafe_ledger": "c6fc8c023f37fef8ad75383f35256e83de91a1bad1da673b45ea4aada94dda97",
+      "unsafe_ledger": "8ff91c6e3f5382a78fe3522e84b0a0c3c5560d3f8fa1818788342916bdf41201",
       "unsafe_scan": "bcb004bfbdf0e342901c02c32ce0ad7e4e2c84af3fbff5022ea4a45580a6b611"
     },
     "paths": {
@@ -26,23 +27,107 @@
     "target_id": "zlib-ng",
     "toolchain_status": "C_ORACLE_GENERATED"
   },
+  "alias_gate": {
+    "complete_alias_safety": false,
+    "decision": "not_applicable",
+    "preconditions": [],
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
   "c2rust_baseline": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
-    "sha256": "4f70c186913a4053c9f936fffa55b221b9a14da5abb3a0248395b5bb1c32192d",
+    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
+  "external_callee_scope": {
+    "blocked_count": 0,
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "semantics_verified": false,
+    "status": "not_applicable",
+    "stub_kind": "none"
+  },
   "fixture": {
     "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
-    "sha256": "15aeb04dbcd238b477dd7470cfe477b7f0477edd39416ace5cccbcb2ba8af6cd"
+    "sha256": "b9a65e653541e27bee2035c9687d1697f5bc4d79e39f96cfdf2d2855dab85324"
   },
   "generated_draft_semantic_pass": false,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/evidence/zlib-ng/l1-native-build.json",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [
+        "<pinned-zlib-ng-root>"
+      ],
+      "tool_versions": {
+        "clang": "NOT_REQUIRED_FOR_MVP",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 137,
+      "case_source": "fixture_contract",
+      "declared_case_count": 1,
+      "fixture_hash": "zlib-adler32-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "value"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "none_recorded",
+      "diagnostics": [],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
+      "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
-    "level": "L0",
+    "level": "L4",
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
-    "sha256": "24a1d840e3870894697d93d906654009168badef2a2e1420f8ad9f7b21c00833",
-    "status": "recorded"
+    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "status": "refused"
   },
   "rust_check_status": "passed",
   "rust_report_status": "passed",
@@ -58,10 +143,15 @@
   "unsafe_status": "passed",
   "validation_profile": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
-    "profile": "L0-dev",
-    "sha256": "4a9c73f163c8eebf0d428e89857f88e3e93b4fee9515b026209fb1fb07516dec",
+    "profile": "L4-accepted-evidence",
+    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
     "status": "passed"
   },
   "validation_profile_status": "passed",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-verified-unsafe-baseline.json",
+    "sha256": "d15e6203b7bc98b2cd26087775881fb043f266885f06b63e83d44522b47bb7f0",
+    "status": "blocked"
+  },
   "version_config_status": "recorded"
 }

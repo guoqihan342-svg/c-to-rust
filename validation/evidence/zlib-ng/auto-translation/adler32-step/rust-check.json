@@ -1,12 +1,44 @@
 {
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-vo9emxnh C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\zlib-ng\\auto-translation\\adler32-step\\l3-adler32-step-rust-draft.rs",
+  "c2rust_baseline": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
+    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-nomll5i1 F:\\agent\\crustpaper\\0630\\validation\\evidence\\zlib-ng\\auto-translation\\adler32-step\\l3-adler32-step-rust-draft.rs",
   "error_count": 0,
   "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
+    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "status": "refused"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "rustc_compile_only",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
   "schema_version": 1,
   "self_healing": {
     "blocked_repairs": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-self-healing-blocked-repairs.json",
     "patch_events": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-patch-events.jsonl",
     "status": "none"
   },
-  "status": "passed"
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
+    "profile": "L4-accepted-evidence",
+    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
+    "status": "passed"
+  }
 }

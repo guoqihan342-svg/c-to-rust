@@ -1,17 +1,19 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
-    "sha256": "e370b3e120f4d45cbf42d46be9aec0f645e380ad1d686e42fbb04f4d87eabe02",
+    "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-    "slice_spec_sha256=9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "slice_spec_sha256=6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "fixture_hash=libuv-ip4-addr-fixture",
     "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "translator_version=0.1.0",
     "schema_version=1",
-    "alias_gate=not_applicable"
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=8ef2d6fa63d521401e241987fe59afea49502447c2bc8ec4a4572f7082476f98"
   ],
   "generated_artifacts": [
     {
@@ -35,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "candidate"
+      "status": "blocked"
     },
     {
       "generated_spans": [
@@ -58,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "candidate"
+      "status": "blocked"
     },
     {
       "generated_spans": [
@@ -81,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "candidate"
+      "status": "blocked"
     }
   ],
   "inputs": {
@@ -89,13 +91,21 @@
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-cfg.json",
       "status": "recorded"
     },
+    "external_callee_context": {
+      "blocked_count": 1,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-context-pack.json",
+      "status": "blocked"
+    },
     "pointer_graph": {
       "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-pointer-graph.json",
       "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/libuv-ip4-addr.json",
-      "sha256": "9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+      "sha256": "6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
       "status": "ready"
     },
     "type_map": {
@@ -104,18 +114,21 @@
     }
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
   "route_decision": {
-    "level": "L1",
+    "level": "L4",
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
-    "sha256": "097a6aa2dc6b95ad22d0bbfce1c4e999ae64b48ae4c71b3b496b78db179d3e05",
-    "status": "recorded"
+    "sha256": "2f84ea8be339b025fa2e0dee86eb29b16fe3ddf327d5bfdce9564c94723a0e3d",
+    "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "ip4-addr",
   "source_commit": "5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-  "status": "draft_generated",
+  "status": "blocked",
   "target_id": "libuv",
+  "translation_source": {
+    "selected": "legacy-string-translator"
+  },
   "translation_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -124,6 +137,17 @@
       "requires_noalias": false,
       "risk_level": "none"
     },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [
+      {
+        "name": "uv_inet_pton",
+        "reason": "missing_declared_external_direct_callee",
+        "semantics_verified": false,
+        "stub_kind": "none"
+      }
+    ],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
     "lvalue_decision_counts": {
       "safe_wrapper": 1
     },
@@ -143,8 +167,8 @@
   },
   "validation_profile": {
     "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
-    "profile": "L1-dev",
-    "sha256": "70ffee3dfed7b7427f5a704de72d1beab50d37d515e5adffcf15fb84af389625",
+    "profile": "L4-accepted-evidence",
+    "sha256": "26aa85430e20f554f87b2cbe46485adb1b4ae3f36bf6a7f7014a1477912dde4e",
     "status": "passed"
   },
   "verification_plan": [

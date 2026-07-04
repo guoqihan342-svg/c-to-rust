@@ -1,17 +1,34 @@
 {
   "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-c2rust-baseline-manifest.json",
+    "sha256": "0eca3d16becf2c25686c38b96beafe6ccaeac5121c5d6453bb469351e1538e9c",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=5e7d51a8f4734cac453db960d4b9919735bbf7c3",
-    "slice_spec_sha256=9ba3e754bccd6de3c154736924b9be1c284d4abbc10d5b07589f6855e7e2f1b6",
+    "slice_spec_sha256=6811c89af3f3a25db9613ad575e0ea04a102ddd50430d7095c9ee6ad8c016efd",
     "fixture_hash=libuv-ip4-addr-fixture",
     "build_profile_hash=27f452e1250f1ec304a82293e68819618637749d78139ba16b3af9a9318c997e",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "candidates": [],
+  "route_decision": {
+    "level": "L4",
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-route-decision.json",
+    "sha256": "2f84ea8be339b025fa2e0dee86eb29b16fe3ddf327d5bfdce9564c94723a0e3d",
+    "status": "refused"
+  },
   "schema_version": 1,
   "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
   "slice_id": "ip4-addr",
   "status": "not_used",
-  "target_id": "libuv"
+  "target_id": "libuv",
+  "validation_profile": {
+    "path": "validation/evidence/libuv/auto-translation/ip4-addr/l3-ip4-addr-validation-profile.json",
+    "profile": "L4-accepted-evidence",
+    "sha256": "26aa85430e20f554f87b2cbe46485adb1b4ae3f36bf6a7f7014a1477912dde4e",
+    "status": "passed"
+  }
 }
