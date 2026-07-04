@@ -2362,6 +2362,141 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             report["blockers"],
         )
 
+    def test_bundle_blocks_nested_before_after_exhibit_sha_drift(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-nested-before-after-drift-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        before_exhibit_path = temp_dir / "before-after" / "reports" / "before-after-exhibit.json"
+        write_json(before_exhibit_path, {"units": [{"unit_id": "flashdb/real-fdb-calc-crc32"}]})
+        before_exhibit_ref = artifact_ref(before_exhibit_path)
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "evidence_artifact_refs": {
+                    "before_after_exhibit": before_exhibit_ref,
+                },
+                "core_translation_quality": {
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "status": "converged",
+                            "baseline": {"path": "validation/evidence/baseline.rs", "sha256": "a" * 64},
+                            "final": {"path": "validation/evidence/final.rs", "sha256": "b" * 64},
+                            "accepted_patch": {"path": "validation/evidence/accepted.patch", "sha256": "c" * 64},
+                            "oracle_evidence": {"path": "validation/evidence/final-verification.json", "sha256": "d" * 64},
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 1,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 1,
+                            },
+                        }
+                    ],
+                    "final_gate_status": "passed",
+                    "repair_summary": {
+                        "status": "not_provided",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 0,
+                        "auto_recovered_unit_count": 0,
+                        "rollback_evidence_count": 0,
+                    },
+                    "semantic_pass_count": 1,
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                    },
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 1,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 1,
+                    },
+                },
+            },
+        )
+        write_json(
+            before_exhibit_path,
+            {
+                "units": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "baseline_verification": {
+                            "path": "validation/evidence/baseline-verification.json",
+                            "sha256": "e" * 64,
+                            "status": "passed",
+                            "semantic_pass": True,
+                            "semantic_claim_source": "verified_unsafe_baseline_gates",
+                            "generated_draft_semantic_pass": False,
+                        },
+                    }
+                ]
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {"judge_evidence_index": artifact_ref(index_path)},
+                        }
+                    ],
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        known_gap_ids = [gap["gap_id"] for gap in report["known_gaps"]]
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn(
+            "nested_artifact_sha256_mismatch:before_after_judge_demo:before_after_exhibit",
+            report["blockers"],
+        )
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", known_gap_ids)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["verified_baseline_unit_count"], 0)
+
     def test_bundle_blocks_proof_class_escalation_without_validation_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 

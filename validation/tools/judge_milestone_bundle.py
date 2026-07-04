@@ -446,6 +446,7 @@ def milestone_blockers(
         blockers.append("core_quality_generated_draft_semantic_pass_must_be_false")
     if int_or_zero(core_translation_quality.get("translation_coverage_numerator")) != 0:
         blockers.append("core_quality_translation_coverage_numerator_must_be_zero")
+    blockers.extend(nested_artifact_ref_blockers(before_after_repair_exhibit))
     blockers.extend(repair_accounting_consistency_blockers(before_after_repair_exhibit))
     blockers.extend(blocked_repairs_rollup_blockers(blocked_repairs_rollup))
     route_rollup = (
@@ -519,6 +520,15 @@ def repair_accounting_consistency_blockers(before_after_repair_exhibit: dict[str
     )
     if all_units_verified_baseline_bound is not expected_all_units_verified:
         blockers.append("repair_accounting_verified_baseline_all_bound_mismatch")
+    return blockers
+
+
+def nested_artifact_ref_blockers(before_after_repair_exhibit: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for source in object_list(before_after_repair_exhibit.get("sources")):
+        for blocker in source.get("nested_artifact_ref_blockers", []):
+            if isinstance(blocker, str) and blocker:
+                blockers.append(blocker)
     return blockers
 
 
@@ -1122,6 +1132,7 @@ def build_before_after_repair_exhibit_rollup(sources: list[dict[str, Any]]) -> d
             or repair.get("status") == "verified"
             or int_or_zero(repair.get("observed_repair_unit_count")) > 0
             or int_or_zero(repair.get("rollback_evidence_count")) > 0
+            or bool(source.get("nested_artifact_ref_blockers"))
         )
         if not has_exhibit:
             continue
@@ -1132,6 +1143,11 @@ def build_before_after_repair_exhibit_rollup(sources: list[dict[str, Any]]) -> d
                 "final_gate_status": source.get("final_gate_status"),
                 "translation_before_after": translation,
                 "before_after_units": units,
+                "nested_artifact_ref_blockers": [
+                    blocker
+                    for blocker in source.get("nested_artifact_ref_blockers", [])
+                    if isinstance(blocker, str) and blocker
+                ],
                 "repair_summary": repair,
                 "unsafe_reduction": source.get("unsafe_reduction", {}),
                 "claim_boundary": {
@@ -2659,9 +2675,14 @@ def core_translation_quality_source_from_artifact(
     final_gate_status = quality.get("final_gate_status")
     translation_before_after = before_after_summary(quality.get("translation_before_after"))
     before_after_units = before_after_unit_summaries(quality.get("before_after_units"))
+    overlay_result = before_after_exhibit_unit_overlay_result(
+        payload,
+        entrypoint_id=entrypoint_id,
+        repo_root=repo_root,
+    )
     before_after_units = merge_before_after_exhibit_unit_overlays(
         before_after_units,
-        before_after_exhibit_unit_overlays(payload, repo_root=repo_root),
+        overlay_result["overlays"],
     )
     repair_summary = repair_summary_for_bundle(quality.get("repair_summary"))
     return {
@@ -2673,6 +2694,7 @@ def core_translation_quality_source_from_artifact(
         "generated_draft_semantic_pass": bool(quality.get("generated_draft_semantic_pass")),
         "translation_before_after": translation_before_after,
         "before_after_units": before_after_units,
+        "nested_artifact_ref_blockers": overlay_result["blockers"],
         "repair_summary": repair_summary,
         "unsafe_reduction": {
             "status": unsafe_reduction.get("status", "unknown"),
@@ -2700,17 +2722,35 @@ def before_after_summary(value: object) -> dict[str, Any]:
     }
 
 
-def before_after_exhibit_unit_overlays(
+def before_after_exhibit_unit_overlay_result(
     payload: dict[str, Any],
     *,
+    entrypoint_id: str,
     repo_root: Path,
-) -> dict[str, dict[str, Any]]:
+) -> dict[str, Any]:
     refs = payload.get("evidence_artifact_refs")
     if not isinstance(refs, dict):
-        return {}
+        return {"overlays": {}, "blockers": []}
     result: dict[str, dict[str, Any]] = {}
+    blockers: list[str] = []
     for ref_name in ["before_after_exhibit", "before_after_exhibit_report"]:
-        exhibit = load_present_json_artifact(refs.get(ref_name), repo_root=repo_root)
+        ref = artifact_ref_from_existing(refs.get(ref_name), repo_root=repo_root)
+        if ref is None:
+            continue
+        status = ref.get("status")
+        if status == "sha256_mismatch":
+            blockers.append(f"nested_artifact_sha256_mismatch:{entrypoint_id}:{ref_name}")
+            continue
+        if status == "missing_expected_sha256":
+            blockers.append(f"nested_artifact_missing_sha256:{entrypoint_id}:{ref_name}")
+            continue
+        if status == "status_mismatch":
+            blockers.append(f"nested_artifact_status_mismatch:{entrypoint_id}:{ref_name}")
+            continue
+        if status != "present":
+            blockers.append(f"nested_artifact_not_present:{entrypoint_id}:{ref_name}:{status}")
+            continue
+        exhibit = load_present_json_artifact(ref, repo_root=repo_root)
         if not isinstance(exhibit, dict):
             continue
         units = exhibit.get("units")
@@ -2745,7 +2785,7 @@ def before_after_exhibit_unit_overlays(
                 overlay["safety_loop_provenance"] = safety_loop_provenance
             if overlay:
                 result[unit_id] = overlay
-    return result
+    return {"overlays": result, "blockers": blockers}
 
 
 def merge_before_after_exhibit_unit_overlays(
