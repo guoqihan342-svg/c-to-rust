@@ -2497,7 +2497,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn("c2rust_baseline_output_still_not_verified_here", known_gap_ids)
         self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["verified_baseline_unit_count"], 0)
 
-    def test_bundle_blocks_before_after_unit_ref_drift_from_workflow_metrics(self) -> None:
+    def test_bundle_blocks_before_after_unit_ref_drift_or_missing_from_workflow_metrics(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle
 
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-before-after-workflow-drift-", dir=REPO_ROOT / "target"))
@@ -2645,6 +2645,97 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         workflow_unit = report["workflow_metrics"]["sources"][0]["before_after_units"][0]
         self.assertEqual(workflow_unit["unit_id"], unit_id)
         self.assertEqual(workflow_unit["accepted_patch"]["sha256"], "c" * 64)
+
+        missing_index_path = temp_dir / "before-after-missing-unit" / "harness" / "judge-evidence-index.json"
+        missing_run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report-missing-unit.json"
+        missing_out_path = temp_dir / "summary" / "judge-milestone-bundle-missing-unit.json"
+        write_json(
+            missing_index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "before_after_units": [],
+                    "final_gate_status": "passed",
+                    "repair_summary": {
+                        "status": "not_provided",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 0,
+                        "auto_recovered_unit_count": 0,
+                        "rollback_evidence_count": 0,
+                    },
+                    "semantic_pass_count": 1,
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                    },
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": unsafe_reduction,
+                },
+            },
+        )
+        write_json(
+            missing_run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(metrics_path),
+                            "judge_evidence_index": repo_relative(missing_index_path),
+                        },
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(metrics_path),
+                                "judge_evidence_index": artifact_ref(missing_index_path),
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+
+        missing_report = bundle.build_judge_milestone_bundle(
+            run_report_path=missing_run_report_path,
+            out_path=missing_out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(missing_report["status"], "blocked")
+        self.assertIn(
+            "before_after_exhibit_workflow_metrics_unit_missing:"
+            "before_after_judge_demo:flashdb/real-fdb-calc-crc32",
+            missing_report["blockers"],
+        )
 
     def test_bundle_blocks_proof_class_escalation_without_validation_contract(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

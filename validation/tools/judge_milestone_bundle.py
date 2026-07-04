@@ -554,12 +554,13 @@ def before_after_workflow_metrics_ref_blockers(
         workflow_units = before_after_units_by_id(workflow_source.get("before_after_units"))
         if not workflow_units:
             continue
-        for core_unit in object_list(core_source.get("before_after_units")):
-            unit_id = core_unit.get("unit_id")
-            if not isinstance(unit_id, str):
+        core_units = before_after_units_by_id(core_source.get("before_after_units"))
+        for unit_id, workflow_unit in workflow_units.items():
+            if not unit_has_before_after_artifact_ref(workflow_unit):
                 continue
-            workflow_unit = workflow_units.get(unit_id)
-            if workflow_unit is None:
+            core_unit = core_units.get(unit_id)
+            if core_unit is None:
+                blockers.append(f"before_after_exhibit_workflow_metrics_unit_missing:{entrypoint_id}:{unit_id}")
                 continue
             for field in BEFORE_AFTER_ARTIFACT_REF_FIELDS:
                 workflow_ref = workflow_unit.get(field)
@@ -585,6 +586,10 @@ def before_after_units_by_id(value: object) -> dict[str, dict[str, Any]]:
         if isinstance(unit_id, str) and unit_id and unit_id not in result:
             result[unit_id] = unit
     return result
+
+
+def unit_has_before_after_artifact_ref(value: dict[str, Any]) -> bool:
+    return any(isinstance(value.get(field), dict) for field in BEFORE_AFTER_ARTIFACT_REF_FIELDS)
 
 
 def ref_binding_tuple(value: dict[str, Any]) -> tuple[object, object]:
