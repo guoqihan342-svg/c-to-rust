@@ -17,6 +17,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +25,10 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools import validate_judge_entrypoints as judge_validator
 TRANSLATOR_MANIFEST = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.toml"
 TRANSLATOR_LOCK = REPO_ROOT / "crates" / "c2r-translator" / "Cargo.lock"
 COMPETITION_ENVIRONMENT_PROFILE = REPO_ROOT / "config" / "competition-env" / "environment.json"
@@ -8885,11 +8890,13 @@ def write_log_text(path: Path, text: str) -> None:
 
 
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    """Delegates to the judge validator's suffix-gated LF-stable file hash so
+    producer-recorded refs and validator-recomputed hashes always use one
+    discipline. Text artifacts (.c/.h/.rs/.json/...) are newline-normalized —
+    upstream checkouts whose text attributes produce CRLF on Windows and LF on
+    Linux (e.g. the pinned FlashDB repository) yield one platform-independent
+    hash — while binary artifacts (.rlib etc.) keep raw-byte hashing."""
+    return judge_validator.sha256_file(path)
 
 
 def sha256_json(value: Any) -> str:

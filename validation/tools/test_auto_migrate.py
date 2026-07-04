@@ -5899,7 +5899,7 @@ class AutoMigrateTests(unittest.TestCase):
                 translator_input["source_file_hashes"],
                 {
                     "src/fdb_utils.c": (
-                        "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+                        "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
                     )
                 },
             )
@@ -5909,7 +5909,7 @@ class AutoMigrateTests(unittest.TestCase):
                     {
                         "path": "src/fdb_utils.c",
                         "role": "source",
-                        "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc",
+                        "sha256": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0",
                     }
                 ],
             )
@@ -6441,7 +6441,7 @@ class AutoMigrateTests(unittest.TestCase):
 
             enriched = json.loads(report_path.read_text(encoding="utf-8"))
             typed_ir_sha = module.sha256_json(function_ir)
-            rust_draft_sha = hashlib.sha256(draft_path.read_bytes()).hexdigest()
+            rust_draft_sha = module.sha256(draft_path)
             self.assertEqual(enriched["typed_ir_candidate"]["typed_ir_sha256"], typed_ir_sha)
             self.assertEqual(enriched["typed_ir_candidate"]["rust_draft_sha256"], rust_draft_sha)
             self.assertEqual(enriched["durable_evidence"]["hash_algorithm"], "sha256")
