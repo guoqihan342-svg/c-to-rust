@@ -869,11 +869,15 @@ def output_text_for_log(value: str) -> str:
 
 
 def path_basename(path_text: str) -> str:
-    name = Path(path_text).name
-    if name:
-        return name
+    # Path(...).name is platform-dependent: PosixPath does not treat
+    # backslashes as separators, so Windows/UNC/WSL paths logged by a Windows
+    # producer would leak through unsanitized when this runs on a Linux host
+    # (judge CI, competition machine). Normalize both separator families
+    # before taking the final component.
     normalized = path_text.replace("\\", "/").rstrip("/")
-    return normalized.rsplit("/", 1)[-1] if normalized else path_text
+    if not normalized:
+        return path_text
+    return normalized.rsplit("/", 1)[-1]
 
 
 def sha256(path: Path) -> str:
