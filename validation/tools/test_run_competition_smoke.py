@@ -191,6 +191,34 @@ class RunCompetitionSmokeTests(unittest.TestCase):
             summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["command_log"]["sha256"], module.sha256_lf_stable(command_log))
 
+    def test_smoke_summary_publication_is_atomic_when_replace_fails(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            summary_path = out_root / "summary" / "competition-smoke-summary.json"
+            original_replace = module.os.replace
+
+            def failing_replace(source: object, destination: object) -> None:
+                if Path(destination) == summary_path:
+                    raise OSError("simulated atomic replace failure")
+                original_replace(source, destination)
+
+            module.os.replace = failing_replace
+            try:
+                with self.assertRaisesRegex(OSError, "simulated atomic replace failure"):
+                    module.run_competition_smoke(
+                        out_root=out_root,
+                        proof_class="local-simulation",
+                        command_runner=FakeCommandRunner(),
+                        repo_root=REPO_ROOT,
+                        run_id="smoke-summary-atomic-test",
+                    )
+            finally:
+                module.os.replace = original_replace
+
+            self.assertFalse(summary_path.exists())
+            self.assertEqual(list(summary_path.parent.glob("*.tmp")), [])
+
     def test_smoke_runner_internal_python_commands_use_portable_python3_b(self) -> None:
         module = load_smoke_module()
         with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:

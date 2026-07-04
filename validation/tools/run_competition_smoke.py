@@ -120,6 +120,17 @@ REQUIRED_TOOL_MISSING_PATTERNS = (
 )
 
 
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp_path.write_text(text, encoding="utf-8", newline="\n")
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+
 class CompetitionSmokeResult:
     def __init__(self, *, exit_code: int, summary_path: Path, summary: dict[str, Any]) -> None:
         self.exit_code = exit_code
@@ -366,7 +377,7 @@ def run_competition_smoke(
     }
     if opencode_model_availability is not None:
         summary["opencode_model_availability"] = opencode_model_availability
-    summary_path_value.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_text(summary_path_value, json.dumps(summary, indent=2, sort_keys=True) + "\n")
     return CompetitionSmokeResult(
         exit_code=0 if status == "passed" else 1,
         summary_path=summary_path_value,
