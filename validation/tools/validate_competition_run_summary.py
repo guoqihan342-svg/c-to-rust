@@ -41,6 +41,7 @@ COMPETITION_OPENCODE_COMMAND = "opencode"
 COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
 COMPETITION_OPENCODE_MODEL = "GLM-5.1"
 COMPETITION_OPENCODE_VARIANT = "max"
+REPAIR_ROUND_CAP = 5
 
 
 def main() -> int:
@@ -335,6 +336,10 @@ def validate_per_unit_statuses(
         repair_rounds = unit["repair_rounds"]
         if not isinstance(repair_rounds, int) or repair_rounds < 1:
             raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_rounds must be a positive integer")
+        if repair_rounds > REPAIR_ROUND_CAP:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_rounds must be between 1 and {REPAIR_ROUND_CAP}"
+            )
         if not isinstance(unit.get("auto_recovered"), bool):
             raise SystemExit(f"workflow metrics per_unit_statuses[{index}].auto_recovered must be boolean")
         repair_history = unit.get("repair_history")

@@ -749,6 +749,14 @@ class RunJudgeEntrypointsTests(unittest.TestCase):
         self.assertIn("config/competition-env/judge-entrypoints/flashdb-harness.json", archive["files"])
         self.assertIn("config/competition-env/review-checklists/flashdb-harness-internal-review.json", archive["files"])
         self.assertIn("config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json", archive["files"])
+        self.assertEqual(
+            archive["files"]["config/competition-env/bundle-manifest.json"]["role"],
+            "competition-env-bundle-manifest",
+        )
+        self.assertEqual(
+            archive["files"]["config/competition-env/environment.json"]["role"],
+            "environment-profile",
+        )
         self.assertIn("requirements.txt", archive["external_refs"])
         self.assertIn("opencode.json", archive["external_refs"])
         self.assertIn("scripts/bootstrap_flashdb_sources.sh", archive["external_refs"])

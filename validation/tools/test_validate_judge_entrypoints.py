@@ -1699,6 +1699,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 "opencode_agent": "c2rust-migrator",
                 "opencode_variant": "max",
                 "opencode_skip_permissions": True,
+                "auto_retry": True,
             },
         )
 
@@ -2276,6 +2277,14 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
             opencode_entry["profile_contract"]["opencode_launch_policy"]["opencode_agent"],
             "c2rust-migrator",
         )
+        self.assertIs(opencode_entry["profile_contract"]["opencode_launch_policy"]["auto_retry"], True)
+
+    def test_opencode_profile_requires_auto_retry_enabled(self) -> None:
+        policy = opencode_launch_policy()
+        policy["auto_retry"] = False
+
+        with self.assertRaisesRegex(ValueError, "opencode profile auto_retry must be true"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
 
     def test_opencode_profile_rejects_wrong_agent_runbook(self) -> None:
         config = load_default_config()
@@ -3727,6 +3736,7 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         payload = valid_opencode_judge_index_payload()
         profile_policy = opencode_launch_policy()
         profile_policy["opencode_skip_permissions"] = True
+        profile_policy["auto_retry"] = True
         materialize_opencode_judge_index_artifacts(
             payload,
             temp_dir / "out",

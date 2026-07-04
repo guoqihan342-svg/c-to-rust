@@ -473,6 +473,34 @@ class ValidateCompetitionRunSummaryTests(unittest.TestCase):
 
         self.assertIn("repair_history", str(raised.exception))
 
+    def test_rejects_repair_rounds_above_five_cap(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+            patch_events_path = summary_path.parent / "patch-events.jsonl"
+            patch_events_path.write_text('{"status":"accepted"}\n', encoding="utf-8")
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            metrics["per_unit_statuses"][0]["repair_rounds"] = 6
+            metrics["per_unit_statuses"][0]["auto_recovered"] = True
+            metrics["per_unit_statuses"][0]["repair_history"] = {
+                "patch_events_path": patch_events_path.name,
+                "patch_events_sha256": lf_stable_sha256(patch_events_path),
+                "statuses": ["failed", "accepted", "verified"],
+                "rollback_ids": ["rollback-1"],
+                "verified": True,
+            }
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("repair_rounds must be between 1 and 5", str(raised.exception))
+
     def test_accepts_translation_before_after_artifact_bindings(self) -> None:
         module = load_validator_module()
         summary = valid_summary()

@@ -30,6 +30,7 @@ CORE_ARTIFACT_REFS = (
     "milestone_release_notes",
 )
 COMPETITION_BUNDLE_MANIFEST_PATH = "config/competition-env/bundle-manifest.json"
+COMPETITION_BUNDLE_MANIFEST_ROLE = "competition-env-bundle-manifest"
 
 
 def main() -> int:
@@ -407,6 +408,7 @@ def require_competition_config_archive_matches_bundle_manifest(
     validate_archive_ref_matches_manifest(
         bundle_manifest_ref,
         expected_path=COMPETITION_BUNDLE_MANIFEST_PATH,
+        expected_role=COMPETITION_BUNDLE_MANIFEST_ROLE,
         expected_sha=judge_validator.sha256_file(manifest_path),
         label=f"competition_config_archive.files.{COMPETITION_BUNDLE_MANIFEST_PATH}",
         repo_root=repo_root,
@@ -415,6 +417,10 @@ def require_competition_config_archive_matches_bundle_manifest(
         validate_archive_ref_matches_manifest(
             require_object(files.get(path_text), f"competition_config_archive.files.{path_text}"),
             expected_path=path_text,
+            expected_role=judge_validator.require_string(
+                entry.get("role"),
+                f"competition env bundle {path_text}.role",
+            ),
             expected_sha=judge_validator.require_string(
                 entry.get("sha256"),
                 f"competition env bundle {path_text}.sha256",
@@ -477,6 +483,7 @@ def validate_archive_ref_matches_manifest(
     ref: dict[str, Any],
     *,
     expected_path: str,
+    expected_role: str | None = None,
     expected_sha: str,
     label: str,
     repo_root: Path,
@@ -484,6 +491,10 @@ def validate_archive_ref_matches_manifest(
     checked = judge_validator.validate_ref(ref, repo_root=repo_root)
     if checked["path"] != expected_path:
         raise ValueError(f"{label}.path must match bundle-manifest path")
+    if expected_role is not None:
+        role = judge_validator.require_string(ref.get("role"), f"{label}.role")
+        if role != expected_role:
+            raise ValueError(f"{label}.role must match bundle-manifest")
     if checked["sha256"] != expected_sha:
         raise ValueError(f"{label}.sha256 must match bundle-manifest sha256")
 

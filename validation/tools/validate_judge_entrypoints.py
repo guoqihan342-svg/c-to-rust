@@ -1900,12 +1900,16 @@ def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id
     skip_permissions = profile.get("opencode_skip_permissions")
     if not isinstance(skip_permissions, bool):
         raise ValueError(f"{entry_id} opencode profile opencode_skip_permissions must be a boolean")
+    auto_retry = profile.get("auto_retry")
+    if auto_retry is not True:
+        raise ValueError(f"{entry_id} opencode profile auto_retry must be true")
     return {
         "opencode_command": command,
         "opencode_model": model,
         "opencode_agent": agent,
         "opencode_variant": variant,
         "opencode_skip_permissions": skip_permissions,
+        "auto_retry": auto_retry,
     }
 
 

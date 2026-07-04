@@ -875,8 +875,13 @@ def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
 
     for path in sorted(candidate_config_files(root)):
         rel = validator.repo_relative(path, repo_root)
+        if rel == "config/competition-env/bundle-manifest.json":
+            role = "competition-env-bundle-manifest"
+        else:
+            role = validator.COMPETITION_ENV_BUNDLE_FILE_ROLES[rel]
         files[rel] = {
             "path": rel,
+            "role": role,
             "status": "present",
             "sha256": validator.sha256_file(path),
             "bytes": path.stat().st_size,
