@@ -848,6 +848,7 @@ def build_publishability(
         "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
         "required_agent": validator.COMPETITION_OPENCODE_AGENT,
         "required_model": validator.COMPETITION_OPENCODE_MODEL,
+        "required_variant": validator.COMPETITION_OPENCODE_VARIANT,
         "opencode_glm51_required": True,
         "opencode_glm51_preflight_status": preflight_status,
         "opencode_glm51_publishable": opencode_glm51_publishable,

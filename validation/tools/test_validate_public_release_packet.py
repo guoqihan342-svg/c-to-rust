@@ -41,6 +41,97 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_verified_unsafe_baseline_fixture(path: Path) -> dict:
+    output_ref = {"path": "validation/evidence/demo/c2rust-output.rs", "sha256": "1" * 64, "status": "generated"}
+    compile_ref = {"path": "validation/evidence/demo/c2rust-output.rlib", "sha256": "2" * 64, "status": "compiled"}
+    direct_ref = {
+        "path": "validation/evidence/demo/l3-demo-c2rust-direct-replay.json",
+        "sha256": "3" * 64,
+        "status": "passed",
+        "binding": "same_c2rust_output",
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_ref,
+        "replay_kind": "direct_c2rust_output_replay",
+        "correctness_role": "direct_replay_evidence",
+    }
+    payload = {
+        "report_kind": "c2rust-verified-unsafe-baseline",
+        "status": "passed",
+        "semantic_pass": True,
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_ref,
+        "direct_c2rust_replay": {
+            "status": "passed",
+            "semantic_pass": False,
+            "observable_replay_pass": True,
+            "artifact": direct_ref,
+            "c2rust_output": output_ref,
+            "compile_artifact": compile_ref,
+        },
+        "same_output_gate_refs": {
+            "c_oracle": {
+                "path": "validation/evidence/demo/c-oracle-status.json",
+                "sha256": "4" * 64,
+                "status": "C_ORACLE_GENERATED",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "rust_replay": direct_ref,
+            "schema_diff": {
+                "path": "validation/evidence/demo/diff.json",
+                "sha256": "5" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "negative_diff": {
+                "path": "validation/evidence/demo/negative-diff.json",
+                "sha256": "6" * 64,
+                "status": "expected_failed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "unsafe_scan": {
+                "path": "validation/evidence/demo/unsafe-scan.json",
+                "sha256": "7" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "unsafe_ledger": {
+                "path": "validation/evidence/demo/unsafe-ledger.json",
+                "sha256": "8" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "final_verification": {
+                "path": "validation/evidence/demo/final-verification.json",
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+        },
+    }
+    write_json(path, payload)
+    return {
+        "path": repo_relative(path),
+        "sha256": judge_validator.sha256_file(path),
+        "status": "passed",
+        "semantic_pass": True,
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
 def write_competition_summary_fixture(summary_path: Path) -> tuple[dict, dict]:
     metrics_path = summary_path.parent / "workflow-metrics.json"
     summary = {
@@ -382,6 +473,7 @@ def write_opencode_safety_transform_attempt_fixture(
         "oracle": write_text_artifact(evidence_root / "oracle.json", '{"status":"passed"}\n'),
         "schema_diff": write_text_artifact(evidence_root / "schema-diff.json", '{"status":"passed"}\n'),
         "unsafe_scan": write_text_artifact(evidence_root / "unsafe-scan.json", '{"status":"passed"}\n'),
+        "baseline_verification": write_verified_unsafe_baseline_fixture(evidence_root / "verified-unsafe-baseline.json"),
     }
     workflow_metrics_path = REPO_ROOT / refs["workflow_metrics"]["path"]
     workflow_metrics = json.loads(workflow_metrics_path.read_text(encoding="utf-8"))
@@ -413,6 +505,7 @@ def write_opencode_safety_transform_attempt_fixture(
     }
     workflow_metrics["per_unit_statuses"][0]["translation_before_after"] = {
         "status": "bound",
+        "baseline_verification": refs["baseline_verification"],
         "baseline": refs["baseline"],
         "final": refs["final"],
         "accepted_patch": refs["accepted_patch"],
@@ -570,6 +663,7 @@ def write_opencode_safety_transform_attempt_fixture(
                     "patch_log": refs["patch_log"],
                 },
                 "verification_delta": {
+                    "baseline_verification": refs["baseline_verification"],
                     "compiled": True,
                     "oracle_evidence": refs["oracle"],
                     "semantic_evidence": {"schema_diff": refs["schema_diff"]},
@@ -1022,6 +1116,7 @@ def valid_packet(root: Path) -> dict:
             "required_agent_tool": "opencode",
             "required_agent": "c2rust-migrator",
             "required_model": "GLM-5.1",
+            "required_variant": "max",
             "opencode_glm51_required": True,
             "opencode_glm51_preflight_status": "passed",
             "opencode_glm51_publishable": True,
@@ -1315,6 +1410,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertFalse(packet["publishability"]["competition_exact_publishable"])
         self.assertEqual(packet["publishability"]["required_agent"], "c2rust-migrator")
         self.assertEqual(packet["publishability"]["required_model"], "GLM-5.1")
+        self.assertEqual(packet["publishability"]["required_variant"], "max")
         self.assertEqual(packet["competition_host_readiness"]["status"], "blocked")
         self.assertEqual(packet["competition_host_readiness"]["required_agent"], "c2rust-migrator")
         self.assertEqual(packet["competition_host_readiness"]["required_model"], "GLM-5.1")
@@ -1418,6 +1514,9 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertIn("harness_architecture_summary", schema["required"])
         self.assertIn("evidence_cost_retention", schema["required"])
         self.assertIn("competition_host_readiness", schema["required"])
+        publishability = schema["properties"]["publishability"]
+        self.assertIn("required_variant", publishability["required"])
+        self.assertEqual(publishability["properties"]["required_variant"]["const"], "max")
         host_readiness = schema["properties"]["competition_host_readiness"]
         self.assertEqual(host_readiness["$ref"], "#/$defs/competitionHostReadiness")
         host_readiness = schema["$defs"]["competitionHostReadiness"]
@@ -2490,6 +2589,7 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "required_agent_tool": "opencode",
             "required_agent": "c2rust-migrator",
             "required_model": "GLM-5.1",
+            "required_variant": "max",
             "opencode_glm51_required": True,
             "opencode_glm51_preflight_status": "passed",
             "opencode_glm51_publishable": True,
@@ -2524,6 +2624,26 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertTrue(
             any("publishability.publication_scope must match external readiness" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_validate_packet_rejects_publishability_required_variant_drift_even_when_bundle_matches(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-publishability-variant-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+        bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+        bundle_payload["publishability"]["required_variant"] = "lite"
+        write_json(bundle_path, bundle_payload)
+        packet["publishability"] = json.loads(json.dumps(bundle_payload["publishability"]))
+        packet["judge_milestone_bundle"]["sha256"] = packet_validator.judge_validator.sha256_file(bundle_path)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("publishability.required_variant" in error and "max" in error for error in result["errors"]),
             result["errors"],
         )
 

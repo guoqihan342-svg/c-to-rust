@@ -378,6 +378,7 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text(f"{name}\n", encoding="utf-8")
         refs[name] = {"path": repo_relative(artifact), "sha256": validator.sha256_file(artifact)}
+    verified_baseline_ref = write_verified_unsafe_baseline_ref(artifact_dir / "verified-unsafe-baseline.json")
     summary_path = artifact_dir / "competition-run-summary.json"
     summary_payload = valid_competition_run_summary_payload(run_id="run-test")
     workflow_metrics_path = write_competition_run_summary_with_workflow_metrics(summary_path, summary_payload)
@@ -500,6 +501,7 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
                     "patch_log": refs["patch-log.jsonl"],
                 },
                 "verification_delta": {
+                    "baseline_verification": verified_baseline_ref,
                     "compiled": True,
                     "oracle_evidence": refs["oracle.json"],
                     "semantic_evidence": {"schema_diff": refs["schema-diff.json"]},
@@ -584,6 +586,7 @@ def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds
             "failed": False,
             "translation_before_after": {
                 "status": "bound",
+                "baseline_verification": verified_baseline_ref,
                 "baseline": refs["baseline-unsafe.rs"],
                 "final": refs["final-safe.rs"],
                 "accepted_patch": refs["accepted.patch"],
@@ -6473,6 +6476,23 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         attempt_ref["sha256"] = validator.sha256_file(attempt_path)
 
         with self.assertRaisesRegex(ValueError, r"must match workflow_metrics\.per_unit_statuses"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_baseline_verification_drift_from_workflow_metrics(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        drifted_ref = write_verified_unsafe_baseline_ref(temp_dir / "attempt-evidence" / "other-verified-baseline.json")
+        payload["safety_transform_units"][0]["verification_delta"]["baseline_verification"] = drifted_ref
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"baseline_verification must match workflow_metrics\.per_unit_statuses"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
     def test_harness_artifact_contracts_deep_validates_opencode_safety_transform_attempt(self) -> None:

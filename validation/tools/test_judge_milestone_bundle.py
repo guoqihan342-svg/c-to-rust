@@ -1103,6 +1103,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
         self.assertFalse(report["publishability"]["external_milestone"])
         self.assertEqual(report["publishability"]["required_agent"], "c2rust-migrator")
+        self.assertEqual(report["publishability"]["required_variant"], "max")
         self.assertTrue(report["publishability"]["opencode_glm51_required"])
         self.assertEqual(report["publishability"]["opencode_glm51_preflight_status"], "passed")
         self.assertTrue(report["publishability"]["opencode_glm51_publishable"])

@@ -687,6 +687,8 @@ def require_publishability_publication_scope_contract(
         raise ValueError("publishability.required_agent must be c2rust-migrator")
     if publishability.get("required_model") != judge_validator.COMPETITION_OPENCODE_MODEL:
         raise ValueError("publishability.required_model must be GLM-5.1")
+    if publishability.get("required_variant") != judge_validator.COMPETITION_OPENCODE_VARIANT:
+        raise ValueError("publishability.required_variant must be max")
     readiness = competition_host_readiness if isinstance(competition_host_readiness, dict) else {}
     if readiness.get("required_agent_tool") != judge_validator.COMPETITION_OPENCODE_COMMAND:
         raise ValueError("competition_host_readiness.required_agent_tool must be opencode")

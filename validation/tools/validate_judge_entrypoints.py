@@ -4044,6 +4044,19 @@ def validate_opencode_safety_transform_unit_matches_workflow_metrics(
         )
 
     delta = require_object(unit.get("verification_delta"), f"{prefix}.verification_delta")
+    compare_artifact_binding(
+        validate_verified_unsafe_baseline_ref(
+            delta.get("baseline_verification"),
+            f"{prefix}.verification_delta.baseline_verification",
+            repo_root=repo_root,
+        ),
+        validate_verified_unsafe_baseline_ref(
+            workflow_evidence.get("baseline_verification"),
+            f"{prefix}.workflow_metrics.per_unit_statuses.translation_before_after.baseline_verification",
+            repo_root=repo_root,
+        ),
+        f"{prefix}.verification_delta.baseline_verification must match workflow_metrics.per_unit_statuses",
+    )
     for unit_field, workflow_field in (
         ("oracle_evidence", "oracle_evidence"),
         ("unsafe_scan_evidence", "unsafe_scan_evidence"),
