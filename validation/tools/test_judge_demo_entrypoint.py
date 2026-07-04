@@ -532,6 +532,7 @@ class JudgeDemoEntrypointTest(unittest.TestCase):
 
 
 def write_judge_demo_fixture_outputs(out_root: Path) -> None:
+    out_root_rel = out_root.resolve().relative_to(REPO_ROOT).as_posix()
     summary_dir = out_root / "summary"
     harness_dir = out_root / "harness"
     summary_dir.mkdir(parents=True, exist_ok=True)
@@ -674,7 +675,7 @@ def write_judge_demo_fixture_outputs(out_root: Path) -> None:
         "profile_id": "flashdb-fdb-utils-before-after",
         "proof_class": "local-simulation",
         "before_after_exhibit_report": {
-            "path": "target/judge-demo-unit/summary/before-after-exhibit.json",
+            "path": f"{out_root_rel}/summary/before-after-exhibit.json",
             "sha256": judge_demo_sha256(before_after_path),
             "status": "passed",
             "report_kind": "before-after-exhibit",
