@@ -7,7 +7,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DOC_ROOTS = (
     Path("README.md"),
-    Path("CONTEXT.md"),
     Path("config"),
     Path("docs"),
     Path("flashDB_rust/README.md"),

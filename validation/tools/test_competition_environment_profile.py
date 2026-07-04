@@ -315,7 +315,7 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertIn("final validator", text)
                 self.assertRegex(text, r"(不受控 LLM code generation|uncontrolled LLM code generation)")
 
-    def test_opencode_single_interaction_context_md_is_handoff_only(self) -> None:
+    def test_opencode_single_interaction_uses_canonical_handoff_entrypoint(self) -> None:
         docs = [
             PROFILE_DIR / "opencode-single-interaction.md",
             PROFILE_DIR / "opencode-single-interaction.en.md",
@@ -327,7 +327,11 @@ class CompetitionEnvironmentProfileTests(unittest.TestCase):
                 self.assertNotIn("Input: repository + CONTEXT.md", text)
                 self.assertNotIn("review CONTEXT.md for current state", text)
                 self.assertIn(
-                    "CONTEXT.md is handoff-only and is not a judge input, release document, evidence source, or entrypoint.",
+                    "current state and next steps live in `docs/c2rust-migration-agent/future-vision-and-mvp.md`",
+                    text,
+                )
+                self.assertIn(
+                    "not judge inputs, release documents, evidence sources, or entrypoints",
                     text,
                 )
 

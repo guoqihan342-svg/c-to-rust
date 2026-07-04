@@ -2265,6 +2265,14 @@ def validate_context_management_contract(
             raise ValueError(f"context_pack.entrypoints.{key}: {error}") from error
     if isinstance(primary_report, str) and entrypoints.get("primary_report") not in (None, primary_report):
         raise ValueError("context_pack.entrypoints.primary_report must match context_management_contract.primary_report")
+    for artifact_key in ("batch_profile_report", "run_plan_report"):
+        expected_value = expected_artifacts.get(artifact_key)
+        if isinstance(expected_value, dict):
+            expected_value = expected_value.get("path")
+        if isinstance(expected_value, str) and entrypoints.get(artifact_key) != expected_value:
+            raise ValueError(
+                f"context_pack.entrypoints.{artifact_key} must match expected_artifacts.{artifact_key}"
+            )
 
     return {
         "path": path_text,
@@ -3606,7 +3614,12 @@ def validate_opencode_hostless_rehearsal_contract(ref: dict[str, Any], *, repo_r
     context_contract = validate_context_management_contract(
         context_payload,
         path_text=context_binding["path"],
-        expected_artifacts={"context_pack": context_binding["path"], "agent_index": agent_binding["path"]},
+        expected_artifacts={
+            "context_pack": context_binding["path"],
+            "agent_index": agent_binding["path"],
+            "batch_profile_report": batch_profile_report["path"],
+            "run_plan_report": run_plan_report["path"],
+        },
         repo_root=repo_root,
     )
     agent_contract = validate_agent_coordination_contract(agent_payload, path_text=agent_binding["path"])

@@ -26,7 +26,7 @@ Codex 聊天、Codex 子智能体、其它 OpenCode 模型、本机 `local-simul
 输出: 真实 C 源函数的 Rust 翻译 + L3 语义通过 evidence
 ```
 
-CONTEXT.md is handoff-only and is not a judge input, release document, evidence source, or entrypoint.
+Standalone handoff files such as `CONTEXT.md` are not maintained; current state and next steps live in `docs/c2rust-migration-agent/future-vision-and-mvp.md`. They are not judge inputs, release documents, evidence sources, or entrypoints.
 
 输出要求：
 - 至少一个真实 C 源函数经 typed IR → Rust draft → C oracle → Rust replay → diff → negative diff → final verification 完整证据链
@@ -211,7 +211,7 @@ python3 -B -m validation.tools.opencode_agent_harness write-merge-plan \
 
 9. 如需多 agent 并行，优先把可复用输入写成 `config/competition-env/planned-batches/*.json`，再用 `run-batch-profile` 一键建立 ledger、生成有序 assignment、用 `max_workers` 执行 planned workers、运行 bounded `auto_retry=true` 并运行最终 worker-summary 聚合；调试时可手工展开为 `init-run`、`plan-source-file`、`run-plan --mode deterministic --execute-merge --auto-retry --max-workers <N>`。profile 设置 `emit_route_governance_metrics_report=true` 时，还会生成并绑定 `summary/route-governance-metrics-report.json`。手工 `assign-slice` 加重复 `run-worker --mode deterministic` 加 `write-merge-plan` 仍是更低层展开版。先用同一个 `run_id` 运行 `opencode-preflight` 证明 OpenCode 能遵守 exact-command contract；只有 preflight 通过且要让 OpenCode 包装一个 assigned request 时，才使用 `run-worker --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>` 或 `run-plan --mode opencode --opencode-model GLM-5.1 --opencode-agent c2rust-migrator --opencode-variant max --opencode-preflight-report <report>`。旧 run 的 preflight report 不可复用，worker summary 仍必须通过 final runner 和 common summary validator 收敛；最多 5 轮 repair retry 后仍缺少 planned worker summary 时最终 merge 会 fail-closed 跳过，OpenCode 启动数据库锁重试则单独记录为 `opencode_process_retries`。
 
-若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。如存在 CONTEXT.md，只能把它作为 handoff-only 当前状态上下文读取。
+若评测方设置 600 分钟上限，将其视为外部预算；没有该限制时也不要降低证据门禁。当前状态和下一步只读取 `docs/c2rust-migration-agent/future-vision-and-mvp.md`；不得把独立 handoff 文件当作评委入口或证据来源。
 只使用 Shell 工具执行命令，不用 Write/Edit 工具改项目源码。
 在 harness retry 路径之外遇到失败就记录原因，不进入手工或无界修复循环。
 ```

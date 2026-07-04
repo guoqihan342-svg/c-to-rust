@@ -6546,6 +6546,25 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
                 repo_root=REPO_ROOT,
             )
 
+    def test_opencode_hostless_rehearsal_contract_rejects_context_run_plan_ref_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+        context_path = REPO_ROOT / payload["context_pack"]["path"]
+        context_payload = json.loads(context_path.read_text(encoding="utf-8"))
+        context_payload["entrypoints"]["run_plan_report"] = "target/stale-run-plan-report.json"
+        write_json(context_path, context_payload)
+        payload["context_pack"]["sha256"] = validator.sha256_file(context_path)
+        write_json(rehearsal_path, payload)
+
+        with self.assertRaisesRegex(ValueError, r"context_pack\.entrypoints\.run_plan_report"):
+            validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+
     def test_opencode_worker_report_summary_claims_must_match_bound_summary(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)

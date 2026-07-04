@@ -204,7 +204,7 @@ openspec validate --all --strict
 
 ## 贡献与文档
 
-- 会话接手短交接：`CONTEXT.md`
+- 当前状态、接力和全局待办唯一入口：`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
 - C2Rust 专题文档索引：`docs/c2rust-migration-agent/README.md`
 - 文档分类索引：`docs/c2rust-migration-agent/index/README.md`
 - 唯一全局待办：`docs/c2rust-migration-agent/future-vision-and-mvp.md` / `docs/c2rust-migration-agent/future-vision-and-mvp.en.md`
