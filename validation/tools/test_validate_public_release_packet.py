@@ -869,6 +869,76 @@ def attach_opencode_safety_attempt(packet: dict, attempt_ref: dict) -> None:
     packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
 
 
+def attach_bound_opencode_judge_index(packet: dict, root: Path, attempt_ref: dict) -> None:
+    index_payload = judge_entrypoint_fixtures.valid_opencode_judge_index_payload()
+    judge_entrypoint_fixtures.materialize_opencode_judge_index_artifacts(
+        index_payload,
+        root / "judge-out",
+        profile_payload={
+            "schema_version": 1,
+            "profile_id": "opencode-profile",
+            "mode": "opencode",
+            **judge_entrypoint_fixtures.opencode_launch_policy(),
+            "auto_retry": True,
+        },
+    )
+    attempt_binding = json.loads(json.dumps(attempt_ref))
+    index_payload["evidence_artifact_refs"]["opencode_safety_transform_attempt"] = attempt_binding
+    worker = index_payload["opencode_agent_runtime"]["workers"][0]
+    worker["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+    worker_report_path = REPO_ROOT / worker["worker_report"]["path"]
+    worker_report = json.loads(worker_report_path.read_text(encoding="utf-8"))
+    worker_report["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+    write_json(worker_report_path, worker_report)
+    worker["worker_report"]["sha256"] = judge_validator.sha256_file(worker_report_path)
+
+    remove_published_artifact_ref(
+        packet,
+        artifact_name="judge_evidence_index",
+        entrypoint_id="opencode_multi_worker_evaluate_profile",
+    )
+    index_path = root / "judge-out" / "harness" / "judge-evidence-index.json"
+    write_json(index_path, index_payload)
+    append_published_artifact_ref(
+        packet,
+        {
+            "artifact_name": "judge_evidence_index",
+            "entrypoint_id": "opencode_multi_worker_evaluate_profile",
+            "path": repo_relative(index_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(index_path),
+        },
+    )
+
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+    notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+    notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+    packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
+def remove_published_artifact_ref(packet: dict, *, artifact_name: str, entrypoint_id: str) -> None:
+    refs = packet["publication_manifest"].setdefault("published_artifact_refs", [])
+    packet["publication_manifest"]["published_artifact_refs"] = [
+        ref
+        for ref in refs
+        if not (
+            isinstance(ref, dict)
+            and ref.get("artifact_name") == artifact_name
+            and ref.get("entrypoint_id") == entrypoint_id
+        )
+    ]
+    packet["publication_manifest"]["published_artifact_count"] = len(
+        packet["publication_manifest"]["published_artifact_refs"]
+    )
+    packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+        packet["publication_manifest"]
+    )
+
+
 def append_published_artifact_ref(packet: dict, ref: dict) -> None:
     refs = packet["publication_manifest"].setdefault("published_artifact_refs", [])
     next_ref = json.loads(json.dumps(ref))
@@ -2261,11 +2331,28 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
         packet = valid_packet(temp_dir)
         attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir)
         attach_opencode_safety_attempt(packet, attempt_ref)
+        attach_bound_opencode_judge_index(packet, temp_dir, attempt_ref)
         write_json(packet_path, packet)
 
         result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
 
         self.assertEqual(result["status"], "passed", result["errors"])
+
+    def test_validate_packet_rejects_opencode_safety_attempt_missing_from_published_judge_evidence_index(self) -> None:
+        temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-attempt-missing-index-", dir=REPO_ROOT / "target"))
+        packet_path = temp_dir / "summary" / "public-release-packet.json"
+        packet = valid_packet(temp_dir)
+        attempt_ref = write_opencode_safety_transform_attempt_fixture(temp_dir)
+        attach_opencode_safety_attempt(packet, attempt_ref)
+        write_json(packet_path, packet)
+
+        result = packet_validator.validate_packet(packet_path, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("judge_evidence_index must bind opencode_safety_transform_attempt" in error for error in result["errors"]),
+            result["errors"],
+        )
 
     def test_validate_packet_rejects_published_judge_index_opencode_attempt_source_mismatch(self) -> None:
         temp_dir = Path(tempfile.mkdtemp(prefix="public-release-packet-opencode-index-attempt-", dir=REPO_ROOT / "target"))
@@ -2285,6 +2372,9 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
                 **judge_entrypoint_fixtures.opencode_launch_policy(),
                 "auto_retry": True,
             },
+        )
+        index_payload["evidence_artifact_refs"]["opencode_safety_transform_attempt"] = json.loads(
+            json.dumps(attempt_ref)
         )
         worker = index_payload["opencode_agent_runtime"]["workers"][0]
         worker["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
@@ -2308,6 +2398,11 @@ class PublicReleasePacketValidatorTests(unittest.TestCase):
             "status": "present",
             "sha256": judge_validator.sha256_file(index_path),
         }
+        remove_published_artifact_ref(
+            packet,
+            artifact_name="judge_evidence_index",
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+        )
         append_published_artifact_ref(packet, index_ref)
         bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
         bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))

@@ -2776,7 +2776,16 @@ def compare_opencode_launch_policy(
     *,
     expected_label: str = "opencode_agent_runtime.opencode_preflight_report",
 ) -> None:
-    if actual != expected:
+    comparable_fields = (
+        "opencode_command",
+        "opencode_model",
+        "opencode_agent",
+        "opencode_variant",
+        "opencode_skip_permissions",
+    )
+    actual_policy = {field: actual.get(field) for field in comparable_fields}
+    expected_policy = {field: expected.get(field) for field in comparable_fields}
+    if actual_policy != expected_policy:
         raise ValueError(f"{label}.launch_policy must match {expected_label}")
 
 
@@ -3973,6 +3982,8 @@ def validate_opencode_safety_transform_attempt_contract(ref: dict[str, Any], *, 
     except SystemExit as error:
         raise ValueError(f"opencode_safety_transform_attempt.summary validation failed: {error}") from error
     worker_summary_payload = load_json(summary_path)
+    if worker_summary_payload.get("run_id") != run_id:
+        raise ValueError("opencode_safety_transform_attempt.summary.run_id must match run_id")
     worker_final_gate = require_object(
         worker_summary_payload.get("final_gate"),
         "opencode_safety_transform_attempt.summary.final_gate",

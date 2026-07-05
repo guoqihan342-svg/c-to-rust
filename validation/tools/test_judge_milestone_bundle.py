@@ -2702,6 +2702,12 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
             "path": "validation/evidence/accepted.patch",
             "sha256": "f" * 64,
         }
+        drifted_unsafe_reduction = {
+            "status": "measured",
+            "baseline_total_unsafe": 1,
+            "current_total_unsafe": 1,
+            "reduced_by": 0,
+        }
         write_json(
             index_path,
             {
@@ -2712,7 +2718,7 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
                             "unit_id": unit_id,
                             "status": "converged",
                             **drifted_refs,
-                            "unsafe_reduction": unsafe_reduction,
+                            "unsafe_reduction": drifted_unsafe_reduction,
                         }
                     ],
                     "final_gate_status": "passed",
@@ -2794,6 +2800,11 @@ class JudgeMilestoneBundleTests(unittest.TestCase):
         self.assertIn(
             "before_after_exhibit_workflow_metrics_ref_mismatch:"
             "before_after_judge_demo:flashdb/real-fdb-calc-crc32:accepted_patch",
+            report["blockers"],
+        )
+        self.assertIn(
+            "before_after_exhibit_workflow_metrics_unsafe_reduction_mismatch:"
+            "before_after_judge_demo:flashdb/real-fdb-calc-crc32",
             report["blockers"],
         )
         workflow_unit = report["workflow_metrics"]["sources"][0]["before_after_units"][0]

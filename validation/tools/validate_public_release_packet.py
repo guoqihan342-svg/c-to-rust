@@ -685,24 +685,141 @@ def require_published_judge_evidence_indexes_are_deep_validated(
     *,
     repo_root: Path,
 ) -> None:
+    present_attempt_refs = [
+        ref for ref in opencode_safety_transform_attempt_refs(publication) if ref.get("status") == "present"
+    ]
+    if len(present_attempt_refs) > 1:
+        raise ValueError(
+            "publication_manifest.published_artifact_refs must include at most one present "
+            "opencode_safety_transform_attempt"
+        )
+    published_attempt = present_attempt_refs[0] if present_attempt_refs else None
+    published_attempt_binding = (
+        judge_validator.validate_artifact_binding_shape(
+            published_attempt,
+            "publication_manifest.published_artifact_refs.opencode_safety_transform_attempt",
+            repo_root=repo_root,
+        )
+        if published_attempt is not None
+        else None
+    )
+    published_attempt_bound_to_index = False
+    same_entrypoint_judge_index_seen = False
+    published_attempt_entrypoint = (
+        published_attempt.get("entrypoint_id") if isinstance(published_attempt, dict) else None
+    )
     for ref in published_artifact_refs(publication):
         ref_obj = require_object(ref, "publication_manifest.published_artifact_refs[]")
         if ref_obj.get("artifact_name") != "judge_evidence_index" or ref_obj.get("status") != "present":
             continue
+        same_entrypoint = (
+            published_attempt_binding is not None
+            and isinstance(published_attempt_entrypoint, str)
+            and ref_obj.get("entrypoint_id") == published_attempt_entrypoint
+        )
+        if same_entrypoint:
+            same_entrypoint_judge_index_seen = True
         try:
             checked = judge_validator.validate_ref(ref_obj, repo_root=repo_root)
             path_text = str(checked["path"])
             payload = judge_validator.load_json(judge_validator.repo_path(path_text, repo_root=repo_root))
+            evidence_refs = payload.get("evidence_artifact_refs")
+            expected_artifacts = None
+            if (
+                published_attempt_binding is not None
+                and isinstance(evidence_refs, dict)
+                and "opencode_safety_transform_attempt" in evidence_refs
+            ):
+                expected_artifacts = {
+                    "opencode_safety_transform_attempt": str(published_attempt_binding["path"]),
+                }
             judge_validator.validate_judge_evidence_index_contract(
                 payload,
                 path_text=path_text,
                 repo_root=repo_root,
+                expected_artifacts=expected_artifacts,
             )
+            if published_attempt_binding is not None:
+                index_binds_attempt = judge_index_binds_published_opencode_attempt(
+                    payload,
+                    published_attempt=published_attempt,
+                    published_attempt_binding=published_attempt_binding,
+                    repo_root=repo_root,
+                )
+                if same_entrypoint and not index_binds_attempt:
+                    raise ValueError(
+                        "same-entrypoint judge_evidence_index must bind opencode_safety_transform_attempt"
+                    )
+                if index_binds_attempt:
+                    published_attempt_bound_to_index = True
         except (OSError, json.JSONDecodeError, ValueError) as error:
             raise ValueError(
                 "publication_manifest.published_artifact_refs[].judge_evidence_index contract failed: "
                 f"{error}"
             ) from error
+    if published_attempt_binding is not None and not same_entrypoint_judge_index_seen:
+        raise ValueError(
+            "publication_manifest.published_artifact_refs must include a present same-entrypoint "
+            "judge_evidence_index when publishing opencode_safety_transform_attempt"
+        )
+    if published_attempt_binding is not None and not published_attempt_bound_to_index:
+        raise ValueError(
+            "publication_manifest.published_artifact_refs[].judge_evidence_index must bind "
+            "opencode_safety_transform_attempt"
+        )
+
+
+def judge_index_binds_published_opencode_attempt(
+    payload: dict[str, Any],
+    *,
+    published_attempt: dict[str, Any],
+    published_attempt_binding: dict[str, Any],
+    repo_root: Path,
+) -> bool:
+    refs = payload.get("evidence_artifact_refs")
+    if not isinstance(refs, dict) or "opencode_safety_transform_attempt" not in refs:
+        return False
+    index_attempt = require_object(
+        refs.get("opencode_safety_transform_attempt"),
+        "judge_evidence_index.evidence_artifact_refs.opencode_safety_transform_attempt",
+    )
+    index_attempt_binding = judge_validator.validate_artifact_binding_shape(
+        index_attempt,
+        "judge_evidence_index.evidence_artifact_refs.opencode_safety_transform_attempt",
+        repo_root=repo_root,
+    )
+    judge_validator.compare_artifact_binding(
+        index_attempt_binding,
+        published_attempt_binding,
+        "judge_evidence_index.evidence_artifact_refs.opencode_safety_transform_attempt",
+    )
+    if index_attempt.get("status") != published_attempt.get("status"):
+        raise ValueError(
+            "judge_evidence_index.evidence_artifact_refs.opencode_safety_transform_attempt.status "
+            "must match publication_manifest.published_artifact_refs"
+        )
+    runtime = require_object(payload.get("opencode_agent_runtime"), "judge_evidence_index.opencode_agent_runtime")
+    workers = runtime.get("workers")
+    if not isinstance(workers, list):
+        raise ValueError("judge_evidence_index.opencode_agent_runtime.workers must be an array")
+    for index, worker_value in enumerate(workers):
+        worker = require_object(worker_value, f"judge_evidence_index.opencode_agent_runtime.workers[{index}]")
+        worker_attempt = worker.get("opencode_safety_transform_attempt")
+        if not isinstance(worker_attempt, dict):
+            continue
+        worker_attempt_binding = judge_validator.validate_artifact_binding_shape(
+            worker_attempt,
+            f"judge_evidence_index.opencode_agent_runtime.workers[{index}].opencode_safety_transform_attempt",
+            repo_root=repo_root,
+        )
+        if (
+            worker_attempt_binding.get("path") == published_attempt_binding.get("path")
+            and worker_attempt_binding.get("sha256") == published_attempt_binding.get("sha256")
+        ):
+            return True
+    raise ValueError(
+        "judge_evidence_index.opencode_agent_runtime.workers must bind opencode_safety_transform_attempt"
+    )
 
 
 def competition_host_readiness_allows_exact_preflight(readiness: dict[str, Any]) -> bool:

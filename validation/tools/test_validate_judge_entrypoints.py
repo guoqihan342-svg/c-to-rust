@@ -6816,6 +6816,45 @@ class JudgeEntrypointsValidatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "summary.final_gate_status must match worker summary final_gate.status"):
             validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
 
+    def test_opencode_safety_transform_attempt_rejects_summary_run_id_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        summary_path = REPO_ROOT / payload["summary"]["path"]
+        summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary_payload["run_id"] = "drifted-run"
+
+        workflow_metrics_path = REPO_ROOT / summary_payload["workflow_metrics"]["path"]
+        workflow_metrics_payload = json.loads(workflow_metrics_path.read_text(encoding="utf-8"))
+        workflow_metrics_payload["run_id"] = "drifted-run"
+        write_json(workflow_metrics_path, workflow_metrics_payload)
+        summary_payload["workflow_metrics"]["sha256"] = validator.sha256_file(workflow_metrics_path)
+
+        command_log_path = REPO_ROOT / summary_payload["command_log"]["path"]
+        command_log_entries = [
+            json.loads(line) for line in command_log_path.read_text(encoding="utf-8").splitlines() if line
+        ]
+        for entry in command_log_entries:
+            entry["run_id"] = "drifted-run"
+        command_log_path.write_text(
+            "\n".join(json.dumps(entry, sort_keys=True) for entry in command_log_entries) + "\n",
+            encoding="utf-8",
+        )
+        summary_payload["command_log"]["sha256"] = validator.sha256_file(command_log_path)
+
+        write_json(summary_path, summary_payload)
+        payload["summary"]["sha256"] = validator.sha256_file(summary_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "summary.run_id must match run_id"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
     def test_opencode_safety_transform_attempt_rejects_workflow_metrics_binding_drift(self) -> None:
         target_dir = REPO_ROOT / "target"
         target_dir.mkdir(exist_ok=True)

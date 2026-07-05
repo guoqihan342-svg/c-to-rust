@@ -577,6 +577,17 @@ def before_after_workflow_metrics_ref_blockers(
                     blockers.append(
                         f"before_after_exhibit_workflow_metrics_ref_mismatch:{entrypoint_id}:{unit_id}:{field}"
                     )
+            workflow_unsafe = measured_unsafe_reduction_tuple(workflow_unit.get("unsafe_reduction"))
+            core_unsafe = measured_unsafe_reduction_tuple(core_unit.get("unsafe_reduction"))
+            if workflow_unsafe is not None or core_unsafe is not None:
+                if core_unsafe is None:
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_unsafe_reduction_missing:{entrypoint_id}:{unit_id}"
+                    )
+                elif workflow_unsafe is None or core_unsafe != workflow_unsafe:
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_unsafe_reduction_mismatch:{entrypoint_id}:{unit_id}"
+                    )
     return blockers
 
 
@@ -624,6 +635,17 @@ def before_after_units_by_id(value: object) -> dict[str, dict[str, Any]]:
 
 def unit_has_before_after_artifact_ref(value: dict[str, Any]) -> bool:
     return any(isinstance(value.get(field), dict) for field in BEFORE_AFTER_ARTIFACT_REF_FIELDS)
+
+
+def measured_unsafe_reduction_tuple(value: object) -> tuple[object, object, object, object] | None:
+    if not isinstance(value, dict) or value.get("status") != "measured":
+        return None
+    return (
+        value.get("status"),
+        int_or_none(value.get("baseline_total_unsafe")),
+        int_or_none(value.get("current_total_unsafe")),
+        int_or_none(value.get("reduced_by")),
+    )
 
 
 def ref_binding_tuple(value: dict[str, Any]) -> tuple[object, object]:
