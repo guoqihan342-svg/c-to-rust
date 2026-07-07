@@ -32,7 +32,7 @@ fn is_integer_lvalue_to_rvalue_cast_expr(expr: &Value) -> bool {
     let Ok(target) = expr_type(expr) else {
         return false;
     };
-    if !matches!(target.kind, ClangTypeKind::Integer { .. }) {
+    if !is_integer_or_target_dependent_integer_type(&target) {
         return false;
     }
     let Some(operand) = inner(expr).first() else {
@@ -41,7 +41,44 @@ fn is_integer_lvalue_to_rvalue_cast_expr(expr: &Value) -> bool {
     let Ok(operand_ty) = expr_type(operand) else {
         return false;
     };
-    matches!(operand_ty.kind, ClangTypeKind::Integer { .. }) && operand_ty.kind == target.kind
+    is_same_lvalue_to_rvalue_integer_type(&target, &operand_ty)
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_integer_or_target_dependent_integer_type(ty: &ClangTypeSkeleton) -> bool {
+    matches!(ty.kind, ClangTypeKind::Integer { .. })
+        || target_dependent_lvalue_read_spelling(ty).is_some()
+}
+
+#[cfg(feature = "typed-ir")]
+fn is_same_lvalue_to_rvalue_integer_type(
+    target: &ClangTypeSkeleton,
+    operand_ty: &ClangTypeSkeleton,
+) -> bool {
+    if matches!(target.kind, ClangTypeKind::Integer { .. })
+        && matches!(operand_ty.kind, ClangTypeKind::Integer { .. })
+    {
+        return operand_ty.kind == target.kind;
+    }
+    let Some(target_spelling) = target_dependent_lvalue_read_spelling(target) else {
+        return false;
+    };
+    let Some(operand_spelling) = target_dependent_lvalue_read_spelling(operand_ty) else {
+        return false;
+    };
+    target_spelling == operand_spelling && target.canonical == operand_ty.canonical
+}
+
+#[cfg(feature = "typed-ir")]
+fn target_dependent_lvalue_read_spelling(ty: &ClangTypeSkeleton) -> Option<&str> {
+    let spelling = unqualified_lvalue_read_spelling(&ty.spelled);
+    (is_target_dependent_integer_spelling(spelling) && ty.canonical == spelling).then_some(spelling)
+}
+
+#[cfg(feature = "typed-ir")]
+fn unqualified_lvalue_read_spelling(spelling: &str) -> &str {
+    let spelling = spelling.trim();
+    spelling.strip_prefix("const ").unwrap_or(spelling).trim()
 }
 
 #[cfg(feature = "typed-ir")]

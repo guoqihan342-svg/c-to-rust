@@ -406,6 +406,7 @@
         "CStyleCastExpr IntegralCast explicit typed IR cast in return/value contexts",
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer value-context LValueToRValue explicit typed IR node",
+        "target-dependent integer LValueToRValue preserved for later target ABI binding",
         "non-integer NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
         "non-integer implicit castKind fail-closed",
@@ -482,6 +483,10 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "value_expr_skeleton_keeps_pointer_lvalue_to_rvalue_transparent",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
               "name": "clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -549,6 +554,10 @@
         {
           "name": "clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "value_expr_skeleton_preserves_target_dependent_integer_lvalue_to_rvalue_for_abi_binding",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
           "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
@@ -625,6 +634,11 @@
           "fail_closed_reason": "non-integer implicit conversions in control-flow conditions require explicit typed IR/lowering semantics before they can be accepted"
         },
         {
+          "name": "value_expr_skeleton_keeps_pointer_lvalue_to_rvalue_transparent",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "target-dependent integer read preservation must not turn pointer reads into explicit LValueToRValue value semantics"
+        },
+        {
           "name": "implicit_cast_without_cast_kind_stays_fail_closed",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "ImplicitCastExpr without castKind lacks clang semantic evidence and must fail closed"
@@ -652,6 +666,7 @@
         "plain char/short/long/long long/size_t width binding",
         "__size_t spelling bound through target pointer width",
         "plain char signedness provenance",
+        "target-dependent integer LValueToRValue retention before target ABI binding",
         "explicit-width-field refusal",
         "profile-bound target integer width lowering",
         "profile-bound sizeof integer type lowering",
@@ -705,6 +720,10 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "value_expr_skeleton_preserves_target_dependent_integer_lvalue_to_rvalue_for_abi_binding",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
               "name": "sizeof type/expression operand lowering tests",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
@@ -728,6 +747,10 @@
             {
               "name": "sizeof/_Alignof target ABI and alignment refusal tests",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "clang_ast_fixture_rejects_integral_c_style_cast_without_target_abi",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -799,6 +822,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "value_expr_skeleton_preserves_target_dependent_integer_lvalue_to_rvalue_for_abi_binding",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "sizeof_long_lowers_from_target_long_width_profile",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -865,6 +892,11 @@
           "name": "type_from_qual_type_with_unrecognized_target_abi_stays_fail_closed",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "unknown or absent target ABI profile must not bind target-dependent integer widths"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_integral_c_style_cast_without_target_abi",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "preserving target-dependent integer LValueToRValue must not bypass the target ABI width requirement"
         },
         {
           "name": "type_from_qual_type_with_target_abi_keeps_unproven_integer_widths_unsupported",

@@ -1,4 +1,20 @@
 #[cfg(feature = "typed-ir")]
+pub(super) fn is_target_dependent_integer_spelling(spelling: &str) -> bool {
+    matches!(
+        spelling.trim(),
+        "char"
+            | "short"
+            | "unsigned short"
+            | "long"
+            | "unsigned long"
+            | "long long"
+            | "unsigned long long"
+            | "size_t"
+            | "__size_t"
+    )
+}
+
+#[cfg(feature = "typed-ir")]
 pub(super) fn target_dependent_integer_width(
     spelling: &str,
     target_abi: Option<&TargetAbiProfile>,

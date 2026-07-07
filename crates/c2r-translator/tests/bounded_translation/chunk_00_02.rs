@@ -484,19 +484,24 @@ fn clang_ast_fixture_replays_integral_c_style_cast_without_clang() {
             width: 32
         }
     ));
+    let IrExpr::LValueToRValue {
+        target: read_ty,
+        expr: read_expr,
+        ..
+    } = expr.as_ref()
+    else {
+        panic!("expected integral C-style cast operand to preserve LValueToRValue, got {expr:?}");
+    };
     assert!(matches!(
-        expr.as_ref(),
-        IrExpr::Var {
-            name,
-            ty: IrType {
-                kind: IrTypeKind::Integer {
-                    signed: false,
-                    width: 64
-                },
-                ..
-            },
-            ..
-        } if name == "value"
+        read_ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 64
+        }
+    ));
+    assert!(matches!(
+        read_expr.as_ref(),
+        IrExpr::Var { name, .. } if name == "value"
     ));
 
     let emitted = emit_rust_from_ir_with_globals(&narrow.function_ir, &narrow.globals)
@@ -511,5 +516,25 @@ fn clang_ast_fixture_replays_integral_c_style_cast_without_clang() {
         "typed-ir-clang-ast-fixture-integral-c-style-cast",
         rust,
         "assert_eq!(narrow(0x1_0000_0001u64), 1u32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_integral_c_style_cast_without_target_abi() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/integral_c_style_cast_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "narrow")
+        .expect_err("target-dependent C-style cast fixture must require target ABI");
+
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(
+        error
+            .message
+            .contains("unsigned long requires target ABI width provenance"),
+        "{error:?}"
     );
 }

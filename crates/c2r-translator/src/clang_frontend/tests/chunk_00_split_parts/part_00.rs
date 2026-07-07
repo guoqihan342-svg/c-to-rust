@@ -479,6 +479,76 @@
     }
 
     #[test]
+    fn value_expr_skeleton_preserves_target_dependent_integer_lvalue_to_rvalue_for_abi_binding() {
+        for (target_spelling, operand_spelling) in [
+            ("unsigned long", "unsigned long"),
+            ("size_t", "size_t"),
+            ("unsigned long", "const unsigned long"),
+        ] {
+            let expr = serde_json::json!({
+                "kind": "ImplicitCastExpr",
+                "castKind": "LValueToRValue",
+                "type": { "qualType": target_spelling },
+                "inner": [
+                    {
+                        "kind": "DeclRefExpr",
+                        "type": { "qualType": operand_spelling },
+                        "referencedDecl": { "name": "value" }
+                    }
+                ]
+            });
+
+            let skeleton = value_expr_skeleton_from_ast(&expr)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "target-dependent integer read skeleton for {target_spelling} from {operand_spelling}"
+                    )
+                });
+            let ClangExprSkeleton::LValueToRValue {
+                target,
+                expr: operand,
+            } = &skeleton
+            else {
+                panic!("expected target-dependent integer LValueToRValue read for {target_spelling} from {operand_spelling}, got {skeleton:?}");
+            };
+            assert_eq!(target.spelled, target_spelling);
+            assert!(matches!(
+                target.kind,
+                ClangTypeKind::Unsupported { ref reason }
+                    if reason.contains("requires target ABI width provenance")
+            ));
+            assert!(matches!(
+                operand.as_ref(),
+                ClangExprSkeleton::DeclRef { name, .. } if name == "value"
+            ));
+        }
+    }
+
+    #[test]
+    fn value_expr_skeleton_keeps_pointer_lvalue_to_rvalue_transparent() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "LValueToRValue",
+            "type": { "qualType": "unsigned long *" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "unsigned long *" },
+                    "referencedDecl": { "name": "p" }
+                }
+            ]
+        });
+
+        let skeleton = value_expr_skeleton_from_ast(&expr)
+            .expect("pointer LValueToRValue should stay transparent");
+
+        assert!(matches!(
+            skeleton,
+            ClangExprSkeleton::DeclRef { ref name, .. } if name == "p"
+        ));
+    }
+
+    #[test]
     fn c_style_noop_integer_cast_preserves_explicit_cast_node() {
         let expr = serde_json::json!({
             "kind": "CStyleCastExpr",

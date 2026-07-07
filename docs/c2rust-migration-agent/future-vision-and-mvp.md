@@ -367,6 +367,8 @@ H7 后续硬化只作为回归门禁，不允许抢占 P0-C/P0-D 主线：`run_j
 
 补充（2026-07-07，C-style integral cast fixture）：no-clang clang AST fixture replay 已把显式 `(unsigned int)value` / `CStyleCastExpr IntegralCast` 固定为 `implicit=false` typed IR cast，并验证 ABI 绑定后可生成 `return (value as u32);` 的 narrowing candidate。该项只是 fixture/test 证据和 candidate context，不是 C/Rust diff、不是 named-slice semantic pass，也不增加 `translation_coverage_numerator`。
 
+补充（2026-07-07，target ABI read preservation）：clang skeleton 现在会在保留 integral casts 的上下文中保留 `unsigned long`/`size_t` 等 target-dependent integer 的 `LValueToRValue` 节点，后续由 target ABI profile 绑定 signed/width；pointer `LValueToRValue` 仍保持透明/专用路径边界，避免把缺 provenance 的 pointer read 误放宽。该项仍是 typed-IR/fixture candidate 证据，不是语义验收。
+
 ### Lowering 层（从 Semantic IR 到 Rust candidate）
 
 这一层做从"描述 C"到"生成 Rust"的转换。关键原则：

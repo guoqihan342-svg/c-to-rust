@@ -348,6 +348,8 @@ This layer is the translator's core asset. It only answers: "What does this C co
 
 Supplement (2026-07-07, C-style integral cast fixture): no-clang clang AST fixture replay now pins explicit `(unsigned int)value` / `CStyleCastExpr IntegralCast` as an `implicit=false` typed-IR cast and verifies that ABI binding can emit the narrowing candidate `return (value as u32);`. This is fixture/test evidence and candidate context only, not a C/Rust diff, not a named-slice semantic pass, and it does not increase `translation_coverage_numerator`.
 
+Supplement (2026-07-07, target ABI read preservation): the clang skeleton now preserves `LValueToRValue` nodes for target-dependent integers such as `unsigned long` and `size_t` when integral casts are being preserved, leaving signedness/width binding to the target ABI profile. Pointer `LValueToRValue` remains transparent or on dedicated narrow paths, so pointer reads without provenance are not widened. This remains typed-IR/fixture candidate evidence, not semantic acceptance.
+
 ### Lowering Layer (from Semantic IR to Rust candidate)
 
 This layer converts "describing C" into "generating Rust". Key principles:
