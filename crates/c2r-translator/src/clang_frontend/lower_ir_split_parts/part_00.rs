@@ -252,6 +252,7 @@ pub(super) fn lower_expr(expr: &ClangExprSkeleton) -> Result<IrExpr, ClangFronte
             arg_type,
             ty,
             alignment_bits,
+            ..
         } => {
             let value = alignof_type_bytes(arg_type, *alignment_bits)?;
             validate_alignof_result_fits_type(value, ty)?;

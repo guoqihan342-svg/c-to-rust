@@ -486,6 +486,7 @@ fn unary_expr_or_type_trait_skeleton_from_ast(
             arg_type,
             ty,
             alignment_bits: None,
+            alignment_type_spellings: clang_type_candidate_spellings(arg_type_object),
         })
     } else {
         Ok(ClangExprSkeleton::SizeOfType { arg_type, ty })

@@ -68,6 +68,28 @@ pub(super) fn target_abi_alignment_bits_for_type(
 }
 
 #[cfg(feature = "typed-ir")]
+fn target_abi_alignment_bits_for_alignof_type(
+    ty: &ClangTypeSkeleton,
+    alignment_type_spellings: &[String],
+    target_abi: &TargetAbiProfile,
+) -> Option<u16> {
+    target_abi_alignment_bits_for_type(ty, target_abi).or_else(|| {
+        if !alignment_type_spellings
+            .iter()
+            .any(|spelling| matches!(spelling.trim(), "size_t" | "__size_t"))
+        {
+            return None;
+        }
+        alignment_type_spellings
+            .iter()
+            .filter_map(|spelling| {
+                type_from_qual_type_with_target_abi(spelling, Some(target_abi)).ok()
+            })
+            .find_map(|candidate| target_abi_alignment_bits_for_type(&candidate, target_abi))
+    })
+}
+
+#[cfg(feature = "typed-ir")]
 pub(super) fn nonzero_width(width: u16) -> Option<u16> {
     if width == 0 {
         None
@@ -245,10 +267,15 @@ pub(super) fn bind_target_abi_to_expr(expr: &mut ClangExprSkeleton, target_abi: 
         ClangExprSkeleton::AlignOfType {
             arg_type,
             alignment_bits,
+            alignment_type_spellings,
             ..
         } => {
             bind_target_abi_to_type(arg_type, target_abi);
-            *alignment_bits = target_abi_alignment_bits_for_type(arg_type, target_abi);
+            *alignment_bits = target_abi_alignment_bits_for_alignof_type(
+                arg_type,
+                alignment_type_spellings,
+                target_abi,
+            );
         }
         ClangExprSkeleton::Index { base, index, .. } => {
             bind_target_abi_to_expr(base, target_abi);

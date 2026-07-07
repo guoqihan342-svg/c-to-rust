@@ -448,6 +448,38 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "alignof_size_t_bytes",
+      "type": {
+        "qualType": "size_t (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "UnaryExprOrTypeTraitExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "valueCategory": "prvalue",
+                  "name": "_Alignof",
+                  "argType": {
+                    "qualType": "size_t",
+                    "desugaredQualType": "unsigned long",
+                    "canonicalQualType": "unsigned long"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

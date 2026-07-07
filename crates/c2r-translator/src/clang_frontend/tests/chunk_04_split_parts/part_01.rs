@@ -54,6 +54,80 @@
     }
 
     #[test]
+    fn alignof_typedef_uses_clang_desugared_alignment_spelling() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "_Alignof",
+            "argType": {
+                "qualType": "size_t",
+                "desugaredQualType": "unsigned long",
+                "canonicalQualType": "unsigned long"
+            }
+        });
+
+        let mut skeleton = expr_skeleton_from_ast(&expr).expect("_Alignof(size_t) should parse");
+        let target_abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            pointer_width: 64,
+            long_width: 64,
+            long_align: 64,
+            ..TargetAbiProfile::default()
+        };
+        bind_target_abi_to_expr(&mut skeleton, &target_abi);
+
+        let ir = lower_expr(&skeleton)
+            .expect("_Alignof(size_t) lowers when clang proves unsigned long alignment");
+        let IrExpr::LitInt { value, ty, .. } = ir else {
+            panic!("expected literal _Alignof(size_t) result, got {ir:?}");
+        };
+        assert_eq!(value, 8);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
+    }
+
+    #[test]
+    fn alignof_non_size_typedef_stays_fail_closed_without_dedicated_alignment_rule() {
+        let expr = serde_json::json!({
+            "kind": "UnaryExprOrTypeTraitExpr",
+            "type": {"qualType": "size_t"},
+            "valueCategory": "prvalue",
+            "name": "_Alignof",
+            "argType": {
+                "qualType": "uint64_t",
+                "desugaredQualType": "unsigned long",
+                "canonicalQualType": "unsigned long"
+            }
+        });
+
+        let mut skeleton = expr_skeleton_from_ast(&expr).expect("_Alignof(uint64_t) should parse");
+        let target_abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            pointer_width: 64,
+            long_width: 64,
+            long_align: 64,
+            ..TargetAbiProfile::default()
+        };
+        bind_target_abi_to_expr(&mut skeleton, &target_abi);
+
+        let error = lower_expr(&skeleton)
+            .expect_err("_Alignof(uint64_t) still needs a dedicated typedef alignment rule");
+        assert_eq!(error.kind, "unsupported_alignof_type");
+        assert!(
+            error.message.contains("_Alignof") && error.message.contains("alignment"),
+            "unexpected error: {error:?}"
+        );
+    }
+
+    #[test]
     fn type_from_qual_type_maps_fixed_array() {
         let ty = type_from_qual_type("uint32_t[256]").expect("array type");
 

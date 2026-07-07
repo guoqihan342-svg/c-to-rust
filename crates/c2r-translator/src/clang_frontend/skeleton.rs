@@ -124,6 +124,7 @@ pub enum ClangExprSkeleton {
         arg_type: ClangTypeSkeleton,
         ty: ClangTypeSkeleton,
         alignment_bits: Option<u16>,
+        alignment_type_spellings: Vec<String>,
     },
     NullPtr {
         ty: ClangTypeSkeleton,

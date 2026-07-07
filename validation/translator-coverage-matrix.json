@@ -706,6 +706,7 @@
         "profile-bound sizeof expression argType lowering",
         "profile-bound sizeof pointer type lowering",
         "profile-bound _Alignof integer type lowering",
+        "profile-bound _Alignof typedef-backed size_t lowering from clang-proven desugared/canonical spelling",
         "alignment trait fail-closed without explicit alignment/layout profile",
         "fail_closed_without_abi_profile",
         "translator input target ABI profile preservation"
@@ -739,6 +740,10 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
             },
             {
+              "name": "_Alignof(size_t) no-clang AST refusal and clang-proven desugared alignment fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_width_ast.json"
+            },
+            {
               "name": "target ABI width fixture replay tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
@@ -766,6 +771,10 @@
             {
               "name": "_Alignof fail-closed and profile-bound lowering tests",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "alignof_typedef_uses_clang_desugared_alignment_spelling",
+              "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_04_split_parts/part_01.rs"
             }
           ]
         },
@@ -808,6 +817,10 @@
             {
               "name": "clang_ast_fixture_replays_alignof_int_with_target_alignment_profile",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_alignof_size_t_with_desugared_alignment_profile",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_00.rs"
             }
           ]
         },
@@ -878,6 +891,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "alignof_typedef_uses_clang_desugared_alignment_spelling",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_04_split_parts/part_01.rs"
+        },
+        {
           "name": "clang_parse_spec_preserves_target_abi_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -908,6 +925,10 @@
         {
           "name": "clang_ast_fixture_replays_alignof_int_with_target_alignment_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_alignof_size_t_with_desugared_alignment_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_00.rs"
         },
         {
           "name": "test_translator_input_preserves_target_abi_profile",
@@ -991,9 +1012,19 @@
           "fail_closed_reason": "_Alignof requires explicit target alignment/layout profile evidence and must not be derived from width-only ABI evidence"
         },
         {
+          "name": "alignof_non_size_typedef_stays_fail_closed_without_dedicated_alignment_rule",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_04_split_parts/part_01.rs",
+          "fail_closed_reason": "non-size_t typedef-backed _Alignof spellings require a dedicated alignment rule before consuming clang desugared/canonical alignment evidence"
+        },
+        {
           "name": "clang_ast_fixture_rejects_alignof_int_without_alignment_profile",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "_Alignof no-clang fixture replay must fail closed unless the target ABI profile supplies explicit alignment evidence"
+        },
+        {
+          "name": "clang_ast_fixture_rejects_alignof_size_t_without_desugared_alignment_profile",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_00.rs",
+          "fail_closed_reason": "_Alignof(size_t) must use clang-proven desugared/canonical type spelling plus the matching target ABI alignment field; width provenance alone is not alignment evidence"
         },
         {
           "name": "clang_ast_fixture_rejects_size_t_without_target_abi_profile",
