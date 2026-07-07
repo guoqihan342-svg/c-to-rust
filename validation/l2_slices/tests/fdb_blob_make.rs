@@ -51,6 +51,10 @@ fn fdb_blob_make_matches_real_flashdb_fixture() {
             case.id
         );
         assert_eq!(returned.buf, value_ptr.cast_mut(), "{} blob.buf", case.id);
-        assert_eq!(returned.size, case.expected_outputs.blob_size, "{} blob.size", case.id);
+        assert_eq!(
+            returned.size, case.expected_outputs.blob_size,
+            "{} blob.size",
+            case.id
+        );
     }
 }

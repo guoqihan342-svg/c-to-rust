@@ -1,0 +1,975 @@
+class _JudgeMilestoneBundleTestsPart00:
+    def test_opencode_preflight_proof_summary_binds_runtime_env(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-runtime-env-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["status"], "passed")
+        self.assertEqual(summary["opencode_agent"], "c2rust-migrator")
+        self.assertEqual(summary["opencode_variant"], "max")
+        self.assertEqual(summary["opencode_runtime_env"], preflight_payload["opencode_runtime_env"])
+        self.assertEqual(summary["opencode_runtime_env_sha256"], preflight_payload["opencode_runtime_env"]["env_sha256"])
+
+    def test_opencode_preflight_proof_summary_recomputes_session_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-contract-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        session_path = Path(fixture["session_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+        session_payload["session_events"][0]["part"]["state"]["input"]["command"] = (
+            "python3 -B validation/tools/opencode_agent_harness.py list-workers --db target/fake.sqlite3"
+        )
+        write_json(session_path, session_payload)
+        preflight_payload["opencode_session_evidence"]["sha256"] = bundle.validator.sha256_file(session_path)
+        write_json(preflight_path, preflight_payload)
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertNotEqual(summary["status"], "passed")
+
+    def test_opencode_preflight_proof_summary_rejects_failed_session_evidence_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}),
+            ("unparsed_session", {"parsed": False}),
+            ("non_jsonl_format", {"format": "text"}),
+        ]
+        for case_name, updates in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-session-contract-", dir=REPO_ROOT / "target"))
+                fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+                preflight_path = Path(fixture["preflight_path"])
+                session_path = Path(fixture["session_path"])
+                preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                write_json(session_path, session_payload)
+                preflight_payload["opencode_session_evidence"]["sha256"] = bundle.validator.sha256_file(session_path)
+                write_json(preflight_path, preflight_payload)
+
+                summary = bundle.opencode_preflight_proof_summary_from_index(
+                    {
+                        "opencode_agent_runtime": {
+                            "opencode_preflight_report": {
+                                "path": repo_relative(preflight_path),
+                                "sha256": bundle.validator.sha256_file(preflight_path),
+                                "status": "present",
+                            }
+                        }
+                    },
+                    entrypoint_id="opencode_multi_worker_evaluate_profile",
+                    proof_class="local-simulation",
+                    repo_root=REPO_ROOT,
+                )
+
+                self.assertNotEqual(summary["status"], "passed")
+
+    def test_opencode_preflight_proof_summary_requires_opencode_run_argv(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-opencode-argv-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload.pop("opencode_argv")
+        write_json(handoff_path, handoff_payload)
+        preflight_payload["handoff_contract"]["sha256"] = bundle.validator.sha256_file(handoff_path)
+        write_json(preflight_path, preflight_payload)
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["status"], "failed")
+        self.assertFalse(summary.get("opencode_run_argv_bound"))
+
+    def test_bundle_binds_all_entrypoints_metrics_and_opencode_runtime(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-bundle-", dir=REPO_ROOT / "target"))
+        readiness_path = temp_dir / "summary" / "judge-entrypoints-readiness.json"
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        before_metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        before_route_metrics_path = temp_dir / "before-after" / "summary" / "route-governance-metrics-report.json"
+        before_exhibit_path = temp_dir / "before-after" / "summary" / "before-after-exhibit.json"
+        evidence_governance_path = temp_dir / "competition-smoke" / "reports" / "evidence-governance.json"
+        before_index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
+        opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
+        opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
+        c2rust_baseline = c2rust_baseline_rollup_fixture(temp_dir / "c2rust-baseline")
+
+        write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
+        preflight_fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        opencode_preflight_path = Path(preflight_fixture["preflight_path"])
+        opencode_models_stdout_path = Path(preflight_fixture["model_stdout_path"])
+        opencode_models_stderr_path = Path(preflight_fixture["model_stderr_path"])
+        launch_policy = dict(preflight_fixture["launch_policy"])
+        launch_policy_sha256 = str(preflight_fixture["launch_policy_sha256"])
+        preflight_binding = {
+            "path": repo_relative(opencode_preflight_path),
+            "sha256": bundle.validator.sha256_file(opencode_preflight_path),
+            "status": "passed",
+            "contract_status": "executed",
+            "run_id": "opencode",
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": launch_policy_sha256,
+        }
+        preflight_artifact_ref = {
+            "path": repo_relative(opencode_preflight_path),
+            "sha256": bundle.validator.sha256_file(opencode_preflight_path),
+            "status": "present",
+        }
+        write_json(
+            before_metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 1,
+                "units_converged": 1,
+                "avg_repair_rounds": 1.0,
+                "auto_recovery_rate": 1.0,
+                "human_interventions": 0,
+                "llm_calls": 1,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+                "per_unit_statuses": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "repair_history": {"rollback_ids": ["rollback-001"]},
+                    }
+                ],
+            },
+        )
+        write_json(
+            before_route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=1,
+                tracked_route_decision_artifacts=2,
+                tracked_slice_gate_contexts=1,
+                s2_workflow_run_count=1,
+                s2_reduced_by=2,
+                c2rust_baseline=c2rust_baseline,
+            ),
+        )
+        write_json(evidence_governance_path, evidence_governance_payload())
+        write_json(
+            before_exhibit_path,
+            {
+                "report_kind": "before-after-exhibit",
+                "status": "passed",
+                "units": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "baseline_verification": {
+                            "path": "validation/evidence/baseline-verification.json",
+                            "sha256": "e" * 64,
+                            "status": "passed",
+                            "semantic_pass": True,
+                            "semantic_claim_source": "verified_unsafe_baseline_gates",
+                            "generated_draft_semantic_pass": False,
+                        },
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                        "repair_history": {
+                            "patch_events_path": "target/demo/retry-repair-history.jsonl",
+                            "patch_events_sha256": "f" * 64,
+                            "rollback_ids": ["rollback-001"],
+                            "statuses": ["failed", "passed", "verified"],
+                            "verified": True,
+                        },
+                        "patch_origin": {
+                            "source": "accepted_safe_evidence",
+                            "accepted_patch_bound": True,
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                        "safety_loop_provenance": {
+                            "status": "accepted_evidence_bound",
+                            "patch_source": "accepted_safe_evidence",
+                            "baseline_verification_status": "passed",
+                            "unsafe_delta": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "repair_rounds": 1,
+                            "auto_recovered": True,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                    }
+                ],
+            },
+        )
+        write_json(
+            before_index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "evidence_artifact_refs": {
+                    "before_after_exhibit": {
+                        "path": repo_relative(before_exhibit_path),
+                        "sha256": bundle.validator.sha256_file(before_exhibit_path),
+                        "status": "present",
+                    }
+                },
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 1,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "core_translation_quality": {
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "status": "converged",
+                            "baseline": {"path": "validation/evidence/baseline.rs", "sha256": "a" * 64},
+                            "final": {"path": "validation/evidence/final.rs", "sha256": "b" * 64},
+                            "accepted_patch": {"path": "validation/evidence/accepted.patch", "sha256": "c" * 64},
+                            "oracle_evidence": {"path": "validation/evidence/final-verification.json", "sha256": "d" * 64},
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                        }
+                    ],
+                    "final_gate_status": "passed",
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 1,
+                    },
+                    "semantic_pass_count": 1,
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                    },
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+                "judge_headline": {
+                    "report_kind": "judge-headline",
+                    "worker_count": 1,
+                    "repair_round_cap": 5,
+                    "semantic_gate": False,
+                    "opencode_runtime": {"enabled": False, "semantic_gate": False},
+                },
+            },
+        )
+        write_json(
+            opencode_metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 2,
+                "units_converged": 2,
+                "avg_repair_rounds": 0.0,
+                "auto_recovery_rate": 0.0,
+                "human_interventions": 0,
+                "llm_calls": 0,
+                "unsafe_reduction": {"status": "not_measured"},
+                "per_unit_statuses": [
+                    {"unit_id": "flashdb/real-fdb-blob-make", "repair_rounds": 0, "auto_recovered": False},
+                    {"unit_id": "flashdb/real-fdb-kv-set", "repair_rounds": 0, "auto_recovered": False},
+                ],
+            },
+        )
+        write_json(
+            opencode_route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=2,
+                tracked_route_decision_artifacts=2,
+                tracked_slice_gate_contexts=2,
+                s2_workflow_run_count=1,
+                s2_reduced_by=0,
+                c2rust_baseline=c2rust_baseline,
+            ),
+        )
+        write_json(
+            opencode_index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 2,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "judge_headline": {
+                    "report_kind": "judge-headline",
+                    "worker_count": 2,
+                    "repair_round_cap": 5,
+                    "semantic_gate": False,
+                    "opencode_runtime": {
+                        "enabled": True,
+                        "worker_count": 2,
+                        "all_contracts_executed": True,
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                    },
+                },
+                "opencode_agent_runtime": {
+                    "runtime": "opencode",
+                    "worker_count": 2,
+                    "all_contracts_executed": True,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "contract_status_counts": {"executed": 2},
+                    "worker_ids": ["worker-a", "worker-b"],
+                    "opencode_preflight_report": preflight_binding,
+                },
+                "evidence_artifact_refs": {
+                    "worker_plan": {"path": "target/opencode/harness/plans/workers.json", "sha256": "a" * 64},
+                    "context_pack": {"path": "target/opencode/harness/context-pack.json", "sha256": "b" * 64},
+                    "agent_index": {"path": "target/opencode/harness/agent-index.json", "sha256": "c" * 64},
+                    "opencode_preflight_report": preflight_artifact_ref,
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 2,
+                "readiness_report": {"path": repo_relative(readiness_path), "status": "present"},
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "headline": "Judge entrypoints passed: 2/2 executed; semantic_gate=false",
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 2,
+                        "configured_count": 2,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "semantic_claim_source": "validator-owned-artifacts",
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "purpose": "core-translation-before-after-exhibit",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "run_id": "before-after",
+                        "judge_focus": ["unsafe reduction"],
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(before_metrics_path),
+                            "route_governance_metrics_report": repo_relative(before_route_metrics_path),
+                            "evidence_governance_report": repo_relative(evidence_governance_path),
+                            "judge_evidence_index": repo_relative(before_index_path),
+                        },
+                    },
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "run_id": "opencode",
+                        "judge_focus": ["OpenCode multi-worker runtime"],
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(opencode_metrics_path),
+                            "route_governance_metrics_report": repo_relative(opencode_route_metrics_path),
+                            "judge_evidence_index": repo_relative(opencode_index_path),
+                        },
+                    },
+                ],
+                "validation": {
+                    "status": "passed",
+                    "source_pin_contract": {
+                        "status": "passed",
+                        "target_id": "flashdb",
+                        "repository": "https://gitcode.com/xwxf/FlashDB.git",
+                        "branch": "competition",
+                        "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                    },
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(before_metrics_path),
+                                "route_governance_metrics_report": artifact_ref(before_route_metrics_path),
+                                "evidence_governance_report": artifact_ref(evidence_governance_path),
+                                "judge_evidence_index": artifact_ref(before_index_path),
+                            },
+                        },
+                        {
+                            "id": "opencode_multi_worker_evaluate_profile",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(opencode_metrics_path),
+                                "route_governance_metrics_report": artifact_ref(opencode_route_metrics_path),
+                                "judge_evidence_index": artifact_ref(opencode_index_path),
+                            },
+                        },
+                    ],
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["report_kind"], "judge-milestone-bundle")
+        self.assertEqual(report["status"], "passed")
+        self.assertFalse(report["claim_boundary"]["semantic_gate"])
+        self.assertFalse(report["claim_boundary"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["claim_boundary"]["translation_coverage_numerator"], 0)
+        self.assertIn("2/2 executed", report["summary"]["headline"])
+        self.assertEqual(report["judge_entrypoints_run_report"]["path"], repo_relative(run_report_path))
+        self.assertEqual(report["entrypoints"][0]["artifacts"]["workflow_metrics"]["status"], "present")
+        self.assertIn("sha256", report["entrypoints"][0]["artifacts"]["workflow_metrics"])
+        self.assertEqual(report["workflow_metrics"]["rollup"]["source_count"], 2)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["units_total"], 3)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["units_converged"], 3)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["measured_unsafe_reduction_source_count"], 1)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["source_count"], 2)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["observed_source_count"], 1)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["repair_history_unit_count"], 1)
+        self.assertEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["auto_recovered_unit_count"], 1)
+        self.assertAlmostEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["avg_repair_rounds"], 1.0 / 3.0)
+        self.assertAlmostEqual(report["workflow_metrics"]["rollup"]["repair_activity"]["auto_recovery_rate"], 1.0 / 3.0)
+        self.assertIn("semantic gate", report["workflow_metrics"]["rollup"]["repair_activity"]["boundary"])
+        self.assertEqual(report["route_governance_metrics"]["report_kind"], "route-governance-metrics-rollup")
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["source_count"], 2)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["accepted_evidence_semantic_pass_count"], 3)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_route_decision_artifacts"], 4)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_slice_gate_contexts"], 3)
+        c2rust_route_rollup = report["route_governance_metrics"]["rollup"]["c2rust_baseline"]
+        self.assertEqual(c2rust_route_rollup["report_kind"], "c2rust-baseline-milestone-rollup")
+        self.assertEqual(c2rust_route_rollup["source_report_count"], 2)
+        self.assertEqual(c2rust_route_rollup["unique_evidence_root_count"], 1)
+        self.assertEqual(c2rust_route_rollup["unique_manifest_count"], 2)
+        self.assertEqual(c2rust_route_rollup["status_counts"], {"skipped": 2})
+        self.assertEqual(c2rust_route_rollup["output_status_counts"], {"missing": 2})
+        self.assertEqual(c2rust_route_rollup["compile_status_counts"], {"missing": 2})
+        self.assertEqual(c2rust_route_rollup["skipped_without_output_count"], 2)
+        self.assertEqual(c2rust_route_rollup["compile_passed_count"], 0)
+        self.assertFalse(c2rust_route_rollup["semantic_gate"])
+        self.assertEqual(c2rust_route_rollup["translation_coverage_numerator"], 0)
+        self.assertEqual(report["blocked_repairs_rollup"]["rollup"]["blocked_repair_count"], 0)
+        self.assertFalse(report["blocked_repairs_rollup"]["semantic_gate"])
+        self.assertEqual(report["blocked_repairs_rollup"]["translation_coverage_numerator"], 0)
+        self.assertTrue(report["route_governance_metrics"]["rollup"]["all_target_artifacts_reproducible"])
+        self.assertTrue(report["route_governance_metrics"]["rollup"]["all_retention_policies_present"])
+        self.assertEqual(report["evidence_cost_retention"]["report_kind"], "evidence-cost-retention-rollup")
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["source_count"], 1)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["artifact_count"], 3)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["total_bytes"], 120)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["pipeline_count"], 2)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["runtime_ms"]["total"], 45)
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["runtime_ms"]["max"], 40)
+        self.assertEqual(
+            report["evidence_cost_retention"]["rollup"]["retention_classes"]["committed_release"]["file_count"],
+            2,
+        )
+        self.assertTrue(report["evidence_cost_retention"]["rollup"]["all_sources_passed"])
+        self.assertEqual(report["evidence_cost_retention"]["rollup"]["portability_issue_count"], 0)
+        evidence_cost_source = report["evidence_cost_retention"]["sources"][0]
+        self.assertEqual(evidence_cost_source["policy_compliance"]["policy_tier"], "ci")
+        self.assertEqual(evidence_cost_source["policy_compliance"]["status"], "passed")
+        self.assertEqual(evidence_cost_source["policy_compliance"]["failed_gates"], [])
+        policy_rollup = report["evidence_cost_retention"]["rollup"]["policy_compliance"]
+        self.assertTrue(policy_rollup["all_sources_policy_passed"])
+        self.assertEqual(policy_rollup["tier_counts"], {"ci": 1})
+        self.assertEqual(policy_rollup["failed_gate_counts"], {})
+        self.assertEqual(report["opencode_runtime"]["enabled_entrypoint_count"], 1)
+        self.assertTrue(report["opencode_runtime"]["all_contracts_executed"])
+        self.assertTrue(report["opencode_runtime"]["chat_output_is_evidence_false"])
+        preflight_summary = report["opencode_runtime"]["preflight_proof_summary"]
+        self.assertEqual(preflight_summary["status"], "passed")
+        self.assertEqual(preflight_summary["opencode_model"], "GLM-5.1")
+        self.assertEqual(preflight_summary["required_model"], "GLM-5.1")
+        self.assertTrue(preflight_summary["model_listed"])
+        self.assertEqual(preflight_summary["preflight_report"]["sha256"], bundle.validator.sha256_file(opencode_preflight_path))
+        self.assertEqual(
+            preflight_summary["model_probe_logs"]["stdout"]["sha256"],
+            bundle.validator.sha256_file(opencode_models_stdout_path),
+        )
+        self.assertFalse(preflight_summary["semantic_gate"])
+        self.assertEqual(preflight_summary["translation_coverage_numerator"], 0)
+        self.assertEqual(report["claim_scope"]["external_review_index_ready"], True)
+        self.assertEqual(report["claim_scope"]["semantic_acceptance_ready"], False)
+        self.assertEqual(report["claim_scope"]["competition_exact_ready"], False)
+        self.assertEqual(report["claim_scope"]["translator_generated_coverage_ready"], False)
+        self.assertEqual(report["publishability"]["status"], "internal_preview")
+        self.assertEqual(report["publishability"]["scope"], "full")
+        self.assertEqual(report["publishability"]["publication_scope"], "internal_preview_full")
+        self.assertFalse(report["summary"]["external_milestone_claim_ready"])
+        self.assertEqual(report["publishability"]["blocker_count"], 0)
+        self.assertEqual(report["publishability"]["blockers"], [])
+        self.assertFalse(report["publishability"]["external_milestone_claim_ready"])
+        self.assertFalse(report["publishability"]["external_milestone"])
+        self.assertEqual(report["publishability"]["required_agent"], "c2rust-migrator")
+        self.assertEqual(report["publishability"]["required_variant"], "max")
+        self.assertTrue(report["publishability"]["opencode_glm51_required"])
+        self.assertEqual(report["publishability"]["opencode_glm51_preflight_status"], "passed")
+        self.assertTrue(report["publishability"]["opencode_glm51_publishable"])
+        self.assertFalse(report["publishability"]["semantic_gate"])
+        self.assertEqual(report["publishability"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["publishability"]["all_entrypoints_run_publishable"], True)
+        self.assertEqual(report["publishability"]["competition_exact_publishable"], False)
+        host_readiness = report["competition_host_readiness"]
+        self.assertEqual(host_readiness["report_kind"], "competition-host-readiness")
+        self.assertEqual(host_readiness["status"], "blocked")
+        self.assertEqual(host_readiness["required_agent_tool"], "opencode")
+        self.assertEqual(host_readiness["required_agent"], "c2rust-migrator")
+        self.assertEqual(host_readiness["required_model"], "GLM-5.1")
+        self.assertEqual(host_readiness["required_variant"], "max")
+        self.assertEqual(host_readiness["required_proof_class"], "competition-exact")
+        self.assertEqual(host_readiness["actual_highest_proof_class"], "local-simulation")
+        self.assertFalse(host_readiness["all_entrypoints_competition_exact"])
+        self.assertFalse(host_readiness["competition_exact_host_verified"])
+        self.assertTrue(host_readiness["opencode_glm51_publishable"])
+        self.assertFalse(host_readiness["external_milestone_claim_ready"])
+        self.assertIn("all_entrypoints_competition_exact", host_readiness["missing_requirements"])
+        self.assertIn("competition_exact_host_verified", host_readiness["missing_requirements"])
+        self.assertFalse(host_readiness["semantic_gate"])
+        self.assertEqual(host_readiness["translation_coverage_numerator"], 0)
+        self.assertEqual(report["unsafe_reduction_scope"]["scope"], "partial")
+        self.assertFalse(report["unsafe_reduction_scope"]["all_sources_measured"])
+        self.assertEqual(report["unsafe_reduction_scope"]["measured_units"], 1)
+        self.assertEqual(report["unsafe_reduction_scope"]["total_units"], 3)
+        self.assertEqual(report["semantic_evidence_rollup"]["translation_coverage_numerator"], 0)
+        self.assertFalse(report["semantic_evidence_rollup"]["accepted_evidence_counts_as_translator_coverage"])
+        self.assertEqual(report["core_translation_quality"]["final_gate_statuses"], ["passed"])
+        self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["baseline_total_unsafe"], 2)
+        self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["current_total_unsafe"], 0)
+        self.assertFalse(report["core_translation_quality"]["generated_draft_semantic_pass"])
+        self.assertIn("before_after_repair_exhibit", report)
+        self.assertEqual(report["before_after_repair_exhibit"]["report_kind"], "before-after-repair-exhibit-rollup")
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["source_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["bound_unit_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["verified_repair_source_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["auto_recovered_unit_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["verified_baseline_unit_count"], 1)
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["missing_verified_baseline_unit_count"], 0)
+        self.assertTrue(report["before_after_repair_exhibit"]["rollup"]["all_units_verified_baseline_bound"])
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["unsafe_reduced_by"], 2)
+        self.assertFalse(report["before_after_repair_exhibit"]["rollup"]["semantic_gate"])
+        self.assertFalse(report["before_after_repair_exhibit"]["rollup"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["before_after_repair_exhibit"]["rollup"]["translation_coverage_numerator"], 0)
+        self.assertEqual(
+            report["before_after_repair_exhibit"]["sources"][0]["before_after_units"][0]["unit_id"],
+            "flashdb/real-fdb-calc-crc32",
+        )
+        before_after_unit = report["before_after_repair_exhibit"]["sources"][0]["before_after_units"][0]
+        self.assertIn("baseline_verification", before_after_unit)
+        self.assertEqual(
+            before_after_unit["baseline_verification"],
+            {
+                "path": "validation/evidence/baseline-verification.json",
+                "sha256": "e" * 64,
+                "status": "passed",
+                "semantic_pass": True,
+                "semantic_claim_source": "verified_unsafe_baseline_gates",
+                "generated_draft_semantic_pass": False,
+            },
+        )
+        self.assertEqual(before_after_unit["repair_rounds"], 1)
+        self.assertTrue(before_after_unit["auto_recovered"])
+        self.assertEqual(before_after_unit["root_cause_key"], "unsafe_baseline_requires_repair")
+        self.assertEqual(
+            before_after_unit["repair_history"],
+            {
+                "patch_events_path": "target/demo/retry-repair-history.jsonl",
+                "patch_events_sha256": "f" * 64,
+                "rollback_ids": ["rollback-001"],
+                "statuses": ["failed", "passed", "verified"],
+                "verified": True,
+            },
+        )
+        self.assertEqual(before_after_unit["patch_origin"]["source"], "accepted_safe_evidence")
+        self.assertTrue(before_after_unit["patch_origin"]["accepted_patch_bound"])
+        self.assertFalse(before_after_unit["patch_origin"]["opencode_session_bound"])
+        self.assertTrue(before_after_unit["patch_origin"]["repair_history_bound"])
+        self.assertFalse(before_after_unit["patch_origin"]["semantic_gate"])
+        self.assertEqual(before_after_unit["patch_origin"]["translation_coverage_numerator"], 0)
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["status"], "accepted_evidence_bound")
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["patch_source"], "accepted_safe_evidence")
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["baseline_verification_status"], "passed")
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["unsafe_delta"]["reduced_by"], 2)
+        self.assertFalse(before_after_unit["safety_loop_provenance"]["opencode_session_bound"])
+        self.assertTrue(before_after_unit["safety_loop_provenance"]["repair_history_bound"])
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["repair_rounds"], 1)
+        self.assertTrue(before_after_unit["safety_loop_provenance"]["auto_recovered"])
+        self.assertFalse(before_after_unit["safety_loop_provenance"]["semantic_gate"])
+        self.assertEqual(before_after_unit["safety_loop_provenance"]["translation_coverage_numerator"], 0)
+        self.assertFalse(report["before_after_repair_exhibit"]["semantic_gate"])
+        self.assertFalse(report["before_after_repair_exhibit"]["generated_draft_semantic_pass"])
+        self.assertEqual(report["before_after_repair_exhibit"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["harness_architecture_summary"]["graph_runtime"], "opencode-harness-langgraph-inspired")
+        self.assertEqual(report["harness_architecture_summary"]["repair_round_cap"], 5)
+        self.assertIn("planner", report["harness_architecture_summary"]["roles"])
+        self.assertFalse(report["harness_architecture_summary"]["semantic_gate"])
+        contract_matrix = report["harness_architecture_summary"]["contract_matrix"]
+        self.assertEqual(
+            [entry["stage"] for entry in contract_matrix],
+            ["plan", "translate", "verify", "repair", "report"],
+        )
+        translate_contract = next(entry for entry in contract_matrix if entry["stage"] == "translate")
+        self.assertIn("worker", translate_contract["roles"])
+        self.assertIn("handoff_contract", translate_contract["artifacts"])
+        self.assertIn("opencode_session_evidence", translate_contract["artifacts"])
+        self.assertIn("opencode_contract_verification", translate_contract["validators"])
+        self.assertFalse(translate_contract["semantic_gate"])
+        self.assertFalse(translate_contract["chat_output_is_evidence"])
+        self.assertTrue(all(entry["semantic_gate"] is False for entry in contract_matrix))
+        self.assertEqual(report["proof_classes"]["all"], ["local-simulation"])
+        self.assertEqual(report["proof_class_rollup"]["highest_proof_class"], "local-simulation")
+        self.assertFalse(report["proof_classes"]["has_competition_exact"])
+        known_gap_ids = [gap["gap_id"] for gap in report["known_gaps"]]
+        self.assertIn("local_simulation_not_competition_exact", known_gap_ids)
+        self.assertNotIn("c2rust_baseline_output_still_not_verified_here", known_gap_ids)
+        self.assertIn("accepted_evidence_is_not_translator_generated_coverage", report["must_not_claim"])
+        self.assertIn("opencode_chat_output_is_semantic_evidence", report["must_not_claim"])
+        self.assertIn("run_judge_entrypoints", report["reproduction_commands"])
+        self.assertEqual(len(report["reproduction_commands"]["entrypoints"]), 2)
+        publication_manifest = report["publication_manifest"]
+        self.assertEqual(publication_manifest["report_kind"], "publication-manifest")
+        self.assertEqual(publication_manifest["bundle_version"], 1)
+        self.assertEqual(publication_manifest["publication_scope"], "internal_preview_full")
+        self.assertEqual(publication_manifest["source_commit"]["status"], "present")
+        self.assertRegex(publication_manifest["source_commit"]["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(publication_manifest["repo_commit"], publication_manifest["source_commit"])
+        self.assertEqual(publication_manifest["target_source_pin"]["target_id"], "flashdb")
+        self.assertEqual(publication_manifest["target_source_pin"]["branch"], "competition")
+        self.assertEqual(
+            publication_manifest["target_source_pin"]["canonical_commit"],
+            "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        )
+        self.assertEqual(publication_manifest["judge_config"]["path"], "unknown")
+        self.assertEqual(publication_manifest["judge_entrypoints_run_report"], report["judge_entrypoints_run_report"])
+        self.assertEqual(publication_manifest["readiness_report"], report["readiness_report"])
+        self.assertEqual(publication_manifest["judge_milestone_bundle"]["path"], repo_relative(out_path))
+        self.assertEqual(publication_manifest["competition_config_archive"]["status"], "absent")
+        self.assertEqual(
+            [entry["id"] for entry in publication_manifest["published_entrypoints"]],
+            ["before_after_judge_demo", "opencode_multi_worker_evaluate_profile"],
+        )
+        self.assertEqual(publication_manifest["published_entrypoints"][0]["proof_class"], "local-simulation")
+        self.assertGreaterEqual(publication_manifest["published_artifact_count"], 6)
+        self.assertTrue(
+            all(ref["status"] == "present" and "sha256" in ref for ref in publication_manifest["published_artifact_refs"])
+        )
+        self.assertEqual(publication_manifest["reproduction_commands"], report["reproduction_commands"])
+        self.assertEqual(publication_manifest["known_gaps"], report["known_gaps"])
+        self.assertIn("semantic acceptance", publication_manifest["known_non_goals"])
+        release_tag_readiness = publication_manifest["release_tag_readiness"]
+        self.assertEqual(release_tag_readiness["report_kind"], "release-tag-readiness")
+        self.assertEqual(release_tag_readiness["status"], "not_tagged")
+        self.assertIsNone(release_tag_readiness["tag_name"])
+        self.assertIsNone(release_tag_readiness["tag_target_commit"])
+        self.assertFalse(release_tag_readiness["tag_matches_repo_commit"])
+        self.assertEqual(release_tag_readiness["remote_release_notes_status"], "not_published")
+        self.assertEqual(release_tag_readiness["external_review_record_status"], "not_recorded")
+        self.assertFalse(release_tag_readiness["external_milestone_claim_ready"])
+        self.assertFalse(release_tag_readiness["semantic_gate"])
+        self.assertEqual(release_tag_readiness["translation_coverage_numerator"], 0)
+        self.assertFalse(publication_manifest["claim_boundary"]["semantic_gate"])
+        self.assertFalse(publication_manifest["claim_boundary"]["publication_manifest_is_semantic_gate"])
+        self.assertEqual(publication_manifest["claim_boundary"]["translation_coverage_numerator"], 0)
+        quantitative_evaluation = report["quantitative_evaluation"]
+        self.assertEqual(quantitative_evaluation["report_kind"], "quantitative-evaluation-scorecard")
+        self.assertEqual(quantitative_evaluation["evaluation_scope"], "bounded-mvp")
+        self.assertFalse(quantitative_evaluation["semantic_gate"])
+        self.assertFalse(quantitative_evaluation["generated_draft_semantic_pass"])
+        self.assertEqual(quantitative_evaluation["translation_coverage_numerator"], 0)
+        self.assertFalse(quantitative_evaluation["claim_boundary"]["semantic_gate"])
+        self.assertFalse(quantitative_evaluation["claim_boundary"]["scorecard_is_semantic_gate"])
+        self.assertEqual(quantitative_evaluation["claim_boundary"]["translation_coverage_numerator"], 0)
+        self.assertEqual(quantitative_evaluation["project_slice_counts"]["workflow_units_total"], 3)
+        self.assertEqual(quantitative_evaluation["project_slice_counts"]["workflow_units_converged"], 3)
+        self.assertEqual(quantitative_evaluation["project_slice_counts"]["before_after_bound_unit_count"], 1)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["accepted_evidence_semantic_pass_count"], 3)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["blocked_repair_count"], 0)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["human_interventions"], 0)
+        self_heal_classification = quantitative_evaluation["self_heal_classification"]
+        self.assertEqual(self_heal_classification["report_kind"], "self-heal-classification")
+        self.assertEqual(self_heal_classification["status"], "none")
+        self.assertEqual(self_heal_classification["blocked_repair_count"], 0)
+        self.assertEqual(self_heal_classification["next_action_count"], 0)
+        self.assertEqual(self_heal_classification["sample_next_action_limit"], 5)
+        self.assertEqual(self_heal_classification["sample_next_actions"], [])
+        self.assertFalse(self_heal_classification["semantic_gate"])
+        self.assertEqual(self_heal_classification["translation_coverage_numerator"], 0)
+        progress_delta = report["progress_delta_ledger"]
+        self.assertEqual(progress_delta["report_kind"], "progress-delta-ledger")
+        self.assertFalse(progress_delta["semantic_gate"])
+        self.assertFalse(progress_delta["generated_draft_semantic_pass"])
+        self.assertEqual(progress_delta["translation_coverage_numerator"], 0)
+        self.assertEqual(progress_delta["capability_delta"]["ledger_count"], 2)
+        self.assertEqual(progress_delta["capability_delta"]["delta_count"], 2)
+        self.assertEqual(progress_delta["capability_delta"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(progress_delta["capability_delta"]["accepted_evidence_semantic_pass_count"], 3)
+        self.assertEqual(progress_delta["governance_delta"]["delta_count"], 4)
+        self.assertEqual(progress_delta["governance_delta"]["verification_command_count"], 6)
+        self.assertEqual(progress_delta["governance_delta"]["route_decision_artifacts"], 4)
+        self.assertEqual(progress_delta["workflow_delta"]["workflow_units_converged"], 3)
+        self.assertEqual(progress_delta["workflow_delta"]["repair_history_unit_count"], 1)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["status"], "measured")
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["baseline_total_unsafe"], 2)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["current_total_unsafe"], 0)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["reduced_by"], 2)
+        self.assertEqual(quantitative_evaluation["unsafe_reduction"]["scope"], "partial")
+        raw_c2rust = quantitative_evaluation["baseline_comparison"]["raw_c2rust"]
+        self.assertEqual(raw_c2rust["status"], "manifest_status_observed")
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["unique_manifest_count"], 2)
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["source_report_count"], 2)
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["status_counts"], {"skipped": 2})
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["compile_passed_count"], 0)
+        self.assertFalse(raw_c2rust["c2rust_baseline_rollup"]["semantic_gate"])
+        self.assertEqual(raw_c2rust["c2rust_baseline_rollup"]["translation_coverage_numerator"], 0)
+        self.assertFalse(raw_c2rust["semantic_acceptance_claimed"])
+        self.assertEqual(
+            quantitative_evaluation["baseline_comparison"]["typed_ir_route"]["tracked_route_decision_artifacts"],
+            4,
+        )
+        self.assertEqual(
+            quantitative_evaluation["baseline_comparison"]["opencode_llm_worker"]["status"],
+            "command_contract_executed",
+        )
+        self.assertFalse(
+            quantitative_evaluation["baseline_comparison"]["opencode_llm_worker"]["chat_output_is_evidence"]
+        )
+        self.assertEqual(
+            quantitative_evaluation["baseline_comparison"]["handwritten_reference"][
+                "accepted_evidence_semantic_pass_count"
+            ],
+            3,
+        )
+        self.assertFalse(
+            quantitative_evaluation["baseline_comparison"]["handwritten_reference"][
+                "counts_as_translator_generated_coverage"
+            ]
+        )
+        self.assertEqual(report["retention_policy"]["report_kind"], "milestone-retention-policy")
+        self.assertTrue(out_path.is_file())
+        self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), report)
+
+    def test_bundle_blocks_c2rust_baseline_manifest_ref_drift_or_unbound_count(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-c2rust-baseline-refs-", dir=REPO_ROOT / "target"))
+        route_metrics_path = temp_dir / "route" / "route-governance-metrics-report.json"
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        manifest_path = temp_dir / "c2rust-baseline" / "real-fdb-calc-crc32" / "c2rust-baseline-manifest.json"
+        write_json(
+            manifest_path,
+            {
+                "report_kind": "c2rust-baseline-manifest",
+                "unit_id": "flashdb/real-fdb-calc-crc32",
+                "status": "skipped",
+                "candidate_context_only": True,
+                "semantic_gate": False,
+            },
+        )
+
+        def build_with(c2rust_baseline: dict, suffix: str) -> dict:
+            write_json(
+                route_metrics_path,
+                route_metrics_payload(
+                    accepted_evidence_semantic_pass_count=0,
+                    tracked_route_decision_artifacts=0,
+                    tracked_slice_gate_contexts=0,
+                    s2_workflow_run_count=0,
+                    s2_reduced_by=0,
+                    c2rust_baseline=c2rust_baseline,
+                ),
+            )
+            write_json(
+                run_report_path,
+                {
+                    "schema_version": 1,
+                    "report_kind": "judge-entrypoints-run-report",
+                    "status": "passed",
+                    "entrypoint_count": 1,
+                    "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                    "summary": {
+                        "readiness": {
+                            "all_entrypoints_executed": True,
+                            "executed_count": 1,
+                            "configured_count": 1,
+                            "validation_status": "passed",
+                        },
+                        "claim_boundary": {
+                            "semantic_gate": False,
+                            "generated_draft_semantic_pass": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                    },
+                    "entrypoints": [
+                        {
+                            "id": "route_demo",
+                            "status": "passed",
+                            "exit_code": 0,
+                            "proof_class": "local-simulation",
+                            "key_artifacts": {
+                                "route_governance_metrics_report": repo_relative(route_metrics_path),
+                            },
+                        }
+                    ],
+                    "validation": {
+                        "status": "passed",
+                        "entrypoints": [
+                            {
+                                "id": "route_demo",
+                                "expected_artifacts": {
+                                    "route_governance_metrics_report": artifact_ref(route_metrics_path),
+                                },
+                            }
+                        ],
+                    },
+                },
+            )
+            return bundle.build_judge_milestone_bundle(
+                run_report_path=run_report_path,
+                out_path=out_path.with_name(f"judge-milestone-bundle-{suffix}.json"),
+                repo_root=REPO_ROOT,
+            )
+
+        bad_sha_baseline = empty_c2rust_baseline_rollup()
+        bad_sha_baseline.update(
+            {
+                "status": "observed",
+                "manifest_count": 1,
+                "skipped_without_output_count": 1,
+                "status_counts": {"skipped": 1},
+                "output_status_counts": {"missing": 1},
+                "compile_status_counts": {"missing": 1},
+                "manifests": [
+                    {"path": repo_relative(manifest_path), "sha256": "0" * 64, "status": "present"},
+                ],
+            }
+        )
+        bad_sha_report = build_with(bad_sha_baseline, "bad-sha")
+        self.assertEqual(bad_sha_report["status"], "blocked")
+        self.assertIn(
+            f"c2rust_baseline_manifest_ref_sha256_mismatch:route_demo:{repo_relative(manifest_path)}",
+            bad_sha_report["blockers"],
+        )
+
+        unbound_count_baseline = dict(bad_sha_baseline)
+        unbound_count_baseline["manifests"] = []
+        unbound_count_report = build_with(unbound_count_baseline, "unbound-count")
+        self.assertIn(
+            "c2rust_baseline_manifest_count_without_bound_refs:route_demo",
+            unbound_count_report["blockers"],
+        )
+
+        count_mismatch_baseline = dict(bad_sha_baseline)
+        count_mismatch_baseline["manifest_count"] = 2
+        count_mismatch_baseline["manifests"] = [
+            {
+                "path": repo_relative(manifest_path),
+                "sha256": bundle.validator.sha256_file(manifest_path),
+                "status": "present",
+            }
+        ]
+        count_mismatch_report = build_with(count_mismatch_baseline, "count-mismatch")
+        self.assertIn(
+            "c2rust_baseline_manifest_count_mismatch:route_demo",
+            count_mismatch_report["blockers"],
+        )

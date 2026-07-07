@@ -1,0 +1,910 @@
+class _JudgeEntrypointsValidatorTestsPart05:
+    def test_opencode_safety_transform_attempt_rejects_workflow_metrics_binding_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        metrics_path = temp_dir / "attempt-evidence" / "workflow-metrics-drift.json"
+        write_json(metrics_path, {"schema_version": 1, "run_id": "run-test", "drifted": True})
+        payload["workflow_metrics"] = {
+            "path": repo_relative(metrics_path),
+            "sha256": validator.sha256_file(metrics_path),
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "workflow_metrics must match worker summary workflow_metrics"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_non_five_round_cap(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json",
+            max_repair_rounds=6,
+        )
+
+        with self.assertRaisesRegex(ValueError, "attempt_contract.max_repair_rounds must be 5"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_requires_before_after_refs(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        del payload["safety_transform_units"][0]["patch_evidence"]["baseline"]
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "patch_evidence.baseline"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_negative_unsafe_delta(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        unsafe_reduction = payload["safety_transform_units"][0]["verification_delta"]["unsafe_reduction"]
+        unsafe_reduction["baseline_total_unsafe"] = 1
+        unsafe_reduction["current_total_unsafe"] = -1
+        unsafe_reduction["reduced_by"] = 2
+        unsafe_reduction["ratio"] = 2.0
+        payload["safety_transform_units"][0]["rounds"][0]["unsafe_delta"] = dict(unsafe_reduction)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "baseline_total_unsafe and current_total_unsafe must be non-negative",
+        ):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_zero_unsafe_baseline(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        unsafe_reduction = payload["safety_transform_units"][0]["verification_delta"]["unsafe_reduction"]
+        unsafe_reduction["baseline_total_unsafe"] = 0
+        unsafe_reduction["current_total_unsafe"] = 0
+        unsafe_reduction["reduced_by"] = 0
+        unsafe_reduction["ratio"] = 0.0
+        payload["safety_transform_units"][0]["rounds"][0]["unsafe_delta"] = dict(unsafe_reduction)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "baseline_total_unsafe must be > 0"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_final_round_patch_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        drift_patch = temp_dir / "attempt-evidence" / "drift.patch"
+        drift_patch.write_text("drift patch\n", encoding="utf-8")
+        payload["safety_transform_units"][0]["rounds"][0]["patch"] = {
+            "path": repo_relative(drift_patch),
+            "sha256": validator.sha256_file(drift_patch),
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"rounds\[0\].patch must match accepted_patch"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_unbound_repair_history(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        history_path = temp_dir / "attempt-evidence" / "retry-repair-history.jsonl"
+        history_path.write_text('{"status":"revalidated_passed"}\n', encoding="utf-8")
+        unit = payload["safety_transform_units"][0]
+        unit["accepted_retry_hint"]["patch_events_path"] = repo_relative(history_path)
+        unit["accepted_retry_hint"]["patch_events_sha256"] = validator.sha256_file(history_path)
+        unit["repair_history"] = {
+            "patch_events_path": repo_relative(history_path),
+            "patch_events_sha256": "0" * 64,
+            "statuses": ["revalidated_passed", "verified"],
+            "verified": True,
+            "rollback_ids": list(unit["accepted_retry_hint"]["rollback_ids"]),
+        }
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"repair_history\.patch_events_sha256 does not match artifact"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_unit_workflow_metrics_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        replacement_patch = temp_dir / "attempt-evidence" / "other-accepted.patch"
+        replacement_patch.write_text("other patch\n", encoding="utf-8")
+        replacement_ref = {
+            "path": repo_relative(replacement_patch),
+            "sha256": validator.sha256_file(replacement_patch),
+        }
+        unit = payload["safety_transform_units"][0]
+        unit["patch_evidence"]["accepted_patch"] = replacement_ref
+        unit["rounds"][-1]["patch"] = replacement_ref
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"must match workflow_metrics\.per_unit_statuses"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_baseline_verification_drift_from_workflow_metrics(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        drifted_ref = write_verified_unsafe_baseline_ref(temp_dir / "attempt-evidence" / "other-verified-baseline.json")
+        payload["safety_transform_units"][0]["verification_delta"]["baseline_verification"] = drifted_ref
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"baseline_verification must match workflow_metrics\.per_unit_statuses"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_harness_artifact_contracts_deep_validates_opencode_safety_transform_attempt(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+
+        result = validator.validate_harness_artifact_contracts(
+            {"opencode_safety_transform_attempt": attempt_ref["path"]},
+            require_local_artifacts=True,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(result["opencode_safety_transform_attempt"]["status"], "passed")
+        self.assertEqual(result["opencode_safety_transform_attempt"]["round_count"], 1)
+
+    def test_opencode_hostless_rehearsal_contract_cannot_close_h9(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+
+        result = validator.validate_harness_artifact_contracts(
+            {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+            require_local_artifacts=True,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+        self.assertEqual(result["opencode_hostless_rehearsal_report"]["required_agent"], "c2rust-migrator")
+        overclaim_cases = [
+            ("proof_class", lambda draft: draft.__setitem__("proof_class", "competition-exact")),
+            ("closes_p0_h9", lambda draft: draft.__setitem__("closes_p0_h9", True)),
+            ("semantic_gate", lambda draft: draft.__setitem__("semantic_gate", True)),
+            (
+                "h9_contract.local_simulation_closes_p0_h9",
+                lambda draft: draft["h9_contract"].__setitem__("local_simulation_closes_p0_h9", True),
+            ),
+            (
+                "h9_contract.required_agent",
+                lambda draft: draft["h9_contract"].__setitem__("required_agent", "default"),
+            ),
+        ]
+        for expected_error, mutate in overclaim_cases:
+            with self.subTest(expected_error=expected_error):
+                draft = json.loads(json.dumps(payload))
+                mutate(draft)
+                write_json(rehearsal_path, draft)
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_harness_artifact_contracts(
+                        {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                        require_local_artifacts=True,
+                        repo_root=REPO_ROOT,
+                    )
+
+    def test_opencode_hostless_rehearsal_contract_rejects_batch_profile_sha_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+        payload["batch_profile_report"]["sha256"] = "0" * 64
+        write_json(rehearsal_path, payload)
+
+        with self.assertRaisesRegex(ValueError, r"batch_profile_report.*sha256"):
+            validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_opencode_hostless_rehearsal_contract_rejects_context_run_plan_ref_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-hostless-rehearsal-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+        context_path = REPO_ROOT / payload["context_pack"]["path"]
+        context_payload = json.loads(context_path.read_text(encoding="utf-8"))
+        context_payload["entrypoints"]["run_plan_report"] = "target/stale-run-plan-report.json"
+        write_json(context_path, context_payload)
+        payload["context_pack"]["sha256"] = validator.sha256_file(context_path)
+        write_json(rehearsal_path, payload)
+
+        with self.assertRaisesRegex(ValueError, r"context_pack\.entrypoints\.run_plan_report"):
+            validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_opencode_worker_report_summary_claims_must_match_bound_summary(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+
+        with self.subTest(drift="summary_status"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="opencode-summary-claim-", dir=target_dir))
+            rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+
+            result = validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+            self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+
+            runtime_worker = payload["opencode_runtime"]["workers"][0]
+            summary_path = REPO_ROOT / runtime_worker["summary"]["path"]
+            summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary_payload["final_gate"]["status"] = "failed"
+            write_json(summary_path, summary_payload)
+            summary_sha = validator.sha256_file(summary_path)
+            runtime_worker["summary"]["sha256"] = summary_sha
+            payload["workers"][0]["summary"]["sha256"] = summary_sha
+            write_json(rehearsal_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                r"worker_report\.summary_status must match summary final_gate\.status",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                )
+
+        with self.subTest(drift="summary_path"):
+            temp_dir = Path(tempfile.mkdtemp(prefix="opencode-summary-claim-", dir=target_dir))
+            rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+            runtime_worker = payload["opencode_runtime"]["workers"][0]
+            report_path = REPO_ROOT / runtime_worker["worker_report"]["path"]
+            report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+            report_payload["summary_path"] = "target/elsewhere/summary/competition-run-summary.json"
+            write_json(report_path, report_payload)
+            report_sha = validator.sha256_file(report_path)
+            runtime_worker["worker_report"]["sha256"] = report_sha
+            payload["workers"][0]["report"]["sha256"] = report_sha
+            write_json(rehearsal_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                r"worker_report\.summary_path must match summary\.path",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_opencode_rehearsal_worker_summary_status_claim_must_match_summary(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-rehearsal-claim-", dir=target_dir))
+        rehearsal_path, payload = write_opencode_hostless_rehearsal_fixture(temp_dir)
+
+        result = validator.validate_harness_artifact_contracts(
+            {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+            require_local_artifacts=True,
+            repo_root=REPO_ROOT,
+        )
+        self.assertEqual(result["opencode_hostless_rehearsal_report"]["status"], "passed")
+
+        runtime_worker = payload["opencode_runtime"]["workers"][0]
+        summary_path = REPO_ROOT / runtime_worker["summary"]["path"]
+        summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary_payload["final_gate"]["status"] = "failed"
+        write_json(summary_path, summary_payload)
+        report_path = REPO_ROOT / runtime_worker["worker_report"]["path"]
+        report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+        report_payload["summary_status"] = "failed"
+        write_json(report_path, report_payload)
+        summary_sha = validator.sha256_file(summary_path)
+        report_sha = validator.sha256_file(report_path)
+        runtime_worker["summary"]["sha256"] = summary_sha
+        runtime_worker["worker_report"]["sha256"] = report_sha
+        payload["workers"][0]["summary"]["sha256"] = summary_sha
+        payload["workers"][0]["report"]["sha256"] = report_sha
+        self.assertEqual(payload["workers"][0]["summary_status"], "passed")
+        write_json(rehearsal_path, payload)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"workers\[0\]\.summary_status must match summary final_gate\.status",
+        ):
+            validator.validate_harness_artifact_contracts(
+                {"opencode_hostless_rehearsal_report": repo_relative(rehearsal_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_multi_worker_entrypoint_requires_multi_worker_judge_graph(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="multi-worker-judge-index-", dir=target_dir))
+        judge_index_path = temp_dir / "harness" / "judge-evidence-index.json"
+        payload = valid_deterministic_judge_index_payload()
+        payload["evidence_artifact_refs"] = {}
+        write_json(judge_index_path, payload)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "judge_evidence_index.harness_architecture.worker_count must be >= 2 for multi-worker entrypoint",
+        ):
+            validator.validate_harness_artifact_contracts(
+                {"judge_evidence_index": repo_relative(judge_index_path)},
+                require_local_artifacts=True,
+                repo_root=REPO_ROOT,
+                entrypoint={"id": "multi_worker_evaluate_profile", "purpose": "harness-architecture-multi-worker-evaluate"},
+            )
+
+    def test_resume_manifest_claim_boundary_fails_closed(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-boundary-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        write_json(context_pack, {"entrypoints": {"resume_manifest": repo_relative(resume_manifest)}})
+        write_json(agent_index, {"reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}}})
+
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-boundary",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {
+                "path": repo_relative(context_pack),
+                "sha256": validator.sha256_file(context_pack),
+            },
+            "agent_index": {
+                "path": repo_relative(agent_index),
+                "sha256": validator.sha256_file(agent_index),
+            },
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": repo_relative(assignment),
+                    "request_path": repo_relative(request),
+                    "summary_path": repo_relative(summary),
+                    "report_path": repo_relative(report),
+                    "isolated_out_root": repo_relative(worker_root),
+                }
+            ],
+            "worker_count": 1,
+        }
+        expected_artifacts = {
+            "context_pack": repo_relative(context_pack),
+            "agent_index": repo_relative(agent_index),
+            "resume_manifest": repo_relative(resume_manifest),
+        }
+        cases = [
+            ("resume_manifest.semantic_gate", lambda draft: draft.__setitem__("semantic_gate", True)),
+            (
+                "resume_manifest.claim_boundary.translation_coverage_numerator",
+                lambda draft: draft["claim_boundary"].__setitem__("translation_coverage_numerator", 1),
+            ),
+            (
+                "resume_manifest.claim_boundary.chat_output_is_evidence",
+                lambda draft: draft["claim_boundary"].__setitem__("chat_output_is_evidence", True),
+            ),
+        ]
+        for expected_error, mutate in cases:
+            with self.subTest(expected_error=expected_error):
+                draft = json.loads(json.dumps(payload))
+                mutate(draft)
+                with self.assertRaisesRegex(ValueError, expected_error):
+                    validator.validate_resume_manifest_contract(
+                        draft,
+                        path_text=repo_relative(resume_manifest),
+                        expected_artifacts=expected_artifacts,
+                        context_payload=json.loads(context_pack.read_text(encoding="utf-8")),
+                        agent_payload=json.loads(agent_index.read_text(encoding="utf-8")),
+                        repo_root=REPO_ROOT,
+                    )
+
+    def test_resume_manifest_ledger_path_is_replay_reference_only(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-ledger-ref-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        missing_ledger = out_root / "state" / "missing.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        worker_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {
+            "entrypoints": {"resume_manifest": repo_relative(resume_manifest)},
+            "workers": [{**worker_fields, "isolated_out_root": repo_relative(worker_root)}],
+        }
+        agent_payload = {
+            "reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}},
+            "agents": [{**worker_fields, "isolated_out_root": repo_relative(worker_root)}],
+            "agents_by_worker_id": {
+                "worker-001": {**worker_fields, "isolated_out_root": repo_relative(worker_root)}
+            },
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-ledger-reference",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(missing_ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    **worker_fields,
+                    "isolated_out_root": repo_relative(worker_root),
+                    "replay_commands": resume_replay_commands(
+                        ledger=missing_ledger,
+                        run_id="resume-ledger-reference",
+                        worker_id="worker-001",
+                        assignment=assignment,
+                        request=request,
+                        summary=summary,
+                        report=report,
+                        worker_root=worker_root,
+                    ),
+                }
+            ],
+            "worker_count": 1,
+        }
+
+        result = validator.validate_resume_manifest_contract(
+            payload,
+            path_text=repo_relative(resume_manifest),
+            expected_artifacts={
+                "context_pack": repo_relative(context_pack),
+                "agent_index": repo_relative(agent_index),
+                "resume_manifest": repo_relative(resume_manifest),
+            },
+            context_payload=context_payload,
+            agent_payload=agent_payload,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["worker_count"], 1)
+        self.assertEqual(result["checkpoint_backend"], "sqlite")
+        self.assertFalse(missing_ledger.exists())
+
+    def test_resume_manifest_workers_must_match_context_and_agent_index_workers(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-worker-drift-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        worker_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {
+            "entrypoints": {"resume_manifest": repo_relative(resume_manifest)},
+            "workers": [worker_fields],
+        }
+        agent_payload = {
+            "reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}},
+            "agents": [worker_fields],
+            "agents_by_worker_id": {
+                "worker-001": {
+                    **worker_fields,
+                    "isolated_out_root": repo_relative(worker_root),
+                },
+            },
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-worker-drift",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    **worker_fields,
+                    "worker_id": "stale-worker-999",
+                    "isolated_out_root": repo_relative(worker_root),
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-worker-drift",
+                        worker_id="stale-worker-999",
+                        assignment=assignment,
+                        request=request,
+                        summary=summary,
+                        report=report,
+                        worker_root=worker_root,
+                    ),
+                }
+            ],
+            "worker_count": 1,
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "resume_manifest.workers worker ids must match context_pack.workers and agent_index",
+        ):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_worker_ids_must_match_workers_when_declared(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-worker-ids-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root = out_root / "workers" / "worker-001"
+        assignment = out_root / "harness" / "assignments" / "worker-001.json"
+        request = out_root / "harness" / "assignments" / "worker-001-request.json"
+        summary = worker_root / "summary" / "competition-run-summary.json"
+        report = worker_root / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment, request, summary, report]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        worker_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "isolated_out_root": repo_relative(worker_root),
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        context_payload = {
+            "entrypoints": {"resume_manifest": repo_relative(resume_manifest)},
+            "workers": [worker_fields],
+        }
+        agent_payload = {
+            "reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}},
+            "agents": [worker_fields],
+            "agents_by_worker_id": {"worker-001": worker_fields},
+        }
+        write_json(context_pack, context_payload)
+        write_json(agent_index, agent_payload)
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-worker-ids",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    **worker_fields,
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-worker-ids",
+                        worker_id="worker-001",
+                        assignment=assignment,
+                        request=request,
+                        summary=summary,
+                        report=report,
+                        worker_root=worker_root,
+                    ),
+                }
+            ],
+            "worker_count": 1,
+            "worker_ids": ["stale-worker-999"],
+        }
+
+        with self.assertRaisesRegex(ValueError, "resume_manifest.worker_ids must match workers"):
+            validator.validate_resume_manifest_contract(
+                payload,
+                path_text=repo_relative(resume_manifest),
+                expected_artifacts={
+                    "context_pack": repo_relative(context_pack),
+                    "agent_index": repo_relative(agent_index),
+                    "resume_manifest": repo_relative(resume_manifest),
+                },
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+                repo_root=REPO_ROOT,
+            )
+
+    def test_resume_manifest_worker_ids_must_be_unique_without_context_payloads(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="resume-manifest-duplicate-worker-ids-", dir=target_dir))
+        out_root = temp_dir / "out"
+        context_pack = out_root / "harness" / "context-pack.json"
+        agent_index = out_root / "harness" / "agent-index.json"
+        resume_manifest = out_root / "harness" / "resume-manifest.json"
+        ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+        worker_root_1 = out_root / "workers" / "worker-001-a"
+        worker_root_2 = out_root / "workers" / "worker-001-b"
+        assignment_1 = out_root / "harness" / "assignments" / "worker-001-a.json"
+        assignment_2 = out_root / "harness" / "assignments" / "worker-001-b.json"
+        request_1 = out_root / "harness" / "assignments" / "worker-001-a-request.json"
+        request_2 = out_root / "harness" / "assignments" / "worker-001-b-request.json"
+        summary_1 = worker_root_1 / "summary" / "competition-run-summary.json"
+        summary_2 = worker_root_2 / "summary" / "competition-run-summary.json"
+        report_1 = worker_root_1 / "harness" / "run-worker-report.json"
+        report_2 = worker_root_2 / "harness" / "run-worker-report.json"
+        for path in [ledger, assignment_1, assignment_2, request_1, request_2, summary_1, summary_2, report_1, report_2]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}\n", encoding="utf-8")
+        write_json(context_pack, {"entrypoints": {"resume_manifest": repo_relative(resume_manifest)}})
+        write_json(agent_index, {"reports": {"resume_manifest": {"path": repo_relative(resume_manifest)}}})
+
+        payload = {
+            "schema_version": 1,
+            "report_kind": "resume-manifest",
+            "run_id": "resume-duplicate-worker-ids",
+            "status": "passed",
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            "ledger": {"path": repo_relative(ledger), "checkpoint_backend": "sqlite"},
+            "context_pack": {"path": repo_relative(context_pack), "sha256": validator.sha256_file(context_pack)},
+            "agent_index": {"path": repo_relative(agent_index), "sha256": validator.sha256_file(agent_index)},
+            "resume_entrypoints": ["evaluate --profile", "run-plan --plan", "run-worker --assignment"],
+            "workers": [
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": repo_relative(assignment_1),
+                    "request_path": repo_relative(request_1),
+                    "summary_path": repo_relative(summary_1),
+                    "report_path": repo_relative(report_1),
+                    "isolated_out_root": repo_relative(worker_root_1),
+                    "slice_id": "demo-unit-a",
+                    "function": "demo_unit_a",
+                    "source_commit": "abc123",
+                    "source_sha256": "f" * 64,
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-duplicate-worker-ids",
+                        worker_id="worker-001",
+                        assignment=assignment_1,
+                        request=request_1,
+                        summary=summary_1,
+                        report=report_1,
+                        worker_root=worker_root_1,
+                    ),
+                },
+                {
+                    "worker_id": "worker-001",
+                    "assignment_path": repo_relative(assignment_2),
+                    "request_path": repo_relative(request_2),
+                    "summary_path": repo_relative(summary_2),
+                    "report_path": repo_relative(report_2),
+                    "isolated_out_root": repo_relative(worker_root_2),
+                    "slice_id": "demo-unit-b",
+                    "function": "demo_unit_b",
+                    "source_commit": "abc123",
+                    "source_sha256": "f" * 64,
+                    "replay_commands": resume_replay_commands(
+                        ledger=ledger,
+                        run_id="resume-duplicate-worker-ids",
+                        worker_id="worker-001",
+                        assignment=assignment_2,
+                        request=request_2,
+                        summary=summary_2,
+                        report=report_2,
+                        worker_root=worker_root_2,
+                    ),
+                },
+            ],
+            "worker_count": 2,
+            "worker_ids": ["worker-001", "worker-001"],
+        }
+
+        expected_artifacts = {
+            "context_pack": repo_relative(context_pack),
+            "agent_index": repo_relative(agent_index),
+            "resume_manifest": repo_relative(resume_manifest),
+        }
+        with self.subTest(case="declared_worker_ids"):
+            with self.assertRaisesRegex(ValueError, "resume_manifest.worker_ids must be unique"):
+                validator.validate_resume_manifest_contract(
+                    payload,
+                    path_text=repo_relative(resume_manifest),
+                    expected_artifacts=expected_artifacts,
+                    context_payload=None,
+                    agent_payload=None,
+                    repo_root=REPO_ROOT,
+                )
+        with self.subTest(case="workers"):
+            draft = dict(payload)
+            draft.pop("worker_ids")
+            with self.assertRaisesRegex(ValueError, "resume_manifest.workers worker_id values must be unique"):
+                validator.validate_resume_manifest_contract(
+                    draft,
+                    path_text=repo_relative(resume_manifest),
+                    expected_artifacts=expected_artifacts,
+                    context_payload=None,
+                    agent_payload=None,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_resume_manifest_worker_consistency_rejects_context_out_root_drift(self) -> None:
+        canonical_root = "target/out/workers/worker-001"
+        stale_context_root = "target/out/stale-workers/worker-001"
+        common_fields = {
+            "worker_id": "worker-001",
+            "assignment_path": "target/out/harness/assignments/worker-001.json",
+            "request_path": "target/out/harness/assignments/worker-001-request.json",
+            "summary_path": f"{canonical_root}/summary/competition-run-summary.json",
+            "report_path": f"{canonical_root}/harness/run-worker-report.json",
+            "slice_id": "demo-unit",
+            "function": "demo_unit",
+            "source_commit": "abc123",
+            "source_sha256": "f" * 64,
+        }
+        workers = [{**common_fields, "isolated_out_root": canonical_root}]
+        context_payload = {"workers": [{**common_fields, "out_root": stale_context_root}]}
+        agent_payload = {
+            "agents": [{**common_fields, "isolated_out_root": canonical_root}],
+            "agents_by_worker_id": {
+                "worker-001": {**common_fields, "isolated_out_root": canonical_root}
+            },
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "resume_manifest worker worker-001 out_root must match isolated_out_root",
+        ):
+            validator.validate_resume_manifest_worker_consistency(
+                workers,
+                context_payload=context_payload,
+                agent_payload=agent_payload,
+            )

@@ -1,0 +1,1029 @@
+def build_run_plan_graph_contract(
+    *,
+    mode: str,
+    auto_retry: bool,
+    max_workers: int,
+    effective_workers: int,
+    opencode_variant: str,
+    opencode_preflight_report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    opencode_worker = {
+        "enabled": mode == "opencode",
+        "preflight_required": mode == "opencode",
+        "preflight_bound": opencode_preflight_report is not None,
+    }
+    if mode == "opencode":
+        opencode_worker["opencode_variant"] = opencode_variant
+    if opencode_preflight_report is not None:
+        opencode_worker["preflight_report"] = {
+            "path": opencode_preflight_report.get("path"),
+            "sha256": opencode_preflight_report.get("sha256"),
+            "status": opencode_preflight_report.get("status"),
+            "contract_status": opencode_preflight_report.get("contract_status"),
+            "launch_policy": opencode_preflight_report.get("launch_policy"),
+            "launch_policy_sha256": opencode_preflight_report.get("launch_policy_sha256"),
+            "opencode_runtime_env": opencode_preflight_report.get("opencode_runtime_env"),
+        }
+    return {
+        "runtime": "opencode-harness-langgraph-inspired",
+        "state_schema": "run-plan-state/v1",
+        "checkpoint_backend": "sqlite",
+        "nodes": [
+            "load_plan",
+            "fanout_workers",
+            "worker",
+            "repair_retry",
+            "merge",
+            "report",
+        ],
+        "edges": [
+            {"from": "load_plan", "to": "fanout_workers", "condition": "units > 0"},
+            {"from": "fanout_workers", "to": "worker", "condition": "map(unit)"},
+            {"from": "worker", "to": "repair_retry", "condition": "exit_code != 0 and auto_retry"},
+            {"from": "repair_retry", "to": "worker", "condition": "hint_open and repair_round < 5"},
+            {"from": "fanout_workers", "to": "merge", "condition": "all_workers_recorded"},
+            {"from": "merge", "to": "report", "condition": "always"},
+        ],
+        "parallel_map": {
+            "node": "worker",
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+            "result_order": "planner_order",
+        },
+        "retry_policy": {
+            "enabled": auto_retry,
+            "round_cap": REPAIR_ROUND_CAP,
+            "checkpoint": "repair_hints",
+        },
+        "opencode_worker": opencode_worker,
+    }
+
+
+def execute_merge_plan(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    merge_plan: dict[str, Any],
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    argv = list(merge_plan.get("argv", []))
+    if not argv:
+        raise SystemExit("merge plan argv is required before execute-merge")
+    logs_dir = out_root / "harness"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = logs_dir / "run-plan-merge.stdout.log"
+    stderr_path = logs_dir / "run-plan-merge.stderr.log"
+    try:
+        if command_runner is subprocess.run:
+            completed = run_captured_process_with_timeout(
+                argv,
+                cwd=repo_root,
+                timeout_seconds=timeout_seconds,
+            )
+        else:
+            completed = command_runner(
+                argv,
+                cwd=repo_root,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout_seconds,
+            )
+    except subprocess.TimeoutExpired as exc:
+        completed = completed_process_from_timeout(argv, exc, timeout_seconds)
+    except OSError as exc:
+        completed = subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
+    timed_out = completed_process_timed_out(completed)
+
+    summary_path = out_root / "summary" / "competition-run-summary.json"
+    summary_exists = summary_path.exists()
+    final_gate_status = None
+    finalized = None
+    effective_exit_code = int(completed.returncode)
+    if summary_exists:
+        summary = load_json(summary_path)
+        final_gate_status = str(summary.get("final_gate", {}).get("status", "failed"))
+        if effective_exit_code == 0 and final_gate_status != "passed":
+            effective_exit_code = 1
+        finalized = finalize_run(
+            db_path=db_path,
+            run_id=run_id,
+            status="completed" if effective_exit_code == 0 else "failed",
+            summary_path=summary_path,
+            final_gate_status=final_gate_status,
+            repo_root=repo_root,
+        )
+    elif effective_exit_code == 0:
+        effective_exit_code = 1
+
+    result = {
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_exists": summary_exists,
+        "final_gate_status": final_gate_status,
+        "finalized": finalized,
+    }
+    if timed_out:
+        result["timed_out"] = True
+        result["timeout_seconds"] = timeout_seconds
+        result["root_cause_key"] = "process_timeout"
+    return result
+
+
+def record_worker_summary(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    summary_path: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    summary_path = repo_path(summary_path, repo_root=repo_root)
+    now = now_text()
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        expected_summary_path = assigned_worker_summary_path(
+            connection,
+            run_id=run_id,
+            worker_id=worker_id,
+            repo_root=repo_root,
+        )
+        summary_rel = repo_relative(summary_path, repo_root=repo_root)
+        expected_summary_rel = repo_relative(expected_summary_path, repo_root=repo_root)
+        if summary_rel != expected_summary_rel:
+            raise SystemExit(
+                f"worker summary path {summary_rel} does not match assigned out_root summary {expected_summary_rel}"
+            )
+        summary = load_json(summary_path)
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        request = load_json(request_path)
+        expected_worker_run_id = worker_request_run_id(request, worker_id=worker_id)
+        summary_run_id = summary.get("run_id")
+        if summary_run_id != expected_worker_run_id:
+            raise SystemExit(
+                f"worker summary run_id {summary_run_id} does not match assigned worker run_id {expected_worker_run_id}"
+            )
+        status = str(summary.get("final_gate", {}).get("status", "failed"))
+        summary_hash = sha256_file(summary_path)
+        connection.execute(
+            """
+            insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(repo_rel_path) do update set
+              run_id=excluded.run_id,
+              agent_id=excluded.agent_id,
+              kind=excluded.kind,
+              sha256=excluded.sha256,
+              status=excluded.status,
+              semantic_role=excluded.semantic_role,
+              payload_json=excluded.payload_json
+            """,
+            (
+                run_id,
+                worker_id,
+                "competition-run-summary",
+                summary_rel,
+                summary_hash,
+                status,
+                "run-summary",
+                json.dumps(summary, sort_keys=True),
+                now,
+            ),
+        )
+        connection.execute(
+            "update agents set status=? where agent_id=? and run_id=?",
+            (status, worker_id, run_id),
+        )
+        connection.execute(
+            "update agent_tasks set status=?, ended_at=? where agent_id=? and run_id=?",
+            (status, now, worker_id, run_id),
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="worker_summary_recorded",
+            payload={"worker_id": worker_id, "summary_path": summary_rel, "sha256": summary_hash, "status": status},
+        )
+        connection.commit()
+    return {"status": "recorded", "summary": summary_rel, "sha256": summary_hash}
+
+
+def record_artifact(
+    connection: sqlite3.Connection,
+    *,
+    run_id: str,
+    worker_id: str,
+    kind: str,
+    path: Path,
+    status: str,
+    semantic_role: str,
+    payload: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, str]:
+    artifact_rel = repo_relative(path, repo_root=repo_root)
+    artifact_sha = sha256_file(path)
+    connection.execute(
+        """
+        insert into artifacts(run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(repo_rel_path) do update set
+          run_id=excluded.run_id,
+          agent_id=excluded.agent_id,
+          kind=excluded.kind,
+          sha256=excluded.sha256,
+          status=excluded.status,
+          semantic_role=excluded.semantic_role,
+          payload_json=excluded.payload_json
+        """,
+        (
+            run_id,
+            worker_id,
+            kind,
+            artifact_rel,
+            artifact_sha,
+            status,
+            semantic_role,
+            json.dumps(payload, sort_keys=True),
+            now_text(),
+        ),
+    )
+    return {"path": artifact_rel, "sha256": artifact_sha}
+
+
+def worker_attempt_request(
+    request: dict[str, Any],
+    *,
+    attempt_number: int,
+    retry_of: str | None = None,
+    repair_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    attempt_request = dict(request)
+    attempt_request["harness_attempt"] = {
+        "attempt": attempt_number,
+        "repair_round": max(0, attempt_number - 1),
+        "repair_round_cap": REPAIR_ROUND_CAP,
+    }
+    attempt_request["harness_attempt_number"] = attempt_number
+    if retry_of:
+        attempt_request["harness_retry_of"] = retry_of
+        attempt_request["harness_repair_hint_id"] = retry_of
+        attempt_request["harness_attempt"]["retry_of"] = retry_of
+    if repair_trace is not None:
+        attempt_request["harness_repair_trace"] = repair_trace
+    return attempt_request
+
+
+def worker_request_run_id(request: dict[str, Any], *, worker_id: str) -> str:
+    run_id = str(request.get("run_id", ""))
+    if not run_id:
+        raise SystemExit(f"worker request missing run_id for {worker_id}")
+    return run_id
+
+
+def run_worker_process(
+    *,
+    argv: list[str],
+    mode: str,
+    command_runner: Any,
+    repo_root: Path,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    env: dict[str, str] | None = None,
+    worker_command: list[str] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None]:
+    retry_delays = [1, 2, 4, 8, 16] if mode == "opencode" else []
+    attempts: list[dict[str, Any]] = []
+    for index in range(len(retry_delays) + 1):
+        completed = run_worker_process_once(
+            argv=argv,
+            command_runner=command_runner,
+            repo_root=repo_root,
+            timeout_seconds=timeout_seconds,
+            env=env,
+        )
+        database_locked = mode == "opencode" and opencode_database_locked(completed)
+        worker_command_observed = database_locked and opencode_worker_command_observed(completed, worker_command)
+        transient_lock = database_locked and not worker_command_observed
+        attempts.append(
+            {
+                "attempt": index + 1,
+                "process_returncode": int(completed.returncode),
+                "transient_lock": transient_lock,
+                "database_locked": database_locked,
+                "worker_command_observed": worker_command_observed,
+                "stderr_tail": tail_text(completed.stderr or "", 512),
+            }
+        )
+        if not transient_lock or index == len(retry_delays):
+            break
+        time.sleep(retry_delays[index])
+    if len(attempts) == 1:
+        return completed, None
+    final_lock = attempts[-1]["transient_lock"] is True
+    return completed, {
+        "status": "exhausted" if final_lock else "recovered",
+        "reason": "opencode_database_locked",
+        "attempt_count": len(attempts),
+        "transient_lock_retry_count": len(attempts) - 1,
+        "max_transient_lock_retries": len(retry_delays),
+        "attempts": attempts,
+        "evidence_boundary": (
+            "OpenCode process retry only handles transient agent database locks before the worker command executes; "
+            "semantic acceptance still requires the worker summary and contract verifier."
+        ),
+        "semantic_gate": False,
+    }
+
+
+def timeout_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def completed_process_from_timeout(
+    argv: list[str],
+    exc: subprocess.TimeoutExpired,
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    stdout = timeout_output_text(exc.output)
+    stderr = timeout_output_text(exc.stderr).rstrip("\n")
+    message = f"timed out after {timeout_seconds} seconds"
+    stderr = f"{stderr}\n{message}\n" if stderr else f"{message}\n"
+    return subprocess.CompletedProcess(argv, PROCESS_TIMEOUT_EXIT_CODE, stdout=stdout, stderr=stderr)
+
+
+def completed_process_timed_out(completed: subprocess.CompletedProcess[str]) -> bool:
+    return int(completed.returncode) == PROCESS_TIMEOUT_EXIT_CODE
+
+
+def kill_process_tree(process: subprocess.Popen[str]) -> None:
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
+            )
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+            return
+        except (OSError, ProcessLookupError):
+            pass
+    try:
+        process.kill()
+    except OSError:
+        pass
+
+
+def run_captured_process_with_timeout(
+    argv: list[str],
+    *,
+    cwd: Path,
+    timeout_seconds: int,
+    env: dict[str, str] | None = None,
+    popen_factory: Any = subprocess.Popen,
+    process_tree_killer: Any = kill_process_tree,
+) -> subprocess.CompletedProcess[str]:
+    popen_kwargs: dict[str, Any] = {
+        "cwd": cwd,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "env": env,
+    }
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        popen_kwargs["start_new_session"] = True
+    process = popen_factory(argv, **popen_kwargs)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        return subprocess.CompletedProcess(argv, int(process.returncode), stdout=stdout, stderr=stderr)
+    except subprocess.TimeoutExpired as exc:
+        process_tree_killer(process)
+        try:
+            process.communicate(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return completed_process_from_timeout(argv, exc, timeout_seconds)
+
+
+def run_worker_process_once(
+    *,
+    argv: list[str],
+    command_runner: Any,
+    repo_root: Path,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        if command_runner is subprocess.run:
+            return run_captured_process_with_timeout(
+                argv,
+                cwd=repo_root,
+                timeout_seconds=timeout_seconds,
+                env=env,
+            )
+        return command_runner(
+            argv,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=timeout_seconds,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return completed_process_from_timeout(argv, exc, timeout_seconds)
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"{type(exc).__name__}: {exc}\n",
+        )
+
+
+def opencode_database_locked(completed: subprocess.CompletedProcess[str]) -> bool:
+    if int(completed.returncode) == 0:
+        return False
+    stderr = (completed.stderr or "").lower()
+    return any(
+        marker in stderr
+        for marker in (
+            "database is locked",
+            "database table is locked",
+            "sqlite_busy",
+            "sqlite busy",
+        )
+    )
+
+
+def opencode_worker_command_observed(
+    completed: subprocess.CompletedProcess[str],
+    worker_command: list[str] | None,
+) -> bool:
+    if worker_command is None:
+        return False
+    expected_worker_command_line = shell_command_line(worker_command)
+    session_evidence = parse_opencode_stdout_session(completed.stdout or "")
+    return any(
+        command_matches_for_contract(command, expected_worker_command_line)
+        for command in extract_opencode_shell_commands(session_evidence)
+    )
+
+
+def tail_text(value: str, max_chars: int) -> str:
+    return value[-max_chars:]
+
+
+def run_worker(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
+    opencode_preflight_report: Path | None = None,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+    attempt_number: int = 1,
+    retry_of: str | None = None,
+    repair_trace: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    started = time.monotonic()
+    assignment_path = assignment_file_path(db_path, worker_id)
+    request_path = assignment_path.with_name(f"{worker_id}-request.json")
+    if not request_path.exists():
+        raise SystemExit(f"worker request does not exist: {repo_relative(request_path, repo_root=repo_root)}")
+    request = load_json(request_path)
+    if not request.get("out_root"):
+        raise SystemExit("worker out_root is required in request")
+    request_out_root = repo_path(Path(str(request.get("out_root", ""))), repo_root=repo_root)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        assigned_out_root_rel = assigned_worker_out_root_rel(connection, run_id=run_id, worker_id=worker_id)
+    request_out_root_rel = repo_relative(request_out_root, repo_root=repo_root)
+    if request_out_root_rel != assigned_out_root_rel:
+        raise SystemExit(
+            f"worker request out_root {request_out_root_rel} does not match ledger assignment {assigned_out_root_rel}"
+        )
+    worker_out_root = repo_path(Path(assigned_out_root_rel), repo_root=repo_root)
+    summary_path = worker_out_root / "summary" / "competition-run-summary.json"
+    logs_dir = worker_out_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = worker_out_root / "harness"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    attempt_request = worker_attempt_request(
+        request,
+        attempt_number=attempt_number,
+        retry_of=retry_of,
+        repair_trace=repair_trace,
+    )
+    attempt_request_path = report_dir / f"{worker_id}-request-attempt-{attempt_number}.json"
+    atomic_write_json(attempt_request_path, attempt_request)
+    rollback_evidence = None
+    stale_summary_cleanup_error: OSError | None = None
+    if summary_path.exists():
+        if retry_of:
+            rollback_evidence = write_worker_rollback_evidence(
+                hint_id=retry_of,
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                repo_root=repo_root,
+            )
+        try:
+            summary_path.unlink()
+        except OSError as exc:
+            stale_summary_cleanup_error = exc
+
+    worker_command = portable_python_script_argv(
+        "scripts/c2rust-migrator.py",
+        "--phase",
+        "migrate",
+        "--input",
+        repo_relative(attempt_request_path, repo_root=repo_root),
+    )
+    preflight_binding = None
+    opencode_runtime_env = None
+    opencode_process_env = None
+    if mode == "opencode" and stale_summary_cleanup_error is None:
+        preflight_binding = validate_opencode_preflight_report(
+            opencode_preflight_report,
+            expected_run_id=run_id,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            repo_root=repo_root,
+        )
+    if stale_summary_cleanup_error is not None:
+        argv = worker_command
+        report_argv = argv
+        runner_kind = "stale-summary-cleanup"
+        handoff_contract = None
+        opencode_process_retries = None
+        completed = subprocess.CompletedProcess(
+            argv,
+            1,
+            stdout="",
+            stderr=(
+                f"{type(stale_summary_cleanup_error).__name__}: failed to remove stale summary "
+                f"{repo_relative(summary_path, repo_root=repo_root)}: {stale_summary_cleanup_error}\n"
+            ),
+        )
+    elif mode == "deterministic":
+        argv = worker_command
+        report_argv = argv
+        runner_kind = "repo-local-c2rust-migrator"
+        handoff_contract = None
+        opencode_process_retries = None
+    elif mode == "opencode":
+        handoff_contract_path = report_dir / "opencode-handoff-contract.json"
+        opencode_process_retries = None
+        opencode_runtime_env = opencode_runtime_env_contract(
+            base_root=worker_out_root,
+            scope=worker_id,
+            repo_root=repo_root,
+        )
+        opencode_process_env = opencode_runtime_process_env(opencode_runtime_env, repo_root=repo_root)
+        argv = build_opencode_run_argv(
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            worker_command=worker_command,
+            request_path=attempt_request_path,
+            summary_path=summary_path,
+            handoff_contract_path=handoff_contract_path,
+            repo_root=repo_root,
+        )
+        report_argv = portable_opencode_evidence_argv(
+            argv,
+            opencode_command=opencode_command,
+        )
+        runner_kind = "opencode-run"
+        handoff_contract = write_opencode_handoff_contract(
+            run_id=run_id,
+            worker_id=worker_id,
+            attempt_number=attempt_number,
+            request_path=attempt_request_path,
+            assignment_request_path=request_path,
+            summary_path=summary_path,
+            contract_path=handoff_contract_path,
+            worker_command=worker_command,
+            opencode_argv=report_argv,
+            launch_policy=opencode_launch_policy(
+                opencode_command=opencode_command,
+                opencode_model=opencode_model,
+                opencode_agent=opencode_agent,
+                opencode_variant=opencode_variant,
+                opencode_skip_permissions=opencode_skip_permissions,
+                opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            ),
+            opencode_runtime_env=opencode_runtime_env,
+            repo_root=repo_root,
+        )
+    else:
+        raise SystemExit(f"unsupported worker mode: {mode}")
+
+    if stale_summary_cleanup_error is None:
+        completed, opencode_process_retries = run_worker_process(
+            argv=argv,
+            mode=mode,
+            command_runner=command_runner,
+            repo_root=repo_root,
+            timeout_seconds=timeout_seconds,
+            env=opencode_process_env,
+            worker_command=worker_command,
+        )
+    timed_out = completed_process_timed_out(completed)
+    stdout_path = logs_dir / "harness-worker-executor.stdout.log"
+    stderr_path = logs_dir / "harness-worker-executor.stderr.log"
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
+    opencode_session_evidence = None
+    if mode == "opencode" and stale_summary_cleanup_error is None:
+        opencode_session_evidence = write_opencode_session_evidence(
+            completed=completed,
+            evidence_path=logs_dir / "opencode-session-evidence.json",
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            opencode_runtime_env=opencode_runtime_env,
+            repo_root=repo_root,
+        )
+    opencode_contract_verification = None
+    if opencode_session_evidence is not None:
+        opencode_contract_verification = verify_opencode_contract_execution(
+            session_evidence=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+            worker_command=worker_command,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+    opencode_safety_transform_attempt = None
+
+    synthetic_failure_root_cause = None
+    rejected_summary_evidence = None
+    if stale_summary_cleanup_error is not None:
+        synthetic_failure_root_cause = "stale_summary_cleanup_failed"
+    if (
+        synthetic_failure_root_cause is None
+        and mode == "opencode"
+        and stale_summary_cleanup_error is None
+        and int(completed.returncode) != 0
+        and opencode_database_locked(completed)
+        and opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") == "executed"
+    ):
+        synthetic_failure_root_cause = "opencode_database_locked_after_worker_command_seen"
+    opencode_contract_failed = (
+        opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") != "executed"
+        and int(completed.returncode) == 0
+    )
+    if stale_summary_cleanup_error is None and opencode_contract_failed:
+        synthetic_failure_root_cause = "opencode_contract_not_executed"
+        if summary_path.exists():
+            rejected_summary_evidence = write_rejected_worker_summary_evidence(
+                run_id=run_id,
+                worker_id=worker_id,
+                summary_path=summary_path,
+                report_dir=report_dir,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+        write_blocked_worker_summary(
+            run_id=run_id,
+            proof_class=run_proof_class(db_path, run_id),
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=synthetic_failure_root_cause,
+            process_returncode=int(completed.returncode),
+            exit_code=1,
+            elapsed_seconds=int(time.monotonic() - started),
+            summary_path=summary_path,
+            metrics_path=summary_path.parent / "workflow-metrics.json",
+            opencode_contract_verification=opencode_contract_verification,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            repo_root=repo_root,
+        )
+    elif stale_summary_cleanup_error is None and not summary_path.exists():
+        provisional_root_cause = synthetic_failure_root_cause or worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=False,
+            summary_status="missing-summary",
+            opencode_contract_verification=opencode_contract_verification,
+        )
+        if provisional_root_cause in {
+            "opencode_contract_not_executed",
+            "process_timeout",
+            "opencode_database_locked_after_worker_command_seen",
+        }:
+            synthetic_failure_root_cause = provisional_root_cause
+            write_blocked_worker_summary(
+                run_id=run_id,
+                proof_class=run_proof_class(db_path, run_id),
+                worker_id=worker_id,
+                request=request,
+                root_cause_key=provisional_root_cause,
+                process_returncode=int(completed.returncode),
+                exit_code=1,
+                elapsed_seconds=int(time.monotonic() - started),
+                summary_path=summary_path,
+                metrics_path=summary_path.parent / "workflow-metrics.json",
+                opencode_contract_verification=opencode_contract_verification,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                repo_root=repo_root,
+            )
+
+    recorded: dict[str, Any] | None = None
+    summary_status = "stale-summary-cleanup-failed" if stale_summary_cleanup_error is not None else "missing-summary"
+    summary_payload: dict[str, Any] | None = None
+    if summary_path.exists() and stale_summary_cleanup_error is None:
+        summary_payload = load_json(summary_path)
+        summary_status = str(summary_payload.get("final_gate", {}).get("status", "failed"))
+        if (
+            mode == "opencode"
+            and summary_status == "passed"
+            and opencode_contract_verification is not None
+            and opencode_contract_verification.get("status") == "executed"
+        ):
+            annotate_opencode_worker_metrics(
+                summary_path=summary_path,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+            summary_payload = load_json(summary_path)
+        if mode == "opencode" and opencode_contract_verification is not None:
+            opencode_safety_transform_attempt = write_opencode_safety_transform_attempt(
+                run_id=run_id,
+                worker_id=worker_id,
+                attempt_number=attempt_number,
+                attempt_path=report_dir / "opencode-safety-transform-attempt.json",
+                summary_path=summary_path,
+                summary_payload=summary_payload,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+        recorded = record_worker_summary(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+
+    effective_exit_code = int(completed.returncode)
+    if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
+        effective_exit_code = 1
+    status = "recorded" if recorded is not None else "failed"
+    report_path = report_dir / "run-worker-report.json"
+    repair_hint = None
+    if effective_exit_code != 0:
+        root_cause_key = (
+            synthetic_failure_root_cause
+            or worker_summary_root_cause(summary_payload, summary_path=summary_path, repo_root=repo_root)
+            or worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=recorded is not None,
+            summary_status=summary_status,
+            opencode_contract_verification=opencode_contract_verification,
+            )
+        )
+        diagnostics = worker_repair_diagnostics(
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            process_returncode=int(completed.returncode),
+            root_cause_key=root_cause_key,
+        )
+        repair_hint = worker_repair_hint_payload(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=root_cause_key,
+            summary_status=summary_status,
+            process_returncode=int(completed.returncode),
+            summary_path=summary_path,
+            report_path=report_path,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            repo_root=repo_root,
+            exit_code=effective_exit_code,
+            attempt_number=attempt_number,
+            diagnostics=diagnostics,
+            retry_of=retry_of,
+            rollback_evidence=rollback_evidence,
+            rejected_summary_evidence=rejected_summary_evidence,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            opencode_contract_verification=opencode_contract_verification,
+        )
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "run-worker-report",
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "mode": mode,
+        "runner_kind": runner_kind,
+        "request_path": repo_relative(attempt_request_path, repo_root=repo_root),
+        "assignment_request_path": repo_relative(request_path, repo_root=repo_root),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_status": summary_status,
+        "recorded": recorded is not None,
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": report_argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+    }
+    if timed_out:
+        report["timed_out"] = True
+        report["timeout_seconds"] = timeout_seconds
+    if handoff_contract is not None:
+        report["handoff_contract"] = handoff_contract
+    if opencode_process_retries is not None:
+        report["opencode_process_retries"] = opencode_process_retries
+    if preflight_binding is not None:
+        report["opencode_preflight_report"] = preflight_binding
+    if opencode_runtime_env is not None:
+        report["opencode_runtime_env"] = opencode_runtime_env
+    if opencode_session_evidence is not None:
+        report["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        report["opencode_contract_verification"] = opencode_contract_verification
+    if opencode_safety_transform_attempt is not None:
+        report["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
+    if retry_of:
+        report["retry_of"] = retry_of
+    if rollback_evidence is not None:
+        report["rollback_evidence"] = rollback_evidence
+    if rejected_summary_evidence is not None:
+        report["rejected_summary_evidence"] = rejected_summary_evidence
+    if repair_hint is not None:
+        report["repair_hint"] = {
+            "hint_id": repair_hint["hint_id"],
+            "root_cause_key": repair_hint["root_cause_key"],
+            "status": "open",
+            "diagnostics": repair_hint["diagnostics"],
+        }
+    atomic_write_json(report_path, report)
+
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        task_status = summary_status if recorded is not None else "failed"
+        connection.execute(
+            "update leases set status=?, heartbeat_at=? where run_id=? and lease_owner=?",
+            (task_status, now_text(), run_id, worker_id),
+        )
+        event_payload = {
+            "worker_id": worker_id,
+            "attempt": attempt_number,
+            "mode": mode,
+            "runner_kind": runner_kind,
+            "exit_code": effective_exit_code,
+            "process_returncode": int(completed.returncode),
+            "summary_path": repo_relative(summary_path, repo_root=repo_root),
+            "summary_status": summary_status,
+            "recorded": recorded is not None,
+            "report_path": repo_relative(report_path, repo_root=repo_root),
+        }
+        worker_report_ref = record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id=worker_id,
+            kind="run-worker-report",
+            path=report_path,
+            status=task_status,
+            semantic_role="worker-execution-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        event_payload["worker_report"] = worker_report_ref
+        if retry_of:
+            event_payload["retry_of"] = retry_of
+        if rollback_evidence is not None:
+            event_payload["rollback_evidence"] = rollback_evidence
+        if rejected_summary_evidence is not None:
+            event_payload["rejected_summary_evidence"] = rejected_summary_evidence
+        if handoff_contract is not None:
+            event_payload["handoff_contract"] = handoff_contract
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-handoff-contract",
+                path=repo_path(Path(handoff_contract["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-command-contract",
+                payload=load_json(repo_path(Path(handoff_contract["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_process_retries is not None:
+            event_payload["opencode_process_retries"] = opencode_process_retries
+        if preflight_binding is not None:
+            event_payload["opencode_preflight_report"] = preflight_binding
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-preflight-report",
+                path=repo_path(Path(preflight_binding["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-preflight-evidence",
+                payload=load_json(repo_path(Path(preflight_binding["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_runtime_env is not None:
+            event_payload["opencode_runtime_env"] = opencode_runtime_env
+        if opencode_session_evidence is not None:
+            event_payload["opencode_session_evidence"] = opencode_session_evidence
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-session-evidence",
+                path=repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-session-evidence",
+                payload=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_contract_verification is not None:
+            event_payload["opencode_contract_verification"] = opencode_contract_verification
+        if opencode_safety_transform_attempt is not None:
+            event_payload["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-safety-transform-attempt",
+                path=repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-safety-transform-attempt",
+                payload=load_json(repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
+        if repair_hint is not None:
+            record_repair_hint(connection, hint=repair_hint)
+        connection.commit()
+
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    if recorded is not None:
+        result["record_worker_summary"] = recorded
+    return result

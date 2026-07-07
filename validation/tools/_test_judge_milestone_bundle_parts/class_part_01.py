@@ -1,0 +1,910 @@
+class _JudgeMilestoneBundleTestsPart01:
+    def test_publication_archive_ref_preserves_external_refs_for_release_notes(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        ref = bundle.publication_archive_ref(
+            {
+                "status": "present",
+                "root": "config/competition-env",
+                "report_kind": "competition-config-archive",
+                "files": {
+                    "config/competition-env/bundle-manifest.json": {
+                        "path": "config/competition-env/bundle-manifest.json",
+                        "sha256": "1" * 64,
+                        "status": "present",
+                    }
+                },
+                "external_refs": {
+                    ".opencode/agents/c2rust-migrator.md": {
+                        "path": ".opencode/agents/c2rust-migrator.md",
+                        "sha256": "3" * 64,
+                        "status": "present",
+                        "role": "opencode-agent-runbook",
+                    },
+                },
+            }
+        )
+
+        self.assertEqual(ref["external_ref_count"], 1)
+        self.assertNotIn(".codex/skills/c2rust-migration/SKILL.md", ref["external_refs"])
+        self.assertEqual(
+            ref["external_refs"][".opencode/agents/c2rust-migrator.md"]["role"],
+            "opencode-agent-runbook",
+        )
+
+    def test_evidence_policy_compliance_failure_blocks_milestone(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        evidence_cost_retention = bundle.build_evidence_cost_retention_rollup(
+            [
+                {
+                    "entrypoint_id": "competition_environment_smoke",
+                    "status": "passed",
+                    "policy_compliance": {
+                        "policy_tier": "release",
+                        "status": "failed",
+                        "failed_gates": ["diagnostic_host_metadata"],
+                    },
+                    "artifact_count": 1,
+                    "total_bytes": 10,
+                    "pipeline_count": 1,
+                    "runtime_observation_count": 0,
+                    "runtime_total_duration_ms": 0,
+                    "runtime_max_duration_ms": 0,
+                    "retention_classes": {},
+                    "claim_anchor_issue_count": 0,
+                    "profile_hash_issue_count": 0,
+                    "diagnostic_host_metadata_count": 1,
+                }
+            ]
+        )
+
+        self.assertFalse(
+            evidence_cost_retention["rollup"]["policy_compliance"]["all_sources_policy_passed"]
+        )
+        self.assertEqual(
+            evidence_cost_retention["rollup"]["policy_compliance"]["failed_gate_counts"],
+            {"diagnostic_host_metadata": 1},
+        )
+        blockers = bundle.milestone_blockers(
+            {"status": "passed", "summary": {"claim_boundary": {}}},
+            {"all_entrypoints_executed": True, "validation_status": "passed"},
+            {},
+            run_report_contract=[],
+            proof_class_contract_errors=[],
+            exact_host_revalidation_errors=[],
+            opencode_policy={"enabled": False},
+            core_translation_quality={
+                "generated_draft_semantic_pass": False,
+                "translation_coverage_numerator": 0,
+            },
+            before_after_repair_exhibit={"rollup": {}},
+            blocked_repairs_rollup={"rollup": {"status_counts": {}}},
+            route_governance_metrics={"rollup": {}},
+            evidence_cost_retention=evidence_cost_retention,
+            opencode_runtime={"enabled_entrypoint_count": 0},
+        )
+
+        self.assertIn("evidence_policy_compliance_must_pass", blockers)
+
+    def test_progress_delta_ledger_uses_before_after_repair_when_workflow_metrics_are_sparse(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-progress-repair-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 1,
+                "units_converged": 0,
+                "avg_repair_rounds": 0.0,
+                "auto_recovery_rate": 0.0,
+                "human_interventions": 0,
+                "llm_calls": 0,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+                "per_unit_statuses": [{"unit_id": "flashdb/real-fdb-calc-crc32"}],
+            },
+        )
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "final_gate_status": "failed",
+                    "semantic_pass_count": 0,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "status": "converged",
+                            "accepted_patch": {"path": "validation/evidence/accepted.patch", "sha256": "c" * 64},
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                        }
+                    ],
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 5,
+                    },
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(metrics_path),
+                            "judge_evidence_index": repo_relative(index_path),
+                        },
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        workflow_delta = report["progress_delta_ledger"]["workflow_delta"]
+        self.assertEqual(workflow_delta["repair_history_unit_count"], 1)
+        self.assertEqual(workflow_delta["observed_repair_unit_count"], 1)
+        self.assertEqual(workflow_delta["auto_recovered_unit_count"], 1)
+        self.assertEqual(workflow_delta["rollback_evidence_count"], 5)
+        self.assertEqual(workflow_delta["before_after_repair_source_count"], 1)
+        self.assertEqual(workflow_delta["repair_delta_source_count"], 1)
+        self.assertFalse(report["progress_delta_ledger"]["semantic_gate"])
+        self.assertEqual(report["progress_delta_ledger"]["translation_coverage_numerator"], 0)
+
+    def test_bundle_matches_schema_and_rejects_expanded_claims(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-schema-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        write_json(
+            metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 1,
+                "units_converged": 1,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+            },
+        )
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 1,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "core_translation_quality": {
+                    "final_gate_status": "passed",
+                    "semantic_pass_count": 1,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "readiness_report": None,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "purpose": "core-translation-before-after-exhibit",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "run_id": "schema-test",
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(metrics_path),
+                            "judge_evidence_index": repo_relative(index_path),
+                        },
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        jsonschema.validate(report, schema)
+
+        for field in (
+            "verified_baseline_unit_count",
+            "missing_verified_baseline_unit_count",
+            "all_units_verified_baseline_bound",
+        ):
+            with self.subTest(missing_before_after_rollup_field=field):
+                missing_baseline_rollup = json.loads(json.dumps(report))
+                missing_baseline_rollup["before_after_repair_exhibit"]["rollup"].pop(field)
+                with self.assertRaises(jsonschema.exceptions.ValidationError):
+                    jsonschema.validate(missing_baseline_rollup, schema)
+
+        invalid_baseline_rollup_values = {
+            "verified_baseline_unit_count": -1,
+            "missing_verified_baseline_unit_count": -1,
+            "all_units_verified_baseline_bound": "true",
+        }
+        for field, value in invalid_baseline_rollup_values.items():
+            with self.subTest(invalid_before_after_rollup_field=field):
+                invalid_baseline_rollup = json.loads(json.dumps(report))
+                invalid_baseline_rollup["before_after_repair_exhibit"]["rollup"][field] = value
+                with self.assertRaises(jsonschema.exceptions.ValidationError):
+                    jsonschema.validate(invalid_baseline_rollup, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["claim_scope"]["semantic_acceptance_ready"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["core_translation_quality"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_evidence_cost = json.loads(json.dumps(report))
+        missing_evidence_cost.pop("evidence_cost_retention")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_evidence_cost, schema)
+
+        missing_contract_matrix = json.loads(json.dumps(report))
+        missing_contract_matrix["harness_architecture_summary"].pop("contract_matrix")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_contract_matrix, schema)
+
+        valid_matrix = report["harness_architecture_summary"]["contract_matrix"]
+        contract_matrix_rewrites = {
+            "missing_repair": [
+                entry for entry in valid_matrix if entry["stage"] != "repair"
+            ],
+            "duplicate_translate": [
+                valid_matrix[0],
+                valid_matrix[1],
+                valid_matrix[2],
+                json.loads(json.dumps(valid_matrix[1])),
+                valid_matrix[4],
+            ],
+            "wrong_order": [
+                valid_matrix[1],
+                valid_matrix[0],
+                valid_matrix[2],
+                valid_matrix[3],
+                valid_matrix[4],
+            ],
+            "unknown_stage": [
+                valid_matrix[0],
+                valid_matrix[1],
+                valid_matrix[2],
+                valid_matrix[3],
+                {**valid_matrix[4], "stage": "publish"},
+            ],
+        }
+        for label, rewritten_matrix in contract_matrix_rewrites.items():
+            with self.subTest(label=label):
+                expanded = json.loads(json.dumps(report))
+                expanded["harness_architecture_summary"]["contract_matrix"] = rewritten_matrix
+                with self.assertRaises(jsonschema.exceptions.ValidationError):
+                    jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["harness_architecture_summary"]["contract_matrix"][1]["chat_output_is_evidence"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_publication_manifest = json.loads(json.dumps(report))
+        missing_publication_manifest.pop("publication_manifest")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_publication_manifest, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["publication_manifest_is_semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["generated_draft_semantic_pass"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["publication_manifest"]["claim_boundary"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_quantitative_evaluation = json.loads(json.dumps(report))
+        missing_quantitative_evaluation.pop("quantitative_evaluation")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_quantitative_evaluation, schema)
+
+        missing_progress_delta = json.loads(json.dumps(report))
+        missing_progress_delta.pop("progress_delta_ledger")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_progress_delta, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["progress_delta_ledger"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["progress_delta_ledger"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_repair_delta = json.loads(json.dumps(report))
+        missing_repair_delta["progress_delta_ledger"]["workflow_delta"].pop("observed_repair_unit_count")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_repair_delta, schema)
+
+        missing_repair_delta = json.loads(json.dumps(report))
+        missing_repair_delta["progress_delta_ledger"]["workflow_delta"].pop("repair_delta_source_count")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_repair_delta, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["claim_boundary"]["scorecard_is_semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["claim_boundary"]["translation_coverage_numerator"] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"][
+            "semantic_acceptance_claimed"
+        ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_raw_c2rust_rollup = json.loads(json.dumps(report))
+        missing_raw_c2rust_rollup["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"].pop(
+            "c2rust_baseline_rollup"
+        )
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_raw_c2rust_rollup, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"]["c2rust_baseline_rollup"][
+            "translation_coverage_numerator"
+        ] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["raw_c2rust"]["c2rust_baseline_rollup"][
+            "compile_semantic_pass_count"
+        ] = 1
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["opencode_llm_worker"][
+            "chat_output_is_evidence"
+        ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["quantitative_evaluation"]["baseline_comparison"]["handwritten_reference"][
+            "counts_as_translator_generated_coverage"
+        ] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_blocked_repairs = json.loads(json.dumps(report))
+        missing_blocked_repairs.pop("blocked_repairs_rollup")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_repairs, schema)
+
+        expanded = json.loads(json.dumps(report))
+        expanded["blocked_repairs_rollup"]["semantic_gate"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(expanded, schema)
+
+        missing_blocked_next_actions = json.loads(json.dumps(report))
+        missing_blocked_next_actions["blocked_repairs_rollup"]["rollup"].pop("next_actions")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_next_actions, schema)
+
+        missing_blocked_reason_counts = json.loads(json.dumps(report))
+        missing_blocked_reason_counts["blocked_repairs_rollup"]["rollup"].pop("blocked_reason_counts")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_reason_counts, schema)
+
+        missing_source_span_kind_counts = json.loads(json.dumps(report))
+        missing_source_span_kind_counts["blocked_repairs_rollup"]["rollup"].pop("source_span_kind_counts")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_source_span_kind_counts, schema)
+
+        missing_blocked_claim = json.loads(json.dumps(report))
+        missing_blocked_claim["must_not_claim"].remove("blocked_repairs_are_not_translation_success")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_blocked_claim, schema)
+
+    def test_quantitative_evaluation_keeps_opencode_chat_output_non_evidence_when_boundary_missing(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        scorecard = bundle.build_quantitative_evaluation(
+            workflow_metrics={"rollup": {}},
+            route_governance_metrics={"rollup": {}},
+            before_after_repair_exhibit={"rollup": {}},
+            blocked_repairs_rollup={"rollup": {}},
+            unsafe_scope={},
+            semantic_evidence={},
+            opencode_runtime={"enabled_entrypoint_count": 1, "all_contracts_executed": False},
+            proof_classes={"entrypoints": []},
+            publishability={},
+        )
+
+        self.assertEqual(
+            scorecard["baseline_comparison"]["opencode_llm_worker"]["status"],
+            "command_contract_incomplete",
+        )
+        self.assertFalse(scorecard["baseline_comparison"]["opencode_llm_worker"]["chat_output_is_evidence"])
+        self.assertFalse(scorecard["claim_boundary"]["semantic_gate"])
+        self.assertFalse(scorecard["semantic_gate"])
+        self.assertEqual(scorecard["translation_coverage_numerator"], 0)
+
+    def test_publishability_requires_complete_opencode_preflight_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        publishability = bundle.build_publishability(
+            status="passed",
+            readiness={"all_entrypoints_executed": True},
+            proof_classes={"all_entrypoints_competition_exact": True},
+            blockers=[],
+            opencode_runtime={
+                "enabled_entrypoint_count": 1,
+                "preflight_proof_summary": {
+                    "status": "passed",
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "required_model": "GLM-5.1",
+                    "model_listed": True,
+                },
+            },
+        )
+
+        self.assertEqual(publishability["status"], "internal_preview")
+        self.assertFalse(publishability["external_milestone_claim_ready"])
+        self.assertFalse(publishability["external_milestone"])
+        self.assertEqual(publishability["required_agent"], "c2rust-migrator")
+        self.assertFalse(publishability["opencode_glm51_publishable"])
+
+    def test_proof_classes_do_not_verify_competition_host_from_proof_class_string_only(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        proof_classes = bundle.build_proof_classes(
+            [
+                {
+                    "id": "competition_environment_smoke",
+                    "proof_class": "competition-exact",
+                    "run_id": "smoke-without-host-attestation",
+                }
+            ]
+        )
+
+        self.assertTrue(proof_classes["all_entrypoints_competition_exact"])
+        self.assertFalse(proof_classes["competition_exact_host_verified"])
+        self.assertEqual(proof_classes["host_attestation_missing_entrypoints"], ["competition_environment_smoke"])
+
+    def test_publishability_requires_competition_host_attestation_not_only_exact_proof_string(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        proof_classes = bundle.build_proof_classes(
+            [
+                {
+                    "id": "competition_environment_smoke",
+                    "proof_class": "competition-exact",
+                    "run_id": "smoke-without-host-attestation",
+                }
+            ]
+        )
+        runtime_env = {"env_sha256": "runtime-env"}
+        publishability = bundle.build_publishability(
+            status="passed",
+            readiness={"all_entrypoints_executed": True},
+            proof_classes=proof_classes,
+            blockers=[],
+            opencode_runtime={
+                "enabled_entrypoint_count": 1,
+                "preflight_proof_summary": {
+                    "status": "passed",
+                    "required_when_opencode_runtime_enabled": True,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "translation_coverage_numerator": 0,
+                    "opencode_command": "opencode",
+                    "opencode_agent": "c2rust-migrator",
+                    "opencode_model": "GLM-5.1",
+                    "opencode_variant": "max",
+                    "required_model": "GLM-5.1",
+                    "model_availability_status": "available",
+                    "model_listed": True,
+                    "process_returncode": 0,
+                    "contract_status": "executed",
+                    "marker_exists": True,
+                    "opencode_run_launched": True,
+                    "opencode_run_argv_bound": True,
+                    "model_probe_argv": ["opencode", "models"],
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_runtime_env_sha256": runtime_env["env_sha256"],
+                },
+            },
+        )
+
+        self.assertEqual(publishability["status"], "internal_preview")
+        self.assertFalse(publishability["external_milestone_claim_ready"])
+        self.assertFalse(publishability["competition_exact_publishable"])
+        self.assertEqual(publishability["required_agent"], "c2rust-migrator")
+        self.assertTrue(publishability["opencode_glm51_publishable"])
+
+    def test_publishability_requires_competition_opencode_agent_and_variant(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        def publishability_for(summary_overrides: dict) -> dict:
+            preflight_summary = {
+                "status": "passed",
+                "required_when_opencode_runtime_enabled": True,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+                "opencode_command": "opencode",
+                "opencode_agent": "c2rust-migrator",
+                "opencode_model": "GLM-5.1",
+                "opencode_variant": "max",
+                "required_model": "GLM-5.1",
+                "model_availability_status": "available",
+                "model_listed": True,
+                "process_returncode": 0,
+                "contract_status": "executed",
+                "marker_exists": True,
+                "opencode_run_launched": True,
+                "opencode_run_argv_bound": True,
+                "model_probe_argv": ["opencode", "models"],
+                "opencode_runtime_env": {"env_sha256": "runtime-env"},
+                "opencode_runtime_env_sha256": "runtime-env",
+            }
+            preflight_summary.update(summary_overrides)
+            return bundle.build_publishability(
+                status="passed",
+                readiness={"all_entrypoints_executed": True},
+                proof_classes={
+                    "all_entrypoints_competition_exact": True,
+                    "competition_exact_host_verified": True,
+                },
+                blockers=[],
+                opencode_runtime={
+                    "enabled_entrypoint_count": 1,
+                    "preflight_proof_summary": preflight_summary,
+                },
+            )
+
+        for overrides in [{"opencode_agent": "general"}, {"opencode_variant": "small"}]:
+            with self.subTest(overrides=overrides):
+                publishability = publishability_for(overrides)
+
+                self.assertFalse(publishability["opencode_glm51_publishable"])
+                self.assertFalse(publishability["external_milestone_claim_ready"])
+                self.assertEqual(publishability["status"], "internal_preview")
+
+    def test_known_gaps_keep_c2rust_baseline_gap_without_verified_baseline_exhibit(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "baseline_verification": {
+                                    "status": "blocked",
+                                    "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+                                    "generated_draft_semantic_pass": False,
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
+    def test_known_gaps_keep_c2rust_baseline_gap_when_only_some_units_have_verified_baseline(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "unit_id": "demo/verified",
+                                "baseline_verification": {
+                                    "path": "validation/evidence/verified-baseline.json",
+                                    "sha256": "a" * 64,
+                                    "status": "passed",
+                                    "semantic_pass": True,
+                                    "semantic_claim_source": "verified_unsafe_baseline_gates",
+                                    "generated_draft_semantic_pass": False,
+                                },
+                            },
+                            {
+                                "unit_id": "demo/missing",
+                                "repair_history": {"verified": True},
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
+    def test_known_gaps_require_verified_baseline_semantic_pass(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "unit_id": "demo/not-semantic-pass",
+                                "baseline_verification": {
+                                    "path": "validation/evidence/verified-baseline.json",
+                                    "sha256": "a" * 64,
+                                    "status": "passed",
+                                    "semantic_pass": False,
+                                    "semantic_claim_source": "verified_unsafe_baseline_gates",
+                                    "generated_draft_semantic_pass": False,
+                                },
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
+    def test_known_gaps_require_verified_baseline_hash_binding_shape(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        gaps = bundle.build_known_gaps(
+            proof_classes={"has_competition_exact": False},
+            opencode_runtime={"enabled_entrypoint_count": 0},
+            before_after_repair_exhibit={
+                "sources": [
+                    {
+                        "before_after_units": [
+                            {
+                                "unit_id": "demo/bad-binding",
+                                "baseline_verification": {
+                                    "path": "",
+                                    "sha256": "short",
+                                    "status": "passed",
+                                    "semantic_pass": True,
+                                    "semantic_claim_source": "verified_unsafe_baseline_gates",
+                                    "generated_draft_semantic_pass": False,
+                                },
+                            },
+                        ]
+                    }
+                ]
+            },
+        )
+
+        self.assertIn("c2rust_baseline_output_still_not_verified_here", [gap["gap_id"] for gap in gaps])
+
+    def test_bundle_blocks_malformed_run_report_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-malformed-run-report-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "report_kind": "wrong-report-kind",
+                "status": "passed",
+                "entrypoint_count": 2,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("run_report_schema_version_must_be_1", report["blockers"])
+        self.assertIn("run_report_kind_must_be_judge_entrypoints_run_report", report["blockers"])
+        self.assertIn("run_report_entrypoint_count_mismatch", report["blockers"])
+
+    def test_bundle_blocks_missing_run_report_validation_even_if_readiness_claims_passed(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-missing-validation-", dir=REPO_ROOT / "target"))
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {},
+                    }
+                ],
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertIn("run_report_validation_missing", report["blockers"])

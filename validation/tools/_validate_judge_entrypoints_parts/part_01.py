@@ -1,0 +1,1005 @@
+def validate_competition_smoke_summary_contract(
+    payload: dict[str, Any],
+    *,
+    expected_artifacts: dict[str, Any],
+    environment_profile: dict[str, Any] | None = None,
+    entrypoint_proof_class: str | None = None,
+    entrypoint_run_id: str | None = None,
+    repo_root: Path = REPO_ROOT,
+    verify_command_log_sha: bool = False,
+) -> dict[str, Any]:
+    if payload.get("report_kind") != "competition-smoke-summary":
+        raise ValueError("competition_smoke_summary report_kind must be competition-smoke-summary")
+    proof_class = require_string(payload.get("proof_class"), "competition_smoke_summary.proof_class")
+    if entrypoint_proof_class is not None and proof_class != entrypoint_proof_class:
+        raise ValueError("competition_smoke_summary proof_class must match entrypoint proof_class")
+    if entrypoint_run_id is not None and payload.get("run_id") != entrypoint_run_id:
+        raise ValueError("competition_smoke_summary run_id must match entrypoint run_id")
+    validate_competition_smoke_profile_binding(payload, environment_profile=environment_profile)
+    boundary = require_object(payload.get("claim_boundary"), "competition_smoke_summary claim_boundary")
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError("competition_smoke_summary claim_boundary.semantic_gate must be false")
+    if boundary.get("generated_draft_semantic_pass") is not False:
+        raise ValueError("competition_smoke_summary claim_boundary.generated_draft_semantic_pass must be false")
+    if boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError("competition_smoke_summary claim_boundary.translation_coverage_numerator must be 0")
+    if "slices" in payload:
+        raise ValueError("competition_smoke_summary must not claim translated slices")
+    smoke_entrypoint = require_object(payload.get("smoke_entrypoint"), "competition_smoke_summary smoke_entrypoint")
+    if smoke_entrypoint.get("semantic_acceptance_boundary") != "does_not_translate_new_slices":
+        raise ValueError("competition_smoke_summary smoke_entrypoint.semantic_acceptance_boundary must be does_not_translate_new_slices")
+    validate_competition_smoke_timeout_policy(payload)
+    final_gate = require_object(payload.get("final_gate"), "competition_smoke_summary final_gate")
+    if final_gate.get("status") != "passed":
+        raise ValueError("competition_smoke_summary final_gate.status must be passed")
+    validate_competition_smoke_proof_class_environment(payload)
+    validate_competition_exact_smoke_summary(payload, repo_root=repo_root)
+    validate_competition_smoke_step_contract(payload)
+    validate_competition_smoke_artifact_roots(payload)
+
+    assert_expected_smoke_path(
+        payload.get("vendored_clang_verification"),
+        "path",
+        expected_artifacts,
+        "vendored_clang_verification",
+        "competition_smoke_summary.vendored_clang_verification.path",
+    )
+    reports = require_object(payload.get("reports"), "competition_smoke_summary reports")
+    assert_expected_smoke_path(
+        reports.get("evidence_governance"),
+        "path",
+        expected_artifacts,
+        "evidence_governance_report",
+        "competition_smoke_summary.reports.evidence_governance.path",
+    )
+    assert_expected_smoke_path(
+        reports.get("translator_coverage_matrix"),
+        "path",
+        expected_artifacts,
+        "translator_coverage_matrix",
+        "competition_smoke_summary.reports.translator_coverage_matrix.path",
+    )
+    assert_expected_smoke_path(
+        payload.get("milestone_release_report"),
+        "path",
+        expected_artifacts,
+        "milestone_release_report",
+        "competition_smoke_summary.milestone_release_report.path",
+    )
+    milestone = require_object(payload.get("milestone_release_report"), "competition_smoke_summary milestone_release_report")
+    if milestone.get("semantic_acceptance_claim") is not False:
+        raise ValueError("competition_smoke_summary milestone_release_report.semantic_acceptance_claim must be false")
+    command_log = require_object(payload.get("command_log"), "competition_smoke_summary.command_log")
+    assert_expected_smoke_path(
+        command_log,
+        "path",
+        expected_artifacts,
+        "command_log",
+        "competition_smoke_summary.command_log.path",
+    )
+    command_log_sha = validate_sha256_hex(
+        command_log.get("sha256"),
+        "competition_smoke_summary.command_log.sha256",
+    )
+    command_log_path = repo_path(
+        require_string(expected_artifacts.get("command_log"), "expected_artifacts.command_log"),
+        repo_root=repo_root,
+    )
+    if verify_command_log_sha and command_log_path.is_file():
+        actual_sha = sha256_file(command_log_path)
+        if actual_sha != command_log_sha:
+            raise ValueError("competition_smoke_summary.command_log.sha256 must match command_log artifact")
+    for step in payload.get("steps", []):
+        step_name = require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+        if step.get("log_path") != command_log["path"]:
+            raise ValueError(f"competition_smoke_summary step {step_name}.log_path must match command_log.path")
+    return {
+        "status": "passed",
+        "proof_class": proof_class,
+        "profile_sha256": payload.get("profile_sha256"),
+        "command_log_sha256": command_log_sha,
+        "final_gate": final_gate.get("status"),
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+    }
+
+
+def validate_evidence_governance_report_contract(payload: Any) -> dict[str, Any]:
+    report = require_object(payload, "evidence_governance_report")
+    if report.get("schema_version") != 1:
+        raise ValueError("evidence_governance_report.schema_version must be 1")
+    status = report.get("status")
+    if status not in {"passed", "failed"}:
+        raise ValueError("evidence_governance_report.status must be passed or failed")
+    require_string(report.get("evidence_root"), "evidence_governance_report.evidence_root")
+    failed_gates = report.get("failed_gates")
+    if not isinstance(failed_gates, list) or not all(isinstance(item, str) for item in failed_gates):
+        raise ValueError("evidence_governance_report.failed_gates must be a string list")
+    policy = require_object(report.get("policy_compliance"), "evidence_governance_report.policy_compliance")
+    if policy.get("status") not in {"passed", "failed"}:
+        raise ValueError("evidence_governance_report.policy_compliance.status must be passed or failed")
+    if not isinstance(policy.get("gates"), list):
+        raise ValueError("evidence_governance_report.policy_compliance.gates must be a list")
+    portability = require_object(report.get("portability"), "evidence_governance_report.portability")
+    if portability.get("status") not in {"passed", "failed"}:
+        raise ValueError("evidence_governance_report.portability.status must be passed or failed")
+    require_object(report.get("inventory"), "evidence_governance_report.inventory")
+    return {"status": status, "failed_gate_count": len(failed_gates)}
+
+
+def validate_translator_coverage_matrix_report_contract(payload: Any) -> dict[str, Any]:
+    report = require_object(payload, "translator_coverage_matrix")
+    if report.get("schema_version") != 1:
+        raise ValueError("translator_coverage_matrix.schema_version must be 1")
+    if report.get("status") != "passed":
+        raise ValueError("translator_coverage_matrix.status must be passed")
+    matrix = require_object(report.get("matrix"), "translator_coverage_matrix.matrix")
+    require_string(matrix.get("path"), "translator_coverage_matrix.matrix.path")
+    capability_count = matrix.get("capability_count")
+    if not isinstance(capability_count, int) or capability_count < 0:
+        raise ValueError("translator_coverage_matrix.matrix.capability_count must be a non-negative integer")
+    if report.get("capability_count") != capability_count:
+        raise ValueError("translator_coverage_matrix.capability_count must match matrix.capability_count")
+    require_object(report.get("dimensions"), "translator_coverage_matrix.dimensions")
+    if not isinstance(report.get("capabilities"), list):
+        raise ValueError("translator_coverage_matrix.capabilities must be a list")
+    ledger = require_object(
+        report.get("capability_delta_ledger"),
+        "translator_coverage_matrix.capability_delta_ledger",
+    )
+    if ledger.get("schema_version") != 1:
+        raise ValueError("translator_coverage_matrix.capability_delta_ledger.schema_version must be 1")
+    if ledger.get("status") != "recorded":
+        raise ValueError("translator_coverage_matrix.capability_delta_ledger.status must be recorded")
+    require_string(report.get("claim_boundary"), "translator_coverage_matrix.claim_boundary")
+    return {"status": "passed", "capability_count": capability_count}
+
+
+def validate_milestone_release_report_contract(payload: Any) -> dict[str, Any]:
+    report = require_object(payload, "milestone_release_report")
+    if report.get("schema_version") != 1:
+        raise ValueError("milestone_release_report.schema_version must be 1")
+    if report.get("report_kind") != "milestone-release-metrics":
+        raise ValueError("milestone_release_report.report_kind must be milestone-release-metrics")
+    status = report.get("status")
+    if status not in {"internal_preview", "release_candidate"}:
+        raise ValueError("milestone_release_report.status must be internal_preview or release_candidate")
+    require_object(report.get("inputs"), "milestone_release_report.inputs")
+    require_object(report.get("harness_architecture"), "milestone_release_report.harness_architecture")
+    core_quality = require_object(
+        report.get("core_translation_quality"),
+        "milestone_release_report.core_translation_quality",
+    )
+    numerator = core_quality.get("translation_coverage_numerator")
+    if not isinstance(numerator, int) or numerator < 0:
+        raise ValueError(
+            "milestone_release_report.core_translation_quality.translation_coverage_numerator "
+            "must be a non-negative integer"
+        )
+    metrics = require_object(report.get("metrics"), "milestone_release_report.metrics")
+    if metrics.get("translation_coverage_numerator") != numerator:
+        raise ValueError("milestone_release_report.metrics.translation_coverage_numerator must match core_translation_quality")
+    readiness = require_object(report.get("readiness"), "milestone_release_report.readiness")
+    if readiness.get("status") != status:
+        raise ValueError("milestone_release_report.readiness.status must match status")
+    require_object(report.get("release_note_inputs"), "milestone_release_report.release_note_inputs")
+    require_string(report.get("claim_boundary"), "milestone_release_report.claim_boundary")
+    return {"status": status, "translation_coverage_numerator": numerator}
+
+
+def validate_competition_smoke_artifact_roots(payload: dict[str, Any]) -> dict[str, Any]:
+    roots = payload.get("artifact_roots", [])
+    if roots is None:
+        roots = []
+    if not isinstance(roots, list):
+        raise ValueError("competition_smoke_summary artifact_roots must be a list")
+    for index, root in enumerate(roots):
+        assert_repo_relative_posix(require_string(root, f"competition_smoke_summary artifact_roots[{index}]"))
+    return {"status": "passed", "root_count": len(roots)}
+
+
+def validate_competition_smoke_command_log_contract(
+    command_log_path: Path,
+    *,
+    expected_steps: list[str] | None = None,
+    expected_step_results: dict[str, dict[str, Any]] | None = None,
+    expected_run_id: str | None = None,
+    require_canonical: bool = False,
+    require_opencode_glm_model: bool = False,
+) -> dict[str, Any]:
+    if not command_log_path.is_file():
+        raise ValueError("competition_smoke_command_log path must exist")
+    checked_entries = 0
+    observed_steps: set[str] = set()
+    observed_step_counts: dict[str, int] = {}
+    opencode_glm_probe_verified = False
+    with command_log_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entry = json.loads(stripped)
+            except json.JSONDecodeError as error:
+                raise ValueError(f"competition_smoke_command_log line {line_number} must be valid JSON") from error
+            if not isinstance(entry, dict):
+                raise ValueError(f"competition_smoke_command_log line {line_number} must be an object")
+            step = entry.get("step")
+            if not isinstance(step, str) or not step:
+                raise ValueError(
+                    f"competition_smoke_command_log line {line_number} step must be a non-empty string"
+                )
+            if expected_run_id is not None:
+                run_id = entry.get("run_id")
+                if not isinstance(run_id, str) or not run_id:
+                    raise ValueError(
+                        f"competition_smoke_command_log line {line_number} run_id must be a non-empty string"
+                    )
+                if run_id != expected_run_id:
+                    raise ValueError(
+                        f"competition_smoke_command_log line {line_number} run_id must match smoke summary run_id"
+                    )
+            if require_canonical and entry.get("canonical") is not True:
+                raise ValueError(f"competition_smoke_command_log line {line_number} canonical must be true")
+            observed_steps.add(step)
+            observed_step_counts[step] = observed_step_counts.get(step, 0) + 1
+            command = entry.get("command")
+            if not isinstance(command, list) or not command:
+                raise ValueError(f"competition_smoke_command_log line {line_number} command must be a non-empty list")
+            for index, argument in enumerate(command):
+                if not isinstance(argument, str):
+                    raise ValueError(
+                        f"competition_smoke_command_log line {line_number} command[{index}] must be a string"
+                    )
+                if LOCAL_ABSOLUTE_PATH.search(argument):
+                    raise ValueError(
+                        "competition_smoke_command_log command contains forbidden local absolute path"
+                    )
+            validate_competition_smoke_step_command(step, command)
+            validate_competition_smoke_command_repo_inputs(command)
+            for field in ("stdout", "stderr"):
+                value = entry.get(field)
+                if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+                    raise ValueError(
+                        "competition_smoke_command_log output contains forbidden local absolute path"
+                    )
+            command_context: dict[str, str] = {}
+            for field in ("cwd", "workdir"):
+                if field not in entry:
+                    continue
+                value = entry.get(field)
+                if not isinstance(value, str):
+                    raise ValueError(f"competition_smoke_command_log {field} must be a string")
+                if LOCAL_ABSOLUTE_PATH.search(value):
+                    raise ValueError(
+                        "competition_smoke_command_log workdir contains forbidden local absolute path"
+                    )
+                try:
+                    assert_repo_relative_posix(value)
+                except ValueError as error:
+                    raise ValueError(
+                        f"competition_smoke_command_log {field} must be repo-relative POSIX: {value}"
+                    ) from error
+                command_context[field] = value
+            if "workdir" not in command_context:
+                raise ValueError("competition_smoke_command_log workdir must be present")
+            if command_context["workdir"] != ".":
+                raise ValueError("competition_smoke_command_log workdir must be repo root '.'")
+            if "cwd" in command_context and command_context["cwd"] != command_context["workdir"]:
+                raise ValueError("competition_smoke_command_log cwd must match workdir")
+            assert_payload_has_no_local_absolute_path(
+                entry,
+                label=f"competition_smoke_command_log line {line_number}",
+            )
+            if step == "opencode-glm-model-probe":
+                if entry.get("returncode") != 0:
+                    raise ValueError("competition_smoke_command_log opencode-glm-model-probe returncode must be 0")
+                if not opencode_models_argv_matches(command, expected_command=COMPETITION_OPENCODE_COMMAND):
+                    raise ValueError(
+                        "competition_smoke_command_log opencode-glm-model-probe command must be opencode models"
+                    )
+                stdout = entry.get("stdout")
+                if not isinstance(stdout, str):
+                    raise ValueError("competition_smoke_command_log opencode-glm-model-probe stdout must be a string")
+                if not opencode_models_output_mentions_required_model(stdout, COMPETITION_OPENCODE_MODEL):
+                    raise ValueError(
+                        "competition_smoke_command_log opencode-glm-model-probe stdout must list "
+                        f"{COMPETITION_OPENCODE_MODEL}"
+                    )
+                opencode_glm_probe_verified = True
+            if isinstance(step, str) and expected_step_results is not None and step in expected_step_results:
+                expected_step = expected_step_results[step]
+                if entry.get("returncode") != expected_step.get("returncode"):
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} returncode must match summary"
+                    )
+                expected_timed_out = expected_step.get("timed_out") is True
+                if (entry.get("timed_out") is True) != expected_timed_out:
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} timed_out must match summary"
+                    )
+                if expected_timed_out and entry.get("timeout_seconds") != expected_step.get("timeout_seconds"):
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} timeout_seconds must match summary"
+                    )
+                if entry.get("failure_class") != expected_step.get("failure_class"):
+                    raise ValueError(
+                        f"competition_smoke_command_log step {step} failure_class must match summary"
+                    )
+            checked_entries += 1
+    if checked_entries == 0:
+        raise ValueError("competition_smoke_command_log must contain at least one entry")
+    if expected_steps is not None:
+        expected_step_set = set(expected_steps)
+        missing_steps = [step for step in expected_steps if step not in observed_steps]
+        if missing_steps:
+            raise ValueError(f"competition_smoke_command_log missing summary steps: {missing_steps}")
+        unexpected_steps = sorted(observed_steps - expected_step_set)
+        if unexpected_steps:
+            raise ValueError(f"competition_smoke_command_log unexpected steps: {unexpected_steps}")
+        duplicate_steps = sorted(
+            step for step, count in observed_step_counts.items() if step in expected_step_set and count > 1
+        )
+        if duplicate_steps:
+            raise ValueError(f"competition_smoke_command_log duplicate summary steps: {duplicate_steps}")
+    if require_opencode_glm_model and not opencode_glm_probe_verified:
+        raise ValueError("competition_smoke_command_log missing verified opencode-glm-model-probe entry")
+    return {
+        "status": "passed",
+        "entry_count": checked_entries,
+        "observed_steps": sorted(observed_steps),
+        "opencode_glm_probe_verified": opencode_glm_probe_verified,
+    }
+
+
+def validate_competition_smoke_step_command(step: str, command: list[str]) -> None:
+    expected_script = COMPETITION_SMOKE_PYTHON_STEP_SCRIPTS.get(step)
+    if expected_script is not None:
+        if len(command) < 3 or command[:2] != [PORTABLE_PYTHON_COMMAND, "-B"]:
+            raise ValueError(f"competition_smoke_command_log step {step} command must use portable python3 -B")
+        if command[2] != expected_script:
+            raise ValueError(
+                f"competition_smoke_command_log step {step} command must execute {expected_script} as argv[2]"
+            )
+        return
+    if step == "lightweight-unittest" and command[:4] != [PORTABLE_PYTHON_COMMAND, "-B", "-m", "unittest"]:
+        raise ValueError("competition_smoke_command_log step lightweight-unittest command must run python3 -B -m unittest")
+
+
+def validate_competition_smoke_command_repo_inputs(command: list[str]) -> None:
+    for index, argument in enumerate(command):
+        if argument in COMPETITION_SMOKE_REPO_INPUT_FLAGS:
+            if index + 1 >= len(command):
+                raise ValueError(f"competition_smoke_command_log command repo input {argument} missing value")
+            validate_competition_smoke_command_repo_input(argument, command[index + 1])
+            continue
+        for flag in COMPETITION_SMOKE_REPO_INPUT_FLAGS:
+            prefix = f"{flag}="
+            if argument.startswith(prefix):
+                validate_competition_smoke_command_repo_input(flag, argument[len(prefix) :])
+                break
+
+
+def validate_competition_smoke_command_repo_input(flag: str, value: str) -> None:
+    if value.startswith(OUT_ROOT_REF_PREFIX):
+        if flag not in COMPETITION_SMOKE_OUTPUT_FLAGS:
+            raise ValueError(
+                f"competition_smoke_command_log command repo input {flag} must be repo-relative POSIX: {value}"
+            )
+        value = value[len(OUT_ROOT_REF_PREFIX) :]
+    try:
+        assert_repo_relative_posix(value)
+    except ValueError as error:
+        raise ValueError(
+            f"competition_smoke_command_log command repo input {flag} must be repo-relative POSIX: {value}"
+        ) from error
+
+
+def validate_vendored_clang_verification_contract(
+    payload: dict[str, Any],
+    *,
+    smoke_summary: dict[str, Any] | None = None,
+    environment_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if payload.get("schema_version") != 1:
+        raise ValueError("vendored_clang_verification schema_version must be 1")
+    if payload.get("artifact_kind") != "vendored-clang-verification":
+        raise ValueError("vendored_clang_verification artifact_kind must be vendored-clang-verification")
+    proof_class = require_string(payload.get("proof_class"), "vendored_clang_verification.proof_class")
+    status = require_string(payload.get("status"), "vendored_clang_verification.status")
+    final_gate = require_object(payload.get("final_gate"), "vendored_clang_verification.final_gate")
+    clang = require_object(payload.get("clang"), "vendored_clang_verification.clang")
+    clang_path = clang.get("path")
+    if clang_path is not None:
+        try:
+            assert_repo_relative_posix(require_string(clang_path, "vendored_clang_verification.clang.path"))
+        except ValueError as error:
+            raise ValueError("vendored_clang_verification clang.path must be repo-relative POSIX") from error
+    clang_lane_verified = payload.get("clang_lane_verified")
+    if not isinstance(clang_lane_verified, bool):
+        raise ValueError("vendored_clang_verification.clang_lane_verified must be boolean")
+
+    if environment_profile is not None:
+        expected_profile_id = require_string(environment_profile.get("profile_id"), "environment_profile.profile_id")
+        expected_sha256 = require_string(environment_profile.get("sha256"), "environment_profile.sha256")
+        if payload.get("profile_id") != expected_profile_id:
+            raise ValueError("vendored_clang_verification profile_id must match environment_profile.profile_id")
+        if payload.get("profile_sha256") != expected_sha256:
+            raise ValueError("vendored_clang_verification profile_sha256 must match environment_profile.sha256")
+
+    if smoke_summary is not None:
+        smoke_proof_class = require_string(smoke_summary.get("proof_class"), "competition_smoke_summary.proof_class")
+        if proof_class != smoke_proof_class:
+            raise ValueError("vendored_clang_verification proof_class must match competition_smoke_summary.proof_class")
+        smoke_profile_match = require_object(
+            smoke_summary.get("competition_profile_match"),
+            "competition_smoke_summary.competition_profile_match",
+        )
+        smoke_clang_verified = smoke_profile_match.get("clang_lane_verified")
+        if not isinstance(smoke_clang_verified, bool):
+            raise ValueError("competition_smoke_summary.competition_profile_match.clang_lane_verified must be boolean")
+        if clang_lane_verified != smoke_clang_verified:
+            raise ValueError("vendored_clang_verification clang_lane_verified must match competition_smoke_summary")
+        top_level_clang_verified = smoke_summary.get("clang_lane_verified")
+        if top_level_clang_verified is not None and top_level_clang_verified != clang_lane_verified:
+            raise ValueError("vendored_clang_verification clang_lane_verified must match competition_smoke_summary")
+
+    if status == "missing":
+        if payload.get("reason") != "missing_clang_path":
+            raise ValueError("vendored_clang_verification missing status requires reason=missing_clang_path")
+        if clang.get("source") != "missing":
+            raise ValueError("vendored_clang_verification missing status requires clang.source=missing")
+        if clang_lane_verified is not False:
+            raise ValueError("vendored_clang_verification missing status requires clang_lane_verified=false")
+        if proof_class == "competition-exact":
+            if payload.get("clang_required") is not True:
+                raise ValueError("vendored_clang_verification competition-exact missing status requires clang_required=true")
+            if final_gate.get("status") != "failed":
+                raise ValueError("vendored_clang_verification competition-exact missing status must fail final_gate")
+        elif final_gate.get("status") != "passed":
+            raise ValueError("vendored_clang_verification non-exact missing status must keep final_gate passed")
+    elif status == "passed":
+        if clang_lane_verified is not True:
+            raise ValueError("vendored_clang_verification passed status requires clang_lane_verified=true")
+        if clang_path is None:
+            raise ValueError("vendored_clang_verification passed status requires clang.path")
+        if final_gate.get("status") != "passed":
+            raise ValueError("vendored_clang_verification passed status requires final_gate.status=passed")
+    elif status == "failed":
+        if final_gate.get("status") != "failed":
+            raise ValueError("vendored_clang_verification failed status requires final_gate.status=failed")
+    else:
+        raise ValueError("vendored_clang_verification.status must be passed, missing, or failed")
+
+    return {
+        "status": "passed",
+        "proof_class": proof_class,
+        "clang_lane_verified": clang_lane_verified,
+        "verification_status": status,
+        "final_gate": final_gate.get("status"),
+    }
+
+
+def validate_competition_smoke_timeout_policy(payload: dict[str, Any]) -> None:
+    timeout_policy = payload.get("timeout_policy")
+    if not isinstance(timeout_policy, dict):
+        raise ValueError("competition_smoke_summary timeout_policy must be an object")
+    timeout_seconds = timeout_policy.get("per_step_timeout_seconds")
+    if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
+        raise ValueError("competition_smoke_summary timeout_policy.per_step_timeout_seconds must be a positive integer")
+    if timeout_policy.get("timeout_exit_code") != 124:
+        raise ValueError("competition_smoke_summary timeout_policy.timeout_exit_code must be 124")
+    if timeout_policy.get("timeout_is_final_gate_failure") is not True:
+        raise ValueError("competition_smoke_summary timeout_policy.timeout_is_final_gate_failure must be true")
+
+
+def validate_competition_smoke_proof_class_environment(payload: dict[str, Any]) -> None:
+    proof_class = require_string(payload.get("proof_class"), "competition_smoke_summary.proof_class")
+    environment = require_object(
+        payload.get("execution_environment"),
+        "competition_smoke_summary.execution_environment",
+    )
+    if proof_class == "ci-approximation" and environment.get("detected_ci") is not True:
+        raise ValueError(
+            "competition_smoke_summary proof_class=ci-approximation requires "
+            "execution_environment.detected_ci=true"
+        )
+    if proof_class == "wsl-local-simulation" and environment.get("detected_wsl") is not True:
+        raise ValueError(
+            "competition_smoke_summary proof_class=wsl-local-simulation requires "
+            "execution_environment.detected_wsl=true"
+        )
+
+
+def validate_competition_smoke_step_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    proof_class = require_string(payload.get("proof_class"), "competition_smoke_summary.proof_class")
+    steps = payload.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("competition_smoke_summary steps must be a non-empty list")
+    observed_steps: dict[str, dict[str, Any]] = {}
+    for step_value in steps:
+        step = require_object(step_value, "competition_smoke_summary.steps[]")
+        name = require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+        if name in observed_steps:
+            raise ValueError(f"competition_smoke_summary steps duplicate gate: {name}")
+        status = require_string(step.get("status"), f"competition_smoke_summary step {name}.status")
+        if step.get("timed_out") is True:
+            raise ValueError(f"competition_smoke_summary step {name} timed_out cannot be in a passed summary")
+        if not isinstance(step.get("returncode"), int):
+            raise ValueError(f"competition_smoke_summary step {name}.returncode must be an integer")
+        assert_repo_relative_posix(require_string(step.get("log_path"), f"competition_smoke_summary step {name}.log_path"))
+        if status == "degraded":
+            if name != "environment-check" or proof_class == "competition-exact":
+                raise ValueError(f"competition_smoke_summary step {name} cannot be degraded for proof_class={proof_class}")
+            if step.get("proof_class_effect") != "exactness_blocker":
+                raise ValueError("competition_smoke_summary environment-check degradation must record exactness_blocker")
+        elif status != "passed":
+            raise ValueError(f"competition_smoke_summary step {name}.status must be passed")
+        observed_steps[name] = step
+    missing = [step for step in REQUIRED_COMPETITION_SMOKE_STEPS if step not in observed_steps]
+    if missing:
+        raise ValueError(f"competition_smoke_summary steps missing required gates: {missing}")
+    allowed_steps = set(REQUIRED_COMPETITION_SMOKE_STEPS)
+    if proof_class == "competition-exact":
+        allowed_steps.add("opencode-glm-model-probe")
+    unexpected_steps = sorted(set(observed_steps) - allowed_steps)
+    if unexpected_steps:
+        raise ValueError(f"competition_smoke_summary steps unexpected gates: {unexpected_steps}")
+    return {
+        "status": "passed",
+        "required_steps": list(REQUIRED_COMPETITION_SMOKE_STEPS),
+        "allowed_steps": sorted(allowed_steps),
+    }
+
+
+def validate_competition_smoke_profile_binding(
+    payload: dict[str, Any],
+    *,
+    environment_profile: dict[str, Any] | None,
+) -> None:
+    if environment_profile is None:
+        return
+    expected_sha256 = require_string(environment_profile.get("sha256"), "environment_profile.sha256")
+    expected_profile_id = require_string(environment_profile.get("profile_id"), "environment_profile.profile_id")
+    observed_profile_id = require_string(payload.get("profile_id"), "competition_smoke_summary.profile_id")
+    if observed_profile_id != expected_profile_id:
+        raise ValueError("competition_smoke_summary profile_id must match environment_profile.profile_id")
+    observed_sha256 = require_string(payload.get("profile_sha256"), "competition_smoke_summary.profile_sha256")
+    if observed_sha256 != expected_sha256:
+        raise ValueError("competition_smoke_summary profile_sha256 must match environment_profile.sha256")
+
+    match = require_object(
+        payload.get("competition_profile_match"),
+        "competition_smoke_summary.competition_profile_match",
+    )
+    match_profile_id = require_string(
+        match.get("profile_id"),
+        "competition_smoke_summary.competition_profile_match.profile_id",
+    )
+    if match_profile_id != expected_profile_id:
+        raise ValueError(
+            "competition_smoke_summary competition_profile_match.profile_id "
+            "must match environment_profile.profile_id"
+        )
+    match_sha256 = require_string(
+        match.get("profile_sha256_actual"),
+        "competition_smoke_summary.competition_profile_match.profile_sha256_actual",
+    )
+    if match_sha256 != expected_sha256:
+        raise ValueError(
+            "competition_smoke_summary competition_profile_match.profile_sha256_actual "
+            "must match environment_profile.sha256"
+        )
+
+
+def validate_competition_summary_entrypoint_contract(
+    payload: dict[str, Any],
+    *,
+    expected_artifacts: dict[str, Any],
+    summary_path: Path | None = None,
+    environment_profile: dict[str, Any] | None = None,
+    entrypoint_proof_class: str | None = None,
+    entrypoint_run_id: str | None = None,
+    repo_root: Path | None = None,
+) -> dict[str, Any]:
+    if payload.get("schema_version") != 1:
+        raise ValueError("competition_summary.schema_version must be 1")
+
+    proof_class = require_string(payload.get("proof_class"), "competition_summary.proof_class")
+    if entrypoint_proof_class is not None and proof_class != entrypoint_proof_class:
+        raise ValueError("competition_summary proof_class must match entrypoint proof_class")
+    run_id = require_string(payload.get("run_id"), "competition_summary.run_id")
+    if entrypoint_run_id is not None and run_id != entrypoint_run_id:
+        raise ValueError("competition_summary run_id must match entrypoint run_id")
+
+    profile_id = require_string(payload.get("profile_id"), "competition_summary.profile_id")
+    profile_sha256 = validate_sha256_hex(payload.get("profile_sha256"), "competition_summary.profile_sha256")
+    if environment_profile is not None:
+        expected_profile_id = require_string(environment_profile.get("profile_id"), "environment_profile.profile_id")
+        if profile_id != expected_profile_id:
+            raise ValueError("competition_summary profile_id must match environment_profile.profile_id")
+        expected_sha256 = validate_sha256_hex(environment_profile.get("sha256"), "environment_profile.sha256")
+        if profile_sha256 != expected_sha256:
+            raise ValueError("competition_summary profile_sha256 must match environment_profile.sha256")
+
+    result: dict[str, Any] = {
+        "status": "passed",
+        "profile_id": profile_id,
+        "profile_sha256": profile_sha256,
+        "proof_class": proof_class,
+        "run_id": run_id,
+    }
+
+    final_gate = payload.get("final_gate")
+    if final_gate is not None:
+        final_gate_payload = require_object(final_gate, "competition_summary.final_gate")
+        final_gate_status = require_string(
+            final_gate_payload.get("status"),
+            "competition_summary.final_gate.status",
+        )
+        if final_gate_status not in {"passed", "failed"}:
+            raise ValueError("competition_summary final_gate.status must be passed or failed")
+        result["final_gate_status"] = final_gate_status
+
+    workflow_metrics = payload.get("workflow_metrics")
+    if isinstance(workflow_metrics, dict):
+        binding = validate_artifact_binding_shape(
+            workflow_metrics,
+            "competition_summary.workflow_metrics",
+            repo_root=repo_root,
+        )
+        expected_workflow_path = expected_artifacts.get("workflow_metrics")
+        if expected_workflow_path is not None and binding["path"] != expected_workflow_path:
+            raise ValueError("competition_summary workflow_metrics.path must match expected_artifacts.workflow_metrics")
+        result["workflow_metrics"] = binding
+
+    if summary_path is not None:
+        try:
+            deep_validation = validate_competition_run_summary.validate_summary(
+                summary_path,
+                repo_root=repo_root or REPO_ROOT,
+            )
+        except SystemExit as error:
+            raise ValueError(f"competition_summary deep validation failed: {error}") from error
+        result["deep_validation"] = deep_validation
+
+    return result
+
+
+def validate_competition_exact_smoke_summary(payload: dict[str, Any], *, repo_root: Path) -> None:
+    if payload.get("proof_class") != "competition-exact":
+        return
+
+    def fail(detail: str) -> None:
+        raise ValueError(
+            "competition_smoke_summary proof_class=competition-exact requires exact host evidence: "
+            f"{detail}"
+        )
+
+    environment = require_object(
+        payload.get("execution_environment"),
+        "competition_smoke_summary.execution_environment",
+    )
+    if environment.get("detected_ci") is True:
+        fail("execution_environment.detected_ci must be false")
+    if environment.get("detected_wsl") is True:
+        fail("execution_environment.detected_wsl must be false")
+    environment_kind = str(environment.get("kind", ""))
+    if str(environment.get("system", "")).lower() == "windows" or environment_kind in {"windows-local", "local"}:
+        fail("execution_environment must not be local Windows")
+    if environment.get("competition_exact_host_attested") is not True:
+        fail("execution_environment.competition_exact_host_attested must be true")
+
+    profile_match = require_object(
+        payload.get("competition_profile_match"),
+        "competition_smoke_summary.competition_profile_match",
+    )
+    for field in (
+        "os_name_match",
+        "kernel_match",
+        "python_version_match",
+        "clang_lane_verified",
+        "cargo_mirror_config_present",
+    ):
+        if profile_match.get(field) is not True:
+            fail(f"competition_profile_match.{field} must be true")
+
+    deviations = payload.get("environment_deviations", [])
+    if not isinstance(deviations, list):
+        raise ValueError("competition_smoke_summary.environment_deviations must be a list")
+    for deviation in deviations:
+        if isinstance(deviation, dict) and deviation.get("severity") == "proof-class-limiting":
+            fail("environment_deviations must not include proof-class-limiting entries")
+
+    availability_value = payload.get("opencode_model_availability")
+    if not isinstance(availability_value, dict):
+        fail("requires OpenCode GLM-5.1 model availability")
+    availability = require_object(
+        availability_value,
+        "competition_smoke_summary.opencode_model_availability",
+    )
+    if availability.get("status") != "available":
+        fail("requires OpenCode GLM-5.1 model availability")
+    if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        fail(f"opencode_model_availability.required_model must be {COMPETITION_OPENCODE_MODEL}")
+    if availability.get("model_listed") is not True:
+        fail("opencode_model_availability.model_listed must be true")
+    if availability.get("opencode_command") != COMPETITION_OPENCODE_COMMAND:
+        fail(f"opencode_model_availability.opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    if int(availability.get("process_returncode", -1)) != 0:
+        fail("opencode_model_availability.process_returncode must be 0")
+    if not opencode_models_argv_matches(
+        availability.get("argv"),
+        expected_command=COMPETITION_OPENCODE_COMMAND,
+    ):
+        fail("opencode_model_availability.argv must be opencode models")
+    try:
+        validate_opencode_model_probe_log_hashes(availability, "competition_smoke_summary", repo_root=repo_root)
+    except ValueError as error:
+        fail(str(error))
+    steps = payload.get("steps")
+    if not isinstance(steps, list):
+        raise ValueError("competition_smoke_summary steps must be a non-empty list")
+    probe_step = None
+    for step_value in steps:
+        if isinstance(step_value, dict) and step_value.get("step") == "opencode-glm-model-probe":
+            probe_step = step_value
+            break
+    if probe_step is None:
+        fail("opencode-glm-model-probe step must be present")
+    if probe_step.get("status") != "passed":
+        fail("opencode-glm-model-probe step.status must be passed")
+    if probe_step.get("returncode") != 0:
+        fail("opencode-glm-model-probe step.returncode must be 0")
+
+
+def assert_expected_smoke_path(
+    container: Any,
+    field: str,
+    expected_artifacts: dict[str, Any],
+    expected_name: str,
+    label: str,
+) -> None:
+    payload = require_object(container, label.rsplit(".", 1)[0])
+    observed = require_string(payload.get(field), label)
+    expected = require_string(expected_artifacts.get(expected_name), f"expected_artifacts.{expected_name}")
+    assert_repo_relative_posix(observed)
+    assert_repo_relative_posix(expected)
+    if observed != expected:
+        raise ValueError(f"{label} must match expected_artifacts.{expected_name}")
+
+
+def validate_claim_boundary(config: dict[str, Any]) -> dict[str, Any]:
+    boundary = config.get("claim_boundary")
+    if not isinstance(boundary, dict):
+        raise ValueError("claim_boundary must be an object")
+    if boundary.get("semantic_claim_source") != "accepted_evidence_binding":
+        raise ValueError("claim_boundary.semantic_claim_source must be accepted_evidence_binding")
+    if boundary.get("generated_draft_semantic_pass") is not False:
+        raise ValueError("claim_boundary.generated_draft_semantic_pass must be false")
+    if boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError("claim_boundary.translation_coverage_numerator must be 0")
+    return {
+        "semantic_claim_source": boundary["semantic_claim_source"],
+        "generated_draft_semantic_pass": boundary["generated_draft_semantic_pass"],
+        "translation_coverage_numerator": boundary["translation_coverage_numerator"],
+    }
+
+
+def validate_proof_class_contract(config: dict[str, Any], entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
+    allowed = config.get("allowed_proof_classes")
+    if not isinstance(allowed, list) or not allowed or not all(isinstance(item, str) for item in allowed):
+        raise ValueError("allowed_proof_classes must be a non-empty string list")
+    default = config.get("proof_class_default")
+    if default not in allowed:
+        raise ValueError("proof_class_default must be listed in allowed_proof_classes")
+    entrypoint_classes: dict[str, str] = {}
+    for entry in entrypoints:
+        proof_class = entry.get("proof_class")
+        if proof_class not in allowed:
+            raise ValueError(f"entrypoint proof_class must be allowed: {entry.get('id')}")
+        entrypoint_classes[str(entry.get("id"))] = str(proof_class)
+    return {
+        "proof_class_default": default,
+        "allowed_proof_classes": list(allowed),
+        "entrypoints": entrypoint_classes,
+        "status": "passed",
+    }
+
+
+def validate_source_pin_contract(config: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    target_id = require_string(config.get("target_id"), "target_id")
+    source_pin = require_object(config.get("source_pin"), "source_pin")
+    environment_ref = require_object(config.get("environment_profile"), "environment_profile")
+    environment = load_json(repo_path(require_string(environment_ref.get("path"), "environment_profile.path"), repo_root=repo_root))
+    profile_pin = require_object(
+        require_object(environment.get("source_pins"), "environment.source_pins").get(target_id),
+        f"environment.source_pins.{target_id}",
+    )
+    for field in ("repository", "branch", "commit", "checkout_command"):
+        if source_pin.get(field) != profile_pin.get(field):
+            raise ValueError(f"source_pin.{field} must match environment source pin")
+    if source_pin.get("target_id") != target_id:
+        raise ValueError("source_pin.target_id must match target_id")
+    assert_no_local_absolute_path(require_string(source_pin.get("checkout_command"), "source_pin.checkout_command"))
+
+    policy = require_object(config.get("source_pin_policy"), "source_pin_policy")
+    canonical_commit = require_string(policy.get("canonical_commit"), "source_pin_policy.canonical_commit")
+    if canonical_commit != source_pin.get("commit"):
+        raise ValueError("source_pin_policy.canonical_commit must match source_pin.commit")
+    if policy.get("new_extraction_requires_canonical_commit") is not True:
+        raise ValueError("source_pin_policy.new_extraction_requires_canonical_commit must be true")
+    allowed_historical = policy.get("allowed_historical_evidence_commits", [])
+    if not isinstance(allowed_historical, list):
+        raise ValueError("source_pin_policy.allowed_historical_evidence_commits must be a list")
+    allowed_commits = {canonical_commit}
+    historical_commits: list[str] = []
+    for index, item in enumerate(allowed_historical):
+        item_payload = require_object(item, f"source_pin_policy.allowed_historical_evidence_commits[{index}]")
+        commit = require_string(item_payload.get("commit"), f"source_pin_policy.allowed_historical_evidence_commits[{index}].commit")
+        reason = require_string(item_payload.get("reason"), f"source_pin_policy.allowed_historical_evidence_commits[{index}].reason")
+        scope = item_payload.get("scope")
+        if not isinstance(scope, list) or not scope or not all(isinstance(value, str) and value for value in scope):
+            raise ValueError(f"source_pin_policy.allowed_historical_evidence_commits[{index}].scope must be a non-empty string list")
+        if commit == canonical_commit:
+            raise ValueError("source_pin_policy.allowed_historical_evidence_commits must not repeat canonical commit")
+        if not reason:
+            raise ValueError(f"source_pin_policy.allowed_historical_evidence_commits[{index}].reason must be non-empty")
+        allowed_commits.add(commit)
+        historical_commits.append(commit)
+    return {
+        "target_id": target_id,
+        "repository": source_pin["repository"],
+        "branch": source_pin["branch"],
+        "canonical_commit": canonical_commit,
+        "allowed_commits": sorted(allowed_commits),
+        "allowed_historical_evidence_commits": historical_commits,
+        "status": "passed",
+    }
+
+
+def validate_entrypoint_profile_contract(
+    entry: dict[str, Any],
+    *,
+    config: dict[str, Any],
+    source_pin_contract: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    profile_ref = require_object(entry.get("profile"), f"{entry.get('id')}.profile")
+    profile_path = require_string(profile_ref.get("path"), f"{entry.get('id')}.profile.path")
+    profile = load_json(repo_path(profile_path, repo_root=repo_root))
+    if profile_ref.get("profile_id") != profile.get("profile_id"):
+        raise ValueError(f"{entry.get('id')} profile_id must match profile payload")
+    command = require_string(entry.get("command"), f"{entry.get('id')}.command")
+    flags = parsed_command_flags(command)
+    command_proof_class = flags.get("--proof-class")
+    profile_proof_class = profile.get("proof_class")
+    effective_proof_class = command_proof_class or profile_proof_class
+    if command_proof_class is not None and command_proof_class != entry.get("proof_class"):
+        raise ValueError(f"{entry.get('id')} command --proof-class must match entrypoint proof_class")
+    if effective_proof_class != entry.get("proof_class"):
+        raise ValueError(f"{entry.get('id')} effective proof_class must match entrypoint proof_class")
+    if profile.get("target_id") != config.get("target_id"):
+        raise ValueError(f"{entry.get('id')} profile target_id must match judge target_id")
+    run_id = require_string(entry.get("run_id"), f"{entry.get('id')}.run_id")
+    if f"--profile {profile_path}" not in command:
+        raise ValueError(f"{entry.get('id')} command must reference its profile path")
+    if f"--run-id {run_id}" not in command:
+        raise ValueError(f"{entry.get('id')} command must reference its run_id")
+    if "--out-root " not in command:
+        raise ValueError(f"{entry.get('id')} command must include --out-root")
+
+    source_repository = profile.get("source_repository")
+    if source_repository is not None and source_repository != source_pin_contract["repository"]:
+        raise ValueError(f"{entry.get('id')} profile source_repository must match source pin")
+    source_branch = profile.get("source_branch")
+    if source_branch is not None and source_branch != source_pin_contract["branch"]:
+        raise ValueError(f"{entry.get('id')} profile source_branch must match source pin")
+    allowed_commits = set(source_pin_contract["allowed_commits"])
+    observed_commits: set[str] = set()
+    for field in ("source_commit", "require_source_commit"):
+        value = profile.get(field)
+        if isinstance(value, str):
+            observed_commits.add(value)
+    workers = profile.get("workers")
+    if isinstance(workers, list):
+        for index, worker in enumerate(workers):
+            worker_payload = require_object(worker, f"{entry.get('id')}.profile.workers[{index}]")
+            if worker_payload.get("target_id") not in (None, config.get("target_id")):
+                raise ValueError(f"{entry.get('id')} worker target_id must match judge target_id")
+            for field in ("source_repository", "source_branch"):
+                value = worker_payload.get(field)
+                expected = source_pin_contract["repository"] if field == "source_repository" else source_pin_contract["branch"]
+                if value is not None and value != expected:
+                    raise ValueError(f"{entry.get('id')} worker {field} must match source pin")
+            for field in ("source_commit", "require_source_commit"):
+                value = worker_payload.get(field)
+                if isinstance(value, str):
+                    observed_commits.add(value)
+    if entrypoint_requires_multi_worker(entry):
+        if not isinstance(workers, list) or len(workers) < 2:
+            raise ValueError(f"{entry.get('id')} multi-worker profile workers must contain at least 2 workers")
+        worker_ids = [
+            require_string(
+                require_object(worker, f"{entry.get('id')}.profile.workers[{index}]").get("worker_id"),
+                f"{entry.get('id')}.profile.workers[{index}].worker_id",
+            )
+            for index, worker in enumerate(workers)
+        ]
+        if len(set(worker_ids)) != len(worker_ids):
+            raise ValueError(f"{entry.get('id')} multi-worker profile worker_id values must be unique")
+        max_workers = profile.get("max_workers")
+        if not isinstance(max_workers, int) or max_workers < len(workers):
+            raise ValueError(f"{entry.get('id')} multi-worker profile max_workers must be >= worker count")
+    disallowed = sorted(commit for commit in observed_commits if commit not in allowed_commits)
+    if disallowed:
+        raise ValueError(f"{entry.get('id')} profile uses commits outside source_pin_policy: {disallowed}")
+    result = {
+        "profile_id": profile.get("profile_id"),
+        "profile_proof_class": profile_proof_class,
+        "proof_class": effective_proof_class,
+        "proof_class_resolution": {
+            "source": "cli-override" if command_proof_class is not None else "profile",
+            "profile_proof_class": profile_proof_class,
+            "effective_proof_class": effective_proof_class,
+            "override_requested": command_proof_class is not None,
+            "changed": command_proof_class is not None and command_proof_class != profile_proof_class,
+            **({"override_proof_class": command_proof_class} if command_proof_class is not None else {}),
+        },
+        "observed_commits": sorted(observed_commits),
+        "status": "passed",
+    }
+    if entrypoint_requires_multi_worker(entry):
+        result["multi_worker_contract"] = {
+            "status": "passed",
+            "worker_count": len(workers),
+            "max_workers": profile["max_workers"],
+        }
+    expected_artifacts = entry.get("expected_artifacts") if isinstance(entry.get("expected_artifacts"), dict) else {}
+    requires_opencode_profile = (
+        "opencode" in str(entry.get("id", ""))
+        or "opencode" in str(entry.get("purpose", ""))
+        or "opencode_preflight_report" in expected_artifacts
+        or "opencode_safety_transform_attempt" in expected_artifacts
+    )
+    if requires_opencode_profile and profile.get("mode") != "opencode":
+        raise ValueError(f"{entry.get('id')} opencode profile mode must be opencode")
+    if profile.get("mode") == "opencode":
+        result["opencode_launch_policy"] = validate_opencode_profile_launch_policy(profile, entry_id=str(entry.get("id")))
+    return result
+
+
+def entrypoint_requires_multi_worker(entry: dict[str, Any]) -> bool:
+    return "multi_worker" in str(entry.get("id", "")) or "multi-worker" in str(entry.get("purpose", ""))
+
+
+def validate_opencode_profile_launch_policy(profile: dict[str, Any], *, entry_id: str) -> dict[str, Any]:
+    command = require_string(profile.get("opencode_command"), f"{entry_id} opencode profile opencode_command")
+    if command != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"{entry_id} opencode profile opencode_command must be {COMPETITION_OPENCODE_COMMAND}")
+    variant = require_string(profile.get("opencode_variant"), f"{entry_id} opencode profile opencode_variant")
+    if variant != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{entry_id} opencode profile opencode_variant must be {COMPETITION_OPENCODE_VARIANT}")
+    model = profile.get("opencode_model")
+    if not isinstance(model, str) or not model:
+        raise ValueError(f"{entry_id} opencode profile opencode_model must be a non-empty string")
+    if model != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{entry_id} opencode profile opencode_model must be {COMPETITION_OPENCODE_MODEL}")
+    agent = profile.get("opencode_agent")
+    if agent != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{entry_id} opencode profile opencode_agent must be {COMPETITION_OPENCODE_AGENT}")
+    skip_permissions = profile.get("opencode_skip_permissions")
+    if not isinstance(skip_permissions, bool):
+        raise ValueError(f"{entry_id} opencode profile opencode_skip_permissions must be a boolean")
+    auto_retry = profile.get("auto_retry")
+    if auto_retry is not True:
+        raise ValueError(f"{entry_id} opencode profile auto_retry must be true")
+    return {
+        "opencode_command": command,
+        "opencode_model": model,
+        "opencode_agent": agent,
+        "opencode_variant": variant,
+        "opencode_skip_permissions": skip_permissions,
+        "auto_retry": auto_retry,
+    }
