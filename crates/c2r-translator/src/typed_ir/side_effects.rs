@@ -162,25 +162,14 @@ fn emit_call_expr_with_prelude(
     path: &str,
 ) -> Result<EmittedExpr, String> {
     if let Some(emitted) =
-        emit_nested_single_inc_dec_call_expr(callee, args, ty, symbols, context, indent_level, path)?
+        emit_side_effect_call_expr(callee, args, ty, symbols, context, indent_level, path)?
     {
         return Ok(emitted);
     }
-    if args.len() != 1 || scalar_inc_dec_assigned_var_name(&args[0]).is_none() {
-        return Ok(EmittedExpr {
-            prelude: String::new(),
-            expr: emit_call_expr(callee, args, ty, symbols, context)
-                .map_err(|detail| format!("{path} {detail}"))?,
-        });
-    }
-
-    let callee = emit_side_effect_call_callee(callee, ty, path)?;
-    let arg = emit_inc_dec_value_expr(&args[0], symbols, indent_level)
-        .map_err(|detail| format!("{path} call arg[0] {detail}"))?
-        .ok_or_else(|| format!("{path} call arg[0] inc/dec expression is unsupported"))?;
     Ok(EmittedExpr {
-        prelude: arg.prelude,
-        expr: format!("{callee}({})", arg.expr),
+        prelude: String::new(),
+        expr: emit_call_expr(callee, args, ty, symbols, context)
+            .map_err(|detail| format!("{path} {detail}"))?,
     })
 }
 
@@ -213,7 +202,7 @@ fn emit_side_effect_call_callee(callee: &str, ty: &IrType, path: &str) -> Result
     Ok(callee)
 }
 
-fn emit_nested_single_inc_dec_call_expr(
+fn emit_side_effect_call_expr(
     callee: &str,
     args: &[IrExpr],
     ty: &IrType,
@@ -222,51 +211,101 @@ fn emit_nested_single_inc_dec_call_expr(
     indent_level: usize,
     path: &str,
 ) -> Result<Option<EmittedExpr>, String> {
-    let [IrExpr::Call {
-        callee: inner_callee,
-        args: inner_args,
-        ty: inner_ty,
-        ..
-    }] = args
-    else {
+    let Some((side_effect_index, _)) = single_side_effect_call_arg(args)? else {
         return Ok(None);
     };
-    if !side_effect_single_chain_nested_call_with_scalar_inc_dec_leaf(args) {
-        return Ok(None);
-    }
+    validate_bounded_call_args(args, context).map_err(|detail| format!("{path} {detail}"))?;
 
     let callee = emit_side_effect_call_callee(callee, ty, path)?;
-    let inner = emit_call_expr_with_prelude(
-        inner_callee,
-        inner_args,
-        inner_ty,
-        symbols,
-        context,
-        indent_level,
-        &format!("{path} call arg[0]"),
-    )?;
+    let mut prelude = String::new();
+    let mut emitted_args = Vec::with_capacity(args.len());
+    for (index, arg) in args.iter().enumerate() {
+        if index == side_effect_index {
+            let emitted = emit_expr_with_prelude(
+                arg,
+                symbols,
+                context,
+                indent_level,
+                &format!("{path} call arg[{index}]"),
+            )?;
+            prelude.push_str(&emitted.prelude);
+            emitted_args.push(emitted.expr);
+        } else {
+            emitted_args.push(
+                emit_call_arg_expr(arg, symbols, context)
+                    .map_err(|detail| format!("{path} call arg[{index}] {detail}"))?,
+            );
+        }
+    }
     Ok(Some(EmittedExpr {
-        prelude: inner.prelude,
-        expr: format!("{callee}({})", inner.expr),
+        prelude,
+        expr: format!("{callee}({})", emitted_args.join(", ")),
     }))
 }
 
-fn side_effect_single_chain_nested_call_with_scalar_inc_dec_leaf(args: &[IrExpr]) -> bool {
-    let [arg] = args else {
-        return false;
-    };
-    side_effect_single_chain_nested_call_expr_with_scalar_inc_dec_leaf(arg)
+fn single_side_effect_call_arg(args: &[IrExpr]) -> Result<Option<(usize, &str)>, String> {
+    let mut found = None;
+    for (index, arg) in args.iter().enumerate() {
+        let Some(assigned_var) = side_effect_expr_assigned_var_name(arg)? else {
+            continue;
+        };
+        if found.is_some() {
+            return Err(
+                "call arguments cannot use increment/decrement value semantics more than once"
+                    .to_string(),
+            );
+        }
+        found = Some((index, assigned_var));
+    }
+    Ok(found)
 }
 
-fn side_effect_single_chain_nested_call_expr_with_scalar_inc_dec_leaf(expr: &IrExpr) -> bool {
+fn side_effect_expr_assigned_var_name(expr: &IrExpr) -> Result<Option<&str>, String> {
+    if let Some(name) = scalar_inc_dec_assigned_var_name(expr) {
+        return Ok(Some(name.as_str()));
+    }
     let IrExpr::Call { args, .. } = expr else {
-        return false;
+        return Ok(None);
     };
-    let [arg] = args.as_slice() else {
-        return false;
-    };
-    scalar_inc_dec_assigned_var_name(arg).is_some()
-        || side_effect_single_chain_nested_call_expr_with_scalar_inc_dec_leaf(arg)
+    single_side_effect_call_arg(args).map(|found| found.map(|(_, name)| name))
+}
+
+fn expr_mentions_var(expr: &IrExpr, expected: &str) -> bool {
+    match expr {
+        IrExpr::Var { name, .. } => name == expected,
+        IrExpr::Binary { lhs, rhs, .. } => {
+            expr_mentions_var(lhs, expected) || expr_mentions_var(rhs, expected)
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => expr_mentions_var(operand, expected),
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            expr_mentions_var(condition, expected)
+                || expr_mentions_var(then_expr, expected)
+                || expr_mentions_var(else_expr, expected)
+        }
+        IrExpr::Index { base, index, .. } => {
+            expr_mentions_var(base, expected) || expr_mentions_var(index, expected)
+        }
+        IrExpr::Member { base, .. } => expr_mentions_var(base, expected),
+        IrExpr::ArrayLiteral { elements, .. } => {
+            elements.iter().any(|element| expr_mentions_var(element, expected))
+        }
+        IrExpr::Call { args, .. } => args.iter().any(|arg| expr_mentions_var(arg, expected)),
+        IrExpr::IncDec { target, .. } => expr_mentions_var(target, expected),
+        IrExpr::Deref { ptr, .. } => expr_mentions_var(ptr, expected),
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Unsupported { .. } => false,
+    }
 }
 
 fn emit_single_inc_dec_call_statement_expr(
@@ -282,7 +321,7 @@ fn emit_single_inc_dec_call_statement_expr(
     else {
         return Ok(None);
     };
-    if args.len() != 1 || scalar_inc_dec_assigned_var_name(&args[0]).is_none() {
+    if single_side_effect_call_arg(args)?.is_none() {
         return Ok(None);
     }
     emit_call_expr_with_prelude(callee, args, ty, symbols, context, indent_level, path).map(Some)

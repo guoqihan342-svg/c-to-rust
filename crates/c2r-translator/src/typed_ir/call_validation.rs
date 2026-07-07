@@ -46,18 +46,21 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
-    if args
-        .iter()
-        .any(single_chain_nested_call_with_scalar_inc_dec_leaf)
-        && args.len() != 1
-    {
-        return Err(
-            "side-effect nested call arguments cannot be combined with other call arguments"
-                .to_string(),
-        );
-    }
+    let side_effect_arg = single_side_effect_call_arg(args)?;
     for (index, arg) in args.iter().enumerate() {
-        validate_bounded_call_arg_with_context(arg, true, Some(context))
+        if let Some((side_effect_index, assigned_var)) = side_effect_arg {
+            if index == side_effect_index {
+                continue;
+            }
+            if expr_mentions_var(arg, assigned_var) {
+                return Err(format!(
+                    "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                ));
+            }
+            validate_bounded_call_arg_with_context(arg, false, Some(context))
+        } else {
+            validate_bounded_call_arg_with_context(arg, true, Some(context))
+        }
             .map_err(|detail| format!("call arg[{index}] {detail}"))?;
     }
     Ok(())
@@ -239,26 +242,19 @@ fn validate_bounded_nested_call_arg(
         return validate_record_pointer_return_nested_call_arg(callee, args, ty, context);
     }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
-    if args
-        .iter()
-        .any(single_chain_nested_call_with_scalar_inc_dec_leaf)
-        && args.len() != 1
-    {
-        return Err(
-            "side-effect nested call arguments cannot be combined with other call arguments"
-                .to_string(),
-        );
-    }
-    if args.len() == 1 && scalar_inc_dec_assigned_var_name(&args[0]).is_some() {
-        return Ok(());
-    }
-    if args
-        .first()
-        .is_some_and(single_chain_nested_call_with_scalar_inc_dec_leaf)
-        && args.len() == 1
-    {
-        validate_bounded_call_arg_with_context(&args[0], true, context)
-            .map_err(|detail| format!("nested call arg[0] {detail}"))?;
+    if let Some((side_effect_index, assigned_var)) = single_side_effect_call_arg(args)? {
+        for (index, arg) in args.iter().enumerate() {
+            if index == side_effect_index {
+                continue;
+            }
+            if expr_mentions_var(arg, assigned_var) {
+                return Err(format!(
+                    "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                ));
+            }
+            validate_bounded_call_arg_with_context(arg, false, context)
+                .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
+        }
         return Ok(());
     }
     for (index, arg) in args.iter().enumerate() {
@@ -266,17 +262,6 @@ fn validate_bounded_nested_call_arg(
             .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
     }
     Ok(())
-}
-
-fn single_chain_nested_call_with_scalar_inc_dec_leaf(expr: &IrExpr) -> bool {
-    let IrExpr::Call { args, .. } = expr else {
-        return false;
-    };
-    let [arg] = args.as_slice() else {
-        return false;
-    };
-    scalar_inc_dec_assigned_var_name(arg).is_some()
-        || single_chain_nested_call_with_scalar_inc_dec_leaf(arg)
 }
 
 fn validate_record_pointer_return_nested_call_arg(

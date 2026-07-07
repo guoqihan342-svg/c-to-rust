@@ -1,0 +1,4 @@
+interface:
+  display_name: "Translation Minimal Slice"
+  short_description: "Minimal slice workflow for translator changes"
+  default_prompt: "Use $translation-minimal-slice to plan and verify a smallest useful translator-layer development slice."

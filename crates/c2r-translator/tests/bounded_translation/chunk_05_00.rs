@@ -1,6 +1,6 @@
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_side_effect_direct_call_argument_with_ordinary_arg() {
+fn typed_ir_rejects_side_effect_direct_call_argument_with_same_var_sibling_read() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "side_effect_call_argument_with_ordinary_arg".to_string(),
@@ -31,12 +31,12 @@ fn typed_ir_rejects_side_effect_direct_call_argument_with_ordinary_arg() {
         source_span: None,
     };
 
-    let error =
-        emit_rust_from_ir(&ir).expect_err("side-effect plus ordinary call args must fail closed");
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("side-effect plus same-var sibling read must fail closed");
 
     assert!(error
         .reason
-        .contains("call arguments cannot use increment/decrement value semantics"));
+        .contains("sibling argument reading modified variable value"));
 }
 
 #[cfg(feature = "typed-ir")]

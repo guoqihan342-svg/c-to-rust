@@ -222,7 +222,7 @@ fn typed_ir_emits_single_chain_nested_direct_call_with_postfix_inc_argument() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_nested_side_effect_direct_call_argument_with_ordinary_arg() {
+fn typed_ir_rejects_nested_side_effect_direct_call_argument_with_same_var_sibling_read() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "nested_side_effect_call_with_plain_arg".to_string(),
@@ -259,13 +259,13 @@ fn typed_ir_rejects_nested_side_effect_direct_call_argument_with_ordinary_arg() 
     };
 
     let error = emit_rust_from_ir(&ir)
-        .expect_err("nested side-effect call argument cannot mix with ordinary args");
+        .expect_err("nested side-effect call argument cannot mix with same-var sibling read");
 
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
     assert!(
-        error.reason.contains(
-            "side-effect nested call arguments cannot be combined with other call arguments"
-        ),
+        error
+            .reason
+            .contains("sibling argument reading modified variable value"),
         "{:?}",
         error.reason
     );
@@ -273,7 +273,7 @@ fn typed_ir_rejects_nested_side_effect_direct_call_argument_with_ordinary_arg() 
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_single_chain_side_effect_call_with_inner_ordinary_arg() {
+fn typed_ir_rejects_single_chain_side_effect_call_with_inner_same_var_sibling_read() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "single_chain_side_effect_call_with_inner_plain_arg".to_string(),
@@ -315,13 +315,13 @@ fn typed_ir_rejects_single_chain_side_effect_call_with_inner_ordinary_arg() {
     };
 
     let error = emit_rust_from_ir(&ir)
-        .expect_err("inner side-effect call argument cannot mix with ordinary args");
+        .expect_err("inner side-effect call argument cannot mix with same-var sibling read");
 
     assert_eq!(error.route.route, CandidateRoute::Unsupported);
     assert!(
-        error.reason.contains(
-            "side-effect nested call arguments cannot be combined with other call arguments"
-        ),
+        error
+            .reason
+            .contains("sibling argument reading modified variable value"),
         "{:?}",
         error.reason
     );

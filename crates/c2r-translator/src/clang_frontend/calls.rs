@@ -344,20 +344,25 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
-    if args
-        .iter()
-        .any(clang_single_chain_nested_call_with_scalar_inc_dec_leaf)
-        && args.len() != 1
-    {
-        return Some(
-            "side-effect nested call arguments cannot be combined with other call arguments"
-                .to_string(),
-        );
-    }
-    if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0]) {
-        return None;
-    }
+    let side_effect_arg = match clang_single_side_effect_call_arg(args) {
+        Ok(side_effect_arg) => side_effect_arg,
+        Err(reason) => return Some(reason),
+    };
     for (index, arg) in args.iter().enumerate() {
+        if let Some((side_effect_index, assigned_var)) = side_effect_arg {
+            if index == side_effect_index {
+                continue;
+            }
+            if clang_expr_mentions_decl(arg, assigned_var) {
+                return Some(format!(
+                    "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                ));
+            }
+            if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {
+                return Some(format!("argument {index}: {reason}"));
+            }
+            continue;
+        }
         if let Some(reason) = bounded_call_arg_rejection_reason(arg, true) {
             return Some(format!("argument {index}: {reason}"));
         }
@@ -366,29 +371,101 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
 }
 
 #[cfg(feature = "typed-ir")]
-fn clang_scalar_inc_dec_call_arg(expr: &ClangExprSkeleton) -> bool {
+fn clang_scalar_inc_dec_call_arg_assigned_name(expr: &ClangExprSkeleton) -> Option<&str> {
     let ClangExprSkeleton::IncDec { target, ty, .. } = expr else {
-        return false;
+        return None;
     };
-    let ClangExprSkeleton::DeclRef { ty: target_ty, .. } = target.as_ref() else {
-        return false;
+    let ClangExprSkeleton::DeclRef {
+        name,
+        ty: target_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return None;
     };
-    target_ty == ty && matches!(target_ty.kind, ClangTypeKind::Integer { .. })
+    (target_ty == ty && matches!(target_ty.kind, ClangTypeKind::Integer { .. }))
+        .then_some(name.as_str())
 }
 
 #[cfg(feature = "typed-ir")]
-fn clang_single_chain_nested_call_with_scalar_inc_dec_leaf(expr: &ClangExprSkeleton) -> bool {
+fn clang_single_side_effect_call_arg(
+    args: &[ClangExprSkeleton],
+) -> Result<Option<(usize, &str)>, String> {
+    let mut found = None;
+    for (index, arg) in args.iter().enumerate() {
+        let Some(assigned_var) = clang_side_effect_expr_assigned_name(arg)? else {
+            continue;
+        };
+        if found.is_some() {
+            return Err(
+                "call arguments cannot use increment/decrement value semantics more than once"
+                    .to_string(),
+            );
+        }
+        found = Some((index, assigned_var));
+    }
+    Ok(found)
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_side_effect_expr_assigned_name(
+    expr: &ClangExprSkeleton,
+) -> Result<Option<&str>, String> {
+    if let Some(name) = clang_scalar_inc_dec_call_arg_assigned_name(expr) {
+        return Ok(Some(name));
+    }
     let ClangExprSkeleton::Call { args, ty, .. } = expr else {
-        return false;
+        return Ok(None);
     };
     if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
-        return false;
+        return Ok(None);
     }
-    let [arg] = args.as_slice() else {
-        return false;
-    };
-    clang_scalar_inc_dec_call_arg(arg)
-        || clang_single_chain_nested_call_with_scalar_inc_dec_leaf(arg)
+    clang_single_side_effect_call_arg(args).map(|found| found.map(|(_, name)| name))
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_expr_mentions_decl(expr: &ClangExprSkeleton, expected: &str) -> bool {
+    match expr {
+        ClangExprSkeleton::DeclRef { name, .. } => name == expected,
+        ClangExprSkeleton::Binary { lhs, rhs, .. } => {
+            clang_expr_mentions_decl(lhs, expected) || clang_expr_mentions_decl(rhs, expected)
+        }
+        ClangExprSkeleton::Unary { operand, .. }
+        | ClangExprSkeleton::Cast { expr: operand, .. }
+        | ClangExprSkeleton::LValueToRValue { expr: operand, .. }
+        | ClangExprSkeleton::ArrayToPointerDecay { expr: operand, .. }
+        | ClangExprSkeleton::FunctionToPointerDecay { expr: operand, .. }
+        | ClangExprSkeleton::AddrOf { operand, .. } => {
+            clang_expr_mentions_decl(operand, expected)
+        }
+        ClangExprSkeleton::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            clang_expr_mentions_decl(condition, expected)
+                || clang_expr_mentions_decl(then_expr, expected)
+                || clang_expr_mentions_decl(else_expr, expected)
+        }
+        ClangExprSkeleton::Index { base, index, .. } => {
+            clang_expr_mentions_decl(base, expected) || clang_expr_mentions_decl(index, expected)
+        }
+        ClangExprSkeleton::ArrayLiteral { elements, .. } => elements
+            .iter()
+            .any(|element| clang_expr_mentions_decl(element, expected)),
+        ClangExprSkeleton::Call { args, .. } => args
+            .iter()
+            .any(|arg| clang_expr_mentions_decl(arg, expected)),
+        ClangExprSkeleton::Member { base, .. } => clang_expr_mentions_decl(base, expected),
+        ClangExprSkeleton::IncDec { target, .. } => clang_expr_mentions_decl(target, expected),
+        ClangExprSkeleton::Deref { ptr, .. } => clang_expr_mentions_decl(ptr, expected),
+        ClangExprSkeleton::IntegerLiteral { .. }
+        | ClangExprSkeleton::SizeOfType { .. }
+        | ClangExprSkeleton::AlignOfType { .. }
+        | ClangExprSkeleton::NullPtr { .. }
+        | ClangExprSkeleton::Unsupported { .. } => false,
+    }
 }
 
 #[cfg(feature = "typed-ir")]
@@ -442,20 +519,24 @@ fn bounded_call_arg_rejection_reason(
                     ty.spelled
                 ));
             }
-            if args
-                .iter()
-                .any(clang_single_chain_nested_call_with_scalar_inc_dec_leaf)
-                && args.len() != 1
-            {
-                return Some(
-                    "side-effect nested call arguments cannot be combined with other call arguments"
-                        .to_string(),
-                );
-            }
-            if args.len() == 1
-                && (clang_scalar_inc_dec_call_arg(&args[0])
-                    || clang_single_chain_nested_call_with_scalar_inc_dec_leaf(&args[0]))
-            {
+            let side_effect_arg = match clang_single_side_effect_call_arg(args) {
+                Ok(side_effect_arg) => side_effect_arg,
+                Err(reason) => return Some(reason),
+            };
+            if let Some((side_effect_index, assigned_var)) = side_effect_arg {
+                for (index, arg) in args.iter().enumerate() {
+                    if index == side_effect_index {
+                        continue;
+                    }
+                    if clang_expr_mentions_decl(arg, assigned_var) {
+                        return Some(format!(
+                            "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                        ));
+                    }
+                    if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {
+                        return Some(format!("nested call argument {index}: {reason}"));
+                    }
+                }
                 return None;
             }
             for (index, arg) in args.iter().enumerate() {
