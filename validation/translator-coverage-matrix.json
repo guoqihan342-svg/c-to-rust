@@ -402,9 +402,9 @@
         "IntegralPromotion explicit typed IR cast in direct-call argument contexts",
         "usual arithmetic conversion requires clang-proven IntegralCast/IntegralPromotion",
         "unary plus integer promotion preserves clang-proven IntegralPromotion",
-        "integer NoOp explicit typed IR cast in preserved value contexts",
+        "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer value-context LValueToRValue explicit typed IR node",
-        "non-integer or non-preserved NoOp transparent skeleton boundary",
+        "non-integer NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
         "non-integer implicit castKind fail-closed",
         "missing implicit castKind fail-closed",
@@ -565,8 +565,8 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
-          "name": "implicit_cast_noop_preserves_operand",
-          "path": "crates/c2r-translator/src/clang_frontend.rs"
+          "name": "implicit_integer_noop_cast_stays_explicit_without_value_context",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_00_split_parts/part_00.rs"
         }
       ],
       "negative_cases": [

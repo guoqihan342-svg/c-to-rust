@@ -88,7 +88,9 @@ fn expr_skeleton_from_ast_with_options(
                     expr: Box::new(operand),
                 });
             }
-            if preserve_integral_casts && is_integral_conversion_cast_expr(expr) {
+            if (preserve_integral_casts || cast_kind.as_deref() == Some("NoOp"))
+                && is_integral_conversion_cast_expr(expr)
+            {
                 return Ok(ClangExprSkeleton::Cast {
                     target: expr_type(expr)?,
                     expr: Box::new(operand),

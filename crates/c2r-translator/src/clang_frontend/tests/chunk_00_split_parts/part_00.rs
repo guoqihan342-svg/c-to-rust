@@ -438,7 +438,7 @@
     }
 
     #[test]
-    fn implicit_cast_noop_preserves_operand() {
+    fn implicit_integer_noop_cast_stays_explicit_without_value_context() {
         let expr = serde_json::json!({
             "kind": "ImplicitCastExpr",
             "castKind": "NoOp",
@@ -452,10 +452,29 @@
             ]
         });
 
-        let skeleton = expr_skeleton_from_ast(&expr).expect("NoOp cast should preserve operand");
+        let skeleton = expr_skeleton_from_ast(&expr).expect("NoOp cast should stay explicit");
+        let ir = lower_expr(&skeleton).expect("lower explicit integer NoOp cast");
+
+        let IrExpr::Cast {
+            target,
+            expr,
+            implicit,
+            ..
+        } = ir
+        else {
+            panic!("expected explicit integer NoOp cast, got {ir:?}");
+        };
+        assert!(implicit);
         assert!(matches!(
-            skeleton,
-            ClangExprSkeleton::DeclRef { name, .. } if name == "value"
+            target.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert!(matches!(
+            expr.as_ref(),
+            IrExpr::Var { name, .. } if name == "value"
         ));
     }
 
