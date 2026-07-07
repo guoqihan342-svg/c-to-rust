@@ -1338,6 +1338,15 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{line}\n"));
             }
+            if let Some(emitted) = emit_single_inc_dec_call_statement_expr(
+                expr,
+                symbols,
+                context,
+                indent_level,
+                "expr",
+            )? {
+                return Ok(format!("{}{indent}{};\n", emitted.prelude, emitted.expr));
+            }
             let expr =
                 emit_expr(expr, symbols, context).map_err(|detail| format!("expr {detail}"))?;
             Ok(format!("{indent}{expr};\n"))
@@ -3957,6 +3966,17 @@ fn emit_expr_with_prelude(
         IrExpr::ArrayLiteral { .. } => Err(format!(
             "{path} array literal expression is only supported as a declaration initializer"
         )),
+        IrExpr::Call {
+            callee, args, ty, ..
+        } => emit_call_expr_with_prelude(
+            callee,
+            args,
+            ty,
+            symbols,
+            context,
+            indent_level,
+            path,
+        ),
         IrExpr::IncDec { .. } => emit_inc_dec_value_expr(expr, symbols, indent_level)
             .map_err(|detail| format!("{path} {detail}"))?
             .ok_or_else(|| format!("{path} inc/dec expression is unsupported")),
@@ -3973,6 +3993,76 @@ fn emit_expr_with_prelude(
             expr: emit_expr(expr, symbols, context).map_err(|detail| format!("{path} {detail}"))?,
         }),
     }
+}
+
+fn emit_call_expr_with_prelude(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<EmittedExpr, String> {
+    if args.len() != 1 || scalar_inc_dec_assigned_var_name(&args[0]).is_none() {
+        return Ok(EmittedExpr {
+            prelude: String::new(),
+            expr: emit_call_expr(callee, args, ty, symbols, context)
+                .map_err(|detail| format!("{path} {detail}"))?,
+        });
+    }
+
+    let callee =
+        emit_identifier(callee, "call callee").map_err(|detail| format!("{path} {detail}"))?;
+    if matches!(
+        callee.as_str(),
+        "assert" | "abs" | "strlen" | "strnlen" | "memcmp"
+    ) {
+        return Err(format!(
+            "{path} call callee {callee} cannot use increment/decrement value arguments"
+        ));
+    }
+    if reserved_c_macro_or_stdlib_callee(&callee) {
+        return Err(format!(
+            "{path} call callee \"{callee}\" is reserved C macro/stdlib/extern surface and requires explicit lowering or extern binding"
+        ));
+    }
+    if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
+        return Err(format!(
+            "{path} call result has pointer value return {} requires explicit ownership/lifetime/ABI lowering",
+            type_label(ty)
+        ));
+    }
+    if !is_void_type(ty) {
+        emit_scalar_type(ty).map_err(|detail| format!("{path} call result has {detail}"))?;
+    }
+
+    let arg = emit_inc_dec_value_expr(&args[0], symbols, indent_level)
+        .map_err(|detail| format!("{path} call arg[0] {detail}"))?
+        .ok_or_else(|| format!("{path} call arg[0] inc/dec expression is unsupported"))?;
+    Ok(EmittedExpr {
+        prelude: arg.prelude,
+        expr: format!("{callee}({})", arg.expr),
+    })
+}
+
+fn emit_single_inc_dec_call_statement_expr(
+    expr: &IrExpr,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<Option<EmittedExpr>, String> {
+    let IrExpr::Call {
+        callee, args, ty, ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    if args.len() != 1 || scalar_inc_dec_assigned_var_name(&args[0]).is_none() {
+        return Ok(None);
+    }
+    emit_call_expr_with_prelude(callee, args, ty, symbols, context, indent_level, path).map(Some)
 }
 
 fn emit_prefix_inc_dec_value_expr(

@@ -2695,12 +2695,26 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
+    if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0]) {
+        return None;
+    }
     for (index, arg) in args.iter().enumerate() {
         if let Some(reason) = bounded_call_arg_rejection_reason(arg, true) {
             return Some(format!("argument {index}: {reason}"));
         }
     }
     None
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_scalar_inc_dec_call_arg(expr: &ClangExprSkeleton) -> bool {
+    let ClangExprSkeleton::IncDec { target, ty, .. } = expr else {
+        return false;
+    };
+    let ClangExprSkeleton::DeclRef { ty: target_ty, .. } = target.as_ref() else {
+        return false;
+    };
+    target_ty == ty && matches!(target_ty.kind, ClangTypeKind::Integer { .. })
 }
 
 #[cfg(feature = "typed-ir")]
@@ -6545,7 +6559,62 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_keeps_prefix_inc_dec_call_argument_fail_closed() {
+    fn expr_skeleton_from_ast_keeps_multiple_prefix_inc_dec_call_arguments_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int, int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int, int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "j" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+            panic!(
+                "expected multiple prefix inc/dec call arguments to fail closed, got {skeleton:?}"
+            );
+        };
+        assert!(
+            reason.contains("call arguments cannot use increment/decrement value semantics"),
+            "unexpected reason: {reason}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_single_prefix_inc_dec_call_argument() {
         let expr = serde_json::json!({
             "kind": "CallExpr",
             "type": { "qualType": "int" },
@@ -6583,12 +6652,76 @@ mod tests {
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
 
-        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
-            panic!("expected prefix inc/dec call argument to fail closed, got {skeleton:?}");
+        let ClangExprSkeleton::Call { args, .. } = skeleton else {
+            panic!("expected single prefix inc/dec call argument to lower, got {skeleton:?}");
+        };
+        let [ClangExprSkeleton::IncDec {
+            target,
+            prefix: true,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected one prefix inc/dec argument, got {args:?}");
         };
         assert!(
-            reason.contains("call arguments cannot use increment/decrement value semantics"),
-            "unexpected reason: {reason}"
+            matches!(target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+            "unexpected target: {target:?}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_single_postfix_inc_dec_call_argument() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Call { args, .. } = skeleton else {
+            panic!("expected single postfix inc/dec call argument to lower, got {skeleton:?}");
+        };
+        let [ClangExprSkeleton::IncDec {
+            target,
+            prefix: false,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected one postfix inc/dec argument, got {args:?}");
+        };
+        assert!(
+            matches!(target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+            "unexpected target: {target:?}"
         );
     }
 

@@ -12388,6 +12388,147 @@ fn typed_ir_emits_nested_direct_call_argument() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_single_prefix_inc_direct_call_argument() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "prefix_inc_call_argument".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![IrExpr::IncDec {
+                    target: Box::new(ir_var("value", i32_ty.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: true,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit prefix inc direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn prefix_inc_call_argument(mut value: i32) -> i32"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("return helper(value);"));
+    assert_rust_snippet_runs(
+        "typed-ir-prefix-inc-direct-call-arg",
+        &format!("fn helper(value: i32) -> i32 {{ value * 2 }}\n{rust}"),
+        "    assert_eq!(prefix_inc_call_argument(5), 12);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_single_postfix_inc_direct_call_argument() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "postfix_inc_call_argument".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![IrExpr::IncDec {
+                    target: Box::new(ir_var("value", i32_ty.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit postfix inc direct call arg");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn postfix_inc_call_argument(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("return helper(post_inc_value);"));
+    assert_rust_snippet_runs(
+        "typed-ir-postfix-inc-direct-call-arg",
+        &format!("fn helper(value: i32) -> i32 {{ value * 2 }}\n{rust}"),
+        "    assert_eq!(postfix_inc_call_argument(5), 10);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_single_postfix_inc_direct_call_argument_statement() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "postfix_inc_call_argument_statement".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    }],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit postfix inc direct call arg statement");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn postfix_inc_call_argument_statement(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("helper(post_inc_value);"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-postfix-inc-direct-call-arg-stmt",
+        &format!("fn helper(value: i32) -> i32 {{ value * 2 }}\n{rust}"),
+        "    assert_eq!(postfix_inc_call_argument_statement(5), 6);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_deeper_nested_direct_call_arguments() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -12473,10 +12614,10 @@ fn typed_ir_rejects_multiple_nested_direct_call_arguments() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_side_effect_direct_call_arguments() {
+fn typed_ir_rejects_side_effect_direct_call_argument_with_ordinary_arg() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
-        name: "side_effect_call_argument".to_string(),
+        name: "side_effect_call_argument_with_ordinary_arg".to_string(),
         return_type: i32_ty.clone(),
         params: vec![IrParam {
             name: "value".to_string(),
@@ -12486,13 +12627,16 @@ fn typed_ir_rejects_side_effect_direct_call_arguments() {
         body: vec![IrStmt::Return {
             value: Some(IrExpr::Call {
                 callee: "helper".to_string(),
-                args: vec![IrExpr::IncDec {
-                    target: Box::new(ir_var("value", i32_ty.clone())),
-                    op: IrIncDecOp::Inc,
-                    prefix: false,
-                    ty: i32_ty.clone(),
-                    source_span: None,
-                }],
+                args: vec![
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: true,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    ir_var("value", i32_ty.clone()),
+                ],
                 ty: i32_ty.clone(),
                 source_span: None,
             }),
@@ -12501,7 +12645,55 @@ fn typed_ir_rejects_side_effect_direct_call_arguments() {
         source_span: None,
     };
 
-    let error = emit_rust_from_ir(&ir).expect_err("side-effect call arg must fail closed");
+    let error =
+        emit_rust_from_ir(&ir).expect_err("side-effect plus ordinary call args must fail closed");
+
+    assert!(error
+        .reason
+        .contains("call arguments cannot use increment/decrement value semantics"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_multiple_side_effect_direct_call_arguments() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "multiple_side_effect_call_arguments".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: true,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("value", i32_ty.clone())),
+                        op: IrIncDecOp::Dec,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                ],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error =
+        emit_rust_from_ir(&ir).expect_err("multiple side-effect call args must fail closed");
 
     assert!(error
         .reason
@@ -27359,14 +27551,14 @@ fn clang_ast_dump_emits_postfix_increment_decl_initializer_when_enabled() {
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled() {
+fn clang_ast_dump_emits_prefix_increment_call_argument_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-prefix-increment-call-arg");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_prefix_call_arg.c");
+    let source_file = out_dir.join("prefix_call_arg.c");
     fs::write(
         &source_file,
-        "int helper(int value) { return value; }\nint bad_prefix_call_arg(int value) { return helper(++value); }\n",
+        "int helper(int value) { return value * 2; }\nint prefix_call_arg(int value) { return helper(++value); }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -27374,29 +27566,60 @@ fn clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled() {
         clang_path.to_string_lossy().into_owned(),
     )]);
 
-    let report = lower_function_from_clang_ast_dump_report(
-        &environment,
-        &source_file,
-        "bad_prefix_call_arg",
-    );
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "prefix_call_arg");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert_eq!(
-        report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_expr")
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit prefix increment call argument");
+    assert!(rust.contains("pub fn prefix_call_arg(mut value: i32) -> i32"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("return helper(value);"));
+    assert_rust_snippet_runs(
+        "typed-ir-real-clang-prefix-increment-call-arg",
+        &format!(
+            "fn helper(value: i32) -> i32 {{ value * 2 }}\n{}",
+            rust.rust
+        ),
+        "    assert_eq!(prefix_call_arg(5), 12);",
     );
-    assert!(
-        report
-            .errors
-            .first()
-            .map(|error| {
-                error
-                    .message
-                    .contains("call arguments cannot use increment/decrement value semantics")
-            })
-            .unwrap_or(false),
-        "{:?}",
-        report.errors
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_postfix_increment_call_argument_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-postfix-increment-call-arg");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("postfix_call_arg.c");
+    fs::write(
+        &source_file,
+        "int helper(int value) { return value * 2; }\nint postfix_call_arg(int value) { return helper(value++); }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "postfix_call_arg");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit postfix increment call argument");
+    assert!(rust.contains("pub fn postfix_call_arg(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("return helper(post_inc_value);"));
+    assert_rust_snippet_runs(
+        "typed-ir-real-clang-postfix-increment-call-arg",
+        &format!(
+            "fn helper(value: i32) -> i32 {{ value * 2 }}\n{}",
+            rust.rust
+        ),
+        "    assert_eq!(postfix_call_arg(5), 10);",
     );
 }
 
