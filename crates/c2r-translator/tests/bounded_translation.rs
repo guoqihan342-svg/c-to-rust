@@ -27175,14 +27175,14 @@ fn clang_ast_dump_emits_prefix_decrement_while_condition_when_enabled() {
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_rejects_prefix_increment_return_value_when_enabled() {
+fn clang_ast_dump_emits_prefix_increment_return_value_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-prefix-increment-return");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_prefix_return.c");
+    let source_file = out_dir.join("prefix_return.c");
     fs::write(
         &source_file,
-        "int bad_prefix_return(int value) { return ++value; }\n",
+        "int prefix_return(int value) { return ++value; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -27191,21 +27191,18 @@ fn clang_ast_dump_rejects_prefix_increment_return_value_when_enabled() {
     )]);
 
     let report =
-        lower_function_from_clang_ast_dump_report(&environment, &source_file, "bad_prefix_return");
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "prefix_return");
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
-    assert_eq!(
-        report.errors.first().map(|error| error.kind.as_str()),
-        Some("unsupported_clang_expr")
-    );
-    assert!(
-        report
-            .errors
-            .first()
-            .map(|error| error.message.contains("prefix opcode ++"))
-            .unwrap_or(false),
-        "{:?}",
-        report.errors
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit prefix increment return value");
+    assert!(rust.contains("pub fn prefix_return(mut value: i32) -> i32"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-real-clang-prefix-increment-return",
+        &rust,
+        "    assert_eq!(prefix_return(5), 6);",
     );
 }
 
@@ -27242,7 +27239,11 @@ fn clang_ast_dump_rejects_prefix_increment_call_argument_when_enabled() {
         report
             .errors
             .first()
-            .map(|error| error.message.contains("prefix opcode ++"))
+            .map(|error| {
+                error
+                    .message
+                    .contains("call arguments cannot use increment/decrement value semantics")
+            })
             .unwrap_or(false),
         "{:?}",
         report.errors
@@ -27282,7 +27283,11 @@ fn clang_ast_dump_rejects_prefix_increment_deref_expr_when_enabled() {
         report
             .errors
             .first()
-            .map(|error| error.message.contains("prefix opcode ++"))
+            .map(|error| {
+                error
+                    .message
+                    .contains("deref pointer cannot use prefix increment/decrement value semantics")
+            })
             .unwrap_or(false),
         "{:?}",
         report.errors

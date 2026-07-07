@@ -1878,18 +1878,24 @@ fn expr_skeleton_from_ast_with_options(
                 message: "UnaryOperator is missing opcode".to_string(),
             })?;
             if opcode == "++" || opcode == "--" {
-                return inc_dec_expr_skeleton_from_ast(expr, false, preserve_integral_casts);
+                return inc_dec_expr_skeleton_from_ast(expr, true, preserve_integral_casts);
             }
             if opcode == "*" {
                 let ptr = inner(expr).first().ok_or_else(|| ClangFrontendError {
                     kind: "invalid_unary_operator".to_string(),
                     message: "UnaryOperator is missing operand".to_string(),
                 })?;
+                let ptr = expr_skeleton_from_ast_with_options(ptr, preserve_integral_casts)?;
+                if matches!(ptr, ClangExprSkeleton::IncDec { prefix: true, .. }) {
+                    return Ok(ClangExprSkeleton::Unsupported {
+                        node: "UnaryOperator".to_string(),
+                        reason:
+                            "deref pointer cannot use prefix increment/decrement value semantics"
+                                .to_string(),
+                    });
+                }
                 return Ok(ClangExprSkeleton::Deref {
-                    ptr: Box::new(expr_skeleton_from_ast_with_options(
-                        ptr,
-                        preserve_integral_casts,
-                    )?),
+                    ptr: Box::new(ptr),
                     ty: expr_type(expr)?,
                 });
             }
@@ -6499,8 +6505,11 @@ mod tests {
     }
 
     #[test]
-    fn expr_skeleton_from_ast_still_rejects_value_position_prefix_inc_dec() {
-        for opcode in ["++", "--"] {
+    fn expr_skeleton_from_ast_lowers_value_position_prefix_inc_dec() {
+        for (opcode, expected_op) in [
+            ("++", ClangIncDecOperator::Inc),
+            ("--", ClangIncDecOperator::Dec),
+        ] {
             let expr = serde_json::json!({
                 "kind": "UnaryOperator",
                 "opcode": opcode,
@@ -6517,14 +6526,104 @@ mod tests {
 
             let skeleton = expr_skeleton_from_ast(&expr).expect("prefix inc/dec skeleton");
 
-            let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
-                panic!("expected unsupported prefix {opcode}, got {skeleton:?}");
+            let ClangExprSkeleton::IncDec {
+                target,
+                op,
+                prefix: true,
+                ty,
+            } = skeleton
+            else {
+                panic!("expected prefix inc/dec skeleton for {opcode}, got {skeleton:?}");
             };
+            assert_eq!(op, expected_op);
+            assert_eq!(ty.spelled, "int");
             assert!(
-                reason.contains("prefix opcode"),
-                "unexpected reason for {opcode}: {reason}"
+                matches!(target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+                "unexpected target for {opcode}: {target:?}"
             );
         }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_keeps_prefix_inc_dec_call_argument_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+            panic!("expected prefix inc/dec call argument to fail closed, got {skeleton:?}");
+        };
+        assert!(
+            reason.contains("call arguments cannot use increment/decrement value semantics"),
+            "unexpected reason: {reason}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_keeps_prefix_inc_dec_deref_operand_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "*",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("deref skeleton");
+
+        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+            panic!("expected prefix inc/dec deref operand to fail closed, got {skeleton:?}");
+        };
+        assert!(
+            reason.contains("deref pointer cannot use prefix increment/decrement value semantics"),
+            "unexpected reason: {reason}"
+        );
     }
 
     #[test]
