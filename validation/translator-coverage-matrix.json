@@ -404,6 +404,7 @@
         "unary plus integer promotion preserves clang-proven IntegralPromotion",
         "compound assignment integer promotion and final truncation preserve clang compute/result type evidence",
         "CStyleCastExpr IntegralCast explicit typed IR cast in return/value contexts",
+        "CStyleCastExpr IntegralCast and integer NoOp operands preserve clang-proven LValueToRValue reads",
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer NoOp explicit typed IR cast operands preserve clang-proven LValueToRValue reads",
         "integer value-context LValueToRValue explicit typed IR node",
@@ -585,6 +586,14 @@
         {
           "name": "clang_ast_fixture_replays_integral_c_style_cast_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "c_style_integral_cast_preserves_inner_lvalue_to_rvalue_without_value_context",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_00_split_parts/part_00.rs"
+        },
+        {
+          "name": "c_style_noop_integer_cast_preserves_inner_lvalue_to_rvalue_without_value_context",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_00_split_parts/part_00.rs"
         },
         {
           "name": "stmt_skeleton_from_ast_preserves_assignment_rhs_integral_cast",

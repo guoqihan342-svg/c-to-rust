@@ -619,3 +619,95 @@
             ClangExprSkeleton::DeclRef { name, .. } if name == "value"
         ));
     }
+
+    #[test]
+    fn c_style_integral_cast_preserves_inner_lvalue_to_rvalue_without_value_context() {
+        let expr = serde_json::json!({
+            "kind": "CStyleCastExpr",
+            "castKind": "IntegralCast",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "uint64_t" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "uint64_t" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr)
+            .expect("C-style integral cast should preserve inner LValueToRValue");
+        let ir = lower_expr(&skeleton).expect("lower explicit C-style integral cast");
+
+        let IrExpr::Cast {
+            target,
+            expr,
+            implicit,
+            ..
+        } = ir
+        else {
+            panic!("expected explicit C-style integral cast, got {ir:?}");
+        };
+        assert!(!implicit);
+        assert!(matches!(
+            target.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", false, 64);
+    }
+
+    #[test]
+    fn c_style_noop_integer_cast_preserves_inner_lvalue_to_rvalue_without_value_context() {
+        let expr = serde_json::json!({
+            "kind": "CStyleCastExpr",
+            "castKind": "NoOp",
+            "type": { "qualType": "uint32_t" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "uint32_t" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "uint32_t" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr)
+            .expect("C-style integer NoOp cast should preserve inner LValueToRValue");
+        let ir = lower_expr(&skeleton).expect("lower explicit C-style integer NoOp cast");
+
+        let IrExpr::Cast {
+            target,
+            expr,
+            implicit,
+            ..
+        } = ir
+        else {
+            panic!("expected explicit C-style integer NoOp cast, got {ir:?}");
+        };
+        assert!(!implicit);
+        assert!(matches!(
+            target.kind,
+            IrTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", false, 32);
+    }

@@ -401,11 +401,13 @@ fn expr_skeleton_from_ast_with_options(
                 kind: "invalid_cast_expr".to_string(),
                 message: "CStyleCastExpr is missing operand".to_string(),
             })?;
+            let preserve_operand_integral_casts =
+                preserve_integral_casts || is_integral_conversion_cast_expr(expr);
             Ok(ClangExprSkeleton::Cast {
                 target,
                 expr: Box::new(expr_skeleton_from_ast_with_options(
                     operand,
-                    preserve_integral_casts,
+                    preserve_operand_integral_casts,
                 )?),
                 implicit: false,
             })
