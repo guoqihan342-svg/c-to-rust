@@ -246,10 +246,7 @@ fn expr_skeleton_from_ast_with_options(
                     base,
                     preserve_integral_casts,
                 )?),
-                index: Box::new(expr_skeleton_from_ast_with_options(
-                    index,
-                    preserve_integral_casts,
-                )?),
+                index: Box::new(expr_skeleton_from_ast_with_options(index, true)?),
                 ty: expr_type(expr)?,
             })
         }

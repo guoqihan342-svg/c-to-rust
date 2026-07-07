@@ -439,6 +439,62 @@
     }
 
     #[test]
+    fn expr_skeleton_from_ast_preserves_array_subscript_index_integer_read() {
+        let expr = serde_json::json!({
+            "kind": "ArraySubscriptExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "ArrayToPointerDecay",
+                    "type": { "qualType": "int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int[3]" },
+                            "referencedDecl": { "name": "table" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("array subscript skeleton");
+        let ir = lower_expr(&skeleton).expect("lower array subscript skeleton");
+
+        let IrExpr::Index {
+            base, index, ty, ..
+        } = ir
+        else {
+            panic!("expected IR array index, got {ir:?}");
+        };
+        assert!(matches!(
+            base.as_ref(),
+            IrExpr::Var { name, .. } if name == "table"
+        ));
+        assert_ir_lvalue_to_rvalue_var(index.as_ref(), "i", true, 32);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
     fn expr_skeleton_from_ast_lowers_record_address_of() {
         let expr = serde_json::json!({
             "kind": "UnaryOperator",

@@ -407,6 +407,7 @@
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer value-context LValueToRValue explicit typed IR node",
         "integer unary scalar operand LValueToRValue explicit typed IR node",
+        "integer array subscript index LValueToRValue explicit typed IR node",
         "target-dependent integer LValueToRValue preserved for later target ABI binding",
         "non-integer NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
@@ -571,6 +572,10 @@
         {
           "name": "expr_skeleton_from_ast_lowers_bitwise_not_with_explicit_read",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_preserves_array_subscript_index_integer_read",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_00_split_parts/part_01.rs"
         },
         {
           "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
