@@ -105,11 +105,11 @@
 - condition-position `?:`、expression-statement `?:`、GNU omitted-middle `a ?: b`，以及 then/else 分支内含 call/inc/dec/post-increment/assignment/comma 副作用的 conditional 仍 fail closed。
 - short-circuit operand 中含 call/inc/dec/side effect、pointer truthiness、float truthiness、unsupported type 或需要完整 usual scalar conversions 的场景仍 fail closed。
 - 非简单 target、value-position 使用、unsupported compute/result 类型组合、pointer arithmetic、floating-point、volatile 或复杂 RHS side effect 的 compound assignment 仍 fail closed。
-- `ForStmt` 中的 `goto` / `switch`、condition variable slot、空 condition/step、condition/return value 中 inc/dec、call argument 中除单标量 direct/nested direct-call 形状之外的 inc/dec、复杂 init/step、非 simple scalar init/step、非 simple integer variable step target、复杂 standalone inc/dec target、parenthesized/comma step 或通用 value-position inc/dec 仍 fail closed；`DoWhile` condition 中的 call/inc/dec/side effect 仍 fail closed；`break` 只在 loop body 中作为直接 loop exit candidate generation 放开，`continue` 只在 loop body 中作为带显式 `DoWhile` condition check 或 `ForStmt` step-before-continue 发射的窄化 candidate generation 放开。
+- `ForStmt` 中的 `goto` / `switch`、condition variable slot、空 condition/step、condition/return value 中 inc/dec、call argument 中除单标量 direct-call 或单链 nested direct-call 形状之外的 inc/dec、复杂 init/step、非 simple scalar init/step、非 simple integer variable step target、复杂 standalone inc/dec target、parenthesized/comma step 或通用 value-position inc/dec 仍 fail closed；`DoWhile` condition 中的 call/inc/dec/side effect 仍 fail closed；`break` 只在 loop body 中作为直接 loop exit candidate generation 放开，`continue` 只在 loop body 中作为带显式 `DoWhile` condition check 或 `ForStmt` step-before-continue 发射的窄化 candidate generation 放开。
 - `ForStmt` init 任一 declarator 的 unsupported type/initializer、VLA/incomplete array、重复符号仍 fail closed。
 - 无初始化局部变量在赋值前读取、首次赋值读取自身、只在单侧分支或循环体中赋值、address-taken initialization、间接写入和 alias write 仍 fail closed。
 - mutable pointer read、复杂 pointer write、pointer escape、多 mutable pointer alias/noalias 未证明、未建模 alias write。
-- function pointer callee、复杂 call side effects、condition 中的 nested call；direct call 实参只放开一层单个 `outer(inner(value))` 形态，更深嵌套、多个 sibling nested call、藏在 binary/index/cast 里的 nested call 仍 fail closed。
+- function pointer callee、复杂 call side effects、condition 中的 nested call；direct call 实参只放开一层单个 ordinary `outer(inner(value))` 形态，以及带单标量 inc/dec leaf 的单链多层 `outer(middle(inner(value++)))` 形态；非单链更深嵌套、多个 sibling nested call、任意层混入普通实参、藏在 binary/index/cast 里的 nested call 仍 fail closed。
 - volatile、硬件寄存器、跨线程/中断语义。
 - 未建模宏副作用、控制流不可恢复、测试 oracle 不足。
 - semantic acceptance 未经完整 C/Rust oracle、negative diff、unsafe ledger、final verification 证明。

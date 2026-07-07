@@ -231,7 +231,7 @@ fn emit_nested_single_inc_dec_call_expr(
     else {
         return Ok(None);
     };
-    if inner_args.len() != 1 || scalar_inc_dec_assigned_var_name(&inner_args[0]).is_none() {
+    if !side_effect_single_chain_nested_call_with_scalar_inc_dec_leaf(args) {
         return Ok(None);
     }
 
@@ -249,6 +249,24 @@ fn emit_nested_single_inc_dec_call_expr(
         prelude: inner.prelude,
         expr: format!("{callee}({})", inner.expr),
     }))
+}
+
+fn side_effect_single_chain_nested_call_with_scalar_inc_dec_leaf(args: &[IrExpr]) -> bool {
+    let [arg] = args else {
+        return false;
+    };
+    side_effect_single_chain_nested_call_expr_with_scalar_inc_dec_leaf(arg)
+}
+
+fn side_effect_single_chain_nested_call_expr_with_scalar_inc_dec_leaf(expr: &IrExpr) -> bool {
+    let IrExpr::Call { args, .. } = expr else {
+        return false;
+    };
+    let [arg] = args.as_slice() else {
+        return false;
+    };
+    scalar_inc_dec_assigned_var_name(arg).is_some()
+        || side_effect_single_chain_nested_call_expr_with_scalar_inc_dec_leaf(arg)
 }
 
 fn emit_single_inc_dec_call_statement_expr(

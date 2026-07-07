@@ -1848,7 +1848,7 @@
         "modeled C strlen(const char *) as a one-level nested direct-call argument",
         "modeled C strnlen(const char *, size_t) direct call with bounded NUL-search precondition",
         "modeled C strnlen(const char *, size_t) as a one-level nested direct-call argument",
-        "single scalar inc/dec argument inside a one-level nested direct-call argument",
+        "single scalar inc/dec argument inside one-level or single-chain multi-layer nested direct-call arguments",
         "modeled C memset(void *, int, size_t) statement with discarded void* return and 0..=255 byte literal precondition",
         "modeled C memcpy(void *, const void *, size_t) statement with discarded void* return and restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
@@ -1928,6 +1928,14 @@
             {
               "name": "memcpy statement discarded void pointer return no-clang fixture replay test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "expr_skeleton_from_ast_lowers_single_chain_nested_direct_call_with_prefix_inc_dec_argument",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "expr_skeleton_from_ast_lowers_single_chain_nested_direct_call_with_postfix_inc_dec_argument",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
         },
@@ -2041,6 +2049,14 @@
             {
               "name": "typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_single_chain_nested_direct_call_with_prefix_inc_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_single_chain_nested_direct_call_with_postfix_inc_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2118,6 +2134,10 @@
             {
               "name": "expr_skeleton_from_ast_keeps_nested_side_effect_call_with_plain_arg_fail_closed",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "typed_ir_rejects_single_chain_side_effect_call_with_inner_ordinary_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2210,6 +2230,14 @@
             },
             {
               "name": "typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_single_chain_nested_direct_call_with_prefix_inc_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_single_chain_nested_direct_call_with_postfix_inc_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -2375,6 +2403,22 @@
         {
           "name": "typed_ir_emits_pointer_truthiness_blob_constructor_with_clang_size_t_strlen_leaf",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_lowers_single_chain_nested_direct_call_with_prefix_inc_dec_argument",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "typed_ir_emits_single_chain_nested_direct_call_with_prefix_inc_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_lowers_single_chain_nested_direct_call_with_postfix_inc_dec_argument",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "typed_ir_emits_single_chain_nested_direct_call_with_postfix_inc_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -2472,6 +2516,11 @@
           "name": "typed_ir_rejects_memcpy_value_expression_outside_statement_model",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "memcpy return values are not modeled in expression position; only statement-position discarded-result calls may lower"
+        },
+        {
+          "name": "typed_ir_rejects_single_chain_side_effect_call_with_inner_ordinary_arg",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "side-effect nested call arguments cannot be combined with ordinary arguments at any layer because C argument evaluation order would be under-modeled"
         }
       ]
     },

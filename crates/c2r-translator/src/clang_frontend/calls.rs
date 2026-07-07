@@ -344,7 +344,11 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
-    if args.iter().any(clang_nested_call_with_single_scalar_inc_dec_arg) && args.len() != 1 {
+    if args
+        .iter()
+        .any(clang_single_chain_nested_call_with_scalar_inc_dec_leaf)
+        && args.len() != 1
+    {
         return Some(
             "side-effect nested call arguments cannot be combined with other call arguments"
                 .to_string(),
@@ -373,12 +377,18 @@ fn clang_scalar_inc_dec_call_arg(expr: &ClangExprSkeleton) -> bool {
 }
 
 #[cfg(feature = "typed-ir")]
-fn clang_nested_call_with_single_scalar_inc_dec_arg(expr: &ClangExprSkeleton) -> bool {
-    matches!(
-        expr,
-        ClangExprSkeleton::Call { args, .. }
-            if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0])
-    )
+fn clang_single_chain_nested_call_with_scalar_inc_dec_leaf(expr: &ClangExprSkeleton) -> bool {
+    let ClangExprSkeleton::Call { args, ty, .. } = expr else {
+        return false;
+    };
+    if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
+        return false;
+    }
+    let [arg] = args.as_slice() else {
+        return false;
+    };
+    clang_scalar_inc_dec_call_arg(arg)
+        || clang_single_chain_nested_call_with_scalar_inc_dec_leaf(arg)
 }
 
 #[cfg(feature = "typed-ir")]
@@ -432,7 +442,20 @@ fn bounded_call_arg_rejection_reason(
                     ty.spelled
                 ));
             }
-            if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0]) {
+            if args
+                .iter()
+                .any(clang_single_chain_nested_call_with_scalar_inc_dec_leaf)
+                && args.len() != 1
+            {
+                return Some(
+                    "side-effect nested call arguments cannot be combined with other call arguments"
+                        .to_string(),
+                );
+            }
+            if args.len() == 1
+                && (clang_scalar_inc_dec_call_arg(&args[0])
+                    || clang_single_chain_nested_call_with_scalar_inc_dec_leaf(&args[0]))
+            {
                 return None;
             }
             for (index, arg) in args.iter().enumerate() {
