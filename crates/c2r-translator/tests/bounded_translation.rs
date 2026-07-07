@@ -6380,6 +6380,59 @@ fn typed_ir_emits_prefix_inc_value_decl_initializer_for_i32_scalar() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_postfix_inc_value_decl_initializer_for_i32_scalar() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "postfix_inc_value_decl".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "out".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(IrExpr::IncDec {
+                    target: Box::new(ir_var("value", i32_ty.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Add,
+                    ir_var("out", i32_ty.clone()),
+                    ir_var("value", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit postfix inc value decl initializer");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn postfix_inc_value_decl(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("let mut out: i32 = post_inc_value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-postfix-inc-value-decl",
+        rust,
+        "    assert_eq!(postfix_inc_value_decl(5), 11);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_prefix_dec_statement_for_usize_scalar() {
     let usize_ty = ir_usize();
     let ir = IrFunction {
@@ -22579,6 +22632,68 @@ fn clang_lowering_skeleton_maps_logical_not_return_value() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_emits_postfix_increment_value_decl_initializer() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "postfix_inc_value_decl".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "value".to_string(),
+            ty: int_ty.clone(),
+        }],
+        body: vec![
+            ClangStmtSkeleton::Decl {
+                name: "out".to_string(),
+                ty: int_ty.clone(),
+                init: Some(ClangExprSkeleton::IncDec {
+                    target: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    op: ClangIncDecOperator::Inc,
+                    prefix: false,
+                    ty: int_ty.clone(),
+                }),
+            },
+            ClangStmtSkeleton::Return {
+                value: Some(ClangExprSkeleton::Binary {
+                    op: ClangBinaryOperator::Add,
+                    lhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "out".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    rhs: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "value".to_string(),
+                        ty: int_ty.clone(),
+                    }),
+                    ty: int_ty,
+                }),
+            },
+        ],
+    };
+    let ir = lower_function_skeleton(&skeleton).expect("lower postfix increment value decl");
+    let rust = emit_rust_from_ir(&ir).expect("emit postfix increment value decl");
+
+    assert!(rust.contains("pub fn postfix_inc_value_decl(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("let mut out: i32 = post_inc_value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-clang-postfix-inc-value-decl",
+        &rust,
+        "    assert_eq!(postfix_inc_value_decl(5), 11);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn typed_ir_emits_scalar_if_from_clang_lowered_ir() {
     let skeleton = clang_scalar_if_skeleton();
     let ir = lower_function_skeleton(&skeleton).expect("lower scalar if skeleton");
@@ -27203,6 +27318,41 @@ fn clang_ast_dump_emits_prefix_increment_return_value_when_enabled() {
         "typed-ir-real-clang-prefix-increment-return",
         &rust,
         "    assert_eq!(prefix_return(5), 6);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_postfix_increment_decl_initializer_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-postfix-increment-decl");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("postfix_decl.c");
+    fs::write(
+        &source_file,
+        "int postfix_decl(int value) { int out = value++; return out + value; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "postfix_decl");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let rust = emit_rust_from_ir(function).expect("emit postfix increment decl initializer");
+    assert!(rust.contains("pub fn postfix_decl(mut value: i32) -> i32"));
+    assert!(rust.contains("let post_inc_value: i32 = value;"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("let mut out: i32 = post_inc_value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-real-clang-postfix-increment-decl",
+        &rust,
+        "    assert_eq!(postfix_decl(5), 11);",
     );
 }
 

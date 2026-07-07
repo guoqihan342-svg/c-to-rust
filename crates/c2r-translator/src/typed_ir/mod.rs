@@ -3393,20 +3393,12 @@ fn emit_prefix_inc_dec_statement(
     let name = emit_identifier(name, "prefix inc/dec target")?;
     let one = emit_integer_literal(1, target_ty)
         .map_err(|detail| format!("prefix inc/dec step {detail}"))?;
-    let bin_op = match op {
-        IrIncDecOp::Inc => IrBinOp::Add,
-        IrIncDecOp::Dec => IrBinOp::Sub,
-    };
-    let rhs = if let Some(method) = unsigned_wrapping_method(&bin_op, target_ty) {
-        format!("{name}.{method}({one})")
-    } else if let Some((method, message)) = signed_checked_method(&bin_op, target_ty) {
-        format!("{name}.{method}({one}).expect(\"{message}\")")
-    } else {
-        return Err(format!(
+    let rhs = emit_inc_dec_assignment_rhs(&name, target_ty, op, &one).ok_or_else(|| {
+        format!(
             "prefix inc/dec target {name} has unsupported type {}",
             type_label(target_ty)
-        ));
-    };
+        )
+    })?;
     Ok(Some(format!("{name} = {rhs};")))
 }
 
@@ -3965,7 +3957,7 @@ fn emit_expr_with_prelude(
         IrExpr::ArrayLiteral { .. } => Err(format!(
             "{path} array literal expression is only supported as a declaration initializer"
         )),
-        IrExpr::IncDec { .. } => emit_prefix_inc_dec_value_expr(expr, symbols, indent_level)
+        IrExpr::IncDec { .. } => emit_inc_dec_value_expr(expr, symbols, indent_level)
             .map_err(|detail| format!("{path} {detail}"))?
             .ok_or_else(|| format!("{path} inc/dec expression is unsupported")),
         IrExpr::Deref { ptr, ty, .. } if matches!(ptr.as_ref(), IrExpr::IncDec { .. }) => {
@@ -4009,6 +4001,102 @@ fn emit_prefix_inc_dec_value_expr(
         prelude: format!("{indent}{line}\n"),
         expr: name,
     }))
+}
+
+fn emit_postfix_inc_dec_value_expr(
+    expr: &IrExpr,
+    symbols: &mut HashSet<String>,
+    indent_level: usize,
+) -> Result<Option<EmittedExpr>, String> {
+    let IrExpr::IncDec {
+        target,
+        op,
+        prefix: false,
+        ty,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    let IrExpr::Var {
+        name,
+        ty: target_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return Ok(None);
+    };
+    if !symbols.contains(name) {
+        return Err(format!("postfix inc/dec target {name} is not declared"));
+    }
+    if target_ty != ty {
+        return Err(format!(
+            "postfix inc/dec target {name} type {} does not match result type {}",
+            type_label(target_ty),
+            type_label(ty)
+        ));
+    }
+    if !is_integer_type(target_ty) {
+        return Err(format!(
+            "postfix inc/dec target {name} has unsupported type {}",
+            type_label(target_ty)
+        ));
+    }
+
+    let name = emit_identifier(name, "postfix inc/dec target")?;
+    let one = emit_integer_literal(1, target_ty)
+        .map_err(|detail| format!("postfix inc/dec step {detail}"))?;
+    let rhs = emit_inc_dec_assignment_rhs(&name, target_ty, op, &one).ok_or_else(|| {
+        format!(
+            "postfix inc/dec target {name} has unsupported type {}",
+            type_label(target_ty)
+        )
+    })?;
+    let temp_prefix = match op {
+        IrIncDecOp::Inc => "post_inc_value",
+        IrIncDecOp::Dec => "post_dec_value",
+    };
+    let temp = first_available_named_temp(temp_prefix, symbols);
+    symbols.insert(temp.clone());
+    let temp = emit_identifier(&temp, "postfix inc/dec value snapshot")?;
+    let snapshot_ty = emit_scalar_type(target_ty)
+        .map_err(|detail| format!("postfix inc/dec snapshot has {detail}"))?;
+    let indent = "    ".repeat(indent_level);
+
+    Ok(Some(EmittedExpr {
+        prelude: format!("{indent}let {temp}: {snapshot_ty} = {name};\n{indent}{name} = {rhs};\n"),
+        expr: temp,
+    }))
+}
+
+fn emit_inc_dec_value_expr(
+    expr: &IrExpr,
+    symbols: &mut HashSet<String>,
+    indent_level: usize,
+) -> Result<Option<EmittedExpr>, String> {
+    if let Some(emitted) = emit_prefix_inc_dec_value_expr(expr, symbols, indent_level)? {
+        return Ok(Some(emitted));
+    }
+    emit_postfix_inc_dec_value_expr(expr, symbols, indent_level)
+}
+
+fn emit_inc_dec_assignment_rhs(
+    name: &str,
+    target_ty: &IrType,
+    op: &IrIncDecOp,
+    one: &str,
+) -> Option<String> {
+    let bin_op = match op {
+        IrIncDecOp::Inc => IrBinOp::Add,
+        IrIncDecOp::Dec => IrBinOp::Sub,
+    };
+    if let Some(method) = unsigned_wrapping_method(&bin_op, target_ty) {
+        Some(format!("{name}.{method}({one})"))
+    } else if let Some((method, message)) = signed_checked_method(&bin_op, target_ty) {
+        Some(format!("{name}.{method}({one}).expect(\"{message}\")"))
+    } else {
+        None
+    }
 }
 
 fn emit_post_increment_byte_read_expr(
@@ -8194,7 +8282,7 @@ fn collect_assigned_vars_from_expr(expr: &IrExpr, assigned_vars: &mut HashSet<St
             }
         }
         IrExpr::IncDec { target, .. } => {
-            if let Some(name) = scalar_prefix_inc_dec_assigned_var_name(expr) {
+            if let Some(name) = scalar_inc_dec_assigned_var_name(expr) {
                 assigned_vars.insert(name.clone());
             }
             collect_assigned_vars_from_expr(target, assigned_vars);
@@ -8209,14 +8297,8 @@ fn collect_assigned_vars_from_expr(expr: &IrExpr, assigned_vars: &mut HashSet<St
     }
 }
 
-fn scalar_prefix_inc_dec_assigned_var_name(expr: &IrExpr) -> Option<&String> {
-    let IrExpr::IncDec {
-        target,
-        prefix: true,
-        ty,
-        ..
-    } = expr
-    else {
+fn scalar_inc_dec_assigned_var_name(expr: &IrExpr) -> Option<&String> {
+    let IrExpr::IncDec { target, ty, .. } = expr else {
         return None;
     };
     let IrExpr::Var {
