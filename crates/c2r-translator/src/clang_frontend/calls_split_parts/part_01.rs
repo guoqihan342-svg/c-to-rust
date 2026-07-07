@@ -48,19 +48,29 @@ fn bounded_call_arg_rejection_reason(
                     ty.spelled
                 ));
             }
-            let side_effect_arg = match clang_single_side_effect_call_arg(args) {
-                Ok(side_effect_arg) => side_effect_arg,
+            let side_effect_args = match clang_side_effect_call_args(args) {
+                Ok(side_effect_args) => side_effect_args,
                 Err(reason) => return Some(reason),
             };
-            if let Some((side_effect_index, assigned_var)) = side_effect_arg {
-                for (index, arg) in args.iter().enumerate() {
-                    if index == side_effect_index {
-                        continue;
+            if !side_effect_args.is_empty() {
+                for (side_effect_index, assigned_var) in &side_effect_args {
+                    for (index, arg) in args.iter().enumerate() {
+                        if index == *side_effect_index {
+                            continue;
+                        }
+                        if clang_expr_mentions_decl(arg, assigned_var) {
+                            return Some(format!(
+                                "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                            ));
+                        }
                     }
-                    if clang_expr_mentions_decl(arg, assigned_var) {
-                        return Some(format!(
-                            "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
-                        ));
+                }
+                for (index, arg) in args.iter().enumerate() {
+                    if side_effect_args
+                        .iter()
+                        .any(|(side_effect_index, _)| *side_effect_index == index)
+                    {
+                        continue;
                     }
                     if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {
                         return Some(format!("nested call argument {index}: {reason}"));

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Translation Route Governance"
+  short_description: "Checks C-to-Rust route evidence, coverage accounting, and claim boundaries."
+  default_prompt: "Use this skill when changing route/profile evidence, coverage numerators, candidate source labels, refusal classifications, route-governance metrics, capability ledgers, or public milestone claims."

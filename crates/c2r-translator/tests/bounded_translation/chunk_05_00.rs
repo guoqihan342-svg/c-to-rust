@@ -41,7 +41,7 @@ fn typed_ir_rejects_side_effect_direct_call_argument_with_same_var_sibling_read(
 
 #[cfg(feature = "typed-ir")]
 #[test]
-fn typed_ir_rejects_multiple_side_effect_direct_call_arguments() {
+fn typed_ir_rejects_multiple_side_effect_direct_call_arguments_on_same_scalar() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
         name: "multiple_side_effect_call_arguments".to_string(),
@@ -83,7 +83,7 @@ fn typed_ir_rejects_multiple_side_effect_direct_call_arguments() {
 
     assert!(error
         .reason
-        .contains("call arguments cannot use increment/decrement value semantics"));
+        .contains("call arguments cannot modify variable value more than once"));
 }
 
 #[cfg(feature = "typed-ir")]

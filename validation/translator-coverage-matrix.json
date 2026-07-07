@@ -2118,6 +2118,7 @@
         "modeled C strnlen(const char *, size_t) as a one-level nested direct-call argument",
         "single scalar inc/dec argument inside one-level or single-chain multi-layer nested direct-call arguments",
         "one scalar inc/dec direct-call argument with independent ordinary scalar sibling arguments",
+        "multiple independent scalar inc/dec direct-call arguments with ordered prelude lowering",
         "one scalar inc/dec single-chain nested direct-call argument with independent ordinary scalar sibling arguments",
         "binary expression side-effect direct-call operand with an independent scalar sibling operand",
         "modeled C memset(void *, int, size_t) statement with discarded void* return and 0..=255 byte literal precondition",
@@ -2230,6 +2231,10 @@
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
             {
+              "name": "expr_skeleton_from_ast_lowers_multiple_independent_prefix_inc_dec_call_arguments",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
               "name": "expr_skeleton_from_ast_keeps_nested_side_effect_call_with_independent_plain_arg",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
@@ -2308,6 +2313,10 @@
             },
             {
               "name": "typed_ir_emits_prefix_inc_direct_call_argument_with_independent_plain_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_multiple_independent_inc_dec_direct_call_arguments",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2444,8 +2453,12 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
-              "name": "expr_skeleton_from_ast_keeps_multiple_prefix_inc_dec_call_arguments_fail_closed",
+              "name": "expr_skeleton_from_ast_rejects_multiple_inc_dec_call_arguments_on_same_scalar",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "typed_ir_rejects_multiple_side_effect_direct_call_arguments_on_same_scalar",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
               "name": "typed_ir_rejects_nested_side_effect_direct_call_argument_with_same_var_sibling_read",
@@ -2578,6 +2591,10 @@
             },
             {
               "name": "typed_ir_emits_prefix_inc_direct_call_argument_with_independent_plain_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_multiple_independent_inc_dec_direct_call_arguments",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2781,6 +2798,10 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "expr_skeleton_from_ast_lowers_multiple_independent_prefix_inc_dec_call_arguments",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "expr_skeleton_from_ast_keeps_nested_side_effect_call_with_independent_plain_arg",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -2790,6 +2811,10 @@
         },
         {
           "name": "typed_ir_emits_prefix_inc_direct_call_argument_with_independent_plain_arg",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_multiple_independent_inc_dec_direct_call_arguments",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -2908,9 +2933,14 @@
           "fail_closed_reason": "a call argument that reads the same scalar modified by a sibling inc/dec argument remains fail-closed because C argument evaluation order would be under-modeled"
         },
         {
-          "name": "expr_skeleton_from_ast_keeps_multiple_prefix_inc_dec_call_arguments_fail_closed",
+          "name": "expr_skeleton_from_ast_rejects_multiple_inc_dec_call_arguments_on_same_scalar",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "clang skeleton lowering admits at most one side-effect inc/dec call argument"
+          "fail_closed_reason": "clang skeleton lowering still rejects call arguments that modify the same scalar more than once"
+        },
+        {
+          "name": "typed_ir_rejects_multiple_side_effect_direct_call_arguments_on_same_scalar",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "typed IR lowering still rejects call arguments that modify the same scalar more than once"
         },
         {
           "name": "typed_ir_rejects_single_chain_side_effect_call_with_inner_same_var_sibling_read",

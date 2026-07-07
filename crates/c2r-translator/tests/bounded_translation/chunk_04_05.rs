@@ -120,6 +120,70 @@ fn typed_ir_emits_nested_prefix_inc_direct_call_argument_with_independent_plain_
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_multiple_independent_inc_dec_direct_call_arguments() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "multiple_independent_inc_dec_call_arguments".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "a".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "b".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Call {
+                callee: "helper".to_string(),
+                args: vec![
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("a", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: false,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                    IrExpr::IncDec {
+                        target: Box::new(ir_var("b", i32_ty.clone())),
+                        op: IrIncDecOp::Inc,
+                        prefix: true,
+                        ty: i32_ty.clone(),
+                        source_span: None,
+                    },
+                ],
+                ty: i32_ty.clone(),
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit independent inc/dec call args");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains(
+        "pub fn multiple_independent_inc_dec_call_arguments(mut a: i32, mut b: i32) -> i32"
+    ));
+    assert!(rust.contains("let post_inc_value: i32 = a;"));
+    assert!(rust.contains("a = a.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("b = b.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("return helper(post_inc_value, b);"));
+    assert_rust_snippet_runs(
+        "typed-ir-multiple-independent-inc-dec-call-args",
+        &format!("fn helper(a: i32, b: i32) -> i32 {{ a * 10 + b }}\n{rust}"),
+        "    assert_eq!(multiple_independent_inc_dec_call_arguments(5, 7), 58);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_single_postfix_inc_direct_call_argument() {
     let i32_ty = ir_i32();
     let ir = IrFunction {

@@ -403,7 +403,7 @@
     }
 
     #[test]
-    fn expr_skeleton_from_ast_keeps_multiple_prefix_inc_dec_call_arguments_fail_closed() {
+    fn expr_skeleton_from_ast_lowers_multiple_independent_prefix_inc_dec_call_arguments() {
         let expr = serde_json::json!({
             "kind": "CallExpr",
             "type": { "qualType": "int" },
@@ -454,11 +454,91 @@
 
         let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
 
-        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
-            panic!("expected multiple prefix inc/dec call arguments to fail closed, got {skeleton:?}");
+        let ClangExprSkeleton::Call { args, .. } = skeleton else {
+            panic!("expected independent multiple prefix inc/dec call arguments to lower, got {skeleton:?}");
+        };
+        let [
+            ClangExprSkeleton::IncDec {
+                target: first_target,
+                prefix: true,
+                ..
+            },
+            ClangExprSkeleton::IncDec {
+                target: second_target,
+                prefix: true,
+                ..
+            },
+        ] = args.as_slice()
+        else {
+            panic!("expected two prefix inc/dec arguments, got {args:?}");
         };
         assert!(
-            reason.contains("increment/decrement value semantics more than once"),
+            matches!(first_target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+            "unexpected first target: {first_target:?}"
+        );
+        assert!(
+            matches!(second_target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "j"),
+            "unexpected second target: {second_target:?}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_rejects_multiple_inc_dec_call_arguments_on_same_scalar() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int, int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int, int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "--",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+            panic!("expected same-scalar multiple inc/dec call arguments to fail closed, got {skeleton:?}");
+        };
+        assert!(
+            reason.contains("modify variable i more than once"),
             "unexpected reason: {reason}"
         );
     }

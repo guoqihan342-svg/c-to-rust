@@ -212,16 +212,20 @@ fn emit_side_effect_call_expr(
     indent_level: usize,
     path: &str,
 ) -> Result<Option<EmittedExpr>, String> {
-    let Some((side_effect_index, _)) = single_side_effect_call_arg(args)? else {
+    let side_effect_args = side_effect_call_args(args)?;
+    if side_effect_args.is_empty() {
         return Ok(None);
-    };
+    }
     validate_bounded_call_args(args, context).map_err(|detail| format!("{path} {detail}"))?;
 
     let callee = emit_side_effect_call_callee(callee, ty, path)?;
     let mut prelude = String::new();
     let mut emitted_args = Vec::with_capacity(args.len());
     for (index, arg) in args.iter().enumerate() {
-        if index == side_effect_index {
+        if side_effect_args
+            .iter()
+            .any(|(side_effect_index, _)| *side_effect_index == index)
+        {
             let emitted = emit_expr_with_prelude(
                 arg,
                 symbols,
@@ -266,19 +270,21 @@ fn validate_binary_side_effect_operand_order(
     Ok(())
 }
 
-fn single_side_effect_call_arg(args: &[IrExpr]) -> Result<Option<(usize, &str)>, String> {
-    let mut found = None;
+fn side_effect_call_args(args: &[IrExpr]) -> Result<Vec<(usize, &str)>, String> {
+    let mut found = Vec::new();
     for (index, arg) in args.iter().enumerate() {
         let Some(assigned_var) = side_effect_expr_assigned_var_name(arg)? else {
             continue;
         };
-        if found.is_some() {
-            return Err(
-                "call arguments cannot use increment/decrement value semantics more than once"
-                    .to_string(),
-            );
+        if found
+            .iter()
+            .any(|(_, existing_var)| *existing_var == assigned_var)
+        {
+            return Err(format!(
+                "call arguments cannot modify variable {assigned_var} more than once"
+            ));
         }
-        found = Some((index, assigned_var));
+        found.push((index, assigned_var));
     }
     Ok(found)
 }
@@ -290,7 +296,15 @@ fn side_effect_expr_assigned_var_name(expr: &IrExpr) -> Result<Option<&str>, Str
     let IrExpr::Call { args, .. } = expr else {
         return Ok(None);
     };
-    single_side_effect_call_arg(args).map(|found| found.map(|(_, name)| name))
+    let found = side_effect_call_args(args)?;
+    match found.as_slice() {
+        [] => Ok(None),
+        [(_, name)] => Ok(Some(*name)),
+        _ => Err(
+            "nested call argument cannot use increment/decrement value semantics for more than one variable"
+                .to_string(),
+        ),
+    }
 }
 
 fn expr_mentions_var(expr: &IrExpr, expected: &str) -> bool {
@@ -344,7 +358,7 @@ fn emit_single_inc_dec_call_statement_expr(
     else {
         return Ok(None);
     };
-    if single_side_effect_call_arg(args)?.is_none() {
+    if side_effect_call_args(args)?.is_empty() {
         return Ok(None);
     }
     emit_call_expr_with_prelude(callee, args, ty, symbols, context, indent_level, path).map(Some)

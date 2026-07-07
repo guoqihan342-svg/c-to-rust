@@ -344,25 +344,37 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
-    let side_effect_arg = match clang_single_side_effect_call_arg(args) {
-        Ok(side_effect_arg) => side_effect_arg,
+    let side_effect_args = match clang_side_effect_call_args(args) {
+        Ok(side_effect_args) => side_effect_args,
         Err(reason) => return Some(reason),
     };
-    for (index, arg) in args.iter().enumerate() {
-        if let Some((side_effect_index, assigned_var)) = side_effect_arg {
-            if index == side_effect_index {
-                continue;
+    if !side_effect_args.is_empty() {
+        for (side_effect_index, assigned_var) in &side_effect_args {
+            for (index, arg) in args.iter().enumerate() {
+                if index == *side_effect_index {
+                    continue;
+                }
+                if clang_expr_mentions_decl(arg, assigned_var) {
+                    return Some(format!(
+                        "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                    ));
+                }
             }
-            if clang_expr_mentions_decl(arg, assigned_var) {
-                return Some(format!(
-                    "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
-                ));
+        }
+        for (index, arg) in args.iter().enumerate() {
+            if side_effect_args
+                .iter()
+                .any(|(side_effect_index, _)| *side_effect_index == index)
+            {
+                continue;
             }
             if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {
                 return Some(format!("argument {index}: {reason}"));
             }
-            continue;
         }
+        return None;
+    }
+    for (index, arg) in args.iter().enumerate() {
         if let Some(reason) = bounded_call_arg_rejection_reason(arg, true) {
             return Some(format!("argument {index}: {reason}"));
         }
@@ -388,21 +400,23 @@ fn clang_scalar_inc_dec_call_arg_assigned_name(expr: &ClangExprSkeleton) -> Opti
 }
 
 #[cfg(feature = "typed-ir")]
-fn clang_single_side_effect_call_arg(
+fn clang_side_effect_call_args(
     args: &[ClangExprSkeleton],
-) -> Result<Option<(usize, &str)>, String> {
-    let mut found = None;
+) -> Result<Vec<(usize, &str)>, String> {
+    let mut found = Vec::new();
     for (index, arg) in args.iter().enumerate() {
         let Some(assigned_var) = clang_side_effect_expr_assigned_name(arg)? else {
             continue;
         };
-        if found.is_some() {
-            return Err(
-                "call arguments cannot use increment/decrement value semantics more than once"
-                    .to_string(),
-            );
+        if found
+            .iter()
+            .any(|(_, existing_var)| *existing_var == assigned_var)
+        {
+            return Err(format!(
+                "call arguments cannot modify variable {assigned_var} more than once"
+            ));
         }
-        found = Some((index, assigned_var));
+        found.push((index, assigned_var));
     }
     Ok(found)
 }
@@ -420,7 +434,15 @@ fn clang_side_effect_expr_assigned_name(
     if !matches!(&ty.kind, ClangTypeKind::Integer { .. }) {
         return Ok(None);
     }
-    clang_single_side_effect_call_arg(args).map(|found| found.map(|(_, name)| name))
+    let found = clang_side_effect_call_args(args)?;
+    match found.as_slice() {
+        [] => Ok(None),
+        [(_, name)] => Ok(Some(*name)),
+        _ => Err(
+            "nested call argument cannot use increment/decrement value semantics for more than one variable"
+                .to_string(),
+        ),
+    }
 }
 
 #[cfg(feature = "typed-ir")]

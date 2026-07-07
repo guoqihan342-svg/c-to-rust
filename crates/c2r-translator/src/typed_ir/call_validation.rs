@@ -46,10 +46,36 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
-    let side_effect_arg = single_side_effect_call_arg(args)?;
+    let side_effect_args = side_effect_call_args(args)?;
     for (index, arg) in args.iter().enumerate() {
-        if let Some((side_effect_index, assigned_var)) = side_effect_arg {
-            if index == side_effect_index {
+        if !side_effect_args.is_empty() {
+            if side_effect_args
+                .iter()
+                .any(|(side_effect_index, _)| *side_effect_index == index)
+            {
+                continue;
+            }
+            for (_, assigned_var) in &side_effect_args {
+                if expr_mentions_var(arg, assigned_var) {
+                    return Err(format!(
+                        "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
+                    ));
+                }
+            }
+            validate_bounded_call_arg_with_context(arg, false, Some(context))
+        } else {
+            validate_bounded_call_arg_with_context(arg, true, Some(context))
+        }
+        .map_err(|detail| format!("call arg[{index}] {detail}"))?;
+    }
+    Ok(())
+}
+
+fn validate_bounded_side_effect_call_args(args: &[IrExpr]) -> Result<Vec<(usize, &str)>, String> {
+    let side_effect_args = side_effect_call_args(args)?;
+    for (side_effect_index, assigned_var) in &side_effect_args {
+        for (index, arg) in args.iter().enumerate() {
+            if index == *side_effect_index {
                 continue;
             }
             if expr_mentions_var(arg, assigned_var) {
@@ -57,13 +83,9 @@ fn validate_bounded_call_args(args: &[IrExpr], context: &EmitContext) -> Result<
                     "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
                 ));
             }
-            validate_bounded_call_arg_with_context(arg, false, Some(context))
-        } else {
-            validate_bounded_call_arg_with_context(arg, true, Some(context))
         }
-            .map_err(|detail| format!("call arg[{index}] {detail}"))?;
     }
-    Ok(())
+    Ok(side_effect_args)
 }
 
 fn validate_bounded_call_arg(
@@ -282,15 +304,14 @@ fn validate_bounded_nested_call_arg(
         return validate_record_pointer_return_nested_call_arg(callee, args, ty, context);
     }
     emit_scalar_type(ty).map_err(|detail| format!("nested call result has {detail}"))?;
-    if let Some((side_effect_index, assigned_var)) = single_side_effect_call_arg(args)? {
+    let side_effect_args = validate_bounded_side_effect_call_args(args)?;
+    if !side_effect_args.is_empty() {
         for (index, arg) in args.iter().enumerate() {
-            if index == side_effect_index {
+            if side_effect_args
+                .iter()
+                .any(|(side_effect_index, _)| *side_effect_index == index)
+            {
                 continue;
-            }
-            if expr_mentions_var(arg, assigned_var) {
-                return Err(format!(
-                    "side-effect call argument cannot be combined with sibling argument reading modified variable {assigned_var}"
-                ));
             }
             validate_bounded_call_arg_with_context(arg, false, context)
                 .map_err(|detail| format!("nested call arg[{index}] {detail}"))?;
