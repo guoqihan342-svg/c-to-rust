@@ -137,6 +137,149 @@ fn clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang() {
 "#,
     );
 }
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/array_decay_call_arg_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "observe_local_table")
+            .expect("array decay direct-call argument of local fixed array should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array decay direct-call argument should emit");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub fn observe_local_table()"), "{rust}");
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("observe(&table);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-array-decay-direct-call-arg",
+        &format!("fn observe(_: &[i32]) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument() {
+    let i32_ty = ir_i32();
+    let void_ty = ir_void();
+    let const_i32_ty = ir_const(i32_ty.clone());
+    let array_ty = ir_array(const_i32_ty.clone(), 3);
+    let pointer_ty = ir_pointer("const int *", "const int *", const_i32_ty, true);
+    let ir = IrFunction {
+        name: "observe_local_table".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: array_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1", i32_ty.clone()),
+                        ir_lit(2, "2", i32_ty.clone()),
+                        ir_lit(3, "3", i32_ty.clone()),
+                    ],
+                    ty: array_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "observe".to_string(),
+                    args: vec![IrExpr::ArrayToPointerDecay {
+                        target: pointer_ty,
+                        expr: Box::new(ir_var("table", array_ty)),
+                        source_span: None,
+                    }],
+                    ty: void_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit local fixed array decay as readonly direct-call argument");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn observe_local_table()"), "{rust}");
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("observe(&table);"), "{rust}");
+    assert!(!rust.contains("array-to-pointer decay"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-local-fixed-array-decay-call-arg",
+        &format!("fn observe(_: &[i32]) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_array_decay_direct_call_argument_target() {
+    let i32_ty = ir_i32();
+    let void_ty = ir_void();
+    let array_ty = ir_array(i32_ty.clone(), 3);
+    let pointer_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "observe_local_table_mut".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![],
+        body: vec![
+            IrStmt::Decl {
+                name: "table".to_string(),
+                ty: array_ty.clone(),
+                init: Some(IrExpr::ArrayLiteral {
+                    elements: vec![
+                        ir_lit(1, "1", i32_ty.clone()),
+                        ir_lit(2, "2", i32_ty.clone()),
+                        ir_lit(3, "3", i32_ty.clone()),
+                    ],
+                    ty: array_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::Call {
+                    callee: "observe_mut".to_string(),
+                    args: vec![IrExpr::ArrayToPointerDecay {
+                        target: pointer_ty,
+                        expr: Box::new(ir_var("table", array_ty)),
+                        source_span: None,
+                    }],
+                    ty: void_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("mutable array decay direct-call argument target must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("must be a readonly integer pointer"),
+        "unexpected error: {error:?}"
+    );
+}
+
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_array_to_pointer_decay_without_lowering_evidence() {

@@ -122,10 +122,9 @@ fn validate_bounded_call_arg_with_context(
         | IrExpr::LValueToRValue { expr: operand, .. } => {
             validate_bounded_call_arg_with_context(operand, false, context)
         }
-        IrExpr::ArrayToPointerDecay { .. } => Err(
-            "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
-                .to_string(),
-        ),
+        IrExpr::ArrayToPointerDecay { target, expr, .. } => {
+            validate_array_decay_direct_call_arg(target, expr).map(|_| ())
+        }
         IrExpr::FunctionToPointerDecay { target, expr, .. } => {
             validate_function_pointer_decay_call_arg(target, expr).map(|_| ())
         }
@@ -182,6 +181,47 @@ fn validate_raw_direct_call_pointer_arg(
         )
     })?;
     Ok(())
+}
+
+fn validate_array_decay_direct_call_arg<'a>(
+    target: &IrType,
+    expr: &'a IrExpr,
+) -> Result<&'a str, String> {
+    let target_element = readonly_pointer_slice_element_type(target).ok_or_else(|| {
+        format!(
+            "array-to-pointer decay call argument target {} must be a readonly integer pointer",
+            type_label(target)
+        )
+    })?;
+    let IrExpr::Var {
+        name,
+        ty: array_ty,
+        ..
+    } = expr
+    else {
+        return Err(
+            "array-to-pointer decay call argument must be a direct fixed array variable"
+                .to_string(),
+        );
+    };
+    let array_element = fixed_integer_array_element_type(array_ty).ok_or_else(|| {
+        format!(
+            "array-to-pointer decay call argument {name} has unsupported array type {}",
+            type_label(array_ty)
+        )
+    })?;
+    let target_element = emit_scalar_type(target_element).map_err(|detail| {
+        format!("array-to-pointer decay call argument target element has {detail}")
+    })?;
+    let array_element = emit_scalar_type(array_element).map_err(|detail| {
+        format!("array-to-pointer decay call argument array element has {detail}")
+    })?;
+    if target_element != array_element {
+        return Err(format!(
+            "array-to-pointer decay call argument element type {array_element} does not match target element type {target_element}"
+        ));
+    }
+    Ok(name)
 }
 
 fn validate_local_record_address_call_arg<'a>(

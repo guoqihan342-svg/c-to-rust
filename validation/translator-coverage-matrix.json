@@ -1047,6 +1047,7 @@
         "ArrayToPointerDecay in ArraySubscriptExpr base",
         "ArrayToPointerDecay unary deref of direct fixed array DeclRef lowers to index zero",
         "ArrayToPointerDecay pointer-add deref of direct fixed array DeclRef lowers to indexed read",
+        "ArrayToPointerDecay direct-call argument of a local fixed integer array lowers to a readonly slice borrow candidate",
         "ordinary ArrayToPointerDecay lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "nullable readonly pointer parameter truthiness condition lowers to Option::is_some before nonnull-branch reads",
         "nullable readonly pointer value position remains fail-closed outside condition/non-null branch use",
@@ -1075,6 +1076,14 @@
             },
             {
               "name": "array decay pointer-add fixture replay tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "array decay direct-call argument no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/array_decay_call_arg_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1117,6 +1126,10 @@
             {
               "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1150,6 +1163,10 @@
             {
               "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_mutable_array_decay_direct_call_argument_target",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1182,6 +1199,14 @@
             },
             {
               "name": "clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1235,6 +1260,14 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "expr_skeleton_from_ast_preserves_array_to_pointer_decay_as_explicit_skeleton",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -1274,6 +1307,11 @@
           "name": "typed_ir_rejects_array_to_pointer_decay_without_lowering_evidence",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "ArrayToPointerDecay in ordinary expression position is visible as explicit typed IR, but Rust emission still requires explicit lowering evidence"
+        },
+        {
+          "name": "typed_ir_rejects_mutable_array_decay_direct_call_argument_target",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "array-to-pointer decay call arguments only lower for readonly integer pointer targets; mutable pointer targets remain fail-closed"
         },
         {
           "name": "typed_ir_rejects_pointer_lvalue_to_rvalue_without_lowering_evidence",
@@ -1935,6 +1973,7 @@
         "reserved C macro/stdlib/extern callee fail-closed",
         "integer cast direct-call argument",
         "integer promotion direct-call argument",
+        "local fixed integer array decay as a readonly direct-call argument candidate",
         "simple scalar function pointer parameter type emitted as Rust fn pointer",
         "direct function-name decay as simple function pointer call argument",
         "ordinary FunctionToPointerDecay outside direct callees and direct function-name call arguments lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
@@ -2004,6 +2043,14 @@
             },
             {
               "name": "strnlen no-clang fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "array decay direct-call argument no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/array_decay_call_arg_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2089,6 +2136,10 @@
             },
             {
               "name": "typed_ir_emits_strnlen_as_nested_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2251,6 +2302,10 @@
             {
               "name": "typed_ir_rejects_single_chain_side_effect_call_with_inner_ordinary_arg",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_mutable_array_decay_direct_call_argument_target",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2295,6 +2350,14 @@
             },
             {
               "name": "typed_ir_emits_strnlen_as_nested_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2411,6 +2474,14 @@
         },
         {
           "name": "typed_ir_emits_direct_call_argument_integral_cast",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -2607,6 +2678,11 @@
           "name": "typed_ir_rejects_pointer_value_direct_call_arguments_with_explicit_boundary",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "ordinary typed pointer values outside the raw direct-call passthrough subset require explicit ownership/lifetime/ABI lowering instead of being treated as slices or raw pointers"
+        },
+        {
+          "name": "typed_ir_rejects_mutable_array_decay_direct_call_argument_target",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "array-to-pointer decay call arguments only lower for readonly integer pointer targets; mutable pointer targets remain fail-closed"
         },
         {
           "name": "typed_ir_rejects_discarded_pointer_return_call_with_non_opaque_pointer_arg",

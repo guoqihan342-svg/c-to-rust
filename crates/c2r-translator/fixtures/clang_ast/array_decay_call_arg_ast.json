@@ -1,0 +1,109 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "observe_local_table",
+      "type": {
+        "qualType": "void (void)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "table",
+                  "type": {
+                    "qualType": "const int[3]"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "InitListExpr",
+                      "type": {
+                        "qualType": "const int[3]"
+                      },
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "2"
+                        },
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "3"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "CallExpr",
+              "type": {
+                "qualType": "void"
+              },
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": {
+                    "qualType": "void (*)(const int *)"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "void (const int *)"
+                      },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "observe"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "ArrayToPointerDecay",
+                  "type": {
+                    "qualType": "const int *"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "const int[3]"
+                      },
+                      "referencedDecl": {
+                        "kind": "VarDecl",
+                        "name": "table"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -18,10 +18,9 @@ fn bounded_call_arg_rejection_reason(
         | ClangExprSkeleton::LValueToRValue { expr: operand, .. } => {
             bounded_call_arg_rejection_reason(operand, false)
         }
-        ClangExprSkeleton::ArrayToPointerDecay { .. } => Some(
-            "call arguments cannot use array-to-pointer decay before explicit lowering evidence"
-                .to_string(),
-        ),
+        ClangExprSkeleton::ArrayToPointerDecay { target, expr } => {
+            clang_array_decay_direct_call_arg_rejection_reason(target, expr)
+        }
         ClangExprSkeleton::FunctionToPointerDecay { .. } => None,
         ClangExprSkeleton::Conditional { .. } => {
             Some("conditional call arguments are outside the bounded call subset".to_string())
@@ -90,6 +89,66 @@ fn bounded_call_arg_rejection_reason(
             Some(format!("unsupported argument expression {node}: {reason}"))
         }
     }
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_array_decay_direct_call_arg_rejection_reason(
+    target: &ClangTypeSkeleton,
+    expr: &ClangExprSkeleton,
+) -> Option<String> {
+    let target_element = match &target.kind {
+        ClangTypeKind::Pointer { pointee, .. }
+            if clang_type_is_const(pointee)
+                && matches!(&pointee.kind, ClangTypeKind::Integer { .. }) =>
+        {
+            pointee.as_ref()
+        }
+        _ => {
+            return Some(format!(
+                "array-to-pointer decay call argument target {} must be a readonly integer pointer",
+                target.spelled
+            ));
+        }
+    };
+    let ClangExprSkeleton::DeclRef { name, ty: array_ty } = expr else {
+        return Some(
+            "array-to-pointer decay call argument must be a direct fixed array variable"
+                .to_string(),
+        );
+    };
+    let ClangTypeKind::Array {
+        element,
+        len: Some(_),
+    } = &array_ty.kind
+    else {
+        return Some(format!(
+            "array-to-pointer decay call argument {name} has unsupported array type {}",
+            array_ty.spelled
+        ));
+    };
+    let (
+        ClangTypeKind::Integer {
+            signed: target_signed,
+            width: target_width,
+        },
+        ClangTypeKind::Integer {
+            signed: array_signed,
+            width: array_width,
+        },
+    ) = (&target_element.kind, &element.kind)
+    else {
+        return Some(format!(
+            "array-to-pointer decay call argument {name} has unsupported array element type {}",
+            element.spelled
+        ));
+    };
+    if target_signed != array_signed || target_width != array_width {
+        return Some(format!(
+            "array-to-pointer decay call argument element type {} does not match target element type {}",
+            element.spelled, target_element.spelled
+        ));
+    }
+    None
 }
 
 #[cfg(feature = "typed-ir")]
