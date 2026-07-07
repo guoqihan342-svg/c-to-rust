@@ -433,3 +433,83 @@ fn clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang() {
         "assert_eq!(promote_plus(-7i8), -7i32);",
     );
 }
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_integral_c_style_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/integral_c_style_cast_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let narrow = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "narrow",
+        Some(&target_abi),
+    )
+    .expect("lower clang-proven integral C-style cast fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = narrow.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integral C-style cast return to preserve an explicit IR cast, got {:?}",
+            narrow.function_ir.body
+        );
+    };
+    assert!(!implicit);
+    assert!(matches!(
+        target.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+    assert!(matches!(
+        expr.as_ref(),
+        IrExpr::Var {
+            name,
+            ty: IrType {
+                kind: IrTypeKind::Integer {
+                    signed: false,
+                    width: 64
+                },
+                ..
+            },
+            ..
+        } if name == "value"
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&narrow.function_ir, &narrow.globals)
+        .expect("emit Rust from clang-proven integral C-style cast fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn narrow(value: u64) -> u32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return (value as u32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-integral-c-style-cast",
+        rust,
+        "assert_eq!(narrow(0x1_0000_0001u64), 1u32);",
+    );
+}

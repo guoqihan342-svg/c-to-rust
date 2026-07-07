@@ -403,6 +403,7 @@
         "usual arithmetic conversion requires clang-proven IntegralCast/IntegralPromotion",
         "unary plus integer promotion preserves clang-proven IntegralPromotion",
         "compound assignment integer promotion and final truncation preserve clang compute/result type evidence",
+        "CStyleCastExpr IntegralCast explicit typed IR cast in return/value contexts",
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer value-context LValueToRValue explicit typed IR node",
         "non-integer NoOp transparent skeleton boundary",
@@ -436,6 +437,10 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/compound_assignment_promotion_ast.json"
             },
             {
+              "name": "integral C-style cast no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/integral_c_style_cast_ast.json"
+            },
+            {
               "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -453,6 +458,10 @@
             },
             {
               "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_integral_c_style_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -500,6 +509,10 @@
             {
               "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_integral_c_style_cast_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -539,6 +552,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_integral_c_style_cast_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
