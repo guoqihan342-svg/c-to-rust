@@ -1,3 +1,275 @@
+fn parse_fixture(input: &str) -> Result<Fixture> {
+    let name = field_value(input, "name").unwrap_or_else(|| "fixture".to_string());
+    let mut operations = Vec::new();
+    let mut accepted_differences = Vec::new();
+    let mut in_accepted = false;
+
+    for line in input.lines() {
+        let trimmed = line.trim().trim_end_matches(',');
+        if trimmed.contains("\"accepted_differences\"") {
+            in_accepted = true;
+            continue;
+        }
+        if in_accepted && trimmed.starts_with(']') {
+            in_accepted = false;
+            continue;
+        }
+        if !trimmed.starts_with('{') {
+            continue;
+        }
+        if trimmed.contains("\"op\"") {
+            let id = field_value(trimmed, "id")
+                .ok_or_else(|| Error::Parse("fixture operation missing id".to_string()))?;
+            let op = field_value(trimmed, "op")
+                .ok_or_else(|| Error::Parse(format!("fixture operation {id} missing op")))?;
+            let mut fields = BTreeMap::new();
+            for field in [
+                "key",
+                "value",
+                "timestamp",
+                "from",
+                "to",
+                "status",
+                "entry_id",
+            ] {
+                if let Some(value) = field_value(trimmed, field) {
+                    fields.insert(field.to_string(), value);
+                }
+            }
+            operations.push(Operation { id, op, fields });
+        } else if in_accepted {
+            accepted_differences.push(AcceptedDifference {
+                id: field_value(trimmed, "id").unwrap_or_else(|| "unknown".to_string()),
+                reason: field_value(trimmed, "reason").unwrap_or_default(),
+                fields: field_value(trimmed, "fields").unwrap_or_default(),
+            });
+        }
+    }
+
+    if operations.is_empty() {
+        return Err(Error::Parse("fixture has no operations".to_string()));
+    }
+    Ok(Fixture {
+        name,
+        operations,
+        accepted_differences,
+    })
+}
+
+fn field_value(input: &str, name: &str) -> Option<String> {
+    let pattern = format!("\"{name}\"");
+    let start = input.find(&pattern)? + pattern.len();
+    let after_name = &input[start..];
+    let colon = after_name.find(':')?;
+    let mut rest = after_name[colon + 1..].trim_start();
+    if rest.starts_with('"') {
+        rest = &rest[1..];
+        let end = rest.find('"')?;
+        Some(rest[..end].to_string())
+    } else {
+        let end = rest.find([',', '}', ']']).unwrap_or(rest.len());
+        Some(rest[..end].trim().to_string())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Mismatch {
+    byte_offset: usize,
+    step_id: String,
+    field_path: String,
+    expected: String,
+    actual: String,
+}
+
+#[derive(Debug, Clone)]
+struct ParsedStep {
+    id: String,
+    fields: BTreeMap<String, String>,
+}
+
+fn compare_reports(expected: &str, actual: &str) -> Result<Option<Mismatch>> {
+    let ignored = ignored_fields(expected, actual);
+    let expected_steps = parse_report_steps(expected)?;
+    let actual_steps = parse_report_steps(actual)?;
+    if expected_steps.len() != actual_steps.len() {
+        return Ok(Some(Mismatch {
+            byte_offset: 0,
+            step_id: "steps".to_string(),
+            field_path: "steps.len".to_string(),
+            expected: expected_steps.len().to_string(),
+            actual: actual_steps.len().to_string(),
+        }));
+    }
+
+    let actual_by_id: BTreeMap<&str, &ParsedStep> = actual_steps
+        .iter()
+        .map(|step| (step.id.as_str(), step))
+        .collect();
+    for expected_step in &expected_steps {
+        let Some(actual_step) = actual_by_id.get(expected_step.id.as_str()) else {
+            return Ok(Some(Mismatch {
+                byte_offset: 0,
+                step_id: expected_step.id.clone(),
+                field_path: "steps.id".to_string(),
+                expected: expected_step.id.clone(),
+                actual: "missing".to_string(),
+            }));
+        };
+
+        let mut fields: Vec<String> = expected_step
+            .fields
+            .keys()
+            .chain(actual_step.fields.keys())
+            .filter(|name| !ignored.contains(name))
+            .cloned()
+            .collect();
+        fields.sort();
+        fields.dedup();
+        for field in fields {
+            let expected_value = expected_step.fields.get(&field);
+            let actual_value = actual_step.fields.get(&field);
+            if expected_value != actual_value {
+                return Ok(Some(Mismatch {
+                    byte_offset: 0,
+                    step_id: expected_step.id.clone(),
+                    field_path: format!("steps.{}.{}", expected_step.id, field),
+                    expected: expected_value
+                        .cloned()
+                        .unwrap_or_else(|| "missing".to_string()),
+                    actual: actual_value
+                        .cloned()
+                        .unwrap_or_else(|| "missing".to_string()),
+                }));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn ignored_fields(left: &str, right: &str) -> Vec<String> {
+    let mut out = ACCEPTED_DIFF_FIELD_ALLOWLIST
+        .iter()
+        .map(|value| (*value).to_string())
+        .collect::<Vec<_>>();
+    collect_accepted_fields(left, &mut out);
+    collect_accepted_fields(right, &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
+const ACCEPTED_DIFF_FIELD_ALLOWLIST: &[&str] = &[
+    "image_hash",
+    "message",
+    "backend",
+    "toolchain_status",
+    "source",
+    "fixture",
+    "fixture_hash",
+    "report_path",
+];
+
+fn collect_accepted_fields(report: &str, out: &mut Vec<String>) {
+    let mut rest = report;
+    while let Some(index) = rest.find("\"fields\"") {
+        rest = &rest[index + "\"fields\"".len()..];
+        let Some(colon) = rest.find(':') else {
+            break;
+        };
+        let value = rest[colon + 1..].trim_start();
+        if !value.starts_with('"') {
+            continue;
+        }
+        let value = &value[1..];
+        let Some(end) = value.find('"') else {
+            break;
+        };
+        for field in value[..end].split(',') {
+            let field = field.trim();
+            if ACCEPTED_DIFF_FIELD_ALLOWLIST.contains(&field) {
+                out.push(field.to_string());
+            }
+        }
+        rest = &value[end + 1..];
+    }
+}
+
+fn parse_report_steps(report: &str) -> Result<Vec<ParsedStep>> {
+    let array = json_array(report, "steps")
+        .ok_or_else(|| Error::Parse("report missing steps array".to_string()))?;
+    let objects = top_level_objects(array)?;
+    let mut steps = Vec::new();
+    for object in objects {
+        let fields = top_level_fields(object)?;
+        let id = fields
+            .get("id")
+            .and_then(|value| unquote_json_string(value))
+            .ok_or_else(|| Error::Parse("step missing id".to_string()))?;
+        steps.push(ParsedStep { id, fields });
+    }
+    Ok(steps)
+}
+
+fn json_array<'a>(input: &'a str, name: &str) -> Option<&'a str> {
+    let marker = format!("\"{name}\"");
+    let start = input.find(&marker)? + marker.len();
+    let after_name = &input[start..];
+    let colon = after_name.find(':')?;
+    let after_colon = after_name[colon + 1..].trim_start();
+    if !after_colon.starts_with('[') {
+        return None;
+    }
+    let offset = input.len() - after_colon.len();
+    let end = matching_delimiter(input, offset, '[', ']')?;
+    Some(&input[offset + 1..end])
+}
+
+fn top_level_objects(input: &str) -> Result<Vec<&str>> {
+    let mut out = Vec::new();
+    let mut in_string = false;
+    let mut escape = false;
+    let mut depth = 0usize;
+    let mut start = None;
+    for (index, ch) in input.char_indices() {
+        if in_string {
+            if escape {
+                escape = false;
+            } else if ch == '\\' {
+                escape = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => in_string = true,
+            '{' => {
+                if depth == 0 {
+                    start = Some(index);
+                }
+                depth += 1;
+            }
+            '}' => {
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or_else(|| Error::Parse("unbalanced report object".to_string()))?;
+                if depth == 0 {
+                    let start = start
+                        .take()
+                        .ok_or_else(|| Error::Parse("missing object start".to_string()))?;
+                    out.push(&input[start..=index]);
+                }
+            }
+            _ => {}
+        }
+    }
+    if depth != 0 {
+        return Err(Error::Parse("unclosed report object".to_string()));
+    }
+    Ok(out)
+}
+
 fn top_level_fields(object: &str) -> Result<BTreeMap<String, String>> {
     let inner = object
         .strip_prefix('{')
@@ -201,248 +473,4 @@ fn l3_report_metadata_json(fixture_name: &str) -> String {
         json_escape(slice_id),
         FLASHDB_SOURCE_COMMIT
     )
-}
-
-fn diff_report_json(
-    rust_report: &Path,
-    oracle_report: &Path,
-    rust_hash: &str,
-    oracle_hash: &str,
-    passed: bool,
-    mismatch: Option<&Mismatch>,
-    toolchain_status: &str,
-) -> String {
-    let status = if passed { "passed" } else { "failed" };
-    let mismatch_json = mismatch
-        .map(mismatch_json)
-        .unwrap_or_else(|| "null".to_string());
-    format!(
-        concat!(
-            "{{",
-            "\"command\":\"diff\",",
-            "\"schema_version\":1,",
-            "\"status\":\"{}\",",
-            "\"rust_report\":\"{}\",",
-            "\"oracle_report\":\"{}\",",
-            "\"rust_report_hash\":\"{}\",",
-            "\"oracle_report_hash\":\"{}\",",
-            "\"toolchain_status\":\"{}\",",
-            "\"first_mismatch\":{}",
-            "}}"
-        ),
-        status,
-        json_escape(&rust_report.display().to_string()),
-        json_escape(&oracle_report.display().to_string()),
-        json_escape(rust_hash),
-        json_escape(oracle_hash),
-        json_escape(toolchain_status),
-        mismatch_json
-    )
-}
-
-fn steps_json(steps: &[StepReport]) -> String {
-    steps
-        .iter()
-        .map(|step| {
-            let fields = step
-                .fields
-                .iter()
-                .map(|(name, value)| format!("\"{}\":{}", json_escape(name), value))
-                .collect::<Vec<_>>()
-                .join(",");
-            if fields.is_empty() {
-                format!(
-                    "{{\"id\":\"{}\",\"op\":\"{}\",\"status\":\"{}\",\"code\":\"{}\"}}",
-                    json_escape(&step.id),
-                    json_escape(&step.op),
-                    json_escape(&step.status),
-                    json_escape(&step.code)
-                )
-            } else {
-                format!(
-                    "{{\"id\":\"{}\",\"op\":\"{}\",\"status\":\"{}\",\"code\":\"{}\",{}}}",
-                    json_escape(&step.id),
-                    json_escape(&step.op),
-                    json_escape(&step.status),
-                    json_escape(&step.code),
-                    fields
-                )
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn accepted_differences_json(values: &[AcceptedDifference]) -> String {
-    values
-        .iter()
-        .map(|value| {
-            format!(
-                "{{\"id\":\"{}\",\"reason\":\"{}\",\"fields\":\"{}\"}}",
-                json_escape(&value.id),
-                json_escape(&value.reason),
-                json_escape(&value.fields)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",")
-}
-
-fn mismatch_json(value: &Mismatch) -> String {
-    format!(
-        concat!(
-            "{{",
-            "\"byte_offset\":{},",
-            "\"step_id\":\"{}\",",
-            "\"field_path\":\"{}\",",
-            "\"expected\":\"{}\",",
-            "\"actual\":\"{}\"",
-            "}}"
-        ),
-        value.byte_offset,
-        json_escape(&value.step_id),
-        json_escape(&value.field_path),
-        json_escape(&value.expected),
-        json_escape(&value.actual)
-    )
-}
-
-fn kv_entries_json(entries: &[KvEntry]) -> String {
-    let body = entries
-        .iter()
-        .map(|entry| {
-            format!(
-                "{{\"key\":\"{}\",\"value\":\"{}\"}}",
-                json_escape(&entry.key),
-                json_escape(&String::from_utf8_lossy(&entry.value))
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("[{body}]")
-}
-
-fn ts_entries_json(entries: &[TsEntry]) -> String {
-    let body = entries
-        .iter()
-        .map(|entry| {
-            format!(
-                concat!(
-                    "{{",
-                    "\"entry_id\":{},",
-                    "\"timestamp\":{},",
-                    "\"status\":\"{}\",",
-                    "\"value\":\"{}\"",
-                    "}}"
-                ),
-                entry.id,
-                entry.timestamp,
-                json_escape(status_name(entry.status)),
-                json_escape(&String::from_utf8_lossy(&entry.payload))
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("[{body}]")
-}
-
-fn optional_bytes_json(value: Option<&[u8]>) -> String {
-    value
-        .map(|bytes| json_string(&String::from_utf8_lossy(bytes)))
-        .unwrap_or_else(|| "null".to_string())
-}
-
-fn json_string(value: &str) -> String {
-    format!("\"{}\"", json_escape(value))
-}
-
-fn json_escape(input: &str) -> String {
-    input
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\r', "\\r")
-        .replace('\n', "\\n")
-}
-
-fn parse_status(value: &str) -> Result<TsStatus> {
-    match value {
-        "written" | "Written" => Ok(TsStatus::Written),
-        "user1" | "UserStatus1" => Ok(TsStatus::UserStatus1),
-        "deleted" | "Deleted" => Ok(TsStatus::Deleted),
-        "user2" | "UserStatus2" => Ok(TsStatus::UserStatus2),
-        other => Err(Error::Parse(format!("unknown TS status {other}"))),
-    }
-}
-
-fn status_name(status: TsStatus) -> &'static str {
-    match status {
-        TsStatus::Written => "written",
-        TsStatus::UserStatus1 => "user1",
-        TsStatus::Deleted => "deleted",
-        TsStatus::UserStatus2 => "user2",
-    }
-}
-
-fn c_toolchain_status() -> &'static str {
-    if command_exists("gcc")
-        || command_exists("clang")
-        || command_exists("cl")
-        || command_exists("cc")
-    {
-        "C_TOOLCHAIN_AVAILABLE"
-    } else {
-        "SKIPPED_LOCAL_NO_C_TOOLCHAIN"
-    }
-}
-
-fn command_exists(command: &str) -> bool {
-    let Some(paths) = std::env::var_os("PATH") else {
-        return false;
-    };
-    for dir in std::env::split_paths(&paths) {
-        if dir.join(command).is_file() {
-            return true;
-        }
-        if cfg!(windows) {
-            for ext in ["exe", "cmd", "bat"] {
-                if dir.join(format!("{command}.{ext}")).is_file() {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-fn unique_run_id() -> String {
-    let sequence = NEXT_REPLAY_RUN_ID.fetch_add(1, Ordering::Relaxed);
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_nanos())
-        .unwrap_or(0);
-    format!("{}_{}_{}", std::process::id(), sequence, nanos)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fixture_parser_reads_operations_and_accepted_differences() {
-        let fixture = parse_fixture(
-            r#"{
-  "name": "unit",
-  "operations": [
-    {"id":"kv-001","op":"kv.set","key":"a","value":"b"}
-  ],
-  "accepted_differences": [
-    {"id":"layout","reason":"seed","fields":"image"}
-  ]
-}"#,
-        )
-        .unwrap();
-        assert_eq!(fixture.name, "unit");
-        assert_eq!(fixture.operations.len(), 1);
-        assert_eq!(fixture.accepted_differences[0].id, "layout");
-    }
 }

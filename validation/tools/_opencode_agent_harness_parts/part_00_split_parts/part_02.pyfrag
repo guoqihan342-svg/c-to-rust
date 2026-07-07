@@ -1,0 +1,26 @@
+        "units": units,
+    }
+    if require_source_commit:
+        plan["require_source_commit"] = require_source_commit
+    if source_repository:
+        plan["source_repository"] = source_repository
+    if source_branch:
+        plan["source_branch"] = source_branch
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(plan_path, plan)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="source-file-worker-plan",
+            path=plan_path,
+            status="planned",
+            semantic_role="worker-plan",
+            payload=plan,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
+        connection.commit()
+    return plan

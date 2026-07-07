@@ -1,0 +1,448 @@
+    def test_route_and_profile_bind_clang_lowered_typed_ir_candidate_evidence(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-calc-crc32",
+            "source_commit": "93d1755",
+            "function_name": "fdb_calc_crc32",
+            "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+            "fixture_contract": {
+                "scalar_input_domain": {
+                    "case_source": "unit-test",
+                    "parameters": [
+                        {
+                            "name": "size",
+                            "type": "size_t",
+                            "range": [0, 1024],
+                            "excludes": [],
+                        }
+                    ],
+                    "covers_overflow_boundaries": False,
+                },
+            },
+            "c_boundary": {
+                "scalar_arithmetic_contract": {
+                    "wrapping_profile": "not_declared",
+                    "signed_overflow": "runtime_precondition_no_overflow",
+                    "division_by_zero": "runtime_precondition_nonzero_divisor",
+                    "signed_division_overflow": "runtime_precondition_excludes_min_div_minus_one",
+                    "shift_count": "runtime_precondition_in_range",
+                    "signed_right_shift": "fail_closed_without_explicit_contract",
+                },
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-real-fdb-calc-crc32"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps(
+                    {
+                        "status": "recorded",
+                        "pointer_nodes": [
+                            {
+                                "id": "buf",
+                                "ownership_role": "borrowed_input",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [
+                                {
+                                    "name": "crc32_table",
+                                    "array_len": 256,
+                                    "init_kind": "integer_array",
+                                    "value_count": 256,
+                                }
+                            ],
+                            "runtime_preconditions": [
+                                {
+                                    "code": "shift_count_in_range",
+                                    "detail": "shift count must stay within the lhs integer width",
+                                    "ir_node": "IrExpr::Binary.Shl",
+                                    "source_span": None,
+                                }
+                            ],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            c2rust_baseline = {"status": "generated", "correctness_role": "candidate_context_only"}
+            route = module.emit_route_decision(spec, evidence_dir, {"status": "generated"}, c2rust_baseline)
+            profile = module.emit_validation_profile(
+                spec,
+                evidence_dir,
+                route,
+                {"status": "DRAFT_GENERATED"},
+                {"status": "passed"},
+            )
+
+            typed_ir = route["candidate_generation"]["typed_ir"]
+            self.assertEqual(route["source_commit"], "93d1755")
+            self.assertEqual(profile["source_commit"], "93d1755")
+            self.assertEqual(route["source_identity"]["source_commit"], "93d1755")
+            self.assertEqual(profile["source_identity"], route["source_identity"])
+            self.assertEqual(typed_ir["status"], "generated")
+            self.assertEqual(
+                Path(route["source_artifacts"]["clang_lowering_report"]["path"]).name,
+                f"{prefix}-clang-lowering-report.json",
+            )
+            self.assertEqual(Path(typed_ir["source_artifact"]["path"]).name, f"{prefix}-clang-lowering-report.json")
+            self.assertEqual(typed_ir["source_artifact"]["status"], "lowered")
+            self.assertIn("sha256", typed_ir["source_artifact"])
+            self.assertEqual(typed_ir["candidate_route"]["route"], "GenericTypedIr")
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["verification_profile"], "L1-dev")
+            self.assertEqual(typed_ir["readonly_globals_identity"]["count"], 1)
+            self.assertEqual(typed_ir["readonly_globals_identity"]["names"], ["crc32_table"])
+            self.assertEqual(typed_ir["readonly_globals"][0]["name"], "crc32_table")
+            self.assertEqual(typed_ir["readonly_globals"][0]["array_len"], 256)
+            self.assertEqual(
+                typed_ir["runtime_preconditions"][0]["code"],
+                "shift_count_in_range",
+            )
+            self.assertEqual(typed_ir["scalar_admission"]["status"], "covered")
+            self.assertEqual(typed_ir["scalar_admission"]["precondition_count"], 1)
+            self.assertEqual(
+                typed_ir["scalar_admission"]["covered"][0]["code"],
+                "shift_count_in_range",
+            )
+            self.assertIn(
+                "fixture_contract.scalar_input_domain",
+                typed_ir["scalar_admission"]["covered"][0]["covered_by"],
+            )
+            self.assertTrue(typed_ir["rust_draft_generated"])
+            self.assertFalse(typed_ir["semantic_pass"])
+            self.assertEqual(profile["candidate_generation"]["typed_ir"]["candidate_route"]["route"], "GenericTypedIr")
+            self.assertEqual(
+                profile["candidate_generation"]["typed_ir"]["runtime_preconditions"],
+                typed_ir["runtime_preconditions"],
+            )
+            self.assertEqual(
+                profile["candidate_generation"]["typed_ir"]["scalar_admission"],
+                typed_ir["scalar_admission"],
+            )
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+
+    def test_generated_zero_token_scalar_typed_ir_candidate_routes_l0(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-route-signal",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-route-signal"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+            profile = module.emit_validation_profile(
+                spec,
+                evidence_dir,
+                route,
+                {"status": "DRAFT_GENERATED"},
+                {"status": "passed"},
+            )
+
+            self.assertEqual(route["level"], "L0")
+            self.assertEqual(route["verification_profile"], "L0-dev")
+            self.assertEqual(profile["route_level"], "L0")
+            self.assertNotIn("unsafe_ledger", profile["required_gates"])
+            self.assertNotIn("rust_tests", profile["required_gates"])
+            self.assertIn(
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+                route["rationale"],
+            )
+            self.assertFalse(route["candidate_generation"]["typed_ir"]["semantic_pass"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+
+    def test_unresolved_scalar_admission_prevents_zero_token_l0_route(self) -> None:
+        module = load_auto_migrate_module()
+        candidate_generation = {
+            "typed_ir": {
+                "status": "generated",
+                "candidate_route": {
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                },
+                "rust_draft_generated": True,
+                "scalar_admission": {
+                    "status": "unresolved",
+                    "precondition_count": 1,
+                    "covered": [],
+                    "unresolved": [
+                        {
+                            "code": "signed_add_no_overflow",
+                            "status": "unresolved",
+                            "missing": ["c_boundary.scalar_arithmetic_contract.signed_overflow"],
+                        }
+                    ],
+                },
+            }
+        }
+
+        level, rationale = module.route_level(
+            {"slice_id": "scalar-admission-route"},
+            {"status": "generated"},
+            {"status": "recorded"},
+            {"status": "recorded"},
+            {"pointer_nodes": []},
+            {"status": "draft_generated"},
+            candidate_generation,
+        )
+
+        self.assertEqual(level, "L1")
+        self.assertEqual(rationale[0]["feature"], "typed_ir_scalar_admission_unresolved")
+        self.assertEqual(rationale[0]["unresolved_count"], 1)
+
+    def test_uncovered_scalar_runtime_preconditions_from_clang_report_stay_l1(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "uncovered-scalar-admission",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-uncovered-scalar-admission"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 0,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "runtime_preconditions": [
+                                {
+                                    "code": "signed_add_no_overflow",
+                                    "detail": "signed addition must not overflow",
+                                    "ir_node": "IrExpr::Binary.Add",
+                                    "source_span": None,
+                                }
+                            ],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+            profile = module.emit_validation_profile(
+                spec,
+                evidence_dir,
+                route,
+                {"status": "DRAFT_GENERATED"},
+                {"status": "passed"},
+            )
+
+            typed_ir = route["candidate_generation"]["typed_ir"]
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["verification_profile"], "L1-dev")
+            self.assertEqual(profile["route_level"], "L1")
+            self.assertEqual(typed_ir["scalar_admission"]["status"], "unresolved")
+            self.assertEqual(
+                typed_ir["scalar_admission"]["unresolved"][0]["missing"],
+                [
+                    "c_boundary.scalar_arithmetic_contract.signed_overflow",
+                    "fixture_contract.scalar_input_domain",
+                ],
+            )
+            self.assertEqual(route["rationale"][0]["feature"], "typed_ir_scalar_admission_unresolved")
+            self.assertEqual(route["rationale"][0]["unresolved_count"], 1)
+
+    def test_scalar_admission_requires_matching_contract_and_input_domain(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "c_boundary": {
+                "scalar_arithmetic_contract": {
+                    "signed_overflow": "runtime_precondition_no_overflow",
+                    "division_by_zero": "runtime_precondition_nonzero_divisor",
+                    "signed_division_overflow": "runtime_precondition_excludes_min_div_minus_one",
+                    "shift_count": "runtime_precondition_in_range",
+                    "signed_right_shift": "explicit_implementation_defined_contract",
+                }
+            },
+            "fixture_contract": {
+                "scalar_input_domain": {
+                    "case_source": "unit-test",
+                    "parameters": [{"name": "value", "type": "int", "range": [-100, 100]}],
+                    "covers_overflow_boundaries": False,
+                }
+            },
+        }
+        preconditions = [
+            {"code": "signed_add_no_overflow"},
+            {"code": "signed_sub_no_overflow"},
+            {"code": "signed_mul_no_overflow"},
+            {"code": "division_divisor_nonzero"},
+            {"code": "modulo_divisor_nonzero"},
+            {"code": "signed_division_no_overflow"},
+            {"code": "signed_modulo_no_overflow"},
+            {"code": "shift_count_in_range"},
+            {"code": "signed_right_shift_implementation_defined"},
+        ]
+
+        covered = module.scalar_admission_from_runtime_preconditions(spec, preconditions)
+        self.assertEqual(covered["status"], "covered")
+        self.assertEqual(len(covered["covered"]), len(preconditions))
+        self.assertEqual(covered["unresolved"], [])
+
+        no_input_domain = json.loads(json.dumps(spec))
+        no_input_domain["fixture_contract"]["scalar_input_domain"]["parameters"] = []
+        missing_domain = module.scalar_admission_from_runtime_preconditions(
+            no_input_domain,
+            [{"code": "shift_count_in_range"}],
+        )
+        self.assertEqual(missing_domain["status"], "unresolved")
+        self.assertEqual(missing_domain["unresolved"][0]["missing"], ["fixture_contract.scalar_input_domain"])
+
+        wrong_contract = json.loads(json.dumps(spec))
+        wrong_contract["c_boundary"]["scalar_arithmetic_contract"]["shift_count"] = "not_declared"
+        wrong_shift = module.scalar_admission_from_runtime_preconditions(
+            wrong_contract,
+            [{"code": "shift_count_in_range"}],
+        )
+        self.assertEqual(wrong_shift["status"], "unresolved")
+        self.assertEqual(
+            wrong_shift["unresolved"][0]["missing"],
+            ["c_boundary.scalar_arithmetic_contract.shift_count"],
+        )
+
+        wrong_signed_shift = json.loads(json.dumps(spec))
+        wrong_signed_shift["c_boundary"]["scalar_arithmetic_contract"][
+            "signed_right_shift"
+        ] = "fail_closed_without_explicit_contract"
+        signed_shift = module.scalar_admission_from_runtime_preconditions(
+            wrong_signed_shift,
+            [{"code": "signed_right_shift_implementation_defined"}],
+        )
+        self.assertEqual(signed_shift["status"], "unresolved")
+        self.assertEqual(
+            signed_shift["unresolved"][0]["missing"],
+            ["c_boundary.scalar_arithmetic_contract.signed_right_shift"],
+        )
+
+        mixed = module.scalar_admission_from_runtime_preconditions(
+            spec,
+            [{"code": "signed_add_no_overflow"}, {"code": "unknown_scalar_precondition"}],
+        )
+        self.assertEqual(mixed["status"], "unresolved")
+        self.assertEqual(mixed["covered"][0]["code"], "signed_add_no_overflow")
+        self.assertEqual(
+            mixed["unresolved"][0]["missing"],
+            ["c_boundary.scalar_arithmetic_contract.unknown"],
+        )

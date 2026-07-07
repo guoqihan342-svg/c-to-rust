@@ -1,0 +1,139 @@
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def passing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[{"status": "passed"}, {"status": "skipped"}],
+        ):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=passing_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"]["status"], "skipped")
+
+    def test_unknown_entrypoint_id_fails_closed(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        with self.assertRaisesRegex(SystemExit, "unknown judge entrypoint id"):
+            runner.select_entrypoints(
+                {"entrypoints": [{"id": "known", "command": "python3 -B -m known"}]},
+                ["missing"],
+            )
+
+    def test_run_unknown_entrypoint_id_fails_closed_before_command(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-unknown-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "known",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("unknown entrypoint must not execute commands")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=["missing"],
+                out_path=out_path,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["entrypoint_count"], 0)
+        self.assertEqual(report["validation"]["reason"], "entrypoint_selection_failed")
+        self.assertTrue(out_path.is_file())
+
+    def test_artifact_ref_marks_missing_without_hashing(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        ref = runner.artifact_ref(REPO_ROOT / "target" / "missing-judge-entrypoint-artifact.json", repo_root=REPO_ROOT)
+        self.assertEqual(ref["status"], "missing")
+        self.assertNotIn("sha256", ref)
+
+    def test_candidate_config_files_excludes_unmanifested_siblings(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-config-archive-allowlist-", dir=REPO_ROOT / "target"))
+        config_root = temp_dir / "config" / "competition-env"
+        config_root.mkdir(parents=True)
+        expected_manifest = config_root / "bundle-manifest.json"
+        expected_environment = config_root / "environment.json"
+        unexpected_scratch = config_root / "scratch.tmp"
+        expected_manifest.write_text("{}\n", encoding="utf-8")
+        expected_environment.write_text("{}\n", encoding="utf-8")
+        unexpected_scratch.write_text("diagnostic only\n", encoding="utf-8")
+
+        candidates = {path.relative_to(config_root).as_posix() for path in runner.candidate_config_files(config_root)}
+
+        self.assertIn("bundle-manifest.json", candidates)
+        self.assertIn("environment.json", candidates)
+        self.assertNotIn("scratch.tmp", candidates)
+
+    def test_materialized_competition_config_archive_requires_summary_output(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-archive-fixed-path-", dir=REPO_ROOT / "target"))
+        out_path = temp_dir / "judge-entrypoints-run-report.json"
+
+        with self.assertRaises(ValueError) as raised:
+            runner.materialize_competition_config_archive(
+                {"report_kind": "competition-config-archive"},
+                out_path=out_path,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertIn("summary/competition-config-archive/manifest.json", str(raised.exception))
+        self.assertFalse((temp_dir / "competition-config-archive").exists())
+
+    def test_core_validation_ci_runs_judge_entrypoint_runner_tests(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
+        self.assertIn("validation.tools.test_run_judge_entrypoints", workflow)
+        self.assertIn("validation.tools.run_judge_entrypoints --dry-run", workflow)
+        self.assertIn("git clone -c core.autocrlf=false --no-local", workflow)
+        self.assertIn("target/repro-clone-lf-ci", workflow)
+        self.assertIn(
+            "validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json",
+            workflow,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

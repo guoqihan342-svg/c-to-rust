@@ -1,3 +1,303 @@
+    }
+
+
+def assert_payload_has_no_local_absolute_path(payload: Any, *, label: str) -> None:
+    forbidden: list[str] = []
+
+    def visit(value: Any, parts: tuple[str, ...]) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                visit(child, (*parts, str(key)))
+            return
+        if isinstance(value, list):
+            for index, child in enumerate(value):
+                visit(child, (*parts, str(index)))
+            return
+        if isinstance(value, str) and LOCAL_ABSOLUTE_PATH.search(value):
+            forbidden.append(json_path(parts))
+
+    visit(payload, ())
+    if forbidden:
+        raise ValueError(f"{label} contains forbidden local absolute path at {forbidden}")
+
+
+def validate_ref(ref: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    path_text = ref.get("path")
+    expected_sha = ref.get("sha256")
+    if not isinstance(path_text, str) or not isinstance(expected_sha, str):
+        raise ValueError("artifact ref must include path and sha256 strings")
+    path = repo_path(path_text, repo_root=repo_root)
+    if not path.is_file():
+        raise ValueError(f"artifact ref path does not exist: {path_text}")
+    actual_sha = sha256_file(path)
+    if expected_sha != actual_sha:
+        raise ValueError(f"artifact ref sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}")
+    return {"path": path_text, "sha256": actual_sha, "status": "present"}
+
+
+def shell_double_quoted_constant(script_text: str, name: str) -> str:
+    match = re.search(rf'(?m)^{re.escape(name)}="([^"]*)"$', script_text)
+    if not match:
+        raise ValueError(f"bootstrap_flashdb_sources.sh {name} must be declared")
+    return match.group(1)
+
+
+def validate_flashdb_bootstrap_source_pin(script_path: Path, source_pin: dict[str, Any]) -> None:
+    script_text = script_path.read_text(encoding="utf-8")
+    expected_values = {
+        "FLASHDB_REPOSITORY": require_string(source_pin.get("repository"), "environment.source_pins.flashdb.repository"),
+        "FLASHDB_BRANCH": require_string(source_pin.get("branch"), "environment.source_pins.flashdb.branch"),
+        "FLASHDB_COMMIT": require_string(source_pin.get("commit"), "environment.source_pins.flashdb.commit"),
+    }
+    for constant, expected in expected_values.items():
+        actual = shell_double_quoted_constant(script_text, constant)
+        if actual != expected:
+            raise ValueError(f"bootstrap_flashdb_sources.sh {constant} must match environment.source_pins.flashdb")
+
+
+def markdown_section(text: str, heading: str) -> str:
+    pattern = re.compile(rf"(?ms)^##\s+{re.escape(heading)}\s*\n(?P<body>.*?)(?=^##\s+|\Z)")
+    match = pattern.search(text)
+    if not match:
+        raise ValueError(f"OpenCode agent runbook must include {heading}")
+    return match.group("body")
+
+
+def validate_opencode_agent_runbook_contract(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    required_preflight = markdown_section(text, "Required Preflight")
+    lower_required_preflight = required_preflight.lower()
+    if "opencode-preflight" not in required_preflight:
+        raise ValueError("OpenCode agent runbook Required Preflight must include opencode-preflight")
+    for required in (
+        f"--opencode-model {COMPETITION_OPENCODE_MODEL}",
+        f"--opencode-agent {COMPETITION_OPENCODE_AGENT}",
+        f"--opencode-variant {COMPETITION_OPENCODE_VARIANT}",
+    ):
+        if required not in required_preflight:
+            raise ValueError(f"OpenCode agent runbook Required Preflight must include {required}")
+    if "openspec" in lower_required_preflight or "superpowers" in lower_required_preflight:
+        raise ValueError(
+            "OpenCode agent runbook Required Preflight must not depend on OpenSpec or superpowers"
+        )
+    optional_governance = markdown_section(text, "Optional Governance Checks")
+    lower_optional_governance = optional_governance.lower()
+    if (
+        "openspec" not in lower_optional_governance
+        or "not" not in lower_optional_governance
+        or "competition preflight" not in lower_optional_governance
+    ):
+        raise ValueError(
+            "OpenCode agent runbook Optional Governance Checks must mark OpenSpec as non-gating"
+        )
+
+
+def validate_opencode_glm_host_acceptance_contract(
+    payload: dict[str, Any],
+    *,
+    label: str = "opencode-glm-host-acceptance",
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object")
+    if payload.get("schema_version") != 1:
+        raise ValueError(f"{label} schema_version must be 1")
+    if payload.get("report_kind") != "opencode-glm-host-acceptance":
+        raise ValueError(f"{label} report_kind must be opencode-glm-host-acceptance")
+    if payload.get("status") != "blocked":
+        raise ValueError(f"{label} status must be blocked until real competition host evidence exists")
+    if payload.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
+        raise ValueError(f"{label} required_agent_tool must be {COMPETITION_OPENCODE_COMMAND}")
+    if payload.get("required_agent") != COMPETITION_OPENCODE_AGENT:
+        raise ValueError(f"{label} required_agent must be {COMPETITION_OPENCODE_AGENT}")
+    if payload.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise ValueError(f"{label} required_model must be {COMPETITION_OPENCODE_MODEL}")
+    if payload.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
+        raise ValueError(f"{label} required_variant must be {COMPETITION_OPENCODE_VARIANT}")
+    if payload.get("required_proof_class") != "competition-exact":
+        raise ValueError(f"{label} required_proof_class must be competition-exact")
+    if payload.get("local_simulation_closes_p0_h9") is not False:
+        raise ValueError(f"{label} local_simulation_closes_p0_h9 must be false")
+    if payload.get("missing_model_root_cause_key") != "opencode_model_unavailable":
+        raise ValueError(f"{label} missing_model_root_cause_key must be opencode_model_unavailable")
+
+    required_evidence = require_object(payload.get("required_evidence"), f"{label}.required_evidence")
+    for field in (
+        "host_attestation",
+        "opencode_model_probe",
+        "opencode_preflight_report",
+        "opencode_session_evidence",
+        "public_packet_competition_host_readiness",
+    ):
+        if required_evidence.get(field) is not True:
+            raise ValueError(f"{label}.required_evidence.{field} must be true")
+
+    acceptance_boundary = require_object(payload.get("acceptance_boundary"), f"{label}.acceptance_boundary")
+    for field in ("fresh_lf_clone_required", "all_entrypoints_required", "require_local_artifacts"):
+        if acceptance_boundary.get(field) is not True:
+            raise ValueError(f"{label}.acceptance_boundary.{field} must be true")
+    if acceptance_boundary.get("chat_output_is_evidence") is not False:
+        raise ValueError(f"{label}.acceptance_boundary.chat_output_is_evidence must be false")
+
+    claim_boundary = require_object(payload.get("claim_boundary"), f"{label}.claim_boundary")
+    if claim_boundary.get("semantic_gate") is not False:
+        raise ValueError(f"{label}.claim_boundary.semantic_gate must be false")
+    if claim_boundary.get("generated_draft_semantic_pass") is not False:
+        raise ValueError(f"{label}.claim_boundary.generated_draft_semantic_pass must be false")
+    if claim_boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError(f"{label}.claim_boundary.translation_coverage_numerator must be 0")
+    if claim_boundary.get("chat_output_is_evidence") is not False:
+        raise ValueError(f"{label}.claim_boundary.chat_output_is_evidence must be false")
+
+    return {
+        "status": "passed",
+        "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_agent": COMPETITION_OPENCODE_AGENT,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "required_variant": COMPETITION_OPENCODE_VARIANT,
+        "required_proof_class": "competition-exact",
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "local_simulation_closes_p0_h9": False,
+    }
+
+
+def validate_competition_env_bundle_contract(
+    config: dict[str, Any],
+    *,
+    repo_root: Path,
+    manifest_path: Path | None = None,
+) -> dict[str, Any]:
+    manifest_path = manifest_path or COMPETITION_ENV_BUNDLE_MANIFEST
+    manifest_path = manifest_path if manifest_path.is_absolute() else repo_root / manifest_path
+    if not manifest_path.is_file():
+        raise ValueError("competition env bundle manifest is missing")
+    manifest = load_json(manifest_path)
+    if manifest.get("schema_version") != 1:
+        raise ValueError("competition env bundle schema_version must be 1")
+    if manifest.get("report_kind") != "competition-env-bundle":
+        raise ValueError("competition env bundle report_kind must be competition-env-bundle")
+    if manifest.get("bundle_root") != COMPETITION_ENV_ROOT:
+        raise ValueError(f"competition env bundle bundle_root must be {COMPETITION_ENV_ROOT}")
+    boundary = require_object(manifest.get("claim_boundary"), "competition env bundle claim_boundary")
+    if boundary.get("semantic_gate") is not False:
+        raise ValueError("competition env bundle claim_boundary.semantic_gate must be false")
+    if boundary.get("archive_is_semantic_gate") is not False:
+        raise ValueError("competition env bundle claim_boundary.archive_is_semantic_gate must be false")
+
+    environment_profile = require_object(config.get("environment_profile"), "environment_profile")
+    canonical_profile = require_object(
+        manifest.get("canonical_environment_profile"),
+        "competition env bundle canonical_environment_profile",
+    )
+    for field in ("path", "profile_id", "sha256"):
+        if canonical_profile.get(field) != environment_profile.get(field):
+            raise ValueError(f"competition env bundle canonical_environment_profile.{field} must match environment_profile")
+    environment_payload = load_json(repo_path(require_string(environment_profile.get("path"), "environment_profile.path"), repo_root=repo_root))
+    flashdb_source_pin = require_object(
+        require_object(environment_payload.get("source_pins"), "environment.source_pins").get("flashdb"),
+        "environment.source_pins.flashdb",
+    )
+
+    files = manifest.get("files")
+    if not isinstance(files, list) or not files:
+        raise ValueError("competition env bundle files must be a non-empty list")
+    result_files: dict[str, dict[str, Any]] = {}
+    roles: dict[str, str] = {}
+    for file_entry in files:
+        entry = require_object(file_entry, "competition env bundle files[]")
+        path_text = require_string(entry.get("path"), "competition env bundle files[].path")
+        role = require_string(entry.get("role"), f"competition env bundle {path_text}.role")
+        expected_sha = require_string(entry.get("sha256"), f"competition env bundle {path_text}.sha256")
+        assert_repo_relative_posix(path_text)
+        if not path_text.startswith(f"{COMPETITION_ENV_ROOT}/"):
+            raise ValueError(f"competition env bundle file must stay under {COMPETITION_ENV_ROOT}: {path_text}")
+        if path_text in result_files:
+            raise ValueError(f"competition env bundle duplicate file: {path_text}")
+        expected_role = COMPETITION_ENV_BUNDLE_FILE_ROLES.get(path_text)
+        if expected_role is None:
+            raise ValueError(f"competition env bundle unexpected file: {path_text}")
+        if role != expected_role:
+            raise ValueError(f"competition env bundle file role mismatch for {path_text}: {role} != {expected_role}")
+        path = repo_path(path_text, repo_root=repo_root)
+        if not path.is_file():
+            raise ValueError(f"competition env bundle file is missing: {path_text}")
+        actual_sha = sha256_file(path)
+        if expected_sha != actual_sha:
+            raise ValueError(f"competition env bundle file sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}")
+        result_files[path_text] = {
+            "path": path_text,
+            "role": role,
+            "sha256": actual_sha,
+            "status": "present",
+        }
+        roles[path_text] = role
+        if path_text == OPENCODE_GLM_HOST_ACCEPTANCE_PATH:
+            validate_opencode_glm_host_acceptance_contract(load_json(path))
+
+    required_paths = set(COMPETITION_ENV_BUNDLE_FILE_ROLES)
+    missing_required = sorted(required_paths - set(result_files))
+    if missing_required:
+        raise ValueError(f"competition env bundle missing required files: {missing_required}")
+    bundle_root = repo_path(COMPETITION_ENV_ROOT, repo_root=repo_root)
+    actual_config_files = {
+        repo_relative(path, repo_root)
+        for path in bundle_root.rglob("*")
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and repo_relative(path, repo_root) != COMPETITION_ENV_BUNDLE_MANIFEST.as_posix()
+    }
+    omitted_config_files = sorted(actual_config_files - set(result_files))
+    if omitted_config_files:
+        raise ValueError(f"competition env bundle manifest missing in-folder files: {omitted_config_files}")
+
+    external_refs = manifest.get("external_refs")
+    if not isinstance(external_refs, list) or not external_refs:
+        raise ValueError("competition env bundle external_refs must be a non-empty list")
+    result_external_refs: dict[str, dict[str, Any]] = {}
+    external_roles: dict[str, str] = {}
+    for ref_entry in external_refs:
+        entry = require_object(ref_entry, "competition env bundle external_refs[]")
+        path_text = require_string(entry.get("path"), "competition env bundle external_refs[].path")
+        role = require_string(entry.get("role"), f"competition env bundle external_ref {path_text}.role")
+        expected_sha = require_string(entry.get("sha256"), f"competition env bundle external_ref {path_text}.sha256")
+        assert_repo_relative_posix(path_text)
+        if path_text.startswith(f"{COMPETITION_ENV_ROOT}/"):
+            raise ValueError(f"competition env bundle external_ref must stay outside {COMPETITION_ENV_ROOT}: {path_text}")
+        if path_text in result_external_refs:
+            raise ValueError(f"competition env bundle duplicate external_ref: {path_text}")
+        expected_role = COMPETITION_ENV_EXTERNAL_REF_ROLES.get(path_text)
+        if expected_role is None:
+            raise ValueError(f"competition env bundle unexpected external_ref: {path_text}")
+        if role != expected_role:
+            raise ValueError(f"competition env bundle external_ref role mismatch for {path_text}: {role} != {expected_role}")
+        path = repo_path(path_text, repo_root=repo_root)
+        if not path.is_file():
+            raise ValueError(f"competition env bundle external_ref is missing: {path_text}")
+        actual_sha = sha256_file(path)
+        if expected_sha != actual_sha:
+            raise ValueError(
+                f"competition env bundle external_ref sha256 mismatch for {path_text}: {expected_sha} != {actual_sha}"
+            )
+        result_external_refs[path_text] = {
+            "path": path_text,
+            "role": role,
+            "sha256": actual_sha,
+            "status": "present",
+        }
+        external_roles[path_text] = role
+        if path_text == "opencode.json":
+            opencode_config = load_json(path)
+            if opencode_config.get("plugin") != []:
+                raise ValueError("opencode.json plugin must be empty for competition profile")
+        if path_text == ".opencode/agents/c2rust-migrator.md":
+            validate_opencode_agent_runbook_contract(path)
+        if path_text == "scripts/bootstrap_flashdb_sources.sh":
+            validate_flashdb_bootstrap_source_pin(path, flashdb_source_pin)
+    missing_external_refs = sorted(set(COMPETITION_ENV_EXTERNAL_REF_ROLES) - set(result_external_refs))
+    if missing_external_refs:
+        raise ValueError(f"competition env bundle external_refs missing required refs: {missing_external_refs}")
+
+    return {
         "status": "passed",
         "report_kind": "competition-env-bundle",
         "manifest": {
@@ -198,35 +498,3 @@ def validate_competition_smoke_entrypoint_contract(entry: dict[str, Any]) -> dic
     expected_prefix = [PORTABLE_PYTHON_COMMAND, "-B", "validation/tools/run_competition_smoke.py"]
     if argv[: len(expected_prefix)] != expected_prefix:
         raise ValueError(
-            f"{entry_id} command must execute validation/tools/run_competition_smoke.py as argv[2]"
-        )
-    flags = parsed_command_flags(command)
-    proof_class = require_command_flag(flags, "--proof-class", f"{entry_id}.command")
-    run_id = require_command_flag(flags, "--run-id", f"{entry_id}.command")
-    out_root = require_command_flag(flags, "--out-root", f"{entry_id}.command")
-    if proof_class != entry.get("proof_class"):
-        raise ValueError(f"{entry_id} command --proof-class must match entrypoint proof_class")
-    if run_id != entry.get("run_id"):
-        raise ValueError(f"{entry_id} command --run-id must match entrypoint run_id")
-    if proof_class == "competition-exact" and "--confirm-competition-exact" not in argv:
-        raise ValueError(f"{entry_id} competition-exact smoke requires --confirm-competition-exact")
-    contract = require_object(entry.get("smoke_contract"), f"{entry_id}.smoke_contract")
-    if contract.get("semantic_gate") is not False:
-        raise ValueError(f"{entry_id}.smoke_contract.semantic_gate must be false")
-    if contract.get("generated_draft_semantic_pass") is not False:
-        raise ValueError(f"{entry_id}.smoke_contract.generated_draft_semantic_pass must be false")
-    if contract.get("translation_coverage_numerator") != 0:
-        raise ValueError(f"{entry_id}.smoke_contract.translation_coverage_numerator must be 0")
-    if contract.get("semantic_acceptance_boundary") != "does_not_translate_new_slices":
-        raise ValueError(f"{entry_id}.smoke_contract.semantic_acceptance_boundary must be does_not_translate_new_slices")
-    expected_artifact_paths = validate_expected_artifacts_under_out_root(entry, out_root=out_root)
-    return {
-        "status": "passed",
-        "proof_class": proof_class,
-        "run_id": run_id,
-        "reproduction_out_root": out_root,
-        "expected_artifact_count": len(expected_artifact_paths),
-        "semantic_gate": False,
-        "generated_draft_semantic_pass": False,
-        "translation_coverage_numerator": 0,
-    }

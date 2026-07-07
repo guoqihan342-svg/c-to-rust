@@ -1,5 +1,228 @@
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_index_target() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let int_array_ty = ClangTypeSkeleton {
+        spelled: "int[4]".to_string(),
+        canonical: "int[4]".to_string(),
+        kind: ClangTypeKind::Array {
+            element: Box::new(int_ty.clone()),
+            len: Some(4),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_index_target".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "values".to_string(),
+            ty: int_array_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Index {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "values".to_string(),
+                    ty: int_array_ty,
+                }),
+                index: Box::new(ClangExprSkeleton::IntegerLiteral {
+                    value: 0,
+                    spelling: "0".to_string(),
+                    ty: int_ty.clone(),
+                }),
+                ty: int_ty.clone(),
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject index target");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error
+        .message
+        .contains("simple variable or by-value record field"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_maps_mutable_record_pointer_field_compound_assignment() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let point_ty = ClangTypeSkeleton {
+        spelled: "struct point".to_string(),
+        canonical: "struct point".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "point".to_string(),
+        },
+    };
+    let point_ptr_ty = ClangTypeSkeleton {
+        spelled: "struct point *".to_string(),
+        canonical: "struct point *".to_string(),
+        kind: ClangTypeKind::Pointer {
+            pointee: Box::new(point_ty.clone()),
+            width: None,
+        },
+    };
+    let void_ty = ClangTypeSkeleton {
+        spelled: "void".to_string(),
+        canonical: "void".to_string(),
+        kind: ClangTypeKind::Void,
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "add_point_x".to_string(),
+        return_type: void_ty,
+        params: vec![
+            ClangParamSkeleton {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+            },
+            ClangParamSkeleton {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+        ],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::DeclRef {
+                    name: "p".to_string(),
+                    ty: point_ptr_ty,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: true,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::DeclRef {
+                name: "value".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let ir = lower_function_skeleton(&skeleton)
+        .expect("lower mutable record pointer field compound assignment");
+
+    let [IrStmt::Assign { target, value, .. }] = ir.body.as_slice() else {
+        panic!(
+            "expected mutable arrow field compound assignment, got {:?}",
+            ir.body
+        );
+    };
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member target, got {target:?}"
+    );
+    let IrExpr::Binary { op, lhs, rhs, .. } = value else {
+        panic!("expected binary compound value, got {value:?}");
+    };
+    assert_eq!(op, &IrBinOp::Add);
+    assert!(
+        matches!(lhs.as_ref(), IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member lhs, got {lhs:?}"
+    );
+    assert!(matches!(rhs.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+
+    let rust = emit_rust_from_ir(&ir)
+        .expect("emit mutable record pointer field compound assignment skeleton");
+    assert!(rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"));
+    assert!(rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"));
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-mutable-record-pointer-field-compound",
+        &rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_lowering_skeleton_rejects_record_field_compound_assignment_nested_base() {
+    let int_ty = ClangTypeSkeleton {
+        spelled: "int".to_string(),
+        canonical: "int".to_string(),
+        kind: ClangTypeKind::Integer {
+            signed: true,
+            width: 32,
+        },
+    };
+    let outer_ty = ClangTypeSkeleton {
+        spelled: "struct outer".to_string(),
+        canonical: "struct outer".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "outer".to_string(),
+        },
+    };
+    let inner_ty = ClangTypeSkeleton {
+        spelled: "struct inner".to_string(),
+        canonical: "struct inner".to_string(),
+        kind: ClangTypeKind::Record {
+            name: "inner".to_string(),
+        },
+    };
+    let skeleton = ClangFunctionSkeleton {
+        name: "bad_record_field_compound_nested_base".to_string(),
+        return_type: int_ty.clone(),
+        params: vec![ClangParamSkeleton {
+            name: "p".to_string(),
+            ty: outer_ty.clone(),
+        }],
+        body: vec![ClangStmtSkeleton::CompoundAssign {
+            target: ClangExprSkeleton::Member {
+                base: Box::new(ClangExprSkeleton::Member {
+                    base: Box::new(ClangExprSkeleton::DeclRef {
+                        name: "p".to_string(),
+                        ty: outer_ty,
+                    }),
+                    field: "inner".to_string(),
+                    ty: inner_ty,
+                    is_arrow: false,
+                }),
+                field: "x".to_string(),
+                ty: int_ty.clone(),
+                is_arrow: false,
+            },
+            op: ClangBinaryOperator::Add,
+            value: ClangExprSkeleton::IntegerLiteral {
+                value: 1,
+                spelling: "1".to_string(),
+                ty: int_ty.clone(),
+            },
+            result_ty: int_ty.clone(),
+            compute_lhs_ty: int_ty.clone(),
+            compute_result_ty: int_ty.clone(),
+        }],
+    };
+
+    let error = lower_function_skeleton(&skeleton)
+        .expect_err("record field compound assignment must reject nested base");
+
+    assert_eq!(error.kind, "unsupported_compound_assignment_target");
+    assert!(error.message.contains("direct record variable base"));
+}
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_compound_assignment_integer_promotion() {
     let uint8_ty = ClangTypeSkeleton {
         spelled: "uint8_t".to_string(),
@@ -244,376 +467,4 @@ fn clang_lowering_skeleton_rejects_compound_assignment_non_var_target() {
     assert!(error
         .message
         .contains("compound assignment target must be a simple variable"));
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_lowering_skeleton_maps_bitand_array_index_expr() {
-    let uint32_ty = ClangTypeSkeleton {
-        spelled: "uint32_t".to_string(),
-        canonical: "uint32_t".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: false,
-            width: 32,
-        },
-    };
-    let int_ty = ClangTypeSkeleton {
-        spelled: "int".to_string(),
-        canonical: "int".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: true,
-            width: 32,
-        },
-    };
-    let const_uint32_array_ty = ClangTypeSkeleton {
-        spelled: "const uint32_t[256]".to_string(),
-        canonical: "uint32_t[256]".to_string(),
-        kind: ClangTypeKind::Array {
-            element: Box::new(uint32_ty.clone()),
-            len: Some(256),
-        },
-    };
-    let skeleton = ClangFunctionSkeleton {
-        name: "crc_index".to_string(),
-        return_type: uint32_ty.clone(),
-        params: vec![
-            ClangParamSkeleton {
-                name: "crc".to_string(),
-                ty: uint32_ty.clone(),
-            },
-            ClangParamSkeleton {
-                name: "idx".to_string(),
-                ty: uint32_ty.clone(),
-            },
-        ],
-        body: vec![ClangStmtSkeleton::Return {
-            value: Some(ClangExprSkeleton::Index {
-                base: Box::new(ClangExprSkeleton::DeclRef {
-                    name: "table".to_string(),
-                    ty: const_uint32_array_ty,
-                }),
-                index: Box::new(ClangExprSkeleton::Binary {
-                    op: ClangBinaryOperator::BitAnd,
-                    lhs: Box::new(ClangExprSkeleton::Binary {
-                        op: ClangBinaryOperator::BitXor,
-                        lhs: Box::new(ClangExprSkeleton::DeclRef {
-                            name: "crc".to_string(),
-                            ty: uint32_ty.clone(),
-                        }),
-                        rhs: Box::new(ClangExprSkeleton::DeclRef {
-                            name: "idx".to_string(),
-                            ty: uint32_ty.clone(),
-                        }),
-                        ty: uint32_ty.clone(),
-                    }),
-                    rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
-                        value: 255,
-                        spelling: "255".to_string(),
-                        ty: int_ty,
-                    }),
-                    ty: uint32_ty.clone(),
-                }),
-                ty: uint32_ty,
-            }),
-        }],
-    };
-
-    let ir = lower_function_skeleton(&skeleton).expect("lower bitand array index");
-
-    let [IrStmt::Return {
-        value: Some(IrExpr::Index { index, .. }),
-        ..
-    }] = ir.body.as_slice()
-    else {
-        panic!("expected return table index, got {:?}", ir.body);
-    };
-    let IrExpr::Binary {
-        op: IrBinOp::BitAnd,
-        lhs,
-        rhs,
-        ..
-    } = index.as_ref()
-    else {
-        panic!("expected bitand index expression, got {index:?}");
-    };
-    assert!(matches!(
-        lhs.as_ref(),
-        IrExpr::Binary {
-            op: IrBinOp::BitXor,
-            ..
-        }
-    ));
-    assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 255, .. }));
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_lowering_skeleton_maps_shift_right_expr() {
-    let uint32_ty = ClangTypeSkeleton {
-        spelled: "uint32_t".to_string(),
-        canonical: "uint32_t".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: false,
-            width: 32,
-        },
-    };
-    let int_ty = ClangTypeSkeleton {
-        spelled: "int".to_string(),
-        canonical: "int".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: true,
-            width: 32,
-        },
-    };
-    let skeleton = ClangFunctionSkeleton {
-        name: "crc_shift".to_string(),
-        return_type: uint32_ty.clone(),
-        params: vec![ClangParamSkeleton {
-            name: "crc".to_string(),
-            ty: uint32_ty.clone(),
-        }],
-        body: vec![ClangStmtSkeleton::Return {
-            value: Some(ClangExprSkeleton::Binary {
-                op: ClangBinaryOperator::Shr,
-                lhs: Box::new(ClangExprSkeleton::DeclRef {
-                    name: "crc".to_string(),
-                    ty: uint32_ty.clone(),
-                }),
-                rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
-                    value: 8,
-                    spelling: "8".to_string(),
-                    ty: int_ty,
-                }),
-                ty: uint32_ty,
-            }),
-        }],
-    };
-
-    let ir = lower_function_skeleton(&skeleton).expect("lower shift right expression");
-
-    let [IrStmt::Return {
-        value:
-            Some(IrExpr::Binary {
-                op: IrBinOp::Shr,
-                lhs,
-                rhs,
-                ..
-            }),
-        ..
-    }] = ir.body.as_slice()
-    else {
-        panic!("expected shift right return, got {:?}", ir.body);
-    };
-    assert!(matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "crc"));
-    assert!(matches!(rhs.as_ref(), IrExpr::LitInt { value: 8, .. }));
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_lowering_skeleton_maps_simple_while_statement() {
-    let uint32_ty = ClangTypeSkeleton {
-        spelled: "uint32_t".to_string(),
-        canonical: "uint32_t".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: false,
-            width: 32,
-        },
-    };
-    let skeleton = ClangFunctionSkeleton {
-        name: "crc_while".to_string(),
-        return_type: uint32_ty.clone(),
-        params: vec![ClangParamSkeleton {
-            name: "crc".to_string(),
-            ty: uint32_ty.clone(),
-        }],
-        body: vec![
-            ClangStmtSkeleton::While {
-                condition: ClangExprSkeleton::DeclRef {
-                    name: "crc".to_string(),
-                    ty: uint32_ty.clone(),
-                },
-                body: vec![ClangStmtSkeleton::Assign {
-                    target: ClangExprSkeleton::DeclRef {
-                        name: "crc".to_string(),
-                        ty: uint32_ty.clone(),
-                    },
-                    value: ClangExprSkeleton::DeclRef {
-                        name: "crc".to_string(),
-                        ty: uint32_ty.clone(),
-                    },
-                }],
-            },
-            ClangStmtSkeleton::Return {
-                value: Some(ClangExprSkeleton::DeclRef {
-                    name: "crc".to_string(),
-                    ty: uint32_ty.clone(),
-                }),
-            },
-        ],
-    };
-
-    let ir = lower_function_skeleton(&skeleton).expect("lower while statement");
-
-    let [IrStmt::While {
-        condition, body, ..
-    }, IrStmt::Return { .. }] = ir.body.as_slice()
-    else {
-        panic!("expected while followed by return, got {:?}", ir.body);
-    };
-    assert!(matches!(condition, IrExpr::Var { name, .. } if name == "crc"));
-    let [IrStmt::Assign { target, value, .. }] = body.as_slice() else {
-        panic!("expected one while-body assignment, got {body:?}");
-    };
-    assert!(matches!(target, IrExpr::Var { name, .. } if name == "crc"));
-    assert!(matches!(value, IrExpr::Var { name, .. } if name == "crc"));
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn typed_ir_emits_scalar_while_from_clang_lowered_ir() {
-    let uint32_ty = ClangTypeSkeleton {
-        spelled: "uint32_t".to_string(),
-        canonical: "uint32_t".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: false,
-            width: 32,
-        },
-    };
-    let skeleton = ClangFunctionSkeleton {
-        name: "crc_while".to_string(),
-        return_type: uint32_ty.clone(),
-        params: vec![ClangParamSkeleton {
-            name: "crc".to_string(),
-            ty: uint32_ty.clone(),
-        }],
-        body: vec![
-            ClangStmtSkeleton::While {
-                condition: ClangExprSkeleton::DeclRef {
-                    name: "crc".to_string(),
-                    ty: uint32_ty.clone(),
-                },
-                body: vec![ClangStmtSkeleton::Assign {
-                    target: ClangExprSkeleton::DeclRef {
-                        name: "crc".to_string(),
-                        ty: uint32_ty.clone(),
-                    },
-                    value: ClangExprSkeleton::Binary {
-                        op: ClangBinaryOperator::BitXor,
-                        lhs: Box::new(ClangExprSkeleton::DeclRef {
-                            name: "crc".to_string(),
-                            ty: uint32_ty.clone(),
-                        }),
-                        rhs: Box::new(ClangExprSkeleton::Unary {
-                            op: ClangUnaryOperator::BitNot,
-                            operand: Box::new(ClangExprSkeleton::IntegerLiteral {
-                                value: 0,
-                                spelling: "0U".to_string(),
-                                ty: uint32_ty.clone(),
-                            }),
-                            ty: uint32_ty.clone(),
-                        }),
-                        ty: uint32_ty.clone(),
-                    },
-                }],
-            },
-            ClangStmtSkeleton::Return {
-                value: Some(ClangExprSkeleton::DeclRef {
-                    name: "crc".to_string(),
-                    ty: uint32_ty.clone(),
-                }),
-            },
-        ],
-    };
-    let ir = lower_function_skeleton(&skeleton).expect("lower scalar while skeleton");
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar while from lowered IR");
-
-    assert!(rust.contains("pub fn crc_while(mut crc: u32) -> u32"));
-    assert!(rust.contains("while crc != 0u32 {"));
-    assert!(rust.contains("crc = (crc ^ !0u32);"));
-    assert!(rust.contains("return crc;"));
-    assert!(!rust.contains("crc32_update_byte"));
-    assert_rust_snippet_compiles("typed-ir-clang-scalar-while", &rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-fn clang_scalar_if_skeleton() -> ClangFunctionSkeleton {
-    let int_ty = ClangTypeSkeleton {
-        spelled: "int".to_string(),
-        canonical: "int".to_string(),
-        kind: ClangTypeKind::Integer {
-            signed: true,
-            width: 32,
-        },
-    };
-    ClangFunctionSkeleton {
-        name: "adjust_if".to_string(),
-        return_type: int_ty.clone(),
-        params: vec![
-            ClangParamSkeleton {
-                name: "value".to_string(),
-                ty: int_ty.clone(),
-            },
-            ClangParamSkeleton {
-                name: "flag".to_string(),
-                ty: int_ty.clone(),
-            },
-        ],
-        body: vec![
-            ClangStmtSkeleton::If {
-                condition: ClangExprSkeleton::DeclRef {
-                    name: "flag".to_string(),
-                    ty: int_ty.clone(),
-                },
-                then_body: vec![ClangStmtSkeleton::Assign {
-                    target: ClangExprSkeleton::DeclRef {
-                        name: "value".to_string(),
-                        ty: int_ty.clone(),
-                    },
-                    value: ClangExprSkeleton::Binary {
-                        op: ClangBinaryOperator::Add,
-                        lhs: Box::new(ClangExprSkeleton::DeclRef {
-                            name: "value".to_string(),
-                            ty: int_ty.clone(),
-                        }),
-                        rhs: Box::new(ClangExprSkeleton::IntegerLiteral {
-                            value: 1,
-                            spelling: "1".to_string(),
-                            ty: int_ty.clone(),
-                        }),
-                        ty: int_ty.clone(),
-                    },
-                }],
-                else_body: vec![ClangStmtSkeleton::Assign {
-                    target: ClangExprSkeleton::DeclRef {
-                        name: "value".to_string(),
-                        ty: int_ty.clone(),
-                    },
-                    value: ClangExprSkeleton::Binary {
-                        op: ClangBinaryOperator::Add,
-                        lhs: Box::new(ClangExprSkeleton::DeclRef {
-                            name: "value".to_string(),
-                            ty: int_ty.clone(),
-                        }),
-                        rhs: Box::new(ClangExprSkeleton::Unary {
-                            op: ClangUnaryOperator::BitNot,
-                            operand: Box::new(ClangExprSkeleton::IntegerLiteral {
-                                value: 0,
-                                spelling: "0".to_string(),
-                                ty: int_ty.clone(),
-                            }),
-                            ty: int_ty.clone(),
-                        }),
-                        ty: int_ty.clone(),
-                    },
-                }],
-            },
-            ClangStmtSkeleton::Return {
-                value: Some(ClangExprSkeleton::DeclRef {
-                    name: "value".to_string(),
-                    ty: int_ty,
-                }),
-            },
-        ],
-    }
 }

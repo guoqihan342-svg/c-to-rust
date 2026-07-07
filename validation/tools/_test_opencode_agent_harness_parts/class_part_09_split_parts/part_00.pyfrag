@@ -1,0 +1,500 @@
+class _OpenCodeAgentHarnessTestPart09:
+    def test_run_worker_opencode_rejects_preflight_report_without_launch_policy_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            preflight_report.parent.mkdir(parents=True, exist_ok=True)
+            preflight_report.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "run-test",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "marker_exists": True,
+                        "contract_verification": {"status": "executed"},
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight launch policy is missing"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_worker_opencode_rejects_preflight_report_without_runtime_env_contract_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            launch_policy = {
+                "opencode_command": "opencode",
+                "opencode_model": "GLM-5.1",
+                "opencode_agent": "c2rust-migrator",
+                "opencode_variant": "max",
+                "opencode_skip_permissions": False,
+            }
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            preflight_report.parent.mkdir(parents=True, exist_ok=True)
+            logs_dir = out_root / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            model_stdout = "GLM-5.1\n"
+            model_stderr = ""
+            model_stdout_path = logs_dir / "opencode-models.stdout.log"
+            model_stderr_path = logs_dir / "opencode-models.stderr.log"
+            model_stdout_path.write_text(model_stdout, encoding="utf-8")
+            model_stderr_path.write_text(model_stderr, encoding="utf-8")
+            preflight_report.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "run-test",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "marker_exists": True,
+                        "contract_verification": {"status": "executed"},
+                        "launch_policy": launch_policy,
+                        "launch_policy_sha256": harness.sha256_text(json.dumps(launch_policy, sort_keys=True)),
+                        "opencode_model_availability": {
+                            "status": "available",
+                            "opencode_command": "opencode",
+                            "required_model": "GLM-5.1",
+                            "argv": ["opencode", "models"],
+                            "process_returncode": 0,
+                            "model_listed": True,
+                            "stdout_sha256": harness.sha256_text(model_stdout),
+                            "stderr_sha256": harness.sha256_text(model_stderr),
+                            "logs": {
+                                "stdout": repo_rel(model_stdout_path),
+                                "stderr": repo_rel(model_stderr_path),
+                            },
+                        },
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight report opencode_runtime_env is missing"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_worker_opencode_rejects_preflight_launch_policy_mismatch_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    opencode_variant="lite",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_worker_opencode_rejects_self_consistent_non_max_variant_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+                opencode_variant="lite",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    opencode_variant="lite",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_worker_opencode_rejects_preflight_report_run_id_mismatch_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="previous-run",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight run_id mismatch"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])
+
+    def test_run_plan_opencode_rejects_preflight_launch_policy_mismatch_before_worker_fanout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            source_root = out_root / "external" / "demo"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True, exist_ok=True)
+            source_file.write_text("int first(void) { return 1; }\nint second(void) { return 2; }\n", encoding="utf-8")
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="demo",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=[],
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="demo",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+
+            with patch.object(harness, "run_worker") as runner:
+                with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+                    harness.run_plan(
+                        db_path=db_path,
+                        run_id="run-test",
+                        plan_path=Path(str(plan["plan_path"])),
+                        out_root=out_root,
+                        proof_class="local-simulation",
+                        mode="opencode",
+                        opencode_preflight_report=preflight_report,
+                        opencode_model="GLM-5.1",
+                        opencode_variant="lite",
+                        command_runner=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="", stderr=""),
+                        repo_root=REPO_ROOT,
+                    )
+
+            runner.assert_not_called()
+
+    def test_run_plan_opencode_rejects_preflight_report_run_id_mismatch_before_worker_fanout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            source_root = out_root / "external" / "demo"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True, exist_ok=True)
+            source_file.write_text("int first(void) { return 1; }\n", encoding="utf-8")
+            plan = harness.plan_source_file(
+                db_path=db_path,
+                run_id="run-test",
+                target_id="demo",
+                source_repo_root=source_root,
+                source_file="src/demo.c",
+                functions=[],
+                source_commit="abc123",
+                out_root=out_root,
+                slice_id_prefix="demo",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="previous-run",
+            )
+
+            with patch.object(
+                harness,
+                "run_worker",
+                return_value={
+                    "worker_id": "worker-001",
+                    "exit_code": 0,
+                    "process_returncode": 0,
+                    "summary_status": "passed",
+                    "summary_path": "target/out/workers/worker-001/summary/competition-run-summary.json",
+                    "report_path": "target/out/workers/worker-001/harness/run-worker-report.json",
+                    "recorded": True,
+                },
+            ) as runner:
+                with self.assertRaisesRegex(SystemExit, "opencode preflight run_id mismatch"):
+                    harness.run_plan(
+                        db_path=db_path,
+                        run_id="run-test",
+                        plan_path=Path(str(plan["plan_path"])),
+                        out_root=out_root,
+                        proof_class="local-simulation",
+                        mode="opencode",
+                        opencode_preflight_report=preflight_report,
+                        command_runner=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout="", stderr=""),
+                        repo_root=REPO_ROOT,
+                    )
+
+            runner.assert_not_called()
+
+    def test_run_worker_opencode_binds_passing_preflight_report(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-test",
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                contract = json.loads(
+                    (out_root / "workers" / "worker-a" / "harness" / "opencode-handoff-contract.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                request = json.loads((REPO_ROOT / contract["request_path"]).read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                mode="opencode",
+                opencode_preflight_report=preflight_report,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["opencode_preflight_report"]["path"], repo_rel(preflight_report))
+            self.assertEqual(result["opencode_preflight_report"]["sha256"], harness.sha256_file(preflight_report))
+            self.assertEqual(result["opencode_preflight_report"]["launch_policy"]["opencode_variant"], "max")
+            self.assertFalse(result["opencode_preflight_report"]["launch_policy"]["opencode_skip_permissions"])
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["opencode_preflight_report"]["status"], "passed")
+            event_payload = json.loads(
+                fetch_rows(db_path, "select payload_json from events where event_type='worker_executed'")[-1][0]
+            )
+            self.assertEqual(event_payload["opencode_preflight_report"]["path"], repo_rel(preflight_report))
+            artifact_rows = fetch_rows(db_path, "select kind, repo_rel_path, semantic_role from artifacts")
+            self.assertIn(
+                ("opencode-preflight-report", repo_rel(preflight_report), "agent-preflight-evidence"),
+                artifact_rows,
+            )
+
+    def test_run_worker_opencode_retries_transient_database_lock_before_contract_failure(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = write_passing_opencode_preflight_report(out_root / "harness" / "opencode-preflight-report.json", run_id="run-test")
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                if len(calls) == 1:
+                    return subprocess.CompletedProcess(argv, 1, stdout="", stderr="database is locked\n")
+                contract = json.loads(
+                    (out_root / "workers" / "worker-a" / "harness" / "opencode-handoff-contract.json").read_text(

@@ -1,0 +1,52 @@
+        return None
+    return value if isinstance(value, int) and value >= 0 else None
+
+
+def sha256_file(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
+def rel(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def require_int(payload: dict[str, Any], key: str) -> int:
+    value = payload.get(key)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def optional_int(payload: dict[str, Any], key: str, default: int) -> int:
+    value = payload.get(key, default)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def require_dict(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    require(isinstance(value, dict), f"{key} must be an object")
+    return value
+
+
+def require_nonnegative_int(value: Any, message: str) -> int:
+    require(isinstance(value, int) and value >= 0, f"{message} must be a non-negative integer")
+    return value
+
+
+def is_l4_refused(item: Any) -> bool:
+    return isinstance(item, dict) and item.get("route_level") == "L4" and item.get("route_status") == "refused"
+
+
+def require(condition: Any, message: str) -> None:
+    if not condition:
+        raise SystemExit(message)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

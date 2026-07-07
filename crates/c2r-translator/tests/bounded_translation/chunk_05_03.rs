@@ -1,5 +1,455 @@
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_continue_in_scalar_while_body() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "skip_large".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: ir_var("value", i32_ty.clone()),
+                body: vec![
+                    IrStmt::If {
+                        condition: ir_binary(
+                            IrBinOp::Gt,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(3, "3", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        then_body: vec![IrStmt::Continue { source_span: None }],
+                        else_body: vec![],
+                        source_span: None,
+                    },
+                    IrStmt::Assign {
+                        target: ir_var("value", i32_ty.clone()),
+                        value: ir_binary(
+                            IrBinOp::Sub,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(1, "1", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    },
+                ],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit continue in scalar while");
+
+    assert!(rust.contains("pub fn skip_large(mut value: i32) -> i32"));
+    assert!(rust.contains("while value != 0i32 {"));
+    assert!(rust.contains("continue;"));
+    assert!(
+        rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
+    assert_rust_snippet_compiles("typed-ir-scalar-while-continue", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_scalar_do_while_with_condition_check_after_body() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "do_countdown".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::DoWhile {
+                body: vec![IrStmt::Assign {
+                    target: ir_var("value", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Sub,
+                        ir_var("value", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                condition: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit scalar do-while");
+
+    assert!(rust.contains("pub fn do_countdown(mut value: i32) -> i32"));
+    assert!(rust.contains("loop {"));
+    assert!(
+        rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");")
+    );
+    assert!(rust.contains("if !(value != 0i32) {"));
+    assert!(rust.contains("break;"));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-scalar-do-while", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_do_while_continue_checks_condition_before_continuing() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "do_skip_large".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::DoWhile {
+                body: vec![
+                    IrStmt::Assign {
+                        target: ir_var("value", i32_ty.clone()),
+                        value: ir_binary(
+                            IrBinOp::Sub,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(1, "1", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    },
+                    IrStmt::If {
+                        condition: ir_binary(
+                            IrBinOp::Gt,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(3, "3", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        then_body: vec![IrStmt::Continue { source_span: None }],
+                        else_body: vec![],
+                        source_span: None,
+                    },
+                    IrStmt::Assign {
+                        target: ir_var("value", i32_ty.clone()),
+                        value: ir_binary(
+                            IrBinOp::Sub,
+                            ir_var("value", i32_ty.clone()),
+                            ir_lit(1, "1", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    },
+                ],
+                condition: ir_var("value", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit do-while continue");
+
+    assert!(rust.contains("pub fn do_skip_large(mut value: i32) -> i32"));
+    assert!(rust.contains(
+        "if (value > 3i32) {\n            if !(value != 0i32) {\n                break;\n            }\n            continue;"
+    ));
+    assert_eq!(rust.matches("if !(value != 0i32) {").count(), 2, "{rust:?}");
+    assert_rust_snippet_compiles("typed-ir-do-while-continue", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_emits_continue_after_step_in_body() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "sum_skip".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "limit".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "total".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+            IrStmt::For {
+                init: vec![IrStmt::Decl {
+                    name: "i".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                condition: Some(ir_binary(
+                    IrBinOp::Lt,
+                    ir_var("i", i32_ty.clone()),
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: ir_var("i", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("i", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![
+                    IrStmt::If {
+                        condition: ir_binary(
+                            IrBinOp::Gt,
+                            ir_var("i", i32_ty.clone()),
+                            ir_lit(3, "3", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        then_body: vec![IrStmt::Continue { source_span: None }],
+                        else_body: vec![],
+                        source_span: None,
+                    },
+                    IrStmt::Assign {
+                        target: ir_var("total", i32_ty.clone()),
+                        value: ir_binary(
+                            IrBinOp::Add,
+                            ir_var("total", i32_ty.clone()),
+                            ir_var("i", i32_ty.clone()),
+                            i32_ty.clone(),
+                        ),
+                        source_span: None,
+                    },
+                ],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("total", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit for continue with step");
+
+    assert!(rust.contains("pub fn sum_skip(limit: i32) -> i32"));
+    assert!(rust.contains("if (i > 3i32) {"));
+    assert!(
+        rust.contains("            if (i > 3i32) {\n                i = i.checked_add(1i32).expect(\"signed addition overflow\");\n                continue;\n            }"),
+        "{rust:?}"
+    );
+    assert_eq!(
+        rust.matches("i = i.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        2,
+        "{rust:?}"
+    );
+    assert_rust_snippet_compiles("typed-ir-for-continue-step", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_nested_while_continue_does_not_emit_outer_step() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "nested_continue".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "limit".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::For {
+                init: vec![IrStmt::Decl {
+                    name: "i".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                condition: Some(ir_binary(
+                    IrBinOp::Lt,
+                    ir_var("i", i32_ty.clone()),
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: ir_var("i", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("i", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![IrStmt::While {
+                    condition: ir_var("limit", i32_ty.clone()),
+                    body: vec![IrStmt::Continue { source_span: None }],
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_lit(0, "0", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let rust = emit_rust_from_ir(&ir).expect("emit nested while continue in for body");
+
+    assert_eq!(
+        rust.matches("i = i.checked_add(1i32).expect(\"signed addition overflow\");")
+            .count(),
+        1,
+        "{rust:?}"
+    );
+    assert!(
+        rust.contains("while limit != 0i32 {\n                continue;\n            }"),
+        "{rust:?}"
+    );
+    assert_rust_snippet_compiles("typed-ir-for-nested-while-continue", &rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_continue_outside_loop() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_continue".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Continue { source_span: None },
+            IrStmt::Return {
+                value: Some(ir_var("value", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("top-level continue must fail closed");
+
+    assert!(error.reason.contains("continue outside loop"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_with_unsupported_condition_expr() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_while_call".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: IrExpr::Call {
+                    callee: "helper".to_string(),
+                    args: vec![],
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: ir_var("count", i32_ty.clone()),
+                    value: ir_var("count", i32_ty.clone()),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("while call condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].while condition"));
+    assert!(error
+        .reason
+        .contains("call expression helper is unsupported"));
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_while_with_incdec_condition_expr() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "bad_while_incdec".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "count".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::While {
+                condition: IrExpr::IncDec {
+                    target: Box::new(ir_var("count", i32_ty.clone())),
+                    op: IrIncDecOp::Dec,
+                    prefix: false,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                body: vec![IrStmt::Assign {
+                    target: ir_var("count", i32_ty.clone()),
+                    value: ir_var("count", i32_ty.clone()),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("count", i32_ty.clone())),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("while incdec condition must fail closed");
+
+    assert!(error
+        .reason
+        .contains("outside the current typed IR emitter subset"));
+    assert!(error.reason.contains("stmt[0].while condition"));
+    assert!(error.reason.contains("inc/dec expression is unsupported"));
+}
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_while_with_non_var_assignment_target() {
     let i32_ty = ir_i32();
     let pointer_ty = ir_pointer("int *", "int *", i32_ty.clone(), false);
@@ -42,608 +492,4 @@ fn typed_ir_rejects_while_with_non_var_assignment_target() {
     assert!(error
         .reason
         .contains("deref assignment pointer ptr is not declared"));
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_rejects_while_body_decl_scope_leak() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "bad_while_scope".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "count".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::While {
-                condition: ir_var("count", i32_ty.clone()),
-                body: vec![IrStmt::Decl {
-                    name: "tmp".to_string(),
-                    ty: i32_ty.clone(),
-                    init: Some(ir_lit(1, "1", i32_ty.clone())),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("tmp", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let error = emit_rust_from_ir(&ir).expect_err("while body decl must not leak");
-
-    assert!(error
-        .reason
-        .contains("outside the current typed IR emitter subset"));
-    assert!(error.reason.contains("var tmp is not declared"));
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_scalar_if_else_with_integer_condition() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "adjust".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "flag".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::If {
-                condition: ir_var("flag", i32_ty.clone()),
-                then_body: vec![IrStmt::Assign {
-                    target: ir_var("value", i32_ty.clone()),
-                    value: ir_binary(
-                        IrBinOp::Add,
-                        ir_var("value", i32_ty.clone()),
-                        ir_lit(1, "1", i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    source_span: None,
-                }],
-                else_body: vec![IrStmt::Assign {
-                    target: ir_var("value", i32_ty.clone()),
-                    value: ir_binary(
-                        IrBinOp::Add,
-                        ir_var("value", i32_ty.clone()),
-                        ir_bitnot(ir_lit(0, "0", i32_ty.clone()), i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("value", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar if");
-
-    assert!(rust.contains("pub fn adjust(mut value: i32, flag: i32) -> i32"));
-    assert!(rust.contains("if flag != 0i32 {"));
-    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
-    assert!(rust.contains("} else {"));
-    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
-    assert!(rust.contains("return value;"));
-    assert_rust_snippet_compiles("typed-ir-scalar-if", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_scalar_if_with_comparison_condition() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "adjust_positive".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::If {
-                condition: ir_binary(
-                    IrBinOp::Gt,
-                    ir_var("value", i32_ty.clone()),
-                    ir_lit(0, "0", i32_ty.clone()),
-                    i32_ty.clone(),
-                ),
-                then_body: vec![IrStmt::Assign {
-                    target: ir_var("value", i32_ty.clone()),
-                    value: ir_binary(
-                        IrBinOp::Add,
-                        ir_var("value", i32_ty.clone()),
-                        ir_lit(1, "1", i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    source_span: None,
-                }],
-                else_body: vec![],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("value", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar if comparison condition");
-
-    assert!(rust.contains("pub fn adjust_positive(mut value: i32) -> i32"));
-    assert!(rust.contains("if (value > 0i32) {"));
-    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
-    assert!(rust.contains("return value;"));
-    assert_rust_snippet_compiles("typed-ir-scalar-if-comparison", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_comparison_condition_with_integral_cast_operand() {
-    let i32_ty = ir_i32();
-    let u32_ty = ir_u32();
-    let ir = IrFunction {
-        name: "cmp_condition_cast".to_string(),
-        return_type: u32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: u32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::If {
-                condition: ir_binary(
-                    IrBinOp::Gt,
-                    ir_var("value", u32_ty.clone()),
-                    IrExpr::Cast {
-                        target: u32_ty.clone(),
-                        expr: Box::new(ir_lit(0, "0", i32_ty.clone())),
-                        implicit: true,
-                        source_span: None,
-                    },
-                    i32_ty.clone(),
-                ),
-                then_body: vec![IrStmt::Assign {
-                    target: ir_var("value", u32_ty.clone()),
-                    value: ir_binary(
-                        IrBinOp::Add,
-                        ir_var("value", u32_ty.clone()),
-                        ir_lit(1, "1", u32_ty.clone()),
-                        u32_ty.clone(),
-                    ),
-                    source_span: None,
-                }],
-                else_body: vec![],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("value", u32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit comparison integral cast operand");
-
-    assert!(rust.contains("pub fn cmp_condition_cast(mut value: u32) -> u32"));
-    assert!(rust.contains("if (value > (0i32 as u32)) {"));
-    assert!(rust.contains("value = value.wrapping_add(1u32);"));
-    assert!(rust.contains("return value;"));
-    assert_rust_snippet_compiles("typed-ir-comparison-condition-cast", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_all_scalar_comparison_conditions_without_integer_truthiness_wrap() {
-    let cases = vec![
-        (IrBinOp::Lt, "<", "lt"),
-        (IrBinOp::Le, "<=", "le"),
-        (IrBinOp::Gt, ">", "gt"),
-        (IrBinOp::Ge, ">=", "ge"),
-        (IrBinOp::Eq, "==", "eq"),
-        (IrBinOp::Neq, "!=", "neq"),
-    ];
-
-    for (op, expected, suffix) in cases {
-        let i32_ty = ir_i32();
-        let ir = IrFunction {
-            name: format!("cmp_{suffix}"),
-            return_type: i32_ty.clone(),
-            params: vec![IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            }],
-            body: vec![
-                IrStmt::If {
-                    condition: ir_binary(
-                        op,
-                        ir_var("value", i32_ty.clone()),
-                        ir_lit(0, "0", i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    then_body: vec![IrStmt::Assign {
-                        target: ir_var("value", i32_ty.clone()),
-                        value: ir_binary(
-                            IrBinOp::Add,
-                            ir_var("value", i32_ty.clone()),
-                            ir_lit(1, "1", i32_ty.clone()),
-                            i32_ty.clone(),
-                        ),
-                        source_span: None,
-                    }],
-                    else_body: vec![],
-                    source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(ir_var("value", i32_ty.clone())),
-                    source_span: None,
-                },
-            ],
-            source_span: None,
-        };
-
-        let rust = emit_rust_from_ir(&ir).expect("emit scalar comparison condition");
-
-        assert!(rust.contains(&format!("if (value {expected} 0i32) {{")));
-        assert!(!rust.contains(&format!("(value {expected} 0i32) != 0i32")));
-        assert_rust_snippet_compiles(&format!("typed-ir-scalar-if-comparison-{suffix}"), &rust);
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_scalar_while_with_comparison_condition() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "countdown_positive".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::While {
-                condition: ir_binary(
-                    IrBinOp::Gt,
-                    ir_var("value", i32_ty.clone()),
-                    ir_lit(0, "0", i32_ty.clone()),
-                    i32_ty.clone(),
-                ),
-                body: vec![IrStmt::Assign {
-                    target: ir_var("value", i32_ty.clone()),
-                    value: ir_binary(
-                        IrBinOp::Add,
-                        ir_var("value", i32_ty.clone()),
-                        ir_bitnot(ir_lit(0, "0", i32_ty.clone()), i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("value", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar while comparison condition");
-
-    assert!(rust.contains("pub fn countdown_positive(mut value: i32) -> i32"));
-    assert!(rust.contains("while (value > 0i32) {"));
-    assert!(!rust.contains("(value > 0i32) != 0i32"));
-    assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
-    assert_rust_snippet_compiles("typed-ir-scalar-while-comparison", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_scalar_if_with_logical_not_integer_condition() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "is_zero".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::If {
-                condition: ir_not(ir_var("value", i32_ty.clone()), i32_ty.clone()),
-                then_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(1, "1", i32_ty.clone())),
-                    source_span: None,
-                }],
-                else_body: vec![],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_lit(0, "0", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar if logical not condition");
-
-    assert!(rust.contains("pub fn is_zero(value: i32) -> i32"));
-    assert!(rust.contains("if value == 0i32 {"));
-    assert!(rust.contains("return 1i32;"));
-    assert!(rust.contains("return 0i32;"));
-    assert_rust_snippet_compiles("typed-ir-scalar-if-logical-not", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_logical_not_condition_with_readonly_pointer_add_index_deref_operand() {
-    let i32_ty = ir_i32();
-    let usize_ty = ir_usize();
-    let u8_ty = ir_u8();
-    let const_u8_ty = ir_const(u8_ty.clone());
-    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
-    let ptr_plus_index = ir_binary(
-        IrBinOp::Add,
-        ir_var("p", const_u8_ptr_ty.clone()),
-        ir_var("i", usize_ty.clone()),
-        const_u8_ptr_ty.clone(),
-    );
-    let ir = IrFunction {
-        name: "offset_is_zero_not_condition".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: const_u8_ptr_ty,
-                source_span: None,
-            },
-            IrParam {
-                name: "i".to_string(),
-                ty: usize_ty,
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::If {
-                condition: ir_not(ir_deref(ptr_plus_index, u8_ty), i32_ty.clone()),
-                then_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(1, "1", i32_ty.clone())),
-                    source_span: None,
-                }],
-                else_body: vec![],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_lit(0, "0", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit logical not offset deref condition");
-
-    assert!(rust.contains("pub fn offset_is_zero_not_condition(p: &[u8], i: usize) -> i32"));
-    assert!(rust.contains("if p[i as usize] == 0u8 {"));
-    assert!(rust.contains("return 1i32;"));
-    assert!(rust.contains("return 0i32;"));
-    assert_rust_snippet_compiles("typed-ir-offset-deref-logical-not-condition", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_rejects_logical_not_condition_with_readonly_pointer_add_compound_index_deref_operand() {
-    let i32_ty = ir_i32();
-    let usize_ty = ir_usize();
-    let u8_ty = ir_u8();
-    let const_u8_ty = ir_const(u8_ty.clone());
-    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", const_u8_ty, false);
-    let compound_index = ir_binary(
-        IrBinOp::Add,
-        ir_var("i", usize_ty.clone()),
-        ir_lit(1, "1", usize_ty.clone()),
-        usize_ty.clone(),
-    );
-    let ptr_plus_compound = ir_binary(
-        IrBinOp::Add,
-        ir_var("p", const_u8_ptr_ty.clone()),
-        compound_index,
-        const_u8_ptr_ty.clone(),
-    );
-    let ir = IrFunction {
-        name: "bad_logical_not_offset_compound_index".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: const_u8_ptr_ty,
-                source_span: None,
-            },
-            IrParam {
-                name: "i".to_string(),
-                ty: usize_ty,
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::If {
-                condition: ir_not(ir_deref(ptr_plus_compound, u8_ty), i32_ty.clone()),
-                then_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(1, "1", i32_ty.clone())),
-                    source_span: None,
-                }],
-                else_body: vec![],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_lit(0, "0", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let error =
-        emit_rust_from_ir(&ir).expect_err("compound index logical-not deref must fail closed");
-
-    assert!(error
-        .reason
-        .contains("outside the current typed IR emitter subset"));
-    assert!(error.reason.contains("stmt[0].if condition"));
-    assert!(error.reason.contains("logical not operand"));
-    assert!(error
-        .reason
-        .contains("deref pointer add index cannot use compound expression"));
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_scalar_while_with_logical_not_integer_condition() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "bump_until_nonzero".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::While {
-                condition: ir_not(ir_var("value", i32_ty.clone()), i32_ty.clone()),
-                body: vec![IrStmt::Assign {
-                    target: ir_var("value", i32_ty.clone()),
-                    value: ir_binary(
-                        IrBinOp::Add,
-                        ir_var("value", i32_ty.clone()),
-                        ir_lit(1, "1", i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("value", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar while logical not condition");
-
-    assert!(rust.contains("pub fn bump_until_nonzero(mut value: i32) -> i32"));
-    assert!(rust.contains("while value == 0i32 {"));
-    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
-    assert!(rust.contains("return value;"));
-    assert_rust_snippet_compiles("typed-ir-scalar-while-logical-not", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_scalar_if_with_logical_not_comparison_condition() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "clamp_nonpositive".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![
-            IrStmt::If {
-                condition: ir_not(
-                    ir_binary(
-                        IrBinOp::Gt,
-                        ir_var("value", i32_ty.clone()),
-                        ir_lit(0, "0", i32_ty.clone()),
-                        i32_ty.clone(),
-                    ),
-                    i32_ty.clone(),
-                ),
-                then_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(0, "0", i32_ty.clone())),
-                    source_span: None,
-                }],
-                else_body: vec![],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("value", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let rust = emit_rust_from_ir(&ir).expect("emit scalar if logical not comparison condition");
-
-    assert!(rust.contains("pub fn clamp_nonpositive(value: i32) -> i32"));
-    assert!(rust.contains("if (value <= 0i32) {"));
-    assert!(!rust.contains("!(value > 0i32)"));
-    assert!(!rust.contains("(value > 0i32) == 0i32"));
-    assert!(rust.contains("return 0i32;"));
-    assert!(rust.contains("return value;"));
-    assert_rust_snippet_compiles("typed-ir-scalar-if-logical-not-comparison", &rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_comparison_return_value_as_c_int() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "positive_as_int".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![IrParam {
-            name: "value".to_string(),
-            ty: i32_ty.clone(),
-            source_span: None,
-        }],
-        body: vec![IrStmt::Return {
-            value: Some(ir_binary(
-                IrBinOp::Gt,
-                ir_var("value", i32_ty.clone()),
-                ir_lit(0, "0", i32_ty.clone()),
-                i32_ty.clone(),
-            )),
-            source_span: None,
-        }],
-        source_span: None,
-    };
-
-    let emitted = emit_rust_from_ir(&ir).expect("emit comparison return value as C int");
-    let rust = &emitted.rust;
-
-    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
-    assert!(rust.contains("pub fn positive_as_int(value: i32) -> i32"));
-    assert!(rust.contains("return (if (value > 0i32) { 1i32 } else { 0i32 });"));
-    assert!(!rust.contains("return (value > 0i32);"));
-    assert_rust_snippet_compiles("typed-ir-comparison-return-value", rust);
 }

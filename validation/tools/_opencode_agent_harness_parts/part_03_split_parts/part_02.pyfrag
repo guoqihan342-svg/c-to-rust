@@ -1,0 +1,4 @@
+        ),
+        "claim_boundary": str(payload.get("claim_boundary", "")),
+    }
+    return {"binding": binding, "payload": payload}

@@ -1,0 +1,451 @@
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-vendored-clang-drift-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(
+                vendored_path,
+                {
+                    "schema_version": 1,
+                    "artifact_kind": "vendored-clang-verification",
+                    "proof_class": "local-simulation",
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "profile_sha256": "a" * 64,
+                    "status": "missing",
+                    "reason": "missing_clang_path",
+                    "clang": {"source": "missing", "path": None, "version": None},
+                    "clang_required": False,
+                    "clang_lane_verified": False,
+                    "checks": {},
+                    "command_logs": [],
+                    "final_gate": {"status": "passed"},
+                },
+            )
+            payload["command_log"]["sha256"] = write_valid_command_log(
+                command_log,
+                payload["steps"],
+                run_id=payload["run_id"],
+            )
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "vendored_clang_verification clang_lane_verified must match competition_smoke_summary",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-vendored-clang-drift-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_malformed_competition_smoke_report_artifacts(self) -> None:
+        cases = [
+            (
+                "evidence_governance_report",
+                "evidence_governance_report.schema_version must be 1",
+            ),
+            (
+                "translator_coverage_matrix",
+                "translator_coverage_matrix.schema_version must be 1",
+            ),
+            (
+                "milestone_release_report",
+                "milestone_release_report.schema_version must be 1",
+            ),
+        ]
+        for artifact_key, expected_error in cases:
+            with self.subTest(artifact_key=artifact_key):
+                with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+                    root = Path(tmp)
+                    artifacts, _payload = write_exact_competition_smoke_fixture(
+                        root,
+                        run_id=f"smoke-report-artifacts-{artifact_key}-contract-test",
+                    )
+                    write_json(REPO_ROOT / artifacts[artifact_key], {})
+
+                    with self.assertRaisesRegex(ValueError, expected_error):
+                        validator.validate_harness_artifact_contracts(
+                            artifacts,
+                            require_local_artifacts=True,
+                            repo_root=REPO_ROOT,
+                            environment_profile={
+                                "profile_id": "huawei-competition-ubuntu-24.04",
+                                "sha256": "a" * 64,
+                            },
+                            smoke_contract={
+                                "proof_class": "competition-exact",
+                                "run_id": f"smoke-report-artifacts-{artifact_key}-contract-test",
+                            },
+                        )
+
+    def test_require_local_artifacts_rejects_missing_command_log(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-missing-command-log-contract-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log path must exist",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-missing-command-log-contract-test",
+                    },
+                )
+
+    def test_competition_smoke_summary_command_log_requires_sha256(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["command_log"].pop("sha256", None)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary.command_log.sha256",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
+                },
+                entrypoint_proof_class="local-simulation",
+                entrypoint_run_id=None,
+            )
+
+    def test_competition_smoke_summary_step_log_path_must_match_command_log(self) -> None:
+        payload = valid_competition_smoke_summary_payload()
+        payload["steps"][0]["log_path"] = "target/other-smoke/logs/commands.jsonl"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "competition_smoke_summary step environment-check.log_path must match command_log.path",
+        ):
+            validator.validate_competition_smoke_summary_contract(
+                payload,
+                expected_artifacts=competition_smoke_expected_artifacts(),
+                environment_profile={
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "sha256": "a" * 64,
+                },
+                entrypoint_proof_class="local-simulation",
+                entrypoint_run_id=None,
+            )
+
+    def test_require_local_artifacts_rejects_command_log_sha256_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-command-log-sha-drift-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            payload["command_log"]["sha256"] = "0" * 64
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
+            write_valid_command_log(command_log, run_id=payload["run_id"])
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_summary.command_log.sha256 must match command_log artifact",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-command-log-sha-drift-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_command_log_run_id_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            artifacts, payload = write_exact_competition_smoke_fixture(
+                root,
+                run_id="smoke-command-log-run-binding-test",
+            )
+            command_log = REPO_ROOT / artifacts["command_log"]
+            entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(entries)
+            entries[0]["run_id"] = "stale-smoke-run"
+            entries[0]["canonical"] = True
+            command_log.write_text(
+                "".join(json.dumps(entry, sort_keys=True) + "\n" for entry in entries),
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(REPO_ROOT / artifacts["competition_smoke_summary"], payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log line 1 run_id must match smoke summary run_id",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-command-log-run-binding-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_noncanonical_command_log_record(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            artifacts, payload = write_exact_competition_smoke_fixture(
+                root,
+                run_id="smoke-command-log-canonical-binding-test",
+            )
+            command_log = REPO_ROOT / artifacts["command_log"]
+            entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(entries)
+            entries[0]["canonical"] = False
+            command_log.write_text(
+                "".join(json.dumps(entry, sort_keys=True) + "\n" for entry in entries),
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(REPO_ROOT / artifacts["competition_smoke_summary"], payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log line 1 canonical must be true",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "competition-exact",
+                        "run_id": "smoke-command-log-canonical-binding-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_command_log_missing_summary_step(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-command-log-step-coverage-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
+            command_log.parent.mkdir(parents=True, exist_ok=True)
+            command_log.write_text(
+                json.dumps(
+                    {
+                        "step": "environment-check",
+                        "command": ["python3", "-B", "validation/tools/run_competition_smoke.py"],
+                        "returncode": 1,
+                        "stdout": "",
+                        "stderr": "",
+                        "workdir": ".",
+                        "run_id": payload["run_id"],
+                        "canonical": True,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log missing summary steps",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-command-log-step-coverage-test",
+                    },
+                )
+
+    def test_require_local_artifacts_rejects_command_log_returncode_drift_from_summary(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="judge-entrypoints-test-", dir=REPO_ROOT / "target") as tmp:
+            root = Path(tmp)
+            summary_path = root / "summary" / "competition-smoke-summary.json"
+            vendored_path = root / "summary" / "vendored-clang-verification.json"
+            evidence_governance = root / "reports" / "evidence-governance.json"
+            coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+            milestone = root / "reports" / "milestone-release-report.json"
+            command_log = root / "logs" / "commands.jsonl"
+
+            artifacts = {
+                "competition_smoke_summary": repo_relative(summary_path),
+                "vendored_clang_verification": repo_relative(vendored_path),
+                "evidence_governance_report": repo_relative(evidence_governance),
+                "translator_coverage_matrix": repo_relative(coverage_matrix),
+                "milestone_release_report": repo_relative(milestone),
+                "command_log": repo_relative(command_log),
+            }
+            payload = valid_competition_smoke_summary_payload()
+            payload["run_id"] = "smoke-command-log-returncode-drift-test"
+            payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+            payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+            payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+            payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+            payload["command_log"]["path"] = artifacts["command_log"]
+            for step in payload["steps"]:
+                step["log_path"] = artifacts["command_log"]
+
+            write_json(summary_path, payload)
+            write_json(vendored_path, valid_vendored_clang_verification_payload())
+            write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
+            drifted_steps = [dict(step) for step in payload["steps"]]
+            for step in drifted_steps:
+                if step["step"] == "environment-check":
+                    step["returncode"] = 0
+            payload["command_log"]["sha256"] = write_valid_command_log(
+                command_log,
+                drifted_steps,
+                run_id=payload["run_id"],
+            )
+            write_json(summary_path, payload)
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "competition_smoke_command_log step environment-check returncode must match summary",
+            ):
+                validator.validate_harness_artifact_contracts(
+                    artifacts,
+                    require_local_artifacts=True,
+                    repo_root=REPO_ROOT,
+                    environment_profile={
+                        "profile_id": "huawei-competition-ubuntu-24.04",
+                        "sha256": "a" * 64,
+                    },
+                    smoke_contract={
+                        "proof_class": "local-simulation",
+                        "run_id": "smoke-command-log-returncode-drift-test",
+                    },
+                )

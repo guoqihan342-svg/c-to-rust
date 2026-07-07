@@ -1,0 +1,9 @@
+        hint_id = hint.get("hint_id")
+        if not isinstance(hint_id, str) or not hint_id:
+            continue
+        worker_id = hint.get("worker_id")
+        if not isinstance(worker_id, str) or not worker_id:
+            worker_id = resume_manifest_worker_id_from_repair_hint_id(hint_id, run_id=run_id)
+        if worker_id:
+            result.setdefault(worker_id, set()).add(hint_id)
+    return result

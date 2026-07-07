@@ -1,0 +1,6 @@
+    return {
+        "status": "finalized",
+        "run_id": run_id,
+        "summary_path": summary_rel,
+        "summary_sha256": summary_hash,
+    }

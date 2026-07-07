@@ -1,0 +1,132 @@
+            "c2rust_output": output_ref,
+            "compile_artifact": compile_ref,
+        }
+        baseline = {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "demo-slice",
+            "source_commit": "1234567",
+            "entry_function": "demo_slice",
+            "status": "passed",
+            "semantic_pass": True,
+            "semantic_claim_source": "verified_unsafe_baseline_gates",
+            "generated_draft_semantic_pass": False,
+            "fixture": {"path": "validation/l2_slices/fixtures/demo.json", "hash": "fixture-sha"},
+            "validation_profile": dict(artifact_ref),
+            "route_decision": dict(artifact_ref),
+            "c2rust_baseline": {
+                "path": "validation/evidence/demo/c2rust-baseline-manifest.json",
+                "status": "generated",
+                "sha256": "baseline-sha",
+            },
+            "c2rust_output": output_ref,
+            "compile_artifact": compile_ref,
+            "direct_c2rust_replay": {
+                "status": "passed",
+                "semantic_pass": False,
+                "observable_replay_pass": True,
+                "artifact": {
+                    "path": "validation/evidence/demo/c2rust-direct-replay.json",
+                    "status": "passed",
+                    "sha256": "direct-replay-sha",
+                },
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "gate_refs": {"rust_replay": dict(artifact_ref)},
+            "same_output_gate_refs": {
+                "c_oracle": dict(gate_ref),
+                "rust_replay": {
+                    **gate_ref,
+                    "path": "validation/evidence/demo/c2rust-direct-replay.json",
+                    "replay_kind": "direct_c2rust_output_replay",
+                    "correctness_role": "direct_replay_evidence",
+                },
+                "schema_diff": dict(gate_ref),
+                "negative_diff": dict(gate_ref),
+                "unsafe_scan": dict(gate_ref),
+                "unsafe_ledger": dict(gate_ref),
+                "final_verification": dict(gate_ref),
+            },
+            "accepted_evidence_binding": {
+                "status": "accepted",
+                "generated_draft_semantic_pass": False,
+            },
+            "blocked_reasons": [],
+            "claim_boundary": {
+                "semantic_pass": True,
+                "generated_draft_semantic_pass": False,
+                "compile_only_is_semantic_pass": False,
+            },
+        }
+
+        jsonschema.validate(baseline, schema)
+
+        semantic_spoof = json.loads(json.dumps(baseline))
+        semantic_spoof["semantic_claim_source"] = "c2rust_compile_only"
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(semantic_spoof, schema)
+
+        generated_draft_spoof = json.loads(json.dumps(baseline))
+        generated_draft_spoof["generated_draft_semantic_pass"] = True
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(generated_draft_spoof, schema)
+
+        missing_gate = json.loads(json.dumps(baseline))
+        missing_gate["same_output_gate_refs"].pop("unsafe_ledger")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_gate, schema)
+
+        rust_replay_not_direct = json.loads(json.dumps(baseline))
+        rust_replay_not_direct["same_output_gate_refs"]["rust_replay"].pop("replay_kind")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(rust_replay_not_direct, schema)
+
+        missing_claim_boundary = json.loads(json.dumps(baseline))
+        missing_claim_boundary.pop("claim_boundary")
+        with self.assertRaises(jsonschema.exceptions.ValidationError):
+            jsonschema.validate(missing_claim_boundary, schema)
+
+    def test_real_fdb_calc_crc32_verified_unsafe_baseline_matches_schema(self) -> None:
+        schema = load_json(
+            REPO_ROOT
+            / "validation"
+            / "auto-translation-template"
+            / "c2rust-verified-unsafe-baseline.schema.json"
+        )
+        artifact = load_json(
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-calc-crc32"
+            / "l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json"
+        )
+
+        jsonschema.validate(artifact, schema)
+
+    def test_cfg_template_schema_pins_control_flow_refusal_kinds(self) -> None:
+        schema_path = REPO_ROOT / "validation" / "cfg-template" / "cfg.schema.json"
+        schema = load_json(schema_path)
+
+        kind_enum = set(
+            schema["definitions"]["unsupportedControlFlow"]["properties"]["kind"]["enum"]
+        )
+        self.assertTrue(
+            {
+                "goto",
+                "switch",
+                "label",
+                "case",
+                "default",
+                "setjmp",
+                "longjmp",
+                "inline_assembly",
+                "relooper_refusal",
+            }.issubset(kind_enum)
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

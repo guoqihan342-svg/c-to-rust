@@ -1,0 +1,36 @@
+        "worker_report_path": repo_relative(report_path, repo_root=repo_root),
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "diagnostics": diagnostics,
+        "attempts": [
+            repair_attempt_payload(
+                attempt_number=attempt_number,
+                summary_status=summary_status,
+                process_returncode=process_returncode,
+                exit_code=exit_code,
+                summary_path=repo_relative(summary_path, repo_root=repo_root),
+                report_path=repo_relative(report_path, repo_root=repo_root),
+                logs={
+                    "stdout": repo_relative(stdout_path, repo_root=repo_root),
+                    "stderr": repo_relative(stderr_path, repo_root=repo_root),
+                },
+                root_cause_key=root_cause_key,
+                retry_of=retry_of,
+                rollback_evidence=rollback_evidence,
+                diagnostics=diagnostics,
+            )
+        ],
+        "retry_command": retry_command,
+        "revalidate_gate": "competition-run-summary.final_gate.status == passed",
+    }
+    if rejected_summary_evidence is not None:
+        hint["rejected_summary_evidence"] = rejected_summary_evidence
+    if handoff_contract is not None:
+        hint["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        hint["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        hint["opencode_contract_verification"] = opencode_contract_verification
+    return hint

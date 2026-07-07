@@ -1,0 +1,200 @@
+    if alias_contract.get("decision") == "requires_noalias_contract" or any(
+        isinstance(risk, dict)
+        and (
+            risk.get("risk_level") == "unknown_alias"
+            or risk.get("gate_decision") == "requires_noalias_contract"
+            or risk.get("requires_noalias") is True
+        )
+        for risk in alias_risks
+    ):
+        return (
+            "L2",
+            {
+                "feature": "alias_requires_noalias_contract",
+                "risk_count": len(alias_risks),
+                "weight": "medium",
+            },
+        )
+    return None
+
+
+def typed_ir_candidate_route_signal(
+    candidate_generation: dict[str, Any], *, scalar_only: bool = False
+) -> tuple[str, dict[str, Any]] | None:
+    typed_ir = candidate_generation.get("typed_ir")
+    if not isinstance(typed_ir, dict):
+        return None
+    status = str(typed_ir.get("status", ""))
+    candidate_route = typed_ir.get("candidate_route")
+    route = candidate_route.get("route") if isinstance(candidate_route, dict) else None
+    token_cost = candidate_route.get("token_cost") if isinstance(candidate_route, dict) else None
+    if status == "generated" and route == "GenericTypedIr" and typed_ir.get("rust_draft_generated") is True:
+        scalar_admission = typed_ir.get("scalar_admission", {})
+        if isinstance(scalar_admission, dict) and scalar_admission.get("status") == "unresolved":
+            unresolved = scalar_admission.get("unresolved", [])
+            return (
+                "L1",
+                {
+                    "feature": "typed_ir_scalar_admission_unresolved",
+                    "route": "GenericTypedIr",
+                    "unresolved_count": len(unresolved) if isinstance(unresolved, list) else 0,
+                    "weight": "requires_contract_or_domain_evidence",
+                },
+            )
+        if scalar_only and token_cost == 0:
+            return (
+                "L0",
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+            )
+        return (
+            "L1",
+            {
+                "feature": "typed_ir_candidate_generated",
+                "route": "GenericTypedIr",
+                "weight": "generic_typed_ir",
+            },
+        )
+    if status == "unsupported":
+        reason = str(typed_ir.get("unsupported_reason") or typed_ir.get("reason") or "typed_ir_candidate_unsupported")
+        return (
+            "L2",
+            {
+                "feature": "typed_ir_candidate_unsupported",
+                "reason": reason,
+                "weight": "repair_queue",
+            },
+        )
+    return None
+
+
+def route_translator(level: str) -> dict[str, Any]:
+    if level == "L4":
+        return {"kind": "refuse", "candidate_generation_allowed": False}
+    if level in {"L0", "L1", "L2"}:
+        return {"kind": "tier1", "candidate_generation_allowed": True}
+    return {"kind": "agent", "candidate_generation_allowed": True}
+
+
+def emit_validation_profile(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+    oracle: dict[str, Any],
+    rust_check: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Write the profile that owns required gates for this route.
+
+    Route status selects the profile; profile status records whether every
+    required gate is present and passed. Generated candidate replay or diff
+    evidence remains diagnostic unless accepted evidence is explicitly
+    authoritative for the route and all profile gates are satisfied.
+    """
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    goal = route_decision.get("policy", {}).get("goal", "dev")
+    level = str(route_decision.get("level", "L4"))
+    profile = route_decision.get("verification_profile") or validation_profile_name(level, goal)
+    required = required_gates_for_profile(level, goal)
+    skipped = []
+    accepted_authoritative = accepted_evidence_authoritative_route(route_decision)
+    if route_decision.get("translator", {}).get("kind") == "refuse" and not accepted_authoritative:
+        skipped.append({"gate": "candidate_generation", "reason": "route_refused"})
+    if "compile" in required and rust_check.get("status") not in {"passed", "failed"}:
+        skipped.append({"gate": "compile", "reason": rust_check.get("status", "unknown")})
+    if "c_oracle_diff" in required and oracle.get("status") != "C_ORACLE_GENERATED":
+        skipped.append({"gate": "c_oracle_diff", "reason": oracle.get("status", "missing")})
+    for gate in required:
+        if gate in {"compile", "c_oracle_diff"}:
+            continue
+        if gate == "rust_tests":
+            test_translation = read_json(evidence_dir / f"{prefix}-test-translation-generated.json")
+            if test_translation.get("status") not in {"recorded", "passed"}:
+                skipped.append({"gate": gate, "reason": test_translation.get("status", "missing")})
+            continue
+        if gate == "unsafe_ledger":
+            accepted_ledger = accepted is not None and accepted.get("reports", {}).get("unsafe_ledger", {}).get("status") == "passed"
+            unsafe_ledger = evidence_dir / f"{prefix}-unsafe-ledger.json"
+            generated_ledger = unsafe_ledger.exists() and read_json(unsafe_ledger).get("status") == "passed"
+            if not accepted_ledger and not generated_ledger:
+                skipped.append({"gate": gate, "reason": "unsafe_ledger_not_passed"})
+            continue
+        skipped.append({"gate": gate, "reason": "required_gate_not_available_in_dev_evidence"})
+    compile_passed = rust_check.get("status") == "passed"
+    oracle_passed = oracle.get("status") == "C_ORACLE_GENERATED"
+    oracle_contract = oracle_boundary_contract(spec, accepted=accepted, oracle=oracle)
+    if accepted is not None and oracle_contract.get("status") != "sufficient_for_semantic_pass":
+        skipped.append(
+            {
+                "gate": "oracle_boundary_contract",
+                "reason": oracle_contract.get("status", "missing"),
+                "insufficient": oracle_contract.get("insufficient_reasons", []),
+            }
+        )
+    result = "passed" if not skipped and compile_passed and oracle_passed else "blocked" if level == "L4" else "incomplete"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "source_commit": source_commit(spec),
+        "source_identity": source_identity(spec),
+        "status": result,
+        "profile": profile,
+        "route_level": level,
+        "goal": goal,
+        "competition_environment": competition_environment_identity(),
+        "required_gates": required,
+        "optional_gates": optional_gates_for_profile(level, goal),
+        "skipped_gates": skipped,
+        "required_gate_status": {
+            "compile": rust_check.get("status"),
+            "c_oracle_diff": oracle.get("status"),
+        },
+        "candidate_generation": route_decision.get("candidate_generation", {}),
+        "scalar_ub_contract": route_decision.get("scalar_ub_contract", scalar_ub_contract(spec)),
+        "oracle_boundary_contract": oracle_contract,
+        "accepted_evidence_authoritative": accepted_authoritative,
+        "generated_draft_semantic_pass": False,
+        "loop_policy": {
+            "source": "run_policy",
+            "fixed_project_loop_count_required": False,
+            "stress_loops": spec.get("verification_profile", {}).get("stress_loops"),
+        },
+        "tool_boundaries": {
+            "c_ub": ["clang_diagnostics", "sanitizer_oracle", "unsupported_evidence"],
+            "rust_ub": ["miri", "unsafe_ledger", "rust_verification_tools"],
+        },
+    }
+    write_json(evidence_dir / f"{prefix}-validation-profile.json", payload)
+    return payload
+
+
+def validation_profile_name(level: str, goal: str) -> str:
+    return f"{level}-{goal}"
+
+
+def required_gates_for_profile(level: str, goal: str) -> list[str]:
+    gates = ["compile", "c_oracle_diff"]
+    if level in {"L1", "L2", "L3"}:
+        gates.extend(["unsafe_ledger", "rust_tests"])
+    if level in {"L2", "L3"}:
+        gates.extend(["fuzz_property", "miri"])
+    if level == "L3" and goal in {"ci-merge", "release"}:
+        gates.append("kani")
+    if goal == "release":
+        gates.extend(["negative_diff", "evidence_cleanliness"])
+    return gates
+
+
+def optional_gates_for_profile(level: str, goal: str) -> list[str]:
+    optional = ["negative_diff", "evidence_cleanliness"]
+    if level in {"L0", "L1"}:
+        optional.extend(["fuzz_property", "miri"])
+    if goal != "release":
+        optional.append("kani")
+    return optional

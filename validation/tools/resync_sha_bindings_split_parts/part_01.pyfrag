@@ -1,0 +1,52 @@
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        action="append",
+        dest="seeds",
+        help="Judge-chain seed JSON file. May be repeated. Only valid with --scope judge-chain.",
+    )
+    parser.add_argument("--max-passes", type=int, default=8)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Fail when the scan would update bindings, needs more passes, or finds missing/self/cycle refs. "
+            "Intended for CI drift gates; usually combined with --dry-run."
+        ),
+    )
+    return parser.parse_args()
+
+
+def exit_code_for_result(result: dict[str, Any], *, check: bool = False) -> int:
+    if not check:
+        return 0 if result["status"] in {"updated", "unchanged", "would_update"} else 1
+    if result["status"] != "unchanged":
+        return 1
+    for key in ("missing_refs", "self_refs", "cycle_refs"):
+        if result.get(key):
+            return 1
+    return 0
+
+
+def main() -> int:
+    args = parse_args()
+    repo_root = Path(args.repo_root)
+    if args.scope == "judge-chain":
+        if args.scan_roots:
+            raise SystemExit("--scan-root cannot be combined with --scope judge-chain; use --seed instead")
+        seeds = [Path(value) for value in args.seeds] if args.seeds else DEFAULT_JUDGE_CHAIN_SEEDS
+        result = resync_judge_chain(repo_root=repo_root, seeds=seeds, max_passes=args.max_passes, dry_run=args.dry_run)
+    else:
+        if args.seeds:
+            raise SystemExit("--seed requires --scope judge-chain")
+        scan_roots = [Path(value) for value in args.scan_roots] if args.scan_roots else DEFAULT_SCAN_ROOTS
+        result = resync_roots(repo_root=repo_root, scan_roots=scan_roots, max_passes=args.max_passes, dry_run=args.dry_run)
+    result["check"] = args.check
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return exit_code_for_result(result, check=args.check)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

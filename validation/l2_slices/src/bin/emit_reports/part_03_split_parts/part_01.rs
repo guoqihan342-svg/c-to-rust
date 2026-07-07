@@ -1,3 +1,39 @@
+fn emit_add_i32_pair_ptr_arith_performance_smoke(
+    report: &AddI32PairPtrArithOracleReport,
+    evidence_dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let iterations = 10_000_u64;
+    let mut calls = 0_u64;
+    for _ in 0..iterations {
+        for case in &report.cases {
+            let alias_case =
+                add_i32_pair_ptr_arith::AddI32PairAliasCase::from_fixture(&case.alias_case)
+                    .ok_or("add_i32_pair_ptr_arith oracle contains unknown alias_case")?;
+            let _ =
+                add_i32_pair_ptr_arith::add_i32_pair_ptr_arith(&case.lhs, &case.rhs, alias_case);
+            calls += 1;
+        }
+    }
+    write_json(
+        &evidence_dir.join("l3-add-i32-pair-ptr-arith-performance-smoke.json"),
+        &json!({
+            "schema_version": 1,
+            "level": "L3",
+            "target_id": "demo",
+            "slice_id": "add-i32-pair-ptr-arith",
+            "source_commit": "demo-add-i32-pair-ptr-arith-20260625",
+            "status": "recorded",
+            "secondary_only": true,
+            "operation": "safe Rust add_i32_pair_ptr_arith replay over fixture corpus",
+            "iterations": iterations,
+            "calls": calls,
+            "elapsed_ms": 0.0,
+            "elapsed_boundary": "Deterministic report refresh records call count; wall-clock step duration is recorded by full regression logs.",
+            "reporting_boundary": "Performance smoke is secondary evidence only and does not replace correctness gates."
+        }),
+    )
+}
+
 fn emit_store_add_one_static_l3_evidence(
     evidence_dir: &Path,
     case_count: usize,
@@ -426,4 +462,3 @@ fn emit_store_add_one_static_l3_evidence(
         }),
     )
 }
-

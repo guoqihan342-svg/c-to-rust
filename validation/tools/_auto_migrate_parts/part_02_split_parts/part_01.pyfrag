@@ -1,3 +1,303 @@
+
+def generate_rust_replay_test_draft(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    slice_spec_path: Path,
+    route_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    function_name = required_str(spec, "function_name")
+    path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    fixture = spec.get("fixture_contract", {})
+    fixture_path_text = fixture_path(spec)
+    fixture_binding = oracle_fixture_binding(spec)
+    fixture_cases_source = rust_replay_fixture_cases_source(spec, fixture_binding)
+    text = (
+        "// Auto-generated Rust replay test draft.\n"
+        "// Review before promoting into validation/l2_slices/tests.\n\n"
+        "#[test]\n"
+        f"fn replay_{safe_ident(slice_id)}_fixture_contract() {{\n"
+        f"    let _fixture = {rust_string_literal(fixture_path_text)};\n"
+        f"    let _api = {rust_string_literal(function_name)};\n"
+        "    const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;\n"
+        f"{fixture_cases_source}"
+        "}\n"
+    )
+    write_text(path, text)
+    behavior_fields = fixture.get("observable_outputs") or fixture.get("behavior_fields", [])
+    test_name = f"replay_{safe_ident(slice_id)}_fixture_contract"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "level": spec.get("level", "L3"),
+        "status": "recorded",
+        "generated_draft_semantic_pass": False,
+        "test_draft": rel(path),
+        "fixture": fixture_path_text,
+        "behavior_fields": list(behavior_fields),
+        "source_commit": source_commit(spec),
+        "repo_commit": repo_commit(),
+        "source_test_inputs": {
+            "oracle_strategy": "Generated replay draft from slice fixture contract; accepted semantics still require C_ORACLE_GENERATED.",
+            "fixtures": [
+                {
+                    "path": fixture_path_text,
+                    "hash": fixture_hash(spec),
+                    "operation_count": len(fixture.get("cases", [])),
+                    "source_kind": "fixture",
+                }
+            ],
+            "oracle_reports": [
+                {
+                    "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
+                    "status": "draft_or_skipped",
+                }
+            ],
+        },
+        "rust_tests": [
+            {
+                "file": rel(path),
+                "test_names": [test_name],
+                "cargo_command": f"cargo test {test_name}",
+                "framework": "cargo test",
+                "file_hash": sha256(path),
+            }
+        ],
+        "coverage": {
+            "main_paths": list(behavior_fields),
+            "error_paths": [],
+            "negative_cases": ["negative diff must be generated before acceptance"],
+        },
+        "translation_mappings": [
+            {
+                "source": fixture_path_text,
+                "rust_test": f"{rel(path)}::{test_name}",
+                "behavior_fields": list(behavior_fields),
+                "coverage_kind": "oracle_replay",
+                "status": "mapped",
+                "evidence": [
+                    {
+                        "path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"),
+                        "status": "not_semantic_pass",
+                    }
+                ],
+            }
+        ],
+        "evidence_links": {
+            "rust_draft": {
+                "path": rel(evidence_dir / f"l3-{slice_id}-rust-draft.rs"),
+                "status": generated_rust_draft_status(route_decision),
+            },
+            "c_oracle": {"path": rel(evidence_dir / f"l3-{slice_id}-c-oracle-status.json"), "status": "draft_or_skipped"},
+        },
+        "known_gaps": [
+            "Generated replay test is a draft until accepted C oracle and Rust replay reports are produced."
+        ],
+        "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+    }
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", payload)
+    return payload
+
+
+def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    if behavior_fields(spec) != ["return_code"]:
+        if fdb_blob_make_replay_supported(spec):
+            return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fixture_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        crc: u32,\n",
+        "        buf: &'static [u8],\n",
+        "        size: usize,\n",
+        "        return_code: u32,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            '        assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);\n',
+            f"        let actual = {function_name}(case.crc, case.buf, case.size);\n",
+            '        assert_eq!(actual, case.return_code, "{} return_code drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_blob_make" and behavior_fields(spec) == [
+        "return_same_blob",
+        "blob.buf",
+        "blob.size",
+    ]
+
+
+def rust_replay_fdb_blob_make_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_blob_make_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this fdb_blob_make replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        value_buf: &'static [u8],\n",
+        "        value_buf_is_null: bool,\n",
+        "        buf_len: usize,\n",
+        "        initial_blob_size: usize,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        if !case.value_buf_is_null {\n",
+            '            assert!(case.value_buf.len() >= case.buf_len, "{} fixture buffer shorter than declared length", case.id);\n',
+            "        }\n",
+            "        let value_ptr: *const core::ffi::c_void = if case.value_buf_is_null {\n",
+            "            core::ptr::null::<core::ffi::c_void>()\n",
+            "        } else {\n",
+            "            case.value_buf.as_ptr().cast::<core::ffi::c_void>()\n",
+            "        };\n",
+            "        let mut blob = FdbBlob { buf: core::ptr::null_mut(), size: case.initial_blob_size };\n",
+            "        let blob_ptr = &mut blob as *mut FdbBlob;\n",
+            "        let returned_ptr = {\n",
+            f"            let returned = {function_name}(&mut blob, value_ptr, case.buf_len);\n",
+            "            returned as *mut FdbBlob\n",
+            "        };\n",
+            '        assert_eq!(returned_ptr, blob_ptr, "{} return_same_blob drifted", case.id);\n',
+            '        assert_eq!(blob.buf, value_ptr as *mut core::ffi::c_void, "{} blob.buf drifted", case.id);\n',
+            '        assert_eq!(blob.size, case.buf_len, "{} blob.size drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_blob_make_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    return_same_blob = expected_outputs.get("return_same_blob")
+    expected_blob_buf = expected_outputs.get("blob.buf")
+    expected_blob_size = expected_outputs.get("blob.size")
+    buf_len = case_payload.get("buf_len")
+    initial_blob_size = case_payload.get("initial_blob_size", 0)
+    value_buf = case_payload.get("value_buf")
+    if return_same_blob is not True or expected_blob_buf != "value_buf":
+        return None
+    if not is_size_value(buf_len) or not is_size_value(initial_blob_size):
+        return None
+    if expected_blob_size != int(buf_len):
+        return None
+    if value_buf is None:
+        value_buf_literal = "&[]"
+        value_buf_is_null = "true"
+    elif is_byte_list(value_buf):
+        value_buf_literal = rust_byte_slice_literal(value_buf)
+        value_buf_is_null = "false"
+    else:
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"value_buf: {value_buf_literal}, "
+        f"value_buf_is_null: {value_buf_is_null}, "
+        f"buf_len: {int(buf_len)}usize, "
+        f"initial_blob_size: {int(initial_blob_size)}usize "
+        "},\n"
+    )
+
+
+def rust_replay_fixture_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    crc = case_payload.get("crc")
+    buf = case_payload.get("buf")
+    size = case_payload.get("size")
+    if not is_uint32_value(expected_return) or not is_uint32_value(crc):
+        return None
+    if not is_size_value(size) or not is_byte_list(buf):
+        return None
+    if int(size) != len(buf):
+        return None
+
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"crc: {int(crc)}u32, "
+        f"buf: {rust_byte_slice_literal(buf)}, "
+        f"size: {int(size)}usize, "
+        f"return_code: {int(expected_return)}u32 "
+        "},\n"
+    )
+
+
+def rust_byte_slice_literal(values: list[int]) -> str:
+    if not values:
+        return "&[]"
+    return "&[" + ", ".join(f"{item}u8" for item in values) + "]"
+
+
+def rust_string_literal(value: Any) -> str:
+    return json.dumps(str(value))
+
+
 def run_generated_rust_replay(
     spec: dict[str, Any],
     evidence_dir: Path,
@@ -198,216 +498,3 @@ def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tupl
                 "blocked_repairs": patch["blocked_repairs"],
             },
         }
-    write_json(evidence_dir / "rust-check.json", payload)
-    return payload, patch
-
-
-def rust_check_once(path: Path) -> dict[str, Any]:
-    with tempfile.TemporaryDirectory(prefix="c2r-rust-check-") as build_dir:
-        cmd = [
-            "rustc",
-            "--edition=2021",
-            "--crate-type=lib",
-            "--error-format=json",
-            "--out-dir",
-            build_dir,
-            str(path),
-        ]
-        result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
-    errors = [
-        json.loads(line)
-        for line in result.stderr.splitlines()
-        if line.startswith("{") and '"level":"error"' in line.replace(" ", "")
-    ]
-    return {
-        "command": " ".join(cmd),
-        "returncode": result.returncode,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "errors": errors,
-    }
-
-
-RUST_KEYWORDS = {
-    "as",
-    "async",
-    "await",
-    "break",
-    "const",
-    "continue",
-    "crate",
-    "dyn",
-    "else",
-    "enum",
-    "extern",
-    "false",
-    "fn",
-    "for",
-    "if",
-    "impl",
-    "in",
-    "let",
-    "loop",
-    "match",
-    "mod",
-    "move",
-    "mut",
-    "pub",
-    "ref",
-    "return",
-    "self",
-    "Self",
-    "static",
-    "struct",
-    "super",
-    "trait",
-    "true",
-    "type",
-    "unsafe",
-    "use",
-    "where",
-    "while",
-}
-
-
-def try_safe_self_heal(
-    spec: dict[str, Any],
-    evidence_dir: Path,
-    draft_path: Path,
-    first: dict[str, Any],
-    *,
-    round_number: int = 1,
-    append_events: bool = False,
-) -> dict[str, Any]:
-    text = draft_path.read_text(encoding="utf-8")
-    keyword_param = next(
-        (
-            match.group(1)
-            for match in re.finditer(
-                r"(?<![#A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)\s*:",
-                text,
-            )
-            if match.group(1) in RUST_KEYWORDS
-        ),
-        None,
-    )
-    if keyword_param is None:
-        return write_blocked_patch(
-            spec,
-            evidence_dir,
-            draft_path,
-            first["errors"],
-            round_number=round_number,
-            append_events=append_events,
-        )
-
-    patched = re.sub(
-        rf"(?<![#A-Za-z0-9_]){re.escape(keyword_param)}(?![A-Za-z0-9_])",
-        f"r#{keyword_param}",
-        text,
-    )
-    if patched == text:
-        return write_blocked_patch(
-            spec,
-            evidence_dir,
-            draft_path,
-            first["errors"],
-            round_number=round_number,
-            append_events=append_events,
-        )
-
-    draft_path.write_text(patched, encoding="utf-8")
-    slice_id = required_str(spec, "slice_id")
-    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
-    base_event = {
-        "schema_version": 1,
-        "patch_id": f"patch-rust-keyword-identifiers-{round_number}",
-        "target_id": spec.get("target_id"),
-        "slice_id": slice_id,
-        "round": round_number,
-        "files": [{"path": rel(draft_path), "spans": [{"line_start": 1, "line_end": max(1, len(text.splitlines()))}]}],
-        "reason": "Rust keyword used as generated identifier; convert to raw identifier without changing C oracle or fixture semantics.",
-        "expected_error_delta": {
-            "before": [rustc_error_code(error) for error in first["errors"]],
-            "after_expected": [],
-        },
-        "forbidden_changes": [
-            "c_oracle_contract",
-            "fixture_expected_behavior",
-            "accepted_metadata_differences",
-            "public_api_outside_impact_set",
-            "source_slice_boundary",
-            "unsafe_budget_policy",
-        ],
-        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-{round_number}",
-        "ai_usage": {"used": False},
-        "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
-    }
-    write_patch_events(events_path, [{**base_event, "status": "applied"}], append=append_events)
-    return {
-        "patch_events": rel(events_path),
-        "blocked_repairs": rel(evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"),
-        "blocked_repairs_status": "recorded",
-        "blocked_repairs_items": [],
-        "status": "applied",
-        "self_heal_applied": True,
-        "_last_patch_event": base_event,
-    }
-
-
-def run_safe_self_heal_loop(
-    spec: dict[str, Any],
-    evidence_dir: Path,
-    draft_path: Path,
-    first: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    current = first
-    for round_number in range(1, REPAIR_ROUND_LIMIT + 1):
-        patch = try_safe_self_heal(
-            spec,
-            evidence_dir,
-            draft_path,
-            current,
-            round_number=round_number,
-            append_events=round_number > 1,
-        )
-        if not patch.get("self_heal_applied"):
-            return current, patch
-        current = rust_check_once(draft_path)
-        if current["returncode"] == 0:
-            return current, mark_self_heal_verified(spec, evidence_dir, patch)
-    return current, write_blocked_patch(
-        spec,
-        evidence_dir,
-        draft_path,
-        current["errors"],
-        round_number=REPAIR_ROUND_LIMIT,
-        append_events=True,
-    )
-
-
-def mark_self_heal_verified(
-    spec: dict[str, Any],
-    evidence_dir: Path,
-    patch: dict[str, Any],
-) -> dict[str, Any]:
-    slice_id = required_str(spec, "slice_id")
-    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
-    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
-    base_event = patch.get("_last_patch_event")
-    if isinstance(base_event, dict):
-        write_patch_events(events_path, [{**base_event, "status": "verified"}], append=True)
-    blocked = blocked_repairs_payload(spec, [])
-    write_json(blocked_path, blocked)
-    visible_patch = dict(patch)
-    visible_patch.pop("_last_patch_event", None)
-    visible_patch.update(
-        {
-            "blocked_repairs": rel(blocked_path),
-            "blocked_repairs_status": blocked["status"],
-            "blocked_repairs_items": blocked["blocked_repairs"],
-            "status": "recorded",
-            "self_heal_applied": True,
-        }
-    )
-    return visible_patch

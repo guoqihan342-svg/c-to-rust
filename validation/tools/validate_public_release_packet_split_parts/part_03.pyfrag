@@ -1,0 +1,72 @@
+
+def before_after_unit_has_measured_unsafe_reduction(unit: dict[str, Any]) -> bool:
+    unsafe_reduction = unit.get("unsafe_reduction")
+    return isinstance(unsafe_reduction, dict) and unsafe_reduction.get("status") == "measured"
+
+
+def require_non_negative_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def expected_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:
+    workflow = bundle.get("workflow_metrics") if isinstance(bundle.get("workflow_metrics"), dict) else {}
+    rollup = workflow.get("rollup") if isinstance(workflow.get("rollup"), dict) else {}
+    repair_activity = rollup.get("repair_activity") if isinstance(rollup.get("repair_activity"), dict) else {}
+    return {
+        "repair_activity": repair_activity,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
+            "They are not a semantic gate and do not increase translation coverage."
+        ),
+    }
+
+
+def require_release_notes_match_bundle(packet: dict[str, Any], bundle: dict[str, Any], *, repo_root: Path) -> None:
+    notes_ref = require_object(packet.get("milestone_release_notes"), "milestone_release_notes")
+    notes_path = judge_validator.repo_path(str(notes_ref.get("path")), repo_root=repo_root)
+    actual_notes = normalize_markdown(notes_path.read_text(encoding="utf-8-sig"))
+    try:
+        expected_notes = normalize_markdown(milestone_release_notes.build_release_notes(bundle))
+    except SystemExit as error:
+        raise ValueError(f"judge_milestone_bundle release notes contract failed: {error}") from error
+    if actual_notes != expected_notes:
+        raise ValueError("milestone_release_notes must match judge_milestone_bundle rendered release notes")
+
+
+def normalize_markdown(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return normalized.rstrip("\n") + "\n"
+
+
+def resolve_packet_path(path: Path, *, repo_root: Path) -> Path:
+    if path.is_absolute():
+        resolved = path.resolve()
+        resolved.relative_to(repo_root.resolve())
+        return resolved
+    path_text = path.as_posix()
+    judge_validator.assert_repo_relative_posix(path_text)
+    return judge_validator.repo_path(path_text, repo_root=repo_root)
+
+
+def require_object(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def require_false(value: Any, label: str) -> None:
+    if value is not False:
+        raise ValueError(f"{label} must be false")
+
+
+def require_zero(value: Any, label: str) -> None:
+    if value != 0:
+        raise ValueError(f"{label} must be 0")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,432 @@
+    if auto_recovered > observed:
+        blockers.append("repair_accounting_auto_recovered_exceeds_observed")
+    if baseline_total_unsafe is not None and unsafe_reduced_by > baseline_total_unsafe:
+        blockers.append("repair_accounting_unsafe_reduced_by_exceeds_measured_baseline")
+    if unit_unsafe_totals is not None:
+        unit_rollup_matches = (
+            unit_unsafe_totals["complete"]
+            and int_or_zero(rollup.get("measured_unsafe_unit_count")) == unit_unsafe_totals["unit_count"]
+            and unsafe_reduction.get("status") == "measured"
+            and baseline_total_unsafe == unit_unsafe_totals["baseline_total_unsafe"]
+            and int_or_none(unsafe_reduction.get("current_total_unsafe")) == unit_unsafe_totals["current_total_unsafe"]
+            and int_or_none(unsafe_reduction.get("reduced_by")) == unit_unsafe_totals["reduced_by"]
+            and unsafe_reduced_by == unit_unsafe_totals["reduced_by"]
+        )
+        if not unit_rollup_matches:
+            blockers.append("repair_accounting_unsafe_reduction_rollup_mismatch")
+    if observed > 0 and rollback_evidence_count == 0:
+        blockers.append("repair_accounting_rollback_evidence_missing_for_observed_repairs")
+    if verified_baseline_units + missing_verified_baseline_units != bound_units:
+        blockers.append("repair_accounting_verified_baseline_counts_mismatch")
+    expected_all_units_verified = (
+        bound_units > 0 and verified_baseline_units == bound_units and missing_verified_baseline_units == 0
+    )
+    if all_units_verified_baseline_bound is not expected_all_units_verified:
+        blockers.append("repair_accounting_verified_baseline_all_bound_mismatch")
+    return blockers
+
+
+def nested_artifact_ref_blockers(before_after_repair_exhibit: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for source in object_list(before_after_repair_exhibit.get("sources")):
+        for blocker in source.get("nested_artifact_ref_blockers", []):
+            if isinstance(blocker, str) and blocker:
+                blockers.append(blocker)
+    return blockers
+
+
+def before_after_workflow_metrics_ref_blockers(
+    core_sources: list[dict[str, Any]],
+    workflow_sources: list[dict[str, Any]],
+) -> list[str]:
+    workflow_by_entrypoint = {
+        source["entrypoint_id"]: source
+        for source in workflow_sources
+        if isinstance(source.get("entrypoint_id"), str)
+    }
+    blockers: list[str] = []
+    for core_source in core_sources:
+        entrypoint_id = core_source.get("entrypoint_id")
+        if not isinstance(entrypoint_id, str):
+            continue
+        workflow_source = workflow_by_entrypoint.get(entrypoint_id)
+        if workflow_source is None:
+            continue
+        workflow_units = before_after_units_by_id(workflow_source.get("before_after_units"))
+        if not workflow_units:
+            continue
+        core_units = before_after_units_by_id(core_source.get("before_after_units"))
+        for unit_id, workflow_unit in workflow_units.items():
+            if not unit_has_before_after_artifact_ref(workflow_unit):
+                continue
+            core_unit = core_units.get(unit_id)
+            if core_unit is None:
+                blockers.append(f"before_after_exhibit_workflow_metrics_unit_missing:{entrypoint_id}:{unit_id}")
+                continue
+            for field in BEFORE_AFTER_ARTIFACT_REF_FIELDS:
+                workflow_ref = workflow_unit.get(field)
+                if not isinstance(workflow_ref, dict):
+                    continue
+                core_ref = core_unit.get(field)
+                if not isinstance(core_ref, dict):
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_ref_missing:{entrypoint_id}:{unit_id}:{field}"
+                    )
+                    continue
+                if ref_binding_tuple(core_ref) != ref_binding_tuple(workflow_ref):
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_ref_mismatch:{entrypoint_id}:{unit_id}:{field}"
+                    )
+            workflow_unsafe = measured_unsafe_reduction_tuple(workflow_unit.get("unsafe_reduction"))
+            core_unsafe = measured_unsafe_reduction_tuple(core_unit.get("unsafe_reduction"))
+            if workflow_unsafe is not None or core_unsafe is not None:
+                if core_unsafe is None:
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_unsafe_reduction_missing:{entrypoint_id}:{unit_id}"
+                    )
+                elif workflow_unsafe is None or core_unsafe != workflow_unsafe:
+                    blockers.append(
+                        f"before_after_exhibit_workflow_metrics_unsafe_reduction_mismatch:{entrypoint_id}:{unit_id}"
+                    )
+    return blockers
+
+
+def c2rust_baseline_manifest_ref_blockers(
+    route_governance_sources: list[dict[str, Any]],
+    *,
+    repo_root: Path,
+) -> list[str]:
+    blockers: list[str] = []
+    for source in route_governance_sources:
+        entrypoint_id = str(source.get("entrypoint_id", "unknown"))
+        baseline = source.get("c2rust_baseline")
+        if not isinstance(baseline, dict) or baseline.get("report_kind") != "c2rust-baseline-rollup":
+            continue
+        manifest_count = int_or_zero(baseline.get("manifest_count"))
+        manifests = object_list(baseline.get("manifests"))
+        if manifest_count > 0 and not manifests:
+            blockers.append(f"c2rust_baseline_manifest_count_without_bound_refs:{entrypoint_id}")
+        if manifests and manifest_count != len(manifests):
+            blockers.append(f"c2rust_baseline_manifest_count_mismatch:{entrypoint_id}")
+        for index, manifest in enumerate(manifests):
+            manifest_path = manifest.get("path") if isinstance(manifest.get("path"), str) else f"manifest:{index}"
+            ref = artifact_ref_from_existing(manifest, repo_root=repo_root)
+            if ref is None:
+                blockers.append(f"c2rust_baseline_manifest_ref_not_present:{entrypoint_id}:{manifest_path}")
+                continue
+            status = ref.get("status")
+            if status == "sha256_mismatch":
+                blockers.append(f"c2rust_baseline_manifest_ref_sha256_mismatch:{entrypoint_id}:{manifest_path}")
+            elif status == "missing_expected_sha256":
+                blockers.append(f"c2rust_baseline_manifest_ref_missing_sha256:{entrypoint_id}:{manifest_path}")
+            elif status != "present":
+                blockers.append(f"c2rust_baseline_manifest_ref_not_present:{entrypoint_id}:{manifest_path}")
+    return blockers
+
+
+def before_after_units_by_id(value: object) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for unit in object_list(value):
+        unit_id = unit.get("unit_id")
+        if isinstance(unit_id, str) and unit_id and unit_id not in result:
+            result[unit_id] = unit
+    return result
+
+
+def unit_has_before_after_artifact_ref(value: dict[str, Any]) -> bool:
+    return any(isinstance(value.get(field), dict) for field in BEFORE_AFTER_ARTIFACT_REF_FIELDS)
+
+
+def measured_unsafe_reduction_tuple(value: object) -> tuple[object, object, object, object] | None:
+    if not isinstance(value, dict) or value.get("status") != "measured":
+        return None
+    return (
+        value.get("status"),
+        int_or_none(value.get("baseline_total_unsafe")),
+        int_or_none(value.get("current_total_unsafe")),
+        int_or_none(value.get("reduced_by")),
+    )
+
+
+def ref_binding_tuple(value: dict[str, Any]) -> tuple[object, object]:
+    return value.get("path"), value.get("sha256")
+
+
+def before_after_unit_unsafe_reduction_totals(before_after_repair_exhibit: dict[str, Any]) -> dict[str, Any] | None:
+    unit_count = 0
+    baseline_total = 0
+    current_total = 0
+    reduced_total = 0
+    complete = True
+    for source in object_list(before_after_repair_exhibit.get("sources")):
+        for unit in object_list(source.get("before_after_units")):
+            unsafe_reduction = unit.get("unsafe_reduction")
+            if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+                continue
+            unit_count += 1
+            baseline = int_or_none(unsafe_reduction.get("baseline_total_unsafe"))
+            current = int_or_none(unsafe_reduction.get("current_total_unsafe"))
+            reduced_by = int_or_none(unsafe_reduction.get("reduced_by"))
+            if baseline is None or current is None or reduced_by is None:
+                complete = False
+                continue
+            baseline_total += baseline
+            current_total += current
+            reduced_total += reduced_by
+    if unit_count == 0:
+        return None
+    return {
+        "unit_count": unit_count,
+        "complete": complete,
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": reduced_total,
+    }
+
+
+def blocked_repairs_rollup_blockers(blocked_repairs_rollup: dict[str, Any]) -> list[str]:
+    rollup = (
+        blocked_repairs_rollup.get("rollup", {})
+        if isinstance(blocked_repairs_rollup.get("rollup"), dict)
+        else {}
+    )
+    status_counts = rollup.get("status_counts", {}) if isinstance(rollup.get("status_counts"), dict) else {}
+    if int_or_zero(status_counts.get("stale")) > 0 or int_or_zero(status_counts.get("incomplete")) > 0:
+        return ["blocked_repairs_rollup_stale_or_incomplete"]
+    return []
+
+
+def run_report_contract_blockers(run_report: dict[str, Any], *, entrypoints: list[dict[str, Any]]) -> list[str]:
+    blockers: list[str] = []
+    if run_report.get("schema_version") != 1:
+        blockers.append("run_report_schema_version_must_be_1")
+    if run_report.get("report_kind") != "judge-entrypoints-run-report":
+        blockers.append("run_report_kind_must_be_judge_entrypoints_run_report")
+    entrypoint_count = run_report.get("entrypoint_count")
+    if isinstance(entrypoint_count, int) and entrypoint_count != len(entrypoints):
+        blockers.append("run_report_entrypoint_count_mismatch")
+    validation = run_report.get("validation")
+    if not isinstance(validation, dict):
+        blockers.append("run_report_validation_missing")
+    elif validation.get("status") != "passed":
+        blockers.append("run_report_validation_not_passed")
+    else:
+        validated_artifacts = validation_artifacts_by_entrypoint(validation)
+        for entry in entrypoints:
+            entrypoint_id = str(entry.get("id", "unknown"))
+            key_artifacts = entry.get("key_artifacts")
+            if not isinstance(key_artifacts, dict):
+                continue
+            expected_artifacts = validated_artifacts.get(entrypoint_id, {})
+            for artifact_name, artifact_value in sorted(key_artifacts.items()):
+                if artifact_value in (None, ""):
+                    continue
+                if artifact_name not in expected_artifacts:
+                    blockers.append(f"validated_artifact_binding_missing:{entrypoint_id}:{artifact_name}")
+    return blockers
+
+
+def validation_proof_class_contract(run_report: dict[str, Any]) -> dict[str, str]:
+    validation = run_report.get("validation")
+    if not isinstance(validation, dict):
+        return {}
+    contract = validation.get("proof_class_contract")
+    if not isinstance(contract, dict) or contract.get("status") != "passed":
+        return {}
+    entrypoints = contract.get("entrypoints")
+    if not isinstance(entrypoints, dict):
+        return {}
+    return {
+        str(entrypoint_id): proof_class
+        for entrypoint_id, proof_class in entrypoints.items()
+        if isinstance(proof_class, str)
+    }
+
+
+def proof_class_contract_blockers(
+    entrypoints: list[dict[str, Any]],
+    *,
+    proof_class_contract: dict[str, str],
+) -> list[str]:
+    blockers: list[str] = []
+    for entry in entrypoints:
+        entrypoint_id = str(entry.get("id", "unknown"))
+        source_proof_class = entry.get("proof_class", "unknown")
+        contract_proof_class = proof_class_contract.get(entrypoint_id)
+        if contract_proof_class is not None and source_proof_class != contract_proof_class:
+            blockers.append(f"proof_class_contract_mismatch:{entrypoint_id}")
+        if contract_proof_class is None and source_proof_class == "competition-exact":
+            blockers.append(f"proof_class_contract_missing_for_competition_exact:{entrypoint_id}")
+    return blockers
+
+
+def trusted_entrypoint_proof_class(
+    entry: dict[str, Any],
+    *,
+    proof_class_contract: dict[str, str],
+) -> str:
+    entrypoint_id = str(entry.get("id", "unknown"))
+    contract_proof_class = proof_class_contract.get(entrypoint_id)
+    if contract_proof_class is not None:
+        return contract_proof_class
+    source_proof_class = entry.get("proof_class", "unknown")
+    if source_proof_class == "competition-exact":
+        return "unknown"
+    return source_proof_class if isinstance(source_proof_class, str) else "unknown"
+
+
+def source_summary_claim(run_report: dict[str, Any]) -> dict[str, Any]:
+    summary = run_report.get("summary")
+    if not isinstance(summary, dict):
+        return {}
+    claim = summary.get("claim_boundary")
+    return claim if isinstance(claim, dict) else {}
+
+
+def build_bundle_summary(
+    *,
+    status: str,
+    run_report: dict[str, Any],
+    readiness: dict[str, Any],
+    blockers: list[str],
+    claim_scope: dict[str, Any],
+    publishability: dict[str, Any],
+) -> dict[str, Any]:
+    executed = int_or_zero(readiness.get("executed_count"))
+    configured = int_or_zero(readiness.get("configured_count"))
+    external_milestone_claim_ready = publishability.get("external_milestone_claim_ready") is True
+    return {
+        "report_kind": "judge-milestone-bundle-summary",
+        "headline": (
+            f"External milestone bundle {status}: judge entrypoints {run_report.get('status', 'unknown')}; "
+            f"{executed}/{configured} executed; semantic_gate=false"
+        ),
+        "source_run_headline": run_report.get("summary", {}).get("headline")
+        if isinstance(run_report.get("summary"), dict)
+        else None,
+        "external_milestone_claim_ready": external_milestone_claim_ready,
+        "claim_scope": claim_scope,
+        "blockers": blockers,
+        "readiness": deepcopy(readiness),
+    }
+
+
+def build_proof_classes(entrypoints: list[dict[str, Any]]) -> dict[str, Any]:
+    entrypoint_proofs = [
+        {
+            "id": entry.get("id"),
+            "proof_class": entry.get("proof_class", "unknown"),
+            "run_id": entry.get("run_id", "unknown"),
+            "competition_exact_host_attested": entrypoint_competition_host_attested(entry),
+        }
+        for entry in entrypoints
+    ]
+    proof_classes = sorted(
+        {
+            str(entry.get("proof_class", "unknown"))
+            for entry in entrypoints
+            if isinstance(entry.get("proof_class", "unknown"), str)
+        }
+    )
+    rank = {"unknown": 0, "local-simulation": 1, "wsl-local-simulation": 2, "ci-approximation": 3, "competition-exact": 4}
+    highest = max(proof_classes, key=lambda value: rank.get(value, 0), default="unknown")
+    non_exact = [entry for entry in entrypoint_proofs if entry.get("proof_class") != "competition-exact"]
+    missing_host_attestation = [
+        str(entry.get("id", "unknown"))
+        for entry in entrypoint_proofs
+        if entry.get("proof_class") == "competition-exact"
+        and entry.get("competition_exact_host_attested") is not True
+    ]
+    return {
+        "all": proof_classes,
+        "highest_proof_class": highest,
+        "has_competition_exact": "competition-exact" in proof_classes,
+        "all_entrypoints_competition_exact": bool(entrypoint_proofs) and not non_exact,
+        "competition_exact_host_verified": bool(entrypoint_proofs) and not non_exact and not missing_host_attestation,
+        "host_attestation_missing_entrypoints": missing_host_attestation,
+        "non_exact_entrypoints": non_exact,
+        "entrypoints": entrypoint_proofs,
+        "boundary": (
+            "Proof class describes the execution environment for this bundle. "
+            "local-simulation, wsl-local-simulation, and ci-approximation must not be described as competition-exact."
+        ),
+    }
+
+
+def build_exact_host_revalidation(
+    run_report: dict[str, Any],
+    entrypoints: list[dict[str, Any]],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    claimed_entrypoint_ids = [
+        str(entry.get("id", "unknown"))
+        for entry in entrypoints
+        if entry.get("proof_class") == "competition-exact"
+        and entrypoint_competition_host_attested(entry)
+    ]
+    result: dict[str, Any] = {
+        "report_kind": "exact-host-revalidation",
+        "required": bool(claimed_entrypoint_ids),
+        "status": "skipped",
+        "entrypoint_ids": claimed_entrypoint_ids,
+        "require_local_artifacts": True,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Competition-exact host attestation from a run report is publishable only after "
+            "revalidating the bound judge config with local artifacts."
+        ),
+    }
+    if not claimed_entrypoint_ids:
+        result["reason"] = "no_competition_exact_host_attestation_claim"
+        return result
+
+    config_ref = run_report.get("config")
+    if not isinstance(config_ref, dict) or not isinstance(config_ref.get("path"), str):
+        result.update({"status": "failed", "errors": ["run_report.config.path missing"]})
+        return result
+
+    try:
+        validator.validate_ref(config_ref, repo_root=repo_root)
+    except ValueError as error:
+        result.update({"status": "failed", "errors": [f"run_report.config {error}"]})
+        return result
+
+    config_path = str(config_ref["path"])
+    try:
+        validation = validator.validate_config(
+            resolve_input_path(Path(config_path), repo_root=repo_root),
+            require_local_artifacts=True,
+            repo_root=repo_root,
+            entrypoint_ids=claimed_entrypoint_ids,
+        )
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        result.update({"status": "failed", "errors": [str(error)]})
+        return result
+
+    result["validation_status"] = validation.get("status")
+    result["validated_config"] = validation.get("config", {})
+    result["validator_errors"] = validation.get("errors", [])
+    proof_contract = validation.get("proof_class_contract") if isinstance(validation, dict) else {}
+    if isinstance(proof_contract, dict):
+        result["proof_class_contract_status"] = proof_contract.get("status")
+        contract_entrypoints = proof_contract.get("entrypoints")
+        if isinstance(contract_entrypoints, dict):
+            result["proof_class_entrypoints"] = {
+                entrypoint_id: contract_entrypoints.get(entrypoint_id)
+                for entrypoint_id in claimed_entrypoint_ids
+            }
+    all_claimed_still_exact = all(
+        result.get("proof_class_entrypoints", {}).get(entrypoint_id) == "competition-exact"
+        for entrypoint_id in claimed_entrypoint_ids
+    )
+    if validation.get("status") == "passed" and all_claimed_still_exact:
+        result["status"] = "passed"
+    else:
+        result["status"] = "failed"
+        errors = list(result.get("validator_errors", []))
+        if not all_claimed_still_exact:
+            errors.append("proof_class_contract did not revalidate all claimed competition-exact entrypoints")
+        result["errors"] = errors or ["exact host revalidation failed"]
+    return result

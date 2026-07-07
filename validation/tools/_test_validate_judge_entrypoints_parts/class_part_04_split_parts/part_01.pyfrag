@@ -1,0 +1,423 @@
+            agent_index,
+            {
+                "report_kind": "agent-index",
+                "agent_coordination_contract": {
+                    "chat_output_is_evidence": False,
+                    "checkpoint_backend": "sqlite",
+                    "contract_kind": "agent-coordination",
+                    "roles": {
+                        "planner": {},
+                        "worker": {"isolation": "per-worker out_root"},
+                        "repairer": {"round_cap": 5},
+                        "verifier": {},
+                        "reporter": {},
+                    },
+                    "schema_version": 1,
+                    "semantic_gate": False,
+                    "worker_count": 1,
+                },
+                "agents": [
+                    {
+                        "assignment_path": repo_relative(assignment),
+                        "function": "demo_unit",
+                        "report_path": repo_relative(report),
+                        "request_path": repo_relative(request),
+                        "slice_id": "demo-unit",
+                        "source_commit": "abc123",
+                        "source_sha256": "f" * 64,
+                        "summary_path": repo_relative(summary),
+                        "worker_id": "worker-001",
+                    }
+                ],
+                "agents_by_worker_id": {
+                    "worker-001": {
+                        "assignment_path": repo_relative(assignment),
+                        "function": "demo_unit",
+                        "isolated_out_root": repo_relative(worker_root),
+                        "report_path": repo_relative(report),
+                        "request_path": repo_relative(request),
+                        "slice_id": "demo-unit",
+                        "source_commit": "abc123",
+                        "source_sha256": "f" * 64,
+                        "summary_path": repo_relative(summary),
+                        "worker_id": "worker-001",
+                    }
+                },
+                "reports": {
+                    "resume_manifest": {
+                        "path": repo_relative(resume_manifest),
+                        "report_kind": "resume-manifest",
+                        "status": "passed",
+                    },
+                },
+            },
+        )
+        write_json(
+            resume_manifest,
+            {
+                "schema_version": 1,
+                "report_kind": "resume-manifest",
+                "run_id": "competition-flashdb-before-after-exhibit",
+                "status": "passed",
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "chat_output_is_evidence": False,
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "ledger": {
+                    "path": repo_relative(ledger),
+                    "checkpoint_backend": "sqlite",
+                },
+                "context_pack": {
+                    "path": repo_relative(context_pack),
+                    "sha256": validator.sha256_file(context_pack),
+                },
+                "agent_index": {
+                    "path": repo_relative(agent_index),
+                    "sha256": validator.sha256_file(agent_index),
+                },
+                "resume_entrypoints": [
+                    "evaluate --profile",
+                    "run-plan --plan",
+                    "run-worker --assignment",
+                ],
+                "workers": [
+                    {
+                        "worker_id": "worker-001",
+                        "assignment_path": repo_relative(assignment),
+                        "request_path": repo_relative(request),
+                        "summary_path": repo_relative(summary),
+                        "report_path": repo_relative(report),
+                        "isolated_out_root": repo_relative(worker_root),
+                        "replay_commands": resume_replay_commands(
+                            ledger=ledger,
+                            run_id="competition-flashdb-before-after-exhibit",
+                            worker_id="worker-001",
+                            assignment=assignment,
+                            request=request,
+                            summary=summary,
+                            report=report,
+                            worker_root=worker_root,
+                        ),
+                    }
+                ],
+                "worker_count": 1,
+                "boundary": "Resume manifest is an index only and not a semantic acceptance gate.",
+            },
+        )
+        write_minimal_context_ledger(
+            ledger,
+            run_id="competition-flashdb-before-after-exhibit",
+            context_pack_path=context_pack,
+            context_pack_payload=json.loads(context_pack.read_text(encoding="utf-8")),
+            agent_index_path=agent_index,
+        )
+        write_json(
+            summary,
+            {
+                "final_gate": {
+                    "status": "failed",
+                    "validator": "baseline_repair_gate",
+                },
+                "slices": {
+                    "attempted": 1,
+                    "failed": 1,
+                    "semantic_pass": 0,
+                },
+            },
+        )
+        with closing(sqlite3.connect(ledger)) as connection:
+            connection.execute(
+                "update artifacts set sha256=?, status=? where kind='competition-run-summary'",
+                (validator.sha256_file(summary), "failed"),
+            )
+            connection.commit()
+
+        result = validator.validate_config(temp_config, require_local_artifacts=True, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed", result["errors"])
+        contracts = result["entrypoints"][0]["harness_contracts"]
+        self.assertEqual(contracts["context_pack"]["repair_round_cap"], 5)
+        self.assertEqual(contracts["agent_index"]["worker_count"], 1)
+        self.assertEqual(contracts["resume_manifest"]["status"], "passed")
+        self.assertEqual(contracts["resume_manifest"]["worker_count"], 1)
+        self.assertEqual(contracts["context_agent_consistency"]["worker_count"], 1)
+        self.assertEqual(contracts["ledger_context_index"]["status"], "passed")
+        self.assertEqual(contracts["repair_self_heal"]["checked_workers"], 1)
+
+    def test_repair_self_heal_contract_requires_bound_baseline_verification(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        other_verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "other-verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(
+            temp_dir / "translation-before-after.json",
+            verified_ref,
+            baseline_verification=other_verified_ref,
+        )
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+
+        with self.assertRaisesRegex(ValueError, "baseline_verification must match.*verified_unsafe_baseline"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_requires_measured_unsafe_reduction(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(
+            temp_dir / "translation-before-after.json",
+            verified_ref,
+            unsafe_status="not_measured",
+            reduced_by=None,
+        )
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+
+        with self.assertRaisesRegex(ValueError, "translation_before_after.unsafe_reduction.status must be measured"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_requires_positive_unsafe_reduction(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(
+            temp_dir / "translation-before-after.json",
+            verified_ref,
+            reduced_by=0,
+        )
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+
+        with self.assertRaisesRegex(ValueError, "translation_before_after.unsafe_reduction.reduced_by must be > 0"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_requires_revalidated_retry_hint_status(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(temp_dir / "translation-before-after.json", verified_ref)
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+        retry_attempt_from_repair_context(context_payload)["hint_status"] = "opened"
+
+        with self.assertRaisesRegex(ValueError, "accepted retry hint_status must be revalidated_passed"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_repair_self_heal_contract_rejects_rollback_evidence_sha_mismatch(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="repair-self-heal-contract-", dir=target_dir))
+        verified_ref = write_verified_unsafe_baseline_ref(temp_dir / "verified-baseline.json")
+        before_after_ref = write_repair_before_after_ref(temp_dir / "translation-before-after.json", verified_ref)
+        rollback = temp_dir / "rollback.json"
+        write_json(rollback, {"rollback": "before retry"})
+        context_payload = valid_repair_self_heal_context_payload(
+            verified_ref=verified_ref,
+            before_after_ref=before_after_ref,
+        )
+        retry_attempt_from_repair_context(context_payload)["rollback_evidence"] = {
+            "path": repo_relative(rollback),
+            "sha256": "0" * 64,
+        }
+
+        with self.assertRaisesRegex(ValueError, "rollback_evidence.sha256 does not match artifact"):
+            validator.validate_repair_self_heal_contract(context_payload, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_accepts_per_round_patch_delta_and_rollback(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+
+        result = validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["unit_count"], 1)
+        self.assertEqual(result["round_count"], 1)
+        self.assertEqual(result["repair_round_cap"], 5)
+        self.assertFalse(result["semantic_gate"])
+        self.assertEqual(result["translation_coverage_numerator"], 0)
+
+    def test_opencode_safety_transform_attempt_rejects_retry_hint_without_bound_rollback_ids(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        payload["safety_transform_units"][0]["accepted_retry_hint"].pop("rollback_ids")
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, r"accepted_retry_hint\.rollback_ids"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_rejects_shallow_contract_without_session_evidence(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        payload.pop("opencode_session_evidence")
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_safety_transform_attempt.*opencode_session_evidence"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_failed_session_evidence_contract(self) -> None:
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}, "process_returncode must be 0"),
+            ("unparsed_session", {"parsed": False}, "parsed must be true"),
+            ("non_jsonl_format", {"format": "text"}, "format must be jsonl"),
+        ]
+        for case_name, updates, expected_error in cases:
+            with self.subTest(case=case_name):
+                target_dir = REPO_ROOT / "target"
+                target_dir.mkdir(exist_ok=True)
+                temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-session-contract-", dir=target_dir))
+                attempt_ref = write_opencode_safety_transform_attempt_ref(
+                    temp_dir / "opencode-safety-transform-attempt-2.json"
+                )
+                attempt_path = REPO_ROOT / attempt_ref["path"]
+                payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+                session_path = REPO_ROOT / payload["opencode_session_evidence"]["path"]
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                write_json(session_path, session_payload)
+                payload["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+                write_json(attempt_path, payload)
+                attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    rf"opencode_safety_transform_attempt\.opencode_session_evidence\.{expected_error}",
+                ):
+                    validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_requires_glm_51_handoff(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["launch_policy"]["opencode_model"] = "not-GLM-5.1"
+        handoff_payload["launch_policy_sha256"] = opencode_launch_policy_sha256(handoff_payload["launch_policy"])
+        write_json(handoff_path, handoff_payload)
+        payload["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_model must be GLM-5.1"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_contract_requires_max_handoff_variant(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload["launch_policy"]["opencode_variant"] = "lite"
+        handoff_payload["launch_policy_sha256"] = opencode_launch_policy_sha256(handoff_payload["launch_policy"])
+        variant_index = handoff_payload["opencode_argv"].index("--variant") + 1
+        handoff_payload["opencode_argv"][variant_index] = "lite"
+        handoff_payload["opencode_command_line"] = shlex.join(handoff_payload["opencode_argv"])
+        write_json(handoff_path, handoff_payload)
+        payload["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "opencode_variant must be max"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_summary_final_gate_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        summary_path = REPO_ROOT / payload["summary"]["path"]
+        summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary_payload["final_gate"]["status"] = "failed"
+        write_json(summary_path, summary_payload)
+        payload["summary"]["sha256"] = validator.sha256_file(summary_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "summary.final_gate_status must match worker summary final_gate.status"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)
+
+    def test_opencode_safety_transform_attempt_rejects_summary_run_id_drift(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="opencode-safety-attempt-", dir=target_dir))
+        attempt_ref = write_opencode_safety_transform_attempt_ref(
+            temp_dir / "opencode-safety-transform-attempt-2.json"
+        )
+        attempt_path = REPO_ROOT / attempt_ref["path"]
+        payload = json.loads(attempt_path.read_text(encoding="utf-8"))
+        summary_path = REPO_ROOT / payload["summary"]["path"]
+        summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary_payload["run_id"] = "drifted-run"
+
+        workflow_metrics_path = REPO_ROOT / summary_payload["workflow_metrics"]["path"]
+        workflow_metrics_payload = json.loads(workflow_metrics_path.read_text(encoding="utf-8"))
+        workflow_metrics_payload["run_id"] = "drifted-run"
+        write_json(workflow_metrics_path, workflow_metrics_payload)
+        summary_payload["workflow_metrics"]["sha256"] = validator.sha256_file(workflow_metrics_path)
+
+        command_log_path = REPO_ROOT / summary_payload["command_log"]["path"]
+        command_log_entries = [
+            json.loads(line) for line in command_log_path.read_text(encoding="utf-8").splitlines() if line
+        ]
+        for entry in command_log_entries:
+            entry["run_id"] = "drifted-run"
+        command_log_path.write_text(
+            "\n".join(json.dumps(entry, sort_keys=True) for entry in command_log_entries) + "\n",
+            encoding="utf-8",
+        )
+        summary_payload["command_log"]["sha256"] = validator.sha256_file(command_log_path)
+
+        write_json(summary_path, summary_payload)
+        payload["summary"]["sha256"] = validator.sha256_file(summary_path)
+        write_json(attempt_path, payload)
+        attempt_ref["sha256"] = validator.sha256_file(attempt_path)
+
+        with self.assertRaisesRegex(ValueError, "summary.run_id must match run_id"):
+            validator.validate_opencode_safety_transform_attempt_contract(attempt_ref, repo_root=REPO_ROOT)

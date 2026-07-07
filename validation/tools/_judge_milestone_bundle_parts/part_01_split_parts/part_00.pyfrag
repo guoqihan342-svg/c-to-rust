@@ -1,0 +1,500 @@
+def exact_host_revalidation_blockers(revalidation: dict[str, Any]) -> list[str]:
+    if revalidation.get("required") is True and revalidation.get("status") != "passed":
+        return ["run_report_exact_host_revalidation_failed"]
+    return []
+
+
+def proof_classes_after_exact_host_revalidation(
+    proof_classes: dict[str, Any],
+    revalidation: dict[str, Any],
+) -> dict[str, Any]:
+    if revalidation.get("required") is not True or revalidation.get("status") == "passed":
+        return proof_classes
+    adjusted = deepcopy(proof_classes)
+    adjusted["competition_exact_host_verified"] = False
+    adjusted["exact_host_revalidation_status"] = revalidation.get("status")
+    adjusted["exact_host_revalidation_failed_entrypoints"] = list(revalidation.get("entrypoint_ids", []))
+    return adjusted
+
+
+def entrypoint_competition_host_attested(entry: dict[str, Any]) -> bool:
+    if entry.get("competition_exact_host_attested") is True:
+        return True
+    host_attestation = entry.get("host_attestation")
+    if isinstance(host_attestation, dict) and host_attestation.get("competition_exact_host_attested") is True:
+        return True
+    environment = entry.get("execution_environment")
+    return isinstance(environment, dict) and environment.get("competition_exact_host_attested") is True
+
+
+def build_claim_scope(
+    *,
+    status: str,
+    proof_classes: dict[str, Any],
+    semantic_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "external_review_index_ready": status == "passed",
+        "semantic_acceptance_ready": False,
+        "competition_exact_ready": bool(proof_classes.get("competition_exact_host_verified")),
+        "translator_generated_coverage_ready": int_or_zero(
+            semantic_evidence.get("translation_coverage_numerator")
+        )
+        > 0,
+        "boundary": (
+            "A passed bundle means the external review index is complete. It is not semantic acceptance, "
+            "competition-exact proof, or translator-generated coverage."
+        ),
+    }
+
+
+def build_publishability(
+    *,
+    status: str,
+    readiness: dict[str, Any],
+    proof_classes: dict[str, Any],
+    blockers: list[str],
+    opencode_runtime: dict[str, Any],
+) -> dict[str, Any]:
+    all_entrypoints = bool(readiness.get("all_entrypoints_executed"))
+    blocked = status != "passed" or bool(blockers)
+    all_entrypoints_run_publishable = not blocked and all_entrypoints
+    competition_exact_publishable = all_entrypoints_run_publishable and bool(
+        proof_classes.get("all_entrypoints_competition_exact")
+    ) and bool(
+        proof_classes.get("competition_exact_host_verified")
+    )
+    scope = "full" if all_entrypoints_run_publishable else "partial" if status == "passed" else "blocked"
+    preflight_summary = (
+        opencode_runtime.get("preflight_proof_summary", {})
+        if isinstance(opencode_runtime.get("preflight_proof_summary"), dict)
+        else {}
+    )
+    opencode_enabled = int_or_zero(opencode_runtime.get("enabled_entrypoint_count")) > 0
+    preflight_status = preflight_summary.get("status") if opencode_enabled else "not-required"
+    if not isinstance(preflight_status, str) or not preflight_status:
+        preflight_status = "missing"
+    opencode_glm51_publishable = opencode_enabled and opencode_preflight_summary_publishable(preflight_summary)
+    external_ready = competition_exact_publishable and opencode_glm51_publishable
+    publication_scope_value = (
+        "full"
+        if external_ready
+        else "internal_preview_full"
+        if all_entrypoints_run_publishable
+        else scope
+    )
+    return {
+        "status": "blocked"
+        if blocked
+        else "external_release_ready"
+        if external_ready
+        else "internal_preview",
+        "scope": scope,
+        "publication_scope": publication_scope_value,
+        "external_milestone_claim_ready": external_ready,
+        "external_milestone": external_ready,
+        "blocker_count": len(blockers),
+        "blockers": blockers,
+        "all_entrypoints_run_publishable": all_entrypoints_run_publishable,
+        "focused_run": not all_entrypoints,
+        "competition_exact_publishable": competition_exact_publishable,
+        "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
+        "required_agent": validator.COMPETITION_OPENCODE_AGENT,
+        "required_model": validator.COMPETITION_OPENCODE_MODEL,
+        "required_variant": validator.COMPETITION_OPENCODE_VARIANT,
+        "opencode_glm51_required": True,
+        "opencode_glm51_preflight_status": preflight_status,
+        "opencode_glm51_publishable": opencode_glm51_publishable,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "target_artifacts_regenerable": True,
+        "committed_release_evidence_refs": "Use validation/evidence manifests and config/competition-env profiles as committed anchors.",
+        "boundary": (
+            "Publishability is a review-package readiness contract. Competition-facing agent evidence requires "
+            "OpenCode with GLM-5.1 and does not convert chat/session output into semantic acceptance."
+        ),
+    }
+
+
+def build_competition_host_readiness(
+    *,
+    proof_classes: dict[str, Any],
+    publishability: dict[str, Any],
+) -> dict[str, Any]:
+    all_entrypoints_run_publishable = publishability.get("all_entrypoints_run_publishable") is True
+    all_entrypoints_competition_exact = proof_classes.get("all_entrypoints_competition_exact") is True
+    competition_exact_host_verified = proof_classes.get("competition_exact_host_verified") is True
+    opencode_glm51_publishable = publishability.get("opencode_glm51_publishable") is True
+    external_milestone_claim_ready = publishability.get("external_milestone_claim_ready") is True
+    missing_requirements = []
+    if not all_entrypoints_run_publishable:
+        missing_requirements.append("all_entrypoints_run_publishable")
+    if not all_entrypoints_competition_exact:
+        missing_requirements.append("all_entrypoints_competition_exact")
+    if not competition_exact_host_verified:
+        missing_requirements.append("competition_exact_host_verified")
+    if not opencode_glm51_publishable:
+        missing_requirements.append("opencode_glm51_publishable")
+    if not external_milestone_claim_ready:
+        missing_requirements.append("external_milestone_claim_ready")
+    return {
+        "report_kind": "competition-host-readiness",
+        "status": "ready" if not missing_requirements else "blocked",
+        "required_agent_tool": validator.COMPETITION_OPENCODE_COMMAND,
+        "required_agent": validator.COMPETITION_OPENCODE_AGENT,
+        "required_model": validator.COMPETITION_OPENCODE_MODEL,
+        "required_variant": validator.COMPETITION_OPENCODE_VARIANT,
+        "required_proof_class": "competition-exact",
+        "actual_highest_proof_class": proof_classes.get("highest_proof_class", "unknown"),
+        "all_entrypoints_run_publishable": all_entrypoints_run_publishable,
+        "all_entrypoints_competition_exact": all_entrypoints_competition_exact,
+        "competition_exact_host_verified": competition_exact_host_verified,
+        "opencode_glm51_preflight_status": publishability.get("opencode_glm51_preflight_status", "unknown"),
+        "opencode_glm51_publishable": opencode_glm51_publishable,
+        "external_milestone_claim_ready": external_milestone_claim_ready,
+        "missing_requirements": missing_requirements,
+        "blocker_count": len(missing_requirements),
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Competition host readiness is the P0-H9 launch contract for OpenCode + GLM-5.1 + c2rust-migrator + max. "
+            "It is not semantic acceptance and does not increase translator-generated coverage."
+        ),
+    }
+
+
+def opencode_preflight_summary_publishable(summary: dict[str, Any]) -> bool:
+    if summary.get("status") != "passed":
+        return False
+    if summary.get("required_when_opencode_runtime_enabled") is not True:
+        return False
+    if summary.get("chat_output_is_evidence") is not False:
+        return False
+    if summary.get("semantic_gate") is not False:
+        return False
+    if int_or_zero(summary.get("translation_coverage_numerator")) != 0:
+        return False
+    if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
+        return False
+    if summary.get("opencode_agent") != validator.COMPETITION_OPENCODE_AGENT:
+        return False
+    if summary.get("opencode_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("opencode_variant") != validator.COMPETITION_OPENCODE_VARIANT:
+        return False
+    if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("model_availability_status") != "available":
+        return False
+    if summary.get("model_listed") is not True:
+        return False
+    if int_or_zero(summary.get("process_returncode")) != 0:
+        return False
+    if summary.get("contract_status") != "executed":
+        return False
+    if summary.get("marker_exists") is not True:
+        return False
+    if summary.get("opencode_run_launched") is not True:
+        return False
+    if summary.get("opencode_run_argv_bound") is not True:
+        return False
+    if not validator.opencode_models_argv_matches(
+        summary.get("model_probe_argv"),
+        expected_command=validator.COMPETITION_OPENCODE_COMMAND,
+    ):
+        return False
+    runtime_env = summary.get("opencode_runtime_env")
+    if not isinstance(runtime_env, dict):
+        return False
+    if summary.get("opencode_runtime_env_sha256") != runtime_env.get("env_sha256"):
+        return False
+    return True
+
+
+def build_semantic_evidence_rollup(run_report: dict[str, Any]) -> dict[str, Any]:
+    summary_claim = source_summary_claim(run_report)
+    return {
+        "semantic_claim_source": summary_claim.get("semantic_claim_source", "validator-owned-artifacts"),
+        "accepted_evidence_semantic_pass_count": 0,
+        "translator_generated_semantic_pass_count": 0,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "source_generated_draft_semantic_pass": bool(summary_claim.get("generated_draft_semantic_pass")),
+        "source_translation_coverage_numerator": int_or_zero(summary_claim.get("translation_coverage_numerator")),
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": (
+            "Accepted-evidence semantic pass counts are context only. The bundle does not increase "
+            "translator-generated semantic-pass counts or translation coverage."
+        ),
+    }
+
+
+def build_unsafe_reduction_scope(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    total_units = sum(int_or_zero(source.get("units_total")) for source in sources)
+    measured_sources = [source for source in sources if source.get("unsafe_reduction_status") == "measured"]
+    measured_units = sum(int_or_zero(source.get("units_total")) for source in measured_sources)
+    unmeasured = [
+        source.get("entrypoint_id")
+        for source in sources
+        if source.get("unsafe_reduction_status") != "measured"
+    ]
+    all_sources_measured = bool(sources) and len(measured_sources) == len(sources)
+    if not measured_sources:
+        scope = "none"
+    elif all_sources_measured:
+        scope = "all"
+    else:
+        scope = "partial"
+    return {
+        "scope": scope,
+        "all_sources_measured": all_sources_measured,
+        "measured_units": measured_units,
+        "total_units": total_units,
+        "unmeasured_entrypoints": unmeasured,
+        "boundary": "Unsafe reduction is only global when every workflow metrics source reports measured data.",
+    }
+
+
+def build_core_translation_quality_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    statuses = sorted(
+        {
+            str(source.get("final_gate_status"))
+            for source in sources
+            if isinstance(source.get("final_gate_status"), str)
+        }
+    )
+    measured = [
+        source.get("unsafe_reduction", {})
+        for source in sources
+        if isinstance(source.get("unsafe_reduction"), dict)
+        and source.get("unsafe_reduction", {}).get("status") == "measured"
+    ]
+    baseline_values = [value.get("baseline_total_unsafe") for value in measured]
+    current_values = [value.get("current_total_unsafe") for value in measured]
+    reduced_values = [value.get("reduced_by") for value in measured]
+    measured_complete = all(value is not None for value in baseline_values + current_values + reduced_values)
+    return {
+        "report_kind": "core-translation-quality-rollup",
+        "sources": sources,
+        "final_gate_statuses": statuses,
+        "semantic_pass_count": sum(int_or_zero(source.get("semantic_pass_count")) for source in sources),
+        "translation_coverage_numerator": max(
+            [int_or_zero(source.get("translation_coverage_numerator")) for source in sources],
+            default=0,
+        ),
+        "generated_draft_semantic_pass": any(bool(source.get("generated_draft_semantic_pass")) for source in sources),
+        "unsafe_reduction": {
+            "status": "measured" if measured else "not_measured",
+            "baseline_total_unsafe": sum(baseline_values) if measured_complete else None,
+            "current_total_unsafe": sum(current_values) if measured_complete else None,
+            "reduced_by": sum(reduced_values) if measured_complete else None,
+        },
+        "boundary": (
+            "This rollup exposes judge-facing before/after quality signals from evidence indexes. "
+            "It does not convert accepted-evidence context into translator-generated semantic acceptance."
+        ),
+    }
+
+
+def build_before_after_repair_exhibit_rollup(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    exhibit_sources: list[dict[str, Any]] = []
+    for source in sources:
+        translation = source.get("translation_before_after", {})
+        repair = source.get("repair_summary", {})
+        units = source.get("before_after_units", [])
+        if not isinstance(translation, dict):
+            translation = before_after_summary(None)
+        if not isinstance(repair, dict):
+            repair = repair_summary_for_bundle(None)
+        if not isinstance(units, list):
+            units = []
+        has_exhibit = (
+            bool(units)
+            or repair.get("status") == "verified"
+            or int_or_zero(repair.get("observed_repair_unit_count")) > 0
+            or int_or_zero(repair.get("rollback_evidence_count")) > 0
+            or bool(source.get("nested_artifact_ref_blockers"))
+        )
+        if not has_exhibit:
+            continue
+        exhibit_sources.append(
+            {
+                "entrypoint_id": source.get("entrypoint_id"),
+                "artifact": source.get("artifact"),
+                "final_gate_status": source.get("final_gate_status"),
+                "translation_before_after": translation,
+                "before_after_units": units,
+                "nested_artifact_ref_blockers": [
+                    blocker
+                    for blocker in source.get("nested_artifact_ref_blockers", [])
+                    if isinstance(blocker, str) and blocker
+                ],
+                "repair_summary": repair,
+                "unsafe_reduction": source.get("unsafe_reduction", {}),
+                "claim_boundary": {
+                    "semantic_gate": False,
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+            }
+        )
+
+    before_after_units = [
+        unit
+        for source in exhibit_sources
+        for unit in source.get("before_after_units", [])
+        if isinstance(unit, dict)
+    ]
+    verified_baseline_unit_count = sum(
+        1
+        for unit in before_after_units
+        if before_after_unit_has_verified_unsafe_baseline(unit)
+    )
+    measured = [
+        source.get("unsafe_reduction", {})
+        for source in exhibit_sources
+        if isinstance(source.get("unsafe_reduction"), dict)
+        and source.get("unsafe_reduction", {}).get("status") == "measured"
+    ]
+    baseline_values = [value.get("baseline_total_unsafe") for value in measured]
+    current_values = [value.get("current_total_unsafe") for value in measured]
+    reduced_values = [value.get("reduced_by") for value in measured]
+    measured_complete = bool(measured) and all(value is not None for value in baseline_values + current_values + reduced_values)
+    return {
+        "report_kind": "before-after-repair-exhibit-rollup",
+        "sources": exhibit_sources,
+        "rollup": {
+            "source_count": len(exhibit_sources),
+            "bound_unit_count": sum(
+                len(source.get("before_after_units", []))
+                for source in exhibit_sources
+                if isinstance(source.get("before_after_units"), list)
+            ),
+            "verified_baseline_unit_count": verified_baseline_unit_count,
+            "missing_verified_baseline_unit_count": len(before_after_units) - verified_baseline_unit_count,
+            "all_units_verified_baseline_bound": bool(before_after_units)
+            and verified_baseline_unit_count == len(before_after_units),
+            "measured_unsafe_unit_count": sum(
+                sum(
+                    1
+                    for unit in source.get("before_after_units", [])
+                    if isinstance(unit, dict)
+                    and isinstance(unit.get("unsafe_reduction"), dict)
+                    and unit.get("unsafe_reduction", {}).get("status") == "measured"
+                )
+                for source in exhibit_sources
+                if isinstance(source.get("before_after_units"), list)
+            ),
+            "accepted_patch_unit_count": sum(
+                sum(
+                    1
+                    for unit in source.get("before_after_units", [])
+                    if isinstance(unit, dict) and isinstance(unit.get("accepted_patch"), dict)
+                )
+                for source in exhibit_sources
+                if isinstance(source.get("before_after_units"), list)
+            ),
+            "verified_repair_source_count": sum(
+                1
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+                and source.get("repair_summary", {}).get("status") == "verified"
+            ),
+            "observed_repair_unit_count": sum(
+                int_or_zero(source.get("repair_summary", {}).get("observed_repair_unit_count"))
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+            ),
+            "auto_recovered_unit_count": sum(
+                int_or_zero(source.get("repair_summary", {}).get("auto_recovered_unit_count"))
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+            ),
+            "rollback_evidence_count": sum(
+                int_or_zero(source.get("repair_summary", {}).get("rollback_evidence_count"))
+                for source in exhibit_sources
+                if isinstance(source.get("repair_summary"), dict)
+            ),
+            "repair_round_cap": max(
+                [
+                    int_or_zero(source.get("repair_summary", {}).get("repair_round_cap"))
+                    for source in exhibit_sources
+                    if isinstance(source.get("repair_summary"), dict)
+                ],
+                default=0,
+            ),
+            "unsafe_reduced_by": sum(int_or_zero(value) for value in reduced_values),
+            "unsafe_reduction": {
+                "status": "measured" if measured else "not_measured",
+                "baseline_total_unsafe": sum(baseline_values) if measured_complete else None,
+                "current_total_unsafe": sum(current_values) if measured_complete else None,
+                "reduced_by": sum(reduced_values) if measured_complete else None,
+            },
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": (
+            "This exhibit binds before/after unsafe-reduction and repair evidence for judge review. "
+            "It is not a semantic gate and does not increase translator-generated coverage."
+        ),
+    }
+
+
+def build_harness_architecture_summary(sources: list[dict[str, Any]]) -> dict[str, Any]:
+    roles = sorted(
+        {
+            role
+            for source in sources
+            for role in source.get("roles", [])
+            if isinstance(role, str)
+        }
+    )
+    graph_nodes = next(
+        (
+            source.get("graph_nodes")
+            for source in sources
+            if isinstance(source.get("graph_nodes"), list) and source.get("graph_nodes")
+        ),
+        [],
+    )
+    contract_matrix = build_harness_contract_matrix(sources=sources, graph_nodes=graph_nodes, roles=roles)
+    return {
+        "report_kind": "harness-architecture-summary",
+        "sources": sources,
+        "graph_runtime": first_string_value(sources, "graph_runtime"),
+        "graph_nodes": graph_nodes,
+        "worker_count": max([int_or_zero(source.get("worker_count")) for source in sources], default=0),
+        "repair_round_cap": max([int_or_zero(source.get("repair_round_cap")) for source in sources], default=0),
+        "repair_checkpoint": first_string_value(sources, "repair_checkpoint"),
+        "roles": roles,
+        "checkpoint_backend": first_string_value(sources, "checkpoint_backend"),
+        "contract_matrix": contract_matrix,
+        "chat_output_is_evidence": any(source.get("chat_output_is_evidence") is True for source in sources),
+        "semantic_gate": any(source.get("semantic_gate") is True for source in sources),
+        "boundary": (
+            "This summary documents the harness graph and agent contracts. Chat output and runtime logs "
+            "remain diagnostic or command-contract evidence unless a validator-owned semantic gate accepts them."
+        ),
+    }
+
+
+def build_harness_contract_matrix(
+    *,
+    sources: list[dict[str, Any]],
+    graph_nodes: list[Any],
+    roles: list[str],
+) -> list[dict[str, Any]]:
+    observed_artifacts = sorted(
+        {
+            artifact
+            for source in sources
+            for artifact in source.get("evidence_artifact_names", [])
+            if isinstance(artifact, str)
+        }
+    )
+    opencode_enabled = any(source.get("opencode_runtime_enabled") is True for source in sources)

@@ -1,0 +1,31 @@
+        "sha256": harness.sha256_file(path),
+        "status": "present",
+    }
+
+
+def load_json_if_exists(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit(f"expected JSON object: {path}")
+    return payload
+
+
+def nonnegative_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, parsed)
+
+
+def summary_semantic_pass_count(summary: dict[str, Any]) -> int:
+    slices = summary.get("slices")
+    if isinstance(slices, dict):
+        return nonnegative_int(slices.get("semantic_pass"))
+    return nonnegative_int(summary.get("semantic_pass"))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

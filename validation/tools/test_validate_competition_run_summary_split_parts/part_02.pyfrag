@@ -1,0 +1,312 @@
+                        "unit_id": "demo/unit-1",
+                        "status": "bound",
+                        "unsafe_reduction": before_after["unsafe_reduction"],
+                        "baseline_verification": before_after["baseline_verification"],
+                    }
+                ],
+            }
+            metrics["per_unit_statuses"][0]["translation_before_after"] = before_after
+            metrics["unsafe_reduction"] = before_after["unsafe_reduction"]
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("translation_before_after.baseline_verification.sha256", str(raised.exception))
+
+    def test_rejects_workflow_root_cause_count_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            metrics["root_cause_counts"] = {}
+            metrics["per_unit_statuses"] = [
+                {
+                    "unit_id": "demo/demo-add-one",
+                    "source": "opencode-worker",
+                    "status": "refused",
+                    "compiled": False,
+                    "semantic_pass": False,
+                    "refused": True,
+                    "blocked": False,
+                    "failed": False,
+                    "root_cause_key": "opencode_contract_not_executed",
+                },
+                {
+                    "unit_id": "demo/demo-add-two",
+                    "source": "slice-spec",
+                    "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
+                },
+            ]
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("root_cause_counts", str(raised.exception))
+
+    def test_rejects_workflow_per_unit_status_count_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            metrics["per_unit_statuses"] = [
+                {
+                    "unit_id": "demo/demo-add-one",
+                    "source": "slice-spec",
+                    "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
+                }
+            ]
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("per_unit_statuses count", str(raised.exception))
+
+    def test_rejects_workflow_per_unit_status_rollup_drift(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+            metrics_path = summary_path.parent / "workflow-metrics.json"
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            metrics["per_unit_statuses"][0].update(
+                {
+                    "status": "failed",
+                    "compiled": False,
+                    "semantic_pass": False,
+                    "failed": True,
+                }
+            )
+            metrics_path.write_text(json.dumps(metrics, sort_keys=True), encoding="utf-8")
+            summary["workflow_metrics"]["sha256"] = lf_stable_sha256(metrics_path)
+            summary_path.write_text(json.dumps(summary), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("per_unit_statuses rollup", str(raised.exception))
+
+    def test_rejects_worker_summary_count_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 2,
+            "summaries": [
+                {
+                    "path": "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+                    "status": "passed",
+                    "proof_class": "local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("workers.count", str(raised.exception))
+
+    def test_rejects_worker_summary_proof_class_mismatch(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 1,
+            "summaries": [
+                {
+                    "path": "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+                    "status": "passed",
+                    "proof_class": "local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("proof_class", str(raised.exception))
+
+    def test_rejects_worker_summary_absolute_path(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 1,
+            "summaries": [
+                {
+                    "path": "F:/agent/crustpaper/0630/target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+                    "status": "passed",
+                    "proof_class": "wsl-local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("worker summary path", str(raised.exception))
+
+    def test_rejects_worker_summary_path_not_under_workers_summary(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["workers"] = {
+            "count": 1,
+            "summaries": [
+                {
+                    "path": "target/competition-out/misc/worker-a.json",
+                    "status": "passed",
+                    "proof_class": "wsl-local-simulation",
+                    "attempted": 1,
+                    "semantic_pass": 1,
+                    "failed": 0,
+                    "slices": {
+                        "attempted": 1,
+                        "typed_ir_generated": 1,
+                        "compiled": 1,
+                        "semantic_pass": 1,
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("workers/<worker-id>/summary/competition-run-summary.json", str(raised.exception))
+
+    def test_rejects_duplicate_worker_summary_paths(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        worker = {
+            "path": "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+            "status": "passed",
+            "proof_class": "wsl-local-simulation",
+            "attempted": 1,
+            "semantic_pass": 1,
+            "failed": 0,
+            "slices": {
+                "attempted": 1,
+                "typed_ir_generated": 1,
+                "compiled": 1,
+                "semantic_pass": 1,
+                "refused": 0,
+                "blocked": 0,
+                "failed": 0,
+            },
+        }
+        summary["workers"] = {"count": 2, "summaries": [dict(worker), dict(worker)]}
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("duplicate worker summary path", str(raised.exception))
+
+    def test_rejects_absolute_artifact_root(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["artifact_roots"][0] = "F:/agent/crustpaper/0625ctr/target/competition-out/evidence"
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("artifact_roots", str(raised.exception))
+
+    def test_rejects_passed_final_gate_without_semantic_pass(self) -> None:
+        module = load_validator_module()
+        summary = valid_summary()
+        summary["slices"]["attempted"] = 1
+        summary["slices"]["typed_ir_generated"] = 0
+        summary["slices"]["compiled"] = 0
+        summary["slices"]["semantic_pass"] = 0
+        summary["slices"]["refused"] = 1
+        with tempfile.TemporaryDirectory(prefix="competition-summary-test-") as tmp:
+            summary_path = Path(tmp) / "competition-run-summary.json"
+            write_summary_with_workflow_metrics(summary_path, summary)
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_summary(summary_path, repo_root=REPO_ROOT)
+
+        self.assertIn("semantic_pass", str(raised.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

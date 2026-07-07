@@ -1,0 +1,28 @@
+        out_root=out_root,
+        extra_artifact_refs={"resume_manifest": payload["resume_manifest"]}
+        if isinstance(payload.get("resume_manifest"), dict)
+        else None,
+        repo_root=repo_root,
+    )
+    if db_path is not None:
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="judge-evidence-index",
+                path=repo_path(Path(judge_index_artifact["binding"]["path"]), repo_root=repo_root),
+                status=str(judge_index_artifact["binding"]["status"]),
+                semantic_role="judge-evidence-index",
+                payload=judge_index_artifact["payload"],
+                repo_root=repo_root,
+            )
+            record_event(
+                connection,
+                run_id=run_id,
+                event_type="judge_evidence_index_written",
+                payload=judge_index_artifact["binding"],
+            )
+            connection.commit()
+    return payload

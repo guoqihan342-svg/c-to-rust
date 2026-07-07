@@ -1,0 +1,284 @@
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_commands_containing={"unsafe_budget.py"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["unsafe_budget"]["status"], "failed")
+            self.assertEqual(summary["unsafe_budget"]["total_first_party_non_test_unsafe"], 0)
+            self.assertEqual(summary["unsafe_budget"]["ratio"], 0.0)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_summary_uses_unsafe_budget_json_stdout(self) -> None:
+        module = load_runner_module()
+        unsafe_stdout = json.dumps(
+            {
+                "schema_version": 1,
+                "status": "passed",
+                "first_party_non_test_unsafe_count": 7,
+                "unsafe_ratio": 0.03125,
+            }
+        )
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(stdout_by_command_marker={"unsafe_budget.py": unsafe_stdout})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["unsafe_budget"]["total_first_party_non_test_unsafe"], 7)
+            self.assertEqual(summary["unsafe_budget"]["ratio"], 0.03125)
+            self.assertEqual(summary["unsafe_budget"]["status"], "passed")
+
+    def test_runner_marks_invalid_unsafe_budget_json_stdout_as_gate_failure(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(stdout_by_command_marker={"unsafe_budget.py": "not-json"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["unsafe_budget"]["status"], "failed")
+            self.assertEqual(summary["unsafe_budget"]["total_first_party_non_test_unsafe"], 0)
+            self.assertEqual(summary["unsafe_budget"]["ratio"], 0.0)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_unsafe_budget_summary_rejects_non_object_json_stdout(self) -> None:
+        module = load_runner_module()
+
+        for stdout in ["null", "[]", '"text"', "123", "true"]:
+            with self.subTest(stdout=stdout):
+                summary = module.unsafe_budget_summary(
+                    subprocess.CompletedProcess(["unsafe_budget.py"], 0, stdout, "")
+                )
+
+                self.assertEqual(summary["status"], "failed")
+                self.assertEqual(summary["total_first_party_non_test_unsafe"], 0)
+                self.assertEqual(summary["ratio"], 0.0)
+
+    def test_runner_keeps_evidence_validator_failure_out_of_terminal_slice_counts(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_commands_containing={"validate_auto_translation_evidence.py"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["refused"], 0)
+            self.assertEqual(summary["slices"]["blocked"], 0)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_counts_refused_and_blocked_slices_separately(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            refused_spec = write_slice_spec(tmp_path, "demo", "refused-slice")
+            blocked_spec = write_slice_spec(tmp_path, "demo", "blocked-slice")
+            write_final_verification(
+                out_root / "evidence",
+                "demo",
+                "refused-slice",
+                semantic_pass=False,
+                status="refused",
+            )
+            write_final_verification(
+                out_root / "evidence",
+                "demo",
+                "blocked-slice",
+                semantic_pass=False,
+                status="blocked",
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[refused_spec, blocked_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 2)
+            self.assertEqual(summary["slices"]["refused"], 1)
+            self.assertEqual(summary["slices"]["blocked"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_records_local_environment_check_failure_without_blocking_translation(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_commands_containing={"toolchain-check.sh"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "passed")
+
+    def test_runner_marks_exact_environment_check_failure_as_global_gate_failure(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(
+                fail_commands_containing={"toolchain-check.sh"},
+                stdout_by_command_marker={"opencode models": "zhipu/GLM-5.1\n"},
+            )
+
+            with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+                result = module.run_competition(
+                    slice_specs=[spec_path],
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            attestation = summary["competition_exact_host_attestation"]
+            availability = attestation["opencode_model_availability"]
+            self.assertTrue(attestation["competition_exact_host_attested"])
+            self.assertEqual(attestation["required_agent"], "c2rust-migrator")
+            self.assertEqual(availability["argv"], ["opencode", "models"])
+            self.assertTrue(availability["model_listed"])
+            stdout_path = out_root / availability["logs"]["stdout"]
+            stderr_path = out_root / availability["logs"]["stderr"]
+            self.assertEqual(stdout_path.read_text(encoding="utf-8"), "zhipu/GLM-5.1\n")
+            self.assertEqual(stderr_path.read_text(encoding="utf-8"), "")
+            self.assertEqual(availability["stdout_sha256"], lf_stable_sha256(stdout_path))
+            self.assertEqual(availability["stderr_sha256"], lf_stable_sha256(stderr_path))
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertEqual(command_texts[0], "opencode models")
+
+    def test_runner_rejects_competition_exact_without_host_attestation_before_launch(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            fake_runner = FakeCommandRunner()
+
+            with mock.patch.dict(module.os.environ, {}, clear=True):
+                with self.assertRaisesRegex(SystemExit, "requires COMPETITION_EXACT_HOST=1"):
+                    module.run_competition(
+                        slice_specs=[spec_path],
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        command_runner=fake_runner,
+                        repo_root=REPO_ROOT,
+                        run_id="run-test",
+                    )
+
+            self.assertEqual(fake_runner.commands, [])
+            self.assertFalse((out_root / "summary" / "competition-run-summary.json").exists())
+
+    def test_runner_rejects_competition_exact_when_opencode_models_lacks_glm51(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            fake_runner = FakeCommandRunner(
+                stdout_by_command_marker={
+                    "opencode models": "openai/gpt-5.1\nopencode/not-GLM-5.1\nzhipu/glm-5.1\n",
+                }
+            )
+
+            with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+                with self.assertRaisesRegex(SystemExit, "requires opencode models to list GLM-5.1"):
+                    module.run_competition(
+                        slice_specs=[spec_path],
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        command_runner=fake_runner,
+                        repo_root=REPO_ROOT,
+                        run_id="run-test",
+                    )
+
+            self.assertEqual(fake_runner.commands, [["opencode", "models"]])
+            self.assertEqual(
+                (out_root / "logs" / "opencode-models.stdout.log").read_text(encoding="utf-8"),
+                "openai/gpt-5.1\nopencode/not-GLM-5.1\nzhipu/glm-5.1\n",
+            )
+            self.assertEqual((out_root / "logs" / "opencode-models.stderr.log").read_text(encoding="utf-8"), "")
+            self.assertFalse((out_root / "summary" / "competition-run-summary.json").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

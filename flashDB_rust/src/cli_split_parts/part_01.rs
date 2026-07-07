@@ -1,3 +1,339 @@
+fn version_manifest(report_path: Option<&Path>) -> Result<String> {
+    let cargo_lock_hash = file_sha256(&manifest_path("Cargo.lock"))?;
+    let cargo_toml_hash = file_sha256(&manifest_path("Cargo.toml"))?;
+    let rustc_version = command_version("rustc", &["--version"]);
+    let cargo_version = command_version("cargo", &["--version"]);
+    let git_version = command_version("git", &["--version"]);
+    let openspec_version = command_version_any(&["openspec", "openspec.cmd"], &["--version"]);
+    let branch = command_version("git", &["branch", "--show-current"]);
+    let repo_commit = command_version("git", &["rev-parse", "HEAD"]);
+    let json = format!(
+        concat!(
+            "{{",
+            "\"command\":\"version-manifest\",",
+            "\"schema_version\":1,",
+            "\"agent_contract_version\":\"0.1.0\",",
+            "\"context_schema_version\":\"0.1.0\",",
+            "\"patch_plan_schema_version\":\"0.1.0\",",
+            "\"fixture_schema_version\":1,",
+            "\"evidence_schema_version\":1,",
+            "\"package_name\":\"{}\",",
+            "\"package_version\":\"{}\",",
+            "\"edition\":\"2021\",",
+            "\"cargo_toml_sha256\":\"{}\",",
+            "\"cargo_lock_sha256\":\"{}\",",
+            "\"rustc_version\":\"{}\",",
+            "\"cargo_version\":\"{}\",",
+            "\"git_version\":\"{}\",",
+            "\"openspec_version\":\"{}\",",
+            "\"rust_toolchain_file\":null,",
+            "\"host_os\":\"{}\",",
+            "\"workspace_branch\":\"{}\",",
+            "\"workspace_commit\":\"{}\",",
+            "\"flashdb_source_clone_url\":\"https://gitcode.com/xwxf/FlashDB.git\",",
+            "\"flashdb_source_commit\":\"93d175549da579b8abac07bd175ce4c3f9dde829\",",
+            "\"flashdb_source_tag\":null,",
+            "\"flashdb_feature_matrix\":{{",
+            "\"FDB_USING_KVDB\":true,",
+            "\"FDB_USING_TSDB\":true,",
+            "\"FDB_USING_FILE_POSIX_MODE\":true,",
+            "\"FDB_WRITE_GRAN\":1",
+            "}},",
+            "\"command_arguments\":[\"version-manifest\"],",
+            "\"fixture_sha256\":null,",
+            "\"ai_metadata\":{{\"used\":false,\"provider\":\"not_configured\"}},",
+            "\"cache_key_inputs\":[",
+            "\"agent_contract_version\",",
+            "\"context_schema_version\",",
+            "\"patch_plan_schema_version\",",
+            "\"fixture_schema_version\",",
+            "\"evidence_schema_version\",",
+            "\"package_version\",",
+            "\"cargo_toml_sha256\",",
+            "\"cargo_lock_sha256\",",
+            "\"rustc_version\",",
+            "\"cargo_version\",",
+            "\"openspec_version\",",
+            "\"flashdb_source_commit\",",
+            "\"flashdb_feature_matrix\",",
+            "\"command_arguments\",",
+            "\"fixture_sha256\",",
+            "\"ai_metadata\"",
+            "]",
+            "}}"
+        ),
+        escape_json(env!("CARGO_PKG_NAME")),
+        escape_json(env!("CARGO_PKG_VERSION")),
+        cargo_toml_hash,
+        cargo_lock_hash,
+        escape_json(&rustc_version),
+        escape_json(&cargo_version),
+        escape_json(&git_version),
+        escape_json(&openspec_version),
+        escape_json(std::env::consts::OS),
+        escape_json(&branch),
+        escape_json(&repo_commit)
+    );
+    if let Some(path) = report_path {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &json)?;
+    }
+    Ok(json)
+}
+
+fn evidence_search(options: Options) -> Result<String> {
+    let evidence_dir = options
+        .evidence_dir
+        .ok_or_else(|| Error::Cli("evidence-search requires --evidence-dir".to_string()))?;
+    let query = options
+        .query
+        .ok_or_else(|| Error::Cli("evidence-search requires --query".to_string()))?;
+    if query.is_empty() {
+        return Err(Error::Cli(
+            "evidence-search requires non-empty --query".to_string(),
+        ));
+    }
+    if options.limit == 0 || options.limit > EVIDENCE_SEARCH_MAX_LIMIT {
+        return Err(Error::Cli(format!(
+            "evidence-search --limit must be between 1 and {EVIDENCE_SEARCH_MAX_LIMIT}"
+        )));
+    }
+    let mut files = Vec::new();
+    collect_evidence_files(&evidence_dir, &mut files)?;
+    files.sort();
+
+    let mut matches = Vec::new();
+    for file in files {
+        if options
+            .report
+            .as_deref()
+            .is_some_and(|report_path| same_path(&file, report_path))
+        {
+            continue;
+        }
+        if matches.len() >= options.limit {
+            break;
+        }
+        let relative = evidence_relative_path(&evidence_dir, &file);
+        let file_handle = fs::File::open(&file)?;
+        let mut reader = BufReader::new(file_handle);
+        let mut line = Vec::new();
+        let mut line_number = 0usize;
+        loop {
+            line.clear();
+            let bytes_read = reader.read_until(b'\n', &mut line)?;
+            if bytes_read == 0 {
+                break;
+            }
+            line_number += 1;
+            let line_text = String::from_utf8_lossy(&line);
+            if line_text.contains(&query) {
+                matches.push(EvidenceMatch {
+                    path: relative.clone(),
+                    line: line_number,
+                    snippet: evidence_snippet(&line_text),
+                });
+                if matches.len() >= options.limit {
+                    break;
+                }
+            }
+        }
+    }
+
+    let matches_json = matches
+        .iter()
+        .map(|item| {
+            format!(
+                "{{\"path\":\"{}\",\"line\":{},\"snippet\":\"{}\"}}",
+                escape_json(&item.path),
+                item.line,
+                escape_json(&item.snippet)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let json = format!(
+        concat!(
+            "{{",
+            "\"command\":\"evidence-search\",",
+            "\"schema_version\":1,",
+            "\"evidence_dir\":\"{}\",",
+            "\"query\":\"{}\",",
+            "\"limit\":{},",
+            "\"match_count\":{},",
+            "\"matches\":[{}]",
+            "}}"
+        ),
+        escape_json(&evidence_dir.display().to_string()),
+        escape_json(&query),
+        options.limit,
+        matches.len(),
+        matches_json
+    );
+    if let Some(path) = &options.report {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &json)?;
+    }
+    Ok(json)
+}
+
+#[derive(Debug)]
+struct EvidenceMatch {
+    path: String,
+    line: usize,
+    snippet: String,
+}
+
+fn collect_evidence_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    if !path.exists() {
+        return Err(Error::Cli(format!(
+            "evidence-search directory does not exist: {}",
+            path.display()
+        )));
+    }
+    collect_evidence_files_at(path, files, 0)
+}
+
+fn collect_evidence_files_at(path: &Path, files: &mut Vec<PathBuf>, depth: usize) -> Result<()> {
+    if depth > EVIDENCE_SEARCH_MAX_DEPTH {
+        return Err(Error::Cli(format!(
+            "evidence-search directory depth exceeds {EVIDENCE_SEARCH_MAX_DEPTH}: {}",
+            path.display()
+        )));
+    }
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let metadata = fs::symlink_metadata(&entry_path)?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
+            collect_evidence_files_at(&entry_path, files, depth + 1)?;
+        } else if metadata.is_file() && is_supported_evidence_file(&entry_path) {
+            if files.len() >= EVIDENCE_SEARCH_MAX_FILES {
+                return Err(Error::Cli(format!(
+                    "evidence-search file count exceeds {EVIDENCE_SEARCH_MAX_FILES}"
+                )));
+            }
+            files.push(entry_path);
+        }
+    }
+    Ok(())
+}
+
+fn is_supported_evidence_file(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase()),
+        Some(ext) if ext == "json" || ext == "jsonl" || ext == "log" || ext == "md"
+    )
+}
+
+fn evidence_relative_path(base: &Path, path: &Path) -> String {
+    path.strip_prefix(base)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+        .replace('\\', "/")
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    if left == right {
+        return true;
+    }
+    match (fs::canonicalize(left), fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
+fn evidence_snippet(line: &str) -> String {
+    let trimmed = line.trim();
+    if trimmed.chars().count() <= EVIDENCE_SNIPPET_MAX_CHARS {
+        return trimmed.to_string();
+    }
+    let mut snippet = trimmed
+        .chars()
+        .take(EVIDENCE_SNIPPET_MAX_CHARS)
+        .collect::<String>();
+    snippet.push_str("...");
+    snippet
+}
+
+fn manifest_path(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(name)
+}
+
+fn command_version_any(commands: &[&str], args: &[&str]) -> String {
+    commands
+        .iter()
+        .map(|command| command_version(command, args))
+        .find(|version| version != "NOT_FOUND")
+        .unwrap_or_else(|| "NOT_FOUND".to_string())
+}
+
+fn command_version(command: &str, args: &[&str]) -> String {
+    std::process::Command::new(command)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "NOT_FOUND".to_string())
+}
+
+fn file_sha256(path: &Path) -> Result<String> {
+    let path_text = path.to_str().unwrap_or_default();
+    if let Some(hash) = std::process::Command::new("sha256sum")
+        .arg(path_text)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .and_then(|value| value.split_whitespace().next().map(str::to_string))
+        .filter(|value| is_sha256_hex(value))
+    {
+        return Ok(hash.to_ascii_lowercase());
+    }
+    if let Some(hash) = std::process::Command::new("certutil")
+        .args(["-hashfile", path_text, "SHA256"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .and_then(|value| {
+            value
+                .lines()
+                .map(str::trim)
+                .find(|line| is_sha256_hex(line))
+                .map(str::to_string)
+        })
+    {
+        return Ok(hash.to_ascii_lowercase());
+    }
+    Ok("NOT_FOUND".to_string())
+}
+
+fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+#[derive(Debug, Clone)]
+struct UnsafeFinding {
+    path: String,
+    line: usize,
+    category: String,
+    text: String,
+}
+
 fn unsafe_scan(path: &Path, report_path: Option<&Path>) -> Result<String> {
     let mut findings = Vec::new();
     let mut scanned_files = 0usize;
@@ -117,589 +453,4 @@ fn scan_dir_for_unsafe(
         }
     }
     Ok(())
-}
-
-fn unsafe_findings_in_line(path: &Path, line_no: usize, line: &str) -> Vec<UnsafeFinding> {
-    let code = strip_strings_and_line_comments(line);
-    let raw_without_comment = strip_line_comment(line);
-    let mut findings = Vec::new();
-    let mut add = |category: &str| {
-        findings.push(UnsafeFinding {
-            path: path.display().to_string().replace('\\', "/"),
-            line: line_no,
-            category: category.to_string(),
-            text: line.trim().to_string(),
-        });
-    };
-
-    if has_ordered_tokens(&code, &["unsafe", "fn"]) {
-        add("unsafe_function");
-    }
-    if has_ordered_tokens(&code, &["unsafe", "impl"]) {
-        add("unsafe_impl");
-    }
-    if code.contains("unsafe {") || code.contains("unsafe{") {
-        add("unsafe_block");
-    }
-    if has_token(&code, "extern")
-        && (raw_without_comment.contains("\"C\"") || raw_without_comment.contains("\"cdecl\""))
-    {
-        add("extern_c");
-    }
-    if code.contains("repr(C)") || code.contains("repr( C )") || code.contains("repr(C,") {
-        add("repr_c");
-    }
-    if has_token(&code, "transmute") {
-        add("transmute");
-    }
-    if code.contains("*mut ")
-        || code.contains("*const ")
-        || code.contains("as *mut")
-        || code.contains("as *const")
-    {
-        add("raw_pointer");
-    }
-
-    findings
-}
-
-fn has_ordered_tokens(code: &str, expected: &[&str]) -> bool {
-    let mut index = 0usize;
-    for token in code.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_')) {
-        if token == expected[index] {
-            index += 1;
-            if index == expected.len() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn has_token(code: &str, expected: &str) -> bool {
-    code.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
-        .any(|token| token == expected)
-}
-
-fn strip_line_comment(line: &str) -> String {
-    line.split_once("//")
-        .map(|(left, _)| left)
-        .unwrap_or(line)
-        .to_string()
-}
-
-fn strip_strings_and_line_comments(line: &str) -> String {
-    let mut out = String::with_capacity(line.len());
-    let mut chars = line.chars().peekable();
-    let mut in_string = false;
-    let mut in_char = false;
-    let mut escaped = false;
-
-    while let Some(ch) = chars.next() {
-        if !in_string && !in_char && ch == '/' && chars.peek() == Some(&'/') {
-            break;
-        }
-
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
-            }
-            out.push(' ');
-            continue;
-        }
-
-        if in_char {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '\'' {
-                in_char = false;
-            }
-            out.push(' ');
-            continue;
-        }
-
-        if ch == '"' {
-            in_string = true;
-            out.push(' ');
-        } else if ch == '\'' {
-            in_char = true;
-            out.push(' ');
-        } else {
-            out.push(ch);
-        }
-    }
-
-    out
-}
-
-fn unsafe_category_counts(findings: &[UnsafeFinding]) -> BTreeMap<&'static str, usize> {
-    let mut counts = BTreeMap::from([
-        ("unsafe_function", 0),
-        ("unsafe_block", 0),
-        ("unsafe_impl", 0),
-        ("extern_c", 0),
-        ("repr_c", 0),
-        ("transmute", 0),
-        ("raw_pointer", 0),
-    ]);
-    for finding in findings {
-        if let Some(value) = counts.get_mut(finding.category.as_str()) {
-            *value += 1;
-        }
-    }
-    counts
-}
-
-fn format_ratio(value: f64) -> String {
-    if value == 0.0 {
-        "0".to_string()
-    } else {
-        format!("{value:.6}")
-    }
-}
-
-fn assert_eq_or_error<T>(actual: T, expected: T, context: &str) -> Result<()>
-where
-    T: std::fmt::Debug + PartialEq,
-{
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(Error::CorruptRecord(format!(
-            "{context}: expected {expected:?}, got {actual:?}"
-        )))
-    }
-}
-
-fn unique_run_id(seed: u64) -> String {
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|value| value.as_nanos())
-        .unwrap_or(0);
-    format!("{}_{}_{}", std::process::id(), seed, nanos)
-}
-
-#[derive(Debug, Clone)]
-struct Lcg {
-    state: u64,
-}
-
-impl Lcg {
-    fn new(seed: u64) -> Self {
-        Self { state: seed }
-    }
-
-    fn next(&mut self) -> u64 {
-        self.state = self
-            .state
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        self.state
-    }
-}
-
-impl Report {
-    fn to_json(&self) -> String {
-        let scenarios = self
-            .scenario_counts
-            .iter()
-            .map(|(name, count)| format!("\"{}\":{}", escape_json(name), count))
-            .collect::<Vec<_>>()
-            .join(",");
-        let hashes = self
-            .image_hashes
-            .iter()
-            .map(|hash| format!("\"{}\"", escape_json(hash)))
-            .collect::<Vec<_>>()
-            .join(",");
-        format!(
-            concat!(
-                "{{",
-                "\"command\":\"{}\",",
-                "\"backend\":\"{}\",",
-                "\"loops\":{},",
-                "\"seed\":{},",
-                "\"scenario\":\"{}\",",
-                "\"scenario_counts\":{{{}}},",
-                "\"duration_ms\":{},",
-                "\"counters\":{{",
-                "\"read_ops\":{},\"write_ops\":{},\"erase_ops\":{},\"flush_ops\":{},",
-                "\"bytes_read\":{},\"bytes_written\":{},\"bytes_erased\":{}",
-                "}},",
-                "\"bytes_processed\":{},",
-                "\"image_hashes\":[{}]",
-                "}}"
-            ),
-            escape_json(&self.command),
-            escape_json(&self.backend),
-            self.loops,
-            self.seed,
-            escape_json(&self.scenario),
-            scenarios,
-            self.duration_ms,
-            self.counters.read_ops,
-            self.counters.write_ops,
-            self.counters.erase_ops,
-            self.counters.flush_ops,
-            self.counters.bytes_read,
-            self.counters.bytes_written,
-            self.counters.bytes_erased,
-            self.bytes_processed,
-            hashes
-        )
-    }
-}
-
-fn escape_json(input: &str) -> String {
-    let mut escaped = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '\\' => escaped.push_str("\\\\"),
-            '"' => escaped.push_str("\\\""),
-            '\u{08}' => escaped.push_str("\\b"),
-            '\u{0c}' => escaped.push_str("\\f"),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            ch if ch <= '\u{1f}' => escaped.push_str(&format!("\\u{:04x}", ch as u32)),
-            ch => escaped.push(ch),
-        }
-    }
-    escaped
-}
-
-fn help() -> String {
-    [
-        "flashdb-rust commands:",
-        "  smoke [--backend memory|file] [--report path]",
-        "  stress --loops N [--seed N] [--backend memory|file] [--scenario all|production|abnormal|reliability] [--report path]",
-        "  replay --fixture file [--backend memory|file] [--report path]",
-        "  diff --rust-report file --oracle-report file [--report path]",
-        "  fixture-replay --fixture file [--report path]  # CI-compatible alias",
-        "  diff-report --actual file --expected file [--report path]  # CI-compatible alias",
-        "  inspect-image --path file",
-        "  unsafe-scan",
-        "  version-manifest [--report path]",
-        "  evidence-search --evidence-dir dir --query text [--limit 1..10000] [--report path]",
-        "",
-        "Long run example:",
-        "  cargo run --release -- stress --loops 10000 --seed 1 --backend file --scenario all --report target/verification/stress-10000.json",
-    ]
-    .join("\n")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stress_report_contains_counts() {
-        let out = run(["stress", "--loops", "3", "--seed", "9"]).unwrap();
-        assert!(out.contains("\"loops\":3"));
-        assert!(out.contains("\"production\":3"));
-        assert!(out.contains("\"abnormal\":3"));
-        assert!(out.contains("\"reliability\":3"));
-    }
-
-    #[test]
-    fn inspect_image_reports_hash() {
-        let path = std::env::temp_dir().join("flashdb_rust_cli_inspect.img");
-        fs::write(&path, [1u8, 2, 3]).unwrap();
-        let out = run([
-            "inspect-image".to_string(),
-            "--path".to_string(),
-            path.display().to_string(),
-        ])
-        .unwrap();
-        assert!(out.contains("\"bytes\":3"));
-        assert!(out.contains("\"image_hash\""));
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn evidence_search_finds_supported_text_matches() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_{}",
-            unique_run_id(101)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("summary.json"),
-            "{\"status\":\"passed\"}\n{\"slice_id\":\"tsdb-user2-status\"}\n",
-        )
-        .unwrap();
-        fs::write(dir.join("trace.log"), "first line\nstatus passed\n").unwrap();
-        fs::write(dir.join("ignored.bin"), "status passed\n").unwrap();
-
-        let out = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "passed".to_string(),
-        ])
-        .unwrap();
-
-        assert!(out.contains("\"command\":\"evidence-search\""));
-        assert!(out.contains("\"schema_version\":1"));
-        assert!(out.contains("\"match_count\":2"));
-        assert!(out.contains("\"path\":\"summary.json\""));
-        assert!(out.contains("\"path\":\"trace.log\""));
-        assert!(out.contains("\"line\":1"));
-        assert!(out.contains("\"line\":2"));
-        assert!(out.contains("\"snippet\":\"{\\\"status\\\":\\\"passed\\\"}\""));
-        assert!(!out.contains("ignored.bin"));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_honors_limit_and_supported_extensions() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_limit_{}",
-            unique_run_id(102)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("a.jsonl"), "{\"status\":\"failed\"}\n").unwrap();
-        fs::write(dir.join("b.md"), "status failed\n").unwrap();
-        fs::write(dir.join("c.bin"), "status failed\n").unwrap();
-
-        let out = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "failed".to_string(),
-            "--limit".to_string(),
-            "1".to_string(),
-        ])
-        .unwrap();
-
-        assert!(out.contains("\"limit\":1"));
-        assert!(out.contains("\"match_count\":1"));
-        assert!(out.contains("\"path\":\"a.jsonl\""));
-        assert!(!out.contains("\"path\":\"b.md\""));
-        assert!(!out.contains("c.bin"));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_requires_query() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_missing_query_{}",
-            unique_run_id(103)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-
-        let err = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-        ])
-        .unwrap_err();
-
-        assert_eq!(
-            err,
-            Error::Cli("evidence-search requires --query".to_string())
-        );
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_rejects_empty_query() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_empty_query_{}",
-            unique_run_id(104)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-
-        let err = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "".to_string(),
-        ])
-        .unwrap_err();
-
-        assert_eq!(
-            err,
-            Error::Cli("evidence-search requires non-empty --query".to_string())
-        );
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_rejects_invalid_limits() {
-        for (seed, limit) in [(105, "0"), (106, "10001")] {
-            let dir = std::env::temp_dir().join(format!(
-                "flashdb_rust_evidence_search_limit_bounds_{}",
-                unique_run_id(seed)
-            ));
-            fs::create_dir_all(&dir).unwrap();
-
-            let err = run([
-                "evidence-search".to_string(),
-                "--evidence-dir".to_string(),
-                dir.display().to_string(),
-                "--query".to_string(),
-                "passed".to_string(),
-                "--limit".to_string(),
-                limit.to_string(),
-            ])
-            .unwrap_err();
-
-            assert_eq!(
-                err,
-                Error::Cli("evidence-search --limit must be between 1 and 10000".to_string())
-            );
-
-            let _ = fs::remove_dir_all(dir);
-        }
-    }
-
-    #[test]
-    fn evidence_search_tolerates_non_utf8_text_evidence() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_non_utf8_{}",
-            unique_run_id(107)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("a-bad.log"), [0xff, b'\n']).unwrap();
-        fs::write(dir.join("z-good.json"), "{\"status\":\"passed\"}\n").unwrap();
-
-        let out = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "passed".to_string(),
-        ])
-        .unwrap();
-
-        assert!(out.contains("\"match_count\":1"));
-        assert!(out.contains("\"path\":\"z-good.json\""));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_bounds_long_snippets() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_long_snippet_{}",
-            unique_run_id(108)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        let long_value = "x".repeat(320);
-        fs::write(
-            dir.join("long.json"),
-            format!("{{\"status\":\"passed\",\"payload\":\"{long_value}\"}}\n"),
-        )
-        .unwrap();
-
-        let out = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "passed".to_string(),
-        ])
-        .unwrap();
-
-        assert!(out.contains("\"snippet\":\"{\\\"status\\\":\\\"passed\\\""));
-        assert!(out.contains("..."));
-        assert!(!out.contains(&long_value));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_excludes_report_path_from_matches() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_report_exclusion_{}",
-            unique_run_id(109)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("source.json"), "{\"status\":\"passed\"}\n").unwrap();
-        let report = dir.join("evidence-search-report.json");
-        fs::write(&report, "{\"old_query\":\"passed\"}\n").unwrap();
-
-        let out = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "passed".to_string(),
-            "--report".to_string(),
-            report.display().to_string(),
-        ])
-        .unwrap();
-
-        assert!(out.contains("\"match_count\":1"));
-        assert!(out.contains("\"path\":\"source.json\""));
-        assert!(!out.contains("\"path\":\"evidence-search-report.json\""));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn evidence_search_escapes_json_control_characters() {
-        let dir = std::env::temp_dir().join(format!(
-            "flashdb_rust_evidence_search_json_escape_{}",
-            unique_run_id(110)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("control.log"), "status\tpassed\u{1}\n").unwrap();
-
-        let out = run([
-            "evidence-search".to_string(),
-            "--evidence-dir".to_string(),
-            dir.display().to_string(),
-            "--query".to_string(),
-            "\tpassed".to_string(),
-        ])
-        .unwrap();
-
-        assert!(out.contains("\"query\":\"\\tpassed\""));
-        assert!(out.contains("\"snippet\":\"status\\tpassed\\u0001\""));
-        assert!(!out.contains('\t'));
-        assert!(!out.contains('\u{1}'));
-
-        let _ = fs::remove_dir_all(dir);
-    }
-
-    #[test]
-    fn unsafe_scan_classifies_review_relevant_categories() {
-        let path = Path::new("src/demo.rs");
-        let samples = [
-            ("pub unsafe fn call() {}", "unsafe_function"),
-            ("unsafe { do_work(); }", "unsafe_block"),
-            ("unsafe impl Send for Demo {}", "unsafe_impl"),
-            ("extern \"C\" { fn c_call(); }", "extern_c"),
-            ("#[repr(C)] struct Demo { value: u32 }", "repr_c"),
-            ("#[repr(C, packed)] struct Demo { value: u32 }", "repr_c"),
-            (
-                "let value = std::mem::transmute::<u32, i32>(raw);",
-                "transmute",
-            ),
-            ("let ptr: *mut u8 = buffer.as_mut_ptr();", "raw_pointer"),
-        ];
-
-        for (line, category) in samples {
-            let findings = unsafe_findings_in_line(path, 7, line);
-            assert!(
-                findings.iter().any(|finding| finding.category == category),
-                "missing category {category} for line {line}; findings={findings:?}"
-            );
-        }
-    }
 }

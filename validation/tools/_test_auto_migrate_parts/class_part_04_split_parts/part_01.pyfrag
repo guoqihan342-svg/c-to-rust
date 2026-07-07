@@ -1,0 +1,476 @@
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "fill-first"
+            cfg = json.loads((evidence_dir / "l3-fill-first-cfg.json").read_text(encoding="utf-8"))
+            pointer_graph = json.loads((evidence_dir / "l3-fill-first-pointer-graph.json").read_text(encoding="utf-8"))
+            plan = json.loads((evidence_dir / "l3-fill-first-auto-translation-plan.json").read_text(encoding="utf-8"))
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "fill-first")
+            self.assertIn("bounded_pointer_index", block["lvalue_kinds"])
+            self.assertTrue(
+                any(decision["decision"] == "bounded_pointer_index" for decision in block["lvalue_decisions"])
+            )
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_index"
+                    for decision in pointer_graph["pointer_decisions"]
+                )
+            )
+            out_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "out")
+            self.assertIn("out[0]", out_node["write_effects"])
+            self.assertIn("bounded_pointer_index", out_node["boundary_decisions"])
+            self.assertIn("bounded-pointer-index-write", plan["translation_summary"]["translation_rule_ids"])
+            self.assertEqual(plan["translation_summary"]["lvalue_decision_counts"]["bounded_pointer_index"], 1)
+            self.assertEqual(
+                plan["translation_summary"]["pointer_boundary_decision_counts"]["bounded_pointer_index"], 1
+            )
+
+    def test_input_buffer_pointer_decision_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "sum-i32-buffer",
+            "source_commit": "1234567",
+            "function_name": "sum_i32_buffer",
+            "c_source": "int sum_i32_buffer(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + values[i]; } out[0] = total; return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "sum"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "sum-i32-buffer.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "sum-i32-buffer"
+            cfg = json.loads((evidence_dir / "l3-sum-i32-buffer-cfg.json").read_text(encoding="utf-8"))
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-sum-i32-buffer-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-sum-i32-buffer-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "sum-i32-buffer")
+            self.assertIn("bounded_input_buffer_read", block["statement_kinds"])
+            self.assertTrue(
+                any(decision["decision"] == "bounded_input_buffer" for decision in block["lvalue_decisions"])
+            )
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_input_buffer"
+                    for decision in pointer_graph["pointer_decisions"]
+                )
+            )
+            values_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "values")
+            self.assertEqual(values_node["kind"], "buffer")
+            self.assertEqual(values_node["buffer_role"], "input")
+            self.assertEqual(values_node["length_companion"], "len")
+            self.assertEqual(values_node["ownership_role"], "borrowed")
+            self.assertEqual(values_node["mutability"], "read_only")
+            self.assertIn("values[i]", values_node["read_effects"])
+            self.assertIn("bounded_input_buffer", values_node["boundary_decisions"])
+            out_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "out")
+            self.assertIn("out[0]", out_node["write_effects"])
+            self.assertIn("bounded-input-buffer-read", plan["translation_summary"]["translation_rule_ids"])
+            self.assertEqual(plan["translation_summary"]["lvalue_decision_counts"]["bounded_input_buffer"], 1)
+            self.assertEqual(
+                plan["translation_summary"]["pointer_boundary_decision_counts"]["bounded_input_buffer"], 1
+            )
+
+    def test_pointer_arithmetic_input_read_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "sum-i32-ptr-arith",
+            "source_commit": "1234567",
+            "function_name": "sum_i32_ptr_arith",
+            "c_source": "int sum_i32_ptr_arith(const int* values, int len, int* out) { int total = 0; for (int i = 0; i < len; i++) { total = total + *(values + i); } out[0] = total; return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "sum"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "sum-i32-ptr-arith.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "sum-i32-ptr-arith"
+            cfg = json.loads((evidence_dir / "l3-sum-i32-ptr-arith-cfg.json").read_text(encoding="utf-8"))
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-sum-i32-ptr-arith-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-sum-i32-ptr-arith-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "sum-i32-ptr-arith")
+            self.assertIn("bounded_input_buffer_read", block["statement_kinds"])
+            self.assertIn("bounded_pointer_arithmetic_input_read", block["statement_kinds"])
+            self.assertIn("bounded_pointer_arithmetic_input_buffer", block["lvalue_kinds"])
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_input_read"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-input-read"
+                    for decision in block["lvalue_decisions"]
+                )
+            )
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_input_read"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-input-read"
+                    for decision in pointer_graph["pointer_decisions"]
+                )
+            )
+            values_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "values")
+            self.assertIn("values[i]", values_node["read_effects"])
+            self.assertIn("*(values + i)", values_node["read_effects"])
+            self.assertIn("bounded_input_buffer", values_node["boundary_decisions"])
+            self.assertIn("bounded_pointer_arithmetic_input_read", values_node["boundary_decisions"])
+            self.assertIn("bounded-input-buffer-read", plan["translation_summary"]["translation_rule_ids"])
+            self.assertIn(
+                "bounded-pointer-arithmetic-input-read",
+                plan["translation_summary"]["translation_rule_ids"],
+            )
+            self.assertEqual(
+                plan["translation_summary"]["lvalue_decision_counts"][
+                    "bounded_pointer_arithmetic_input_read"
+                ],
+                1,
+            )
+            self.assertEqual(
+                plan["translation_summary"]["pointer_boundary_decision_counts"][
+                    "bounded_pointer_arithmetic_input_read"
+                ],
+                1,
+            )
+
+    def test_pointer_arithmetic_output_write_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "fill-i32-ptr-arith-out",
+            "source_commit": "1234567",
+            "function_name": "fill_i32_ptr_arith_out",
+            "c_source": "int fill_i32_ptr_arith_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "out_values"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "fill-i32-ptr-arith-out.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "fill-i32-ptr-arith-out"
+            cfg = json.loads((evidence_dir / "l3-fill-i32-ptr-arith-out-cfg.json").read_text(encoding="utf-8"))
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-fill-i32-ptr-arith-out-pointer-graph.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            plan = json.loads(
+                (
+                    evidence_dir / "l3-fill-i32-ptr-arith-out-auto-translation-plan.json"
+                ).read_text(encoding="utf-8")
+            )
+            rust_draft = (evidence_dir / "l3-fill-i32-ptr-arith-out-rust-draft.rs").read_text(
+                encoding="utf-8"
+            )
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            _, plan = self._assert_route_refused_candidate(manifest, evidence_dir, "fill-i32-ptr-arith-out")
+            self.assertIn("out: &mut [i32]", rust_draft)
+            self.assertIn("out[i as usize] = value;", rust_draft)
+            self.assertIn("bounded_pointer_arithmetic_output_write", block["statement_kinds"])
+            self.assertIn("bounded_pointer_arithmetic_output_buffer", block["lvalue_kinds"])
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_output_write"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-output-write"
+                    for decision in block["lvalue_decisions"]
+                )
+            )
+            self.assertTrue(
+                any(
+                    decision["decision"] == "bounded_pointer_arithmetic_output_write"
+                    and decision["translation_rule_id"] == "bounded-pointer-arithmetic-output-write"
+                    for decision in pointer_graph["pointer_decisions"]
+                )
+            )
+            out_node = next(node for node in pointer_graph["pointer_nodes"] if node["id"] == "out")
+            self.assertEqual(out_node["kind"], "buffer")
+            self.assertEqual(out_node["buffer_role"], "output")
+            self.assertEqual(out_node["length_companion"], "len")
+            self.assertEqual(out_node["ownership_role"], "out_param")
+            self.assertEqual(out_node["mutability"], "write_only")
+            self.assertIn("out[i]", out_node["write_effects"])
+            self.assertIn("*(out + i)", out_node["write_effects"])
+            self.assertIn("bounded_pointer_arithmetic_output_write", out_node["boundary_decisions"])
+            self.assertIn(
+                "bounded-pointer-arithmetic-output-write",
+                plan["translation_summary"]["translation_rule_ids"],
+            )
+            self.assertEqual(
+                plan["translation_summary"]["lvalue_decision_counts"][
+                    "bounded_pointer_arithmetic_output_write"
+                ],
+                1,
+            )
+            self.assertEqual(
+                plan["translation_summary"]["pointer_boundary_decision_counts"][
+                    "bounded_pointer_arithmetic_output_write"
+                ],
+                1,
+            )
+
+    def test_alias_sensitive_read_write_pointer_gate_flows_through_auto_migrate(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "copy-i32-alias-gate",
+            "source_commit": "1234567",
+            "function_name": "copy_i32_alias_gate",
+            "c_source": "int copy_i32_alias_gate(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "c_boundary": {
+                "pointer_contract": {
+                    "input_buffers": [
+                        {
+                            "name": "values",
+                            "c_type": "const int*",
+                            "length_companion": "len",
+                            "read_effects": ["*(values + i)", "values[i]"],
+                        }
+                    ],
+                    "output_pointers": [
+                        {
+                            "name": "out",
+                            "c_type": "int*",
+                            "length_companion": "len",
+                            "write_effects": ["*(out + i)", "out[i]"],
+                        }
+                    ],
+                    "aliasing_proven": False,
+                }
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "out_values"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "copy-i32-alias-gate.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "copy-i32-alias-gate"
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-copy-i32-alias-gate-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-copy-i32-alias-gate-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            cache = json.loads(
+                (evidence_dir / "l3-copy-i32-alias-gate-auto-cache-metadata.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertIn("alias_sensitive_state", pointer_graph["applicability"]["triggers"])
+            self.assertEqual(pointer_graph["schema_version"], 2)
+            self.assertEqual(pointer_graph["alias_sets"][0]["id"], "alias-set-1")
+            self.assertEqual(pointer_graph["alias_sets"][0]["members"], ["values", "out"])
+            self.assertEqual(pointer_graph["alias_sets"][0]["relationship"], "unknown_overlap")
+            self.assertEqual(
+                pointer_graph["alias_sets"][0]["evidence"],
+                "c_boundary.pointer_contract.aliasing_proven=false",
+            )
+            self.assertEqual(pointer_graph["alias_contract"]["decision"], "requires_noalias_contract")
+            self.assertFalse(pointer_graph["alias_contract"]["proven"])
+            self.assertTrue(pointer_graph["alias_contract"]["requires_noalias"])
+            self.assertEqual(pointer_graph["alias_risks"][0]["risk_level"], "unknown_alias")
+            self.assertEqual(pointer_graph["alias_risks"][0]["gate_decision"], "requires_noalias_contract")
+            self.assertIn("values", pointer_graph["alias_risks"][0]["pointer_nodes"])
+            self.assertIn("out", pointer_graph["alias_risks"][0]["pointer_nodes"])
+            effect_graph = pointer_graph["effect_graph"]
+            read_effect = next(
+                effect
+                for effect in effect_graph["effects"]
+                if effect["pointer_node"] == "values"
+                and effect["kind"] == "read"
+                and effect["expression"] == "values[i]"
+            )
+            write_effect = next(
+                effect
+                for effect in effect_graph["effects"]
+                if effect["pointer_node"] == "out"
+                and effect["kind"] == "write"
+                and effect["expression"] == "out[i]"
+            )
+            self.assertTrue(
+                any(
+                    edge["from_effect"] == read_effect["id"]
+                    and edge["to_effect"] == write_effect["id"]
+                    and edge["relationship"] == "requires_noalias"
+                    for edge in effect_graph["edges"]
+                )
+            )
+            self.assertEqual(effect_graph["summary"]["reads"], ["values"])
+            self.assertEqual(effect_graph["summary"]["writes"], ["out"])
+            self.assertTrue(effect_graph["summary"]["alias_sensitive"])
+            self.assertEqual(
+                effect_graph["summary"]["alias_gate_decision"],
+                "requires_noalias_contract",
+            )
+            self.assertTrue(
+                any(
+                    item["kind"] == "noalias"
+                    and item["applies_to"] == ["values", "out"]
+                    and item["required"]
+                    for item in pointer_graph["safe_boundary_preconditions"]
+                )
+            )
+            self.assertEqual(
+                plan["translation_summary"]["alias_gate"]["decision"],
+                "requires_noalias_contract",
+            )
+            self.assertEqual(
+                manifest["claim_boundary"]["alias_gate"]["decision"],
+                "requires_noalias_contract",
+            )
+            self.assertFalse(manifest["claim_boundary"]["alias_gate"]["complete_alias_safety"])
+            self.assertIn("effect_graph", pointer_graph["cache_invalidation_keys"])
+            self.assertIn("effect_graph_identity", cache["cache_input_fields"])
+            self.assertEqual(cache["effect_graph_identity"]["alias_sensitive"], True)
+            self.assertEqual(cache["effect_graph_identity"]["read_effect_count"], 2)
+            self.assertEqual(cache["effect_graph_identity"]["write_effect_count"], 2)

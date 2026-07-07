@@ -1,0 +1,413 @@
+            "observable_replay_pass": True,
+            "semantic_pass": False,
+            "generated_draft_semantic_pass": False,
+            "replay_kind": "direct_c2rust_output_replay",
+            "correctness_role": "direct_replay_evidence",
+            "c2rust_output": dict(direct_output_ref or output_ref),
+            "compile_artifact": dict(compile_ref),
+            "results": {"case_count": 1, "cases": [{"id": "case-one", "matched": True}]},
+        }
+        self._write_json(direct_path, direct_payload)
+
+        verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+        verified_payload = {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": prefix.removeprefix("l3-"),
+            "source_commit": "1234567",
+            "entry_function": prefix.removeprefix("l3-").replace("-", "_"),
+            "status": "blocked",
+            "semantic_pass": False,
+            "semantic_claim_source": "blocked_missing_c2rust_bound_gates",
+            "generated_draft_semantic_pass": False,
+            "c2rust_baseline": baseline_ref,
+            "c2rust_output": dict(output_ref),
+            "compile_artifact": dict(compile_ref),
+            "fixture": {
+                "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+                "hash": "call-expression-fixture",
+            },
+            "route_decision": self._ref(
+                evidence_dir / f"{prefix}-route-decision.json",
+                json.loads((evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8")).get(
+                    "status",
+                    "recorded",
+                ),
+            ),
+            "validation_profile": self._ref(
+                evidence_dir / f"{prefix}-validation-profile.json",
+                json.loads((evidence_dir / f"{prefix}-validation-profile.json").read_text(encoding="utf-8")).get(
+                    "status",
+                    "incomplete",
+                ),
+            ),
+            "direct_c2rust_replay": {
+                "status": "passed",
+                "semantic_pass": False,
+                "observable_replay_pass": True,
+                "artifact": self._ref(direct_path, "passed"),
+                "c2rust_output": dict(direct_output_ref or output_ref),
+                "compile_artifact": dict(compile_ref),
+            },
+            "blocked_reasons": ["c2rust_bound_gate_refs_not_implemented"],
+            "claim_boundary": {
+                "semantic_pass": False,
+                "generated_draft_semantic_pass": False,
+                "compile_only_is_semantic_pass": False,
+            },
+        }
+        self._write_json(verified_path, verified_payload)
+        verified_ref = self._ref(verified_path, "blocked")
+
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+        auto_manifest["verified_unsafe_baseline"] = verified_ref
+        self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["evidence"]["verified_unsafe_baseline"] = verified_ref
+        self._write_json(manifest_path, manifest)
+
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["verified_unsafe_baseline"] = verified_ref
+        self._write_json(final_path, final)
+
+    def _verified_baseline_same_output_gate_refs_for_tests(
+        self,
+        evidence_dir: Path,
+        prefix: str,
+        output_ref: dict,
+        compile_ref: dict,
+    ) -> dict:
+        gate_paths = {
+            "c_oracle": (evidence_dir / f"{prefix}-c-oracle-status.json", "C_ORACLE_GENERATED"),
+            "rust_replay": (evidence_dir / f"{prefix}-c2rust-direct-replay.json", "passed"),
+            "schema_diff": (evidence_dir / f"{prefix}-diff.json", "passed"),
+            "negative_diff": (evidence_dir / f"{prefix}-negative-diff.json", "expected_failed"),
+            "unsafe_scan": (evidence_dir / f"{prefix}-unsafe-scan.json", "passed"),
+            "unsafe_ledger": (evidence_dir / f"{prefix}-unsafe-ledger.json", "passed"),
+            "final_verification": (evidence_dir / f"{prefix}-final-verification.json", "passed"),
+        }
+        refs = {}
+        for gate, (path, status) in gate_paths.items():
+            ref = self._ref(path, status)
+            ref["binding"] = "same_c2rust_output"
+            ref["c2rust_output"] = dict(output_ref)
+            ref["compile_artifact"] = dict(compile_ref)
+            if gate == "rust_replay":
+                ref["replay_kind"] = "direct_c2rust_output_replay"
+                ref["correctness_role"] = "direct_replay_evidence"
+            refs[gate] = ref
+        return refs
+
+    def _global_dependency_spec(self) -> dict:
+        return {
+            "schema_version": 1,
+            "target_id": "demo",
+            "slice_id": "global-dependency-validator",
+            "level": "L3",
+            "status": "ready",
+            "source_commit": "1234567",
+            "function_name": "global_dependency_validator",
+            "c_source": "int global_dependency_validator(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "l1_evidence": {
+                "path": "validation/evidence/demo/l1-native-build.json",
+                "status": "test",
+                "accepted": False,
+            },
+            "source": {
+                "source_root": "unit",
+                "source_commit": "1234567",
+                "repo_commit": "1234567",
+                "source_file_hashes": {"unit/global.c": "global-sha"},
+            },
+            "build_profile": {
+                "profile_id": "demo-global-dependency-validator-auto-profile",
+                "compiler_command_source": "unit-test",
+                "include_paths": ["inc"],
+                "defines": [],
+                "target": {
+                    "triple_or_abi": "x86_64-unknown-linux-gnu",
+                    "endianness": "little",
+                    "int_width": 32,
+                    "long_width": 64,
+                    "pointer_width": 64,
+                },
+                "preprocessing_mode": "manual_flags",
+                "tool_versions": {"cc": "unit-test"},
+                "clang_type_extraction": {"available": False, "diagnostics": ["unit-test"]},
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "fixture_id": "unit-fixture",
+                "path": "unit-test-fixture.json",
+                "hash": "fixture",
+                "cases": [
+                    {
+                        "id": "case-one",
+                        "input_ref": "cases[0]",
+                        "expected_ref": "inline",
+                        "expected_outputs": {"value": 42},
+                    }
+                ],
+                "observable_outputs": ["value"],
+                "behavior_fields": ["value"],
+            },
+            "c_boundary": {
+                "files": [{"path": "unit/global.c", "role": "source", "sha256": "global-sha"}],
+                "functions": ["global_dependency_validator"],
+                "signatures": [
+                    {
+                        "function": "global_dependency_validator",
+                        "return_type": "int",
+                        "parameters": [{"name": "value", "c_type": "int"}],
+                    }
+                ],
+                "direct_dependencies": [
+                    {
+                        "kind": "global",
+                        "name": "table",
+                        "source": "extracted_function_body_reference",
+                        "definition_status": "same_file_top_level_declared",
+                        "source_span": {
+                            "file": "unit/global.c",
+                            "line_start": 3,
+                            "line_end": 3,
+                            "sha256": "table-sha",
+                        },
+                        "sha256": "table-sha",
+                    }
+                ],
+            },
+            "rust_boundary": {
+                "crate": "validation/l2_slices",
+                "module": "validation/l2_slices/src/global_dependency_validator.rs",
+                "public_api": [
+                    {
+                        "name": "global_dependency_validator",
+                        "visibility": "public",
+                        "boundary_kind": "internal_ffi",
+                    }
+                ],
+                "raw_pointer_policy": "internal_only",
+                "unsafe_policy": {"max_first_party_non_test_ratio": 0.1, "ledger_required": True},
+            },
+            "claim_boundary": {
+                "accepted_metadata_differences": [],
+                "non_goals": ["unit test only"],
+                "must_not_claim": ["semantic equivalence without C oracle"],
+            },
+            "cache_invalidation_keys": ["unit-test"],
+        }
+
+    def _backfill_route_baseline_profile_evidence(self, evidence_dir: Path, target_id: str, slice_id: str) -> None:
+        prefix = f"l3-{slice_id}"
+        manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        source_commit = manifest.get("source_commit", "UNKNOWN0")
+        baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+
+        baseline = {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "status": "skipped",
+            "reason": "unit_test_backfill_for_legacy_fixture",
+            "correctness_role": "candidate_context_only",
+            "fallback_oracle": "original_c_oracle_required",
+            "validation_impact": "legacy fixture backfill only; accepted gates remain authoritative",
+            "source_commit": source_commit,
+            "slice_spec": {"path": f"validation/slice-specs/demo-{slice_id}.json", "sha256": "legacy-fixture"},
+            "build_profile_hash": "legacy-fixture",
+            "commands": [],
+            "selected_command": None,
+            "reference_tree": {"path": "F:/agent/c2rust-master", "status": "missing", "cargo_toml": ""},
+            "output": None,
+            "diagnostics": ["legacy fixture backfill"],
+        }
+        self._write_json(baseline_path, baseline)
+
+        route = {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "status": "recorded",
+            "level": "L0",
+            "translator": {"kind": "tier1", "candidate_generation_allowed": True},
+            "rationale": [{"feature": "legacy_fixture_backfill", "weight": "low"}],
+            "verification_profile": "L0-dev",
+            "source_artifacts": {
+                "type_map": self._ref(evidence_dir / f"{prefix}-type-map.json", "recorded"),
+                "cfg": self._ref(evidence_dir / f"{prefix}-cfg.json", "recorded"),
+                "pointer_graph": self._ref(evidence_dir / f"{prefix}-pointer-graph.json", "not_applicable"),
+                "translation_plan": self._ref(evidence_dir / f"{prefix}-auto-translation-plan.json", "draft_generated"),
+                "c2rust_baseline": self._ref(baseline_path, "skipped"),
+            },
+            "policy": {
+                "goal": "dev",
+                "fixed_loop_count_required": False,
+                "repair_budget_source": "run_policy",
+            },
+            "misroute": None,
+        }
+        self._write_json(route_path, route)
+
+        contract = self._call_expression_oracle_boundary_contract()
+        profile = {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "status": "passed",
+            "profile": "L0-dev",
+            "route_level": "L0",
+            "goal": "dev",
+            "required_gates": ["compile", "c_oracle_diff"],
+            "optional_gates": ["negative_diff", "evidence_cleanliness", "fuzz_property", "miri", "kani"],
+            "skipped_gates": [],
+            "required_gate_status": {"compile": "passed", "c_oracle_diff": "C_ORACLE_GENERATED"},
+            "loop_policy": {"source": "run_policy", "fixed_project_loop_count_required": False, "stress_loops": None},
+            "tool_boundaries": {
+                "c_ub": ["clang_diagnostics", "sanitizer_oracle", "unsupported_evidence"],
+                "rust_ub": ["miri", "unsafe_ledger", "rust_verification_tools"],
+            },
+            "oracle_boundary_contract": contract,
+        }
+        self._write_json(profile_path, profile)
+
+        route_ref = self._ref(route_path, "recorded")
+        route_ref["level"] = "L0"
+        profile_ref = self._ref(profile_path, "passed")
+        profile_ref["profile"] = "L0-dev"
+        baseline_ref = self._ref(baseline_path, "skipped")
+
+        final_path = evidence_dir / f"{prefix}-final-verification.json"
+        final = json.loads(final_path.read_text(encoding="utf-8"))
+        final["c2rust_baseline"] = baseline_ref
+        final["route_decision"] = route_ref
+        final["validation_profile"] = profile_ref
+        final["skipped_gates"] = []
+        final["validation_profile_status"] = "passed"
+        final["oracle_boundary_contract"] = contract
+        self._write_json(final_path, final)
+
+        cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache["c2rust_baseline_identity"] = {"status": "skipped", "sha256": self._sha256_json(baseline)}
+        cache["route_decision_identity"] = {"status": "recorded", "sha256": self._sha256_json(route)}
+        cache["validation_profile_identity"] = {"status": "passed", "sha256": self._sha256_json(profile)}
+        cache["oracle_boundary_contract_identity"] = {
+            "status": contract["status"],
+            "sha256": self._sha256_json(contract),
+        }
+        fields = cache.setdefault("cache_input_fields", [])
+        for key in [
+            "c2rust_baseline_identity",
+            "route_decision_identity",
+            "validation_profile_identity",
+            "oracle_boundary_contract_identity",
+        ]:
+            if key not in fields:
+                fields.append(key)
+        cache["dependent_artifacts"] = {
+            "c2rust_baseline": baseline_ref,
+            "route_decision": route_ref,
+            "validation_profile": profile_ref,
+        }
+        self._write_json(cache_path, cache)
+
+        auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+        if auto_manifest_path.exists():
+            auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+            auto_manifest["c2rust_baseline"] = baseline_ref
+            auto_manifest["route_decision"] = route_ref
+            auto_manifest["validation_profile"] = profile_ref
+            self._write_json(auto_manifest_path, auto_manifest)
+
+        manifest["evidence"]["c2rust_baseline"] = baseline_ref
+        manifest["evidence"]["route_decision"] = route_ref
+        manifest["evidence"]["validation_profile"] = profile_ref
+        manifest["evidence"]["final_verification"] = self._ref(final_path, final.get("status", "passed"))
+        manifest["evidence"]["cache_metadata"] = self._ref(cache_path, "recorded")
+        self._write_json(manifest_path, manifest)
+
+    def _candidate_selection_record(self) -> dict:
+        c2rust_candidate = {
+            "candidate_id": "c2rust-baseline",
+            "kind": "c2rust-baseline",
+            "status": "skipped",
+            "role": "baseline_or_repair_candidate_context",
+            "correctness_role": "candidate_context_only",
+            "reason": "blocked_by_missing_tools",
+            "semantic_pass": False,
+        }
+        return {
+            "selection_policy": {
+                "stage": "post_generation_provenance",
+                "selection_basis": "translator_artifact_primary_candidate",
+                "semantic_acceptance": False,
+                "full_router": False,
+            },
+            "selected_candidate_id": None,
+            "candidate_set": [
+                {
+                    "candidate_id": "compat:legacy-string-translator",
+                    "kind": "legacy-string-translator",
+                    "status": "generated",
+                    "role": "compatibility_rust_draft",
+                    "correctness_role": "compatibility_only",
+                    "compatibility_only": True,
+                    "semantic_pass": False,
+                },
+                {
+                    "candidate_id": "typed-ir:clang-lowered",
+                    "kind": "typed-ir",
+                    "status": "missing",
+                    "role": "typed_ir_candidate_signal",
+                    "rust_draft_generated": False,
+                    "semantic_pass": False,
+                },
+                c2rust_candidate,
+            ],
+            "c2rust_baseline": c2rust_candidate,
+        }
+
+    def _refresh_route_source_artifact_ref(
+        self,
+        evidence_dir: Path,
+        slice_id: str,
+        artifact_key: str,
+        artifact_path: Path,
+        artifact_status: str,
+    ) -> None:
+        prefix = f"l3-{slice_id}"
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        route = json.loads(route_path.read_text(encoding="utf-8"))
+        route["source_artifacts"][artifact_key] = self._ref(artifact_path, artifact_status)
+        self._write_json(route_path, route)
+
+        route_ref = self._ref(route_path, route.get("status", "recorded"))
+        if route.get("level"):
+            route_ref["level"] = route["level"]
+
+        for path, key_path in [
+            (evidence_dir / f"{prefix}-auto-translation-manifest.json", ("route_decision",)),
+            (evidence_dir / f"{prefix}-evidence-manifest.json", ("evidence", "route_decision")),
+            (evidence_dir / f"{prefix}-final-verification.json", ("route_decision",)),
+            (evidence_dir / f"{prefix}-auto-cache-metadata.json", ("dependent_artifacts", "route_decision")),
+        ]:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if len(key_path) == 1:
+                payload[key_path[0]] = route_ref
+            else:
+                payload[key_path[0]][key_path[1]] = route_ref
+            if path.name.endswith("-auto-cache-metadata.json"):
+                payload["route_decision_identity"] = {
+                    "status": route.get("status", "unknown"),
+                    "sha256": self._sha256_json(route),
+                }
+            self._write_json(path, payload)

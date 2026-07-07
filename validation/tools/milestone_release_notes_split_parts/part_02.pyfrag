@@ -1,0 +1,66 @@
+    return text(value, "unknown")
+
+
+def string_list_text(value: Any) -> str:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return ", ".join(value) if value else "none"
+    return "unknown"
+
+
+def int_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(int(value))
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    return "0"
+
+
+def count_map_text(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none"
+    parts = []
+    for key in sorted(value):
+        count = value.get(key)
+        if isinstance(count, bool):
+            count_text = str(int(count))
+        elif isinstance(count, (int, float)):
+            count_text = str(int(count))
+        else:
+            count_text = "0"
+        parts.append(f"`{key}`: {count_text}")
+    return ", ".join(parts)
+
+
+def retention_class_text(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none"
+    parts = []
+    for key in sorted(value):
+        retention_class = object_or_empty(value.get(key))
+        parts.append(
+            f"`{key}`: {int_text(retention_class.get('file_count'))} files / "
+            f"{int_text(retention_class.get('total_bytes'))} bytes"
+        )
+    return ", ".join(parts)
+
+
+def text(value: Any, default: str) -> str:
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, (int, float, bool)):
+        return str(value).lower() if isinstance(value, bool) else str(value)
+    return default
+
+
+def object_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def string_list(value: Any) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

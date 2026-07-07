@@ -1,0 +1,500 @@
+class _AutoMigrateTestsPart00:
+    def _env_with_clang_path(self) -> dict[str, str]:
+        environment = dict(os.environ)
+        if environment.get("CLANG_PATH"):
+            return environment
+        default_clang = Path("C:/Program Files/LLVM/bin/clang.exe")
+        if not default_clang.exists():
+            self.skipTest("CLANG_PATH is required for real clang-lowering-report generation tests")
+        environment["CLANG_PATH"] = str(default_clang)
+        return environment
+
+    def _assert_route_refused_candidate(
+        self,
+        manifest: dict[str, Any],
+        evidence_dir: Path,
+        slice_id: str,
+        *,
+        rust_status: str | None = "passed",
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        prefix = f"l3-{slice_id}"
+        route = json.loads((evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8"))
+        plan = json.loads((evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(manifest["status"], "candidate_refused")
+        self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+        self.assertEqual(route["status"], "refused")
+        self.assertEqual(route["level"], "L4")
+        self.assertEqual(route["translator"]["kind"], "refuse")
+        self.assertFalse(route["translator"]["candidate_generation_allowed"])
+        self.assertIn("blocked_artifact", [item.get("feature") for item in route["rationale"]])
+        self.assertEqual(plan["status"], "blocked")
+        self.assertTrue(all(artifact["status"] == "blocked" for artifact in plan["generated_artifacts"]))
+        if rust_status is not None:
+            self.assertEqual(manifest["rust_check"]["status"], rust_status)
+        return route, plan
+
+    def test_write_text_preserves_lf_bytes_for_hash_stable_evidence(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            output_path = Path(tmp) / "evidence.json"
+
+            module.write_text(output_path, "{\n  \"status\": \"recorded\"\n}\n")
+
+            self.assertEqual(output_path.read_bytes(), b'{\n  "status": "recorded"\n}\n')
+
+    def test_incomplete_manifest_does_not_make_openspec_a_semantic_gate(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            root = Path(tmp)
+            evidence_dir = root / "evidence"
+            evidence_dir.mkdir()
+            slice_spec_path = root / "slice.json"
+            spec = {
+                "target_id": "demo",
+                "slice_id": "store-add-one",
+                "source_commit": "abc123",
+                "fixture_contract": {"path": "fixtures/demo.json", "hash": "fixture-sha"},
+            }
+            slice_spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            manifest = module.emit_manifest(
+                spec,
+                evidence_dir,
+                slice_spec_path,
+                translator_summary={"status": "generated"},
+                oracle={"status": "draft"},
+                replay={"status": "not_run"},
+                rust_check={"status": "blocked"},
+                patch={"status": "not_run"},
+                cache={"status": "recorded"},
+                c2rust_baseline={"status": "skipped"},
+                route_decision={
+                    "level": "L1",
+                    "status": "recorded",
+                    "translator": {"candidate_generation_allowed": True},
+                },
+                validation_profile={"status": "blocked", "skipped_gates": ["rust_check"]},
+            )
+
+            self.assertNotIn("OpenSpec validation", manifest["claim_boundary"]["must_still_pass"])
+            l3_manifest = json.loads(
+                (evidence_dir / "l3-store-add-one-evidence-manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("OpenSpec", l3_manifest["claim_boundary"]["scope"])
+
+    def test_real_fdb_crc32_fixture_includes_non_empty_check_vector(self) -> None:
+        fixture_path = REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        cases = {case["id"]: case for case in fixture["cases"]}
+
+        self.assertEqual(fixture["case_count"], len(fixture["cases"]))
+        self.assertEqual(fixture["compared_fields"], ["return_code"])
+        self.assertIn("ascii-123456789-crc-zero", cases)
+        self.assertEqual(
+            cases["ascii-123456789-crc-zero"],
+            {
+                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                "coverage_kind": "standard_crc32_check_vector",
+                "crc": 0,
+                "id": "ascii-123456789-crc-zero",
+                "return_code": 3421780262,
+                "size": 9,
+                "status": "draft_expected_from_standard_crc32_check_vector",
+            },
+        )
+
+    def test_oracle_fixture_binding_resolves_expected_outputs_from_fixture_case_refs(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            fixture_path = Path(tmp) / "fixture.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {"id": "case-zero", "value": 7, "input_only": "zero"},
+                            {"id": "case-one", "value": 42, "input_only": "one"},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "case-one",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        }
+                    ],
+                    "observable_outputs": ["value"],
+                    "behavior_fields": ["value"],
+                }
+            }
+
+            binding = module.oracle_fixture_binding(spec)
+
+            self.assertEqual(binding["case_count"], 1)
+            self.assertEqual(binding["case_bindings"][0]["expected_outputs"], {"value": 42})
+            self.assertEqual(binding["case_bindings"][0]["missing_observable_outputs"], [])
+            self.assertNotIn("input_only", binding["case_bindings"][0]["expected_outputs"])
+            self.assertEqual(binding["expected_output_status"], "declared_not_executed")
+
+    def test_oracle_harness_draft_calls_bound_empty_buffer_fixture(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture_path = tmp_path / "real-fdb-calc-crc32.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "empty-crc-zero",
+                                "crc": 0,
+                                "buf": [],
+                                "size": 0,
+                                "return_code": 0,
+                            },
+                            {
+                                "id": "ascii-123456789-crc-zero",
+                                "crc": 0,
+                                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                                "size": 9,
+                                "return_code": 3421780262,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "1234567",
+                "function_name": "fdb_calc_crc32",
+                "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+                "fixture_hash": "real-fdb-calc-crc32-fixture",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "empty-crc-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": fixture_ref,
+                        },
+                        {
+                            "id": "ascii-123456789-crc-zero",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        }
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                },
+                "c_boundary": {
+                    "functions": ["fdb_calc_crc32"],
+                    "signatures": [
+                        {
+                            "function": "fdb_calc_crc32",
+                            "return_type": "uint32_t",
+                            "parameters": [
+                                {"name": "crc", "c_type": "uint32_t", "direction": "input"},
+                                {"name": "buf", "c_type": "const void*", "direction": "input"},
+                                {"name": "size", "c_type": "size_t", "direction": "input"},
+                            ],
+                        }
+                    ],
+                },
+                "non_goals": ["unit test only"],
+            }
+            spec_path = tmp_path / "real-fdb-calc-crc32-spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            harness = (
+                out_root
+                / "flashdb"
+                / "auto-translation"
+                / "real-fdb-calc-crc32"
+                / "l3-real-fdb-calc-crc32-c-oracle-harness-draft.c"
+            ).read_text(encoding="utf-8")
+
+            self.assertIn("static const uint8_t empty_crc_zero_buf[] = { 0 };", harness)
+            self.assertIn("fixture cases: 2", harness)
+            self.assertIn(
+                'fixture case: ascii-123456789-crc-zero input_ref=cases[1] '
+                f'expected_ref={fixture_ref} expected_outputs={{"return_code": 3421780262}}',
+                harness,
+            )
+            self.assertIn(
+                "static const uint8_t ascii_123456789_crc_zero_buf[] = "
+                "{ 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u };",
+                harness,
+            )
+            self.assertIn(
+                "uint32_t actual_empty_crc_zero_return_code = "
+                "fdb_calc_crc32((uint32_t)0u, empty_crc_zero_buf, (size_t)0u);",
+                harness,
+            )
+            self.assertIn("if (actual_empty_crc_zero_return_code != (uint32_t)0u)", harness)
+            self.assertIn(
+                "uint32_t actual_ascii_123456789_crc_zero_return_code = "
+                "fdb_calc_crc32((uint32_t)0u, ascii_123456789_crc_zero_buf, (size_t)9u);",
+                harness,
+            )
+            self.assertIn(
+                "if (actual_ascii_123456789_crc_zero_return_code != (uint32_t)3421780262u)",
+                harness,
+            )
+
+    def test_rust_replay_draft_enumerates_bound_fixture_cases_without_semantic_claim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture_path = tmp_path / "real-fdb-calc-crc32.json"
+            fixture_path.write_text(
+                json.dumps(
+                    {
+                        "cases": [
+                            {
+                                "id": "empty-crc-zero",
+                                "crc": 0,
+                                "buf": [],
+                                "size": 0,
+                                "return_code": 0,
+                            },
+                            {
+                                "id": "ascii-123456789-crc-zero",
+                                "crc": 0,
+                                "buf": [49, 50, 51, 52, 53, 54, 55, 56, 57],
+                                "size": 9,
+                                "return_code": 3421780262,
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            fixture_ref = fixture_path.as_posix()
+            spec = {
+                "target_id": "flashdb",
+                "slice_id": "real-fdb-calc-crc32",
+                "source_commit": "1234567",
+                "function_name": "fdb_calc_crc32",
+                "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
+                "fixture_hash": "real-fdb-calc-crc32-fixture",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+                "fixture_contract": {
+                    "path": fixture_ref,
+                    "cases": [
+                        {
+                            "id": "empty-crc-zero",
+                            "input_ref": "cases[0]",
+                            "expected_ref": fixture_ref,
+                        },
+                        {
+                            "id": "ascii-123456789-crc-zero",
+                            "input_ref": "cases[1]",
+                            "expected_ref": fixture_ref,
+                        },
+                    ],
+                    "observable_outputs": ["return_code"],
+                    "behavior_fields": ["return_code"],
+                },
+                "c_boundary": {
+                    "functions": ["fdb_calc_crc32"],
+                    "signatures": [
+                        {
+                            "function": "fdb_calc_crc32",
+                            "return_type": "uint32_t",
+                            "parameters": [
+                                {"name": "crc", "c_type": "uint32_t", "direction": "input"},
+                                {"name": "buf", "c_type": "const void*", "direction": "input"},
+                                {"name": "size", "c_type": "size_t", "direction": "input"},
+                            ],
+                        }
+                    ],
+                },
+                "non_goals": ["unit test only"],
+            }
+            spec_path = tmp_path / "real-fdb-calc-crc32-spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            replay_draft = (evidence_dir / "l3-real-fdb-calc-crc32-rust-replay-test-draft.rs").read_text(
+                encoding="utf-8"
+            )
+            test_translation = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-test-translation-generated.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertIn('let _fixture = "' + fixture_ref + '";', replay_draft)
+            self.assertIn('let _api = "fdb_calc_crc32";', replay_draft)
+            self.assertIn("const GENERATED_DRAFT_SEMANTIC_PASS: bool = false;", replay_draft)
+            self.assertIn("struct FixtureCase", replay_draft)
+            self.assertIn(
+                'FixtureCase { id: "empty-crc-zero", crc: 0u32, buf: &[], size: 0usize, '
+                "return_code: 0u32 }",
+                replay_draft,
+            )
+            self.assertIn(
+                'FixtureCase { id: "ascii-123456789-crc-zero", crc: 0u32, '
+                "buf: &[49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8], "
+                "size: 9usize, return_code: 3421780262u32 }",
+                replay_draft,
+            )
+            self.assertIn('assert_eq!(fixture_cases.len(), 2usize, "fixture case count drifted");', replay_draft)
+            self.assertIn(
+                'assert_eq!(case.buf.len(), case.size, "{} fixture size must match byte buffer length", case.id);',
+                replay_draft,
+            )
+            self.assertIn("let actual = fdb_calc_crc32(case.crc, case.buf, case.size);", replay_draft)
+            self.assertIn("assert_eq!(actual, case.return_code", replay_draft)
+            self.assertNotIn("TODO: call generated Rust API", replay_draft)
+            self.assertNotIn("draft only: generated Rust API assertions are not bound", replay_draft)
+            self.assertEqual(test_translation["status"], "recorded")
+            self.assertFalse(test_translation["generated_draft_semantic_pass"])
+            self.assertEqual(
+                test_translation["source_test_inputs"]["fixtures"][0]["operation_count"],
+                2,
+            )
+            self.assertEqual(test_translation["translation_mappings"][0]["status"], "mapped")
+
+    def test_compile_success_records_harness_execution_without_oracle_claim(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fake_bin = tmp_path / "fake-bin"
+            fake_bin.mkdir()
+            fake_cc_helper = fake_bin / "fake_cc.py"
+            fake_cc_helper.write_text(
+                "\n".join(
+                    [
+                        "import os",
+                        "import shutil",
+                        "import stat",
+                        "import sys",
+                        "",
+                        "args = sys.argv[1:]",
+                        "try:",
+                        "    output = args[args.index('-o') + 1]",
+                        "except (ValueError, IndexError):",
+                        "    print('missing -o output', file=sys.stderr)",
+                        "    sys.exit(2)",
+                        "if os.name == 'nt':",
+                        "    system_root = os.environ.get('SystemRoot') or os.environ.get('WINDIR') or r'C:\\Windows'",
+                        "    zero_exit_exe = os.path.join(system_root, 'System32', 'hostname.exe')",
+                        "    shutil.copyfile(zero_exit_exe, output)",
+                        "else:",
+                        "    with open(output, 'w', encoding='utf-8') as fh:",
+                        "        fh.write('#!/bin/sh\\nexit 0\\n')",
+                        "    os.chmod(output, os.stat(output).st_mode | stat.S_IXUSR)",
+                        "print('fake cc compiled ' + output)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            if os.name == "nt":
+                (fake_bin / "cc.cmd").write_text(
+                    f'@echo off\r\n"{sys.executable}" "%~dp0fake_cc.py" %*\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                fake_cc = fake_bin / "cc"
+                fake_cc.write_text(
+                    f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/fake_cc.py" "$@"\n',
+                    encoding="utf-8",
+                )
+                fake_cc.chmod(0o755)
+
+            spec = {
+                "target_id": "demo",
+                "slice_id": "compile-run",
+                "source_commit": "1234567",
+                "function_name": "compile_run",
+                "c_source": "int compile_run(void) { return 0; }",
+                "fixture_hash": "fixture",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+                "fixture_contract": {
+                    "path": "unit-test-fixture.json",
+                    "behavior_fields": ["return_code"],
+                },
+                "c_boundary": {
+                    "functions": ["compile_run"],
+                    "signatures": [
+                        {
+                            "function": "compile_run",
+                            "return_type": "int",
+                            "parameters": [],
+                        }
+                    ],
+                },
+                "non_goals": ["unit test only"],
+            }
+            spec_path = tmp_path / "compile-run.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+            env = os.environ.copy()
+            env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,

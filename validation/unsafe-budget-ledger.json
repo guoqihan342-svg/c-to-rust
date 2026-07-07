@@ -63,8 +63,8 @@
   "registered_findings": [
     {
       "category": "raw_pointer",
-      "file": "validation/l2_slices/src/bin/emit_reports.rs",
-      "path": "validation/l2_slices/src/bin/emit_reports.rs",
+      "file": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01.rs",
+      "path": "validation/l2_slices/src/bin/emit_reports/part_00_split_parts/part_01.rs",
       "reason": "The real-fdb-blob-make Rust replay report compares the returned FdbBlob pointer identity with the input blob address, matching the C observable output return_same_blob for an accepted evidence slice.",
       "replacement_or_alternative": "Keep the raw pointer cast inside the bounded L2 replay reporter until the fixture-report ABI observer is replaced by a narrower safe identity wrapper.",
       "review_status": "accepted_with_evidence",
@@ -78,8 +78,8 @@
         "source_slice": "validation/slice-specs/flashdb-real-fdb-blob-make.json"
       },
       "span": {
-        "end_line": 762,
-        "start_line": 760
+        "end_line": 310,
+        "start_line": 308
       },
       "validation_evidence": {
         "gate": "validate_auto_translation_evidence.py --require-semantic-pass",

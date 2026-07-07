@@ -1,0 +1,499 @@
+class _ValidateAutoTranslationEvidenceTestsPart04:
+    def test_rejects_passed_verified_unsafe_baseline_same_output_gate_ref_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            prefix = "l3-call-expression"
+            output_ref, compile_ref, baseline_ref = self._install_generated_c2rust_baseline_for_verified_tests(
+                evidence_dir,
+                prefix,
+            )
+            self._install_verified_baseline_direct_replay_for_tests(
+                evidence_dir,
+                prefix,
+                baseline_ref,
+                output_ref,
+                compile_ref,
+            )
+            verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+            verified = json.loads(verified_path.read_text(encoding="utf-8"))
+            verified["status"] = "passed"
+            verified["semantic_pass"] = True
+            verified["semantic_claim_source"] = "verified_unsafe_baseline_gates"
+            verified["blocked_reasons"] = []
+            verified["claim_boundary"]["semantic_pass"] = True
+            verified["same_output_gate_refs"] = self._verified_baseline_same_output_gate_refs_for_tests(
+                evidence_dir,
+                prefix,
+                output_ref,
+                compile_ref,
+            )
+            verified["same_output_gate_refs"]["schema_diff"]["c2rust_output"]["sha256"] = "stale-output-sha"
+            self._write_json(verified_path, verified)
+            verified_ref = self._ref(verified_path, "passed")
+            for ref_path, key_path in [
+                (evidence_dir / f"{prefix}-auto-translation-manifest.json", ("verified_unsafe_baseline",)),
+                (evidence_dir / f"{prefix}-evidence-manifest.json", ("evidence", "verified_unsafe_baseline")),
+                (evidence_dir / f"{prefix}-final-verification.json", ("verified_unsafe_baseline",)),
+            ]:
+                payload = json.loads(ref_path.read_text(encoding="utf-8"))
+                target = payload
+                for key in key_path[:-1]:
+                    target = target[key]
+                target[key_path[-1]] = verified_ref
+                self._write_json(ref_path, payload)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("same_output_gate_refs.schema_diff c2rust_output drift", result.stderr + result.stdout)
+
+    def test_semantic_pass_rejects_missing_oracle_boundary_contract(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+            spec_path = tmp_path / "demo-call-expression-authoritative.json"
+            self._write_json(spec_path, spec)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+            profile_path = evidence_dir / "l3-call-expression-validation-profile.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile.pop("oracle_boundary_contract", None)
+            self._write_json(profile_path, profile)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("oracle_boundary_contract", result.stderr + result.stdout)
+
+    def test_semantic_pass_rejects_invalid_optional_target_abi_width_contract(self) -> None:
+        for key, value, expected in [
+            ("char_width", 0, "target.char_width invalid"),
+            ("short_width", "not-a-width", "target.short_width invalid"),
+            ("long_long_width", -64, "target.long_long_width invalid"),
+            ("int_align", 0, "target.int_align invalid"),
+            ("pointer_align", "not-an-align", "target.pointer_align invalid"),
+            ("plain_char_signed", "signed", "target.plain_char_signed invalid"),
+        ]:
+            with self.subTest(key=key):
+                with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+                    tmp_path = Path(tmp)
+                    spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(
+                        tmp_path
+                    )
+                    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+                    spec["claim_boundary"]["accepted_evidence_authoritative"] = True
+                    spec_path = tmp_path / "demo-call-expression-authoritative.json"
+                    self._write_json(spec_path, spec)
+                    self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+                    self._add_call_expression_oracle_boundary_contract(evidence_dir)
+
+                    for artifact in [
+                        evidence_dir / "l3-call-expression-validation-profile.json",
+                        evidence_dir / "l3-call-expression-final-verification.json",
+                    ]:
+                        payload = json.loads(artifact.read_text(encoding="utf-8"))
+                        payload["oracle_boundary_contract"]["target"][key] = value
+                        self._write_json(artifact, payload)
+                    self._refresh_call_expression_validation_profile_refs(evidence_dir)
+
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(VALIDATOR),
+                            "--target-id",
+                            "demo",
+                            "--slice-id",
+                            "call-expression",
+                            "--slice-spec",
+                            str(spec_path),
+                            "--evidence-root",
+                            str(out_root),
+                            "--require-semantic-pass",
+                        ],
+                        cwd=REPO_ROOT,
+                        text=True,
+                        capture_output=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(expected, result.stderr + result.stdout)
+
+    def test_semantic_pass_rejects_root_accepted_c_oracle_sha_drift(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--accept-existing-evidence",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            prefix = "l3-real-fdb-calc-crc32"
+            temp_root_oracle = out_root / "flashdb" / f"{prefix}-c-oracle.json"
+            shutil.copy2(REPO_ROOT / "validation" / "evidence" / "flashdb" / f"{prefix}-c-oracle.json", temp_root_oracle)
+            stale_sha = self._sha256(temp_root_oracle)
+
+            c_oracle_status_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+            c_oracle_status = json.loads(c_oracle_status_path.read_text(encoding="utf-8"))
+            c_oracle_status["accepted_oracle"] = {
+                "path": temp_root_oracle.as_posix(),
+                "sha256": stale_sha,
+                "status": "passed",
+            }
+            self._write_json(c_oracle_status_path, c_oracle_status)
+            self._bind_manifest_ref(evidence_dir, prefix, "c_oracle", c_oracle_status_path, "C_ORACLE_GENERATED")
+
+            auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+            auto_manifest = json.loads(auto_manifest_path.read_text(encoding="utf-8"))
+            auto_manifest["accepted_evidence_binding"]["paths"]["c_oracle"] = temp_root_oracle.as_posix()
+            auto_manifest["accepted_evidence_binding"]["path_sha256"]["c_oracle"] = stale_sha
+            self._write_json(auto_manifest_path, auto_manifest)
+
+            root_oracle = json.loads(temp_root_oracle.read_text(encoding="utf-8"))
+            root_oracle["cases"][0]["return_code"] = 1
+            self._write_json(temp_root_oracle, root_oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-calc-crc32",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("accepted c_oracle", result.stderr + result.stdout)
+            self.assertIn("sha256", result.stderr + result.stdout)
+
+    def test_semantic_pass_rejects_l4_authoritative_artifacts_without_spec_authorization(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(tmp_path)
+            self._promote_call_expression_fixture_to_l4_authoritative(evidence_dir)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("accepted_evidence_authoritative", result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_schema_diff_missing_accepted_ref(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
+            prefix = "l3-call-expression"
+            diff_path = evidence_dir / f"{prefix}-diff.json"
+            diff = json.loads(diff_path.read_text(encoding="utf-8"))
+            diff.pop("accepted_diff", None)
+            self._write_json(diff_path, diff)
+            self._bind_manifest_ref(evidence_dir, prefix, "schema_diff", diff_path, "passed")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("schema diff", result.stderr + result.stdout)
+            self.assertIn("accepted_diff", result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_schema_diff_missing_gate_fields(self) -> None:
+        for field in ["diff_gate", "accepted_diff_required", "blocked_by", "required_inputs"]:
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+                    spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
+                    prefix = "l3-call-expression"
+                    diff_path = evidence_dir / f"{prefix}-diff.json"
+                    diff = json.loads(diff_path.read_text(encoding="utf-8"))
+                    diff.pop(field, None)
+                    self._write_json(diff_path, diff)
+                    self._bind_manifest_ref(evidence_dir, prefix, "schema_diff", diff_path, "passed")
+
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(VALIDATOR),
+                            "--target-id",
+                            "demo",
+                            "--slice-id",
+                            "call-expression",
+                            "--slice-spec",
+                            str(spec_path),
+                            "--evidence-root",
+                            str(out_root),
+                            "--require-semantic-pass",
+                        ],
+                        cwd=REPO_ROOT,
+                        text=True,
+                        capture_output=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("schema diff", result.stderr + result.stdout)
+                    self.assertIn(field, result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_negative_diff_missing_accepted_ref(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
+            prefix = "l3-call-expression"
+            negative_path = evidence_dir / f"{prefix}-negative-diff.json"
+            negative = json.loads(negative_path.read_text(encoding="utf-8"))
+            negative.pop("accepted_negative_diff", None)
+            self._write_json(negative_path, negative)
+            self._bind_manifest_ref(evidence_dir, prefix, "negative_diff", negative_path, "expected_failed")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("negative diff", result.stderr + result.stdout)
+            self.assertIn("accepted_negative_diff", result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_negative_diff_missing_gate_fields(self) -> None:
+        for field in [
+            "negative_diff_gate",
+            "accepted_negative_diff_required",
+            "blocked_by",
+            "root_blocked_by",
+            "required_inputs",
+        ]:
+            with self.subTest(field=field):
+                with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+                    spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
+                    prefix = "l3-call-expression"
+                    negative_path = evidence_dir / f"{prefix}-negative-diff.json"
+                    negative = json.loads(negative_path.read_text(encoding="utf-8"))
+                    negative.pop(field, None)
+                    self._write_json(negative_path, negative)
+                    self._bind_manifest_ref(evidence_dir, prefix, "negative_diff", negative_path, "expected_failed")
+
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(VALIDATOR),
+                            "--target-id",
+                            "demo",
+                            "--slice-id",
+                            "call-expression",
+                            "--slice-spec",
+                            str(spec_path),
+                            "--evidence-root",
+                            str(out_root),
+                            "--require-semantic-pass",
+                        ],
+                        cwd=REPO_ROOT,
+                        text=True,
+                        capture_output=True,
+                    )
+
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("negative diff", result.stderr + result.stdout)
+                    self.assertIn(field, result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_manifest_schema_diff_sha_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
+            prefix = "l3-call-expression"
+            manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["evidence"]["schema_diff"]["sha256"] = "stale-schema-diff-sha"
+            self._write_json(manifest_path, manifest)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("schema_diff", result.stderr + result.stdout)
+            self.assertIn("sha256", result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_manifest_negative_diff_status_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._call_expression_semantic_pass_fixture(Path(tmp))
+            prefix = "l3-call-expression"
+            manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["evidence"]["negative_diff"]["status"] = "passed"
+            self._write_json(manifest_path, manifest)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "call-expression",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                    "--require-semantic-pass",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("negative_diff", result.stderr + result.stdout)
+            self.assertIn("status", result.stderr + result.stdout)
+
+    def test_rejects_semantic_pass_manifest_ref_payload_missing_status(self) -> None:
+        validator = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            ref_path = Path(tmp) / "payload.json"
+            self._write_json(ref_path, {"schema_version": 1, "kind": "unit-test"})
+            evidence = {
+                "unit_ref": {
+                    "path": ref_path.as_posix(),
+                    "status": "passed",
+                    "sha256": self._sha256(ref_path),
+                }
+            }
+
+            with self.assertRaises(SystemExit) as raised:
+                validator.load_ref(evidence, "unit_ref")
+
+            self.assertIn("unit_ref", str(raised.exception))
+            self.assertIn("payload status", str(raised.exception))
+
+    def test_rejects_read_write_pointer_graph_missing_alias_gate_fields(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-copy-i32-ptr-arith.json"
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "evidence"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )

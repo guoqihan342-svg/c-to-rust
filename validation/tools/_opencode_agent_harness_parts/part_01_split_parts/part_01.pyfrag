@@ -1,3 +1,303 @@
+        )
+    else:
+        plan = plan_source_file(
+            db_path=db_path,
+            run_id=run_id,
+            target_id=profile_required_string(profile, "target_id"),
+            source_repo_root=Path(profile_required_string(profile, "source_repo_root")),
+            source_repository=profile_string(profile, "source_repository"),
+            source_branch=profile_string(profile, "source_branch"),
+            source_file=profile_required_string(profile, "source_file"),
+            functions=profile_string_list(profile, "functions"),
+            source_commit=profile_required_string(profile, "source_commit"),
+            require_source_commit=profile_string(profile, "require_source_commit"),
+            slice_specs=profile_string_list(profile, "slice_specs"),
+            compiler_command_source=profile_string(profile, "compiler_command_source"),
+            include_paths=profile_string_list(profile, "include_paths"),
+            defines=profile_string_list(profile, "defines"),
+            reuse_accepted_evidence=profile_bool(profile, "reuse_accepted_evidence", default=False),
+            accepted_evidence_root=profile_string(profile, "accepted_evidence_root"),
+            out_root=out_root,
+            slice_id_prefix=profile_required_string(profile, "slice_id_prefix"),
+            worker_prefix=profile_string(profile, "worker_prefix", default="worker"),
+            limit=profile_int(profile, "limit"),
+            lease_ttl_seconds=profile_int(profile, "lease_ttl_seconds", default=3600),
+            repo_root=repo_root,
+        )
+    run_result = run_plan(
+        db_path=db_path,
+        run_id=run_id,
+        plan_path=Path(str(plan["plan_path"])),
+        out_root=out_root,
+        proof_class=proof_class,
+        mode=mode,
+        opencode_command=profile_string(profile, "opencode_command", default="opencode"),
+        opencode_model=profile_string(profile, "opencode_model"),
+        opencode_agent=profile_string(profile, "opencode_agent"),
+        opencode_variant=profile_string(profile, "opencode_variant", default="max"),
+        opencode_skip_permissions=profile_bool(profile, "opencode_skip_permissions", default=False),
+        opencode_allow_non_competition_model=profile_bool(
+            profile,
+            "opencode_allow_non_competition_model",
+            default=False,
+        ),
+        opencode_preflight_report=opencode_preflight_report,
+        execute_merge=profile_bool(profile, "execute_merge", default=False),
+        auto_retry=profile_bool(profile, "auto_retry", default=False),
+        max_workers=profile_int(profile, "max_workers", default=1),
+        timeout_seconds=profile_int(
+            profile,
+            "timeout_seconds",
+            default=timeout_seconds or DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        ),
+        repair_trace=attempt_evidence_policy,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    route_metrics_artifact = write_route_governance_metrics_profile_report(
+        profile=profile,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    before_after_exhibit_artifact = write_before_after_exhibit_profile_report(
+        profile=profile,
+        profile_path=profile_path,
+        run_id=run_id,
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        route_metrics_artifact=route_metrics_artifact,
+        proof_class_resolution=proof_class_resolution,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "status": run_result["status"],
+        "exit_code": int(run_result["exit_code"]),
+        "profile_id": profile_id,
+        "profile_path": repo_relative(profile_path, repo_root=repo_root),
+        "profile_sha256": sha256_file(profile_path),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "db_path": repo_relative(db_path, repo_root=repo_root),
+        "profile_proof_class": profile_proof_class,
+        "proof_class": proof_class,
+        "proof_class_resolution": proof_class_resolution,
+        "mode": mode,
+        "worker_count": len(plan["units"]),
+        "plan_path": plan["plan_path"],
+        "plan": plan,
+        "run_plan": run_result,
+    }
+    if acceptance_boundary is not None:
+        result["acceptance_boundary"] = acceptance_boundary
+    if attempt_evidence_policy is not None:
+        result["attempt_evidence_policy"] = attempt_evidence_policy
+    if route_metrics_artifact is not None:
+        result["route_governance_metrics_report"] = route_metrics_artifact["binding"]
+    if before_after_exhibit_artifact is not None:
+        result["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        result["opencode_preflight_report"] = run_result["opencode_preflight_report"]
+    report_path = out_root / "harness" / "batch-profile-report.json"
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    report_artifacts: dict[str, dict[str, Any]] = {}
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        report_artifacts["opencode_preflight_report"] = run_result["opencode_preflight_report"]
+    if route_metrics_artifact is not None:
+        report_artifacts["route_governance_metrics_report"] = route_metrics_artifact["binding"]
+    if before_after_exhibit_artifact is not None:
+        report_artifacts["before_after_exhibit_report"] = before_after_exhibit_artifact["binding"]
+    verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+        {"attempt_evidence_policy": attempt_evidence_policy} if attempt_evidence_policy is not None else None,
+        repo_root=repo_root,
+    )
+    if verified_baseline_ref is not None:
+        report_artifacts["verified_unsafe_baseline"] = verified_baseline_ref
+    context_refs = write_context_pack_and_agent_index(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=profile_required_string(profile, "target_id"),
+        proof_class=proof_class,
+        mode=mode,
+        out_root=out_root,
+        plan=plan,
+        run_result=run_result,
+        primary_report_path=report_path,
+        report_entrypoint="batch_profile_report",
+        acceptance_boundary=acceptance_boundary,
+        attempt_evidence_policy=attempt_evidence_policy,
+        report_artifacts=report_artifacts,
+        proof_class_resolution=proof_class_resolution,
+        repo_root=repo_root,
+    )
+    result.update(context_refs)
+    result["judge_summary"] = build_judge_summary(
+        entrypoint="run-batch-profile",
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        context_refs=context_refs,
+        acceptance_boundary=acceptance_boundary,
+        route_metrics_artifact=route_metrics_artifact,
+        before_after_exhibit_artifact=before_after_exhibit_artifact,
+        repo_root=repo_root,
+    )
+    hostless_rehearsal_artifact = None
+    if hostless_rehearsal_enabled:
+        hostless_rehearsal_artifact = write_opencode_hostless_rehearsal_report(
+            profile=profile,
+            run_id=run_id,
+            proof_class=proof_class,
+            mode=mode,
+            run_result=run_result,
+            context_refs=context_refs,
+            batch_profile_report_path=report_path,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
+        result["opencode_hostless_rehearsal_report"] = hostless_rehearsal_artifact["binding"]
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, result)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="batch-profile-report",
+            path=report_path,
+            status=str(result["status"]),
+            semantic_role="batch-profile-report",
+            payload=result,
+            repo_root=repo_root,
+        )
+        if route_metrics_artifact is not None:
+            binding = route_metrics_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="route-governance-metrics-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="route-governance-metrics",
+                payload=route_metrics_artifact["payload"],
+                repo_root=repo_root,
+            )
+        if before_after_exhibit_artifact is not None:
+            binding = before_after_exhibit_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="before-after-exhibit-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="before-after-exhibit",
+                payload=before_after_exhibit_artifact["payload"],
+                repo_root=repo_root,
+            )
+        if hostless_rehearsal_artifact is not None:
+            binding = hostless_rehearsal_artifact["binding"]
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id="planner",
+                kind="opencode-hostless-rehearsal-report",
+                path=repo_path(Path(binding["path"]), repo_root=repo_root),
+                status=str(binding["status"]),
+                semantic_role="opencode-hostless-rehearsal",
+                payload=hostless_rehearsal_artifact["payload"],
+                repo_root=repo_root,
+            )
+        record_event(connection, run_id=run_id, event_type="batch_profile_executed", payload=result)
+        connection.commit()
+    return result
+
+
+def write_opencode_hostless_rehearsal_report(
+    *,
+    profile: dict[str, Any],
+    run_id: str,
+    proof_class: str,
+    mode: str,
+    run_result: dict[str, Any],
+    context_refs: dict[str, dict[str, str]],
+    batch_profile_report_path: Path,
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if mode != "opencode":
+        raise SystemExit("hostless OpenCode rehearsal requires mode=opencode")
+    if proof_class != "local-simulation":
+        raise SystemExit("hostless OpenCode rehearsal cannot close P0-H9")
+    out_root = repo_path(out_root, repo_root=repo_root)
+    report_path = out_root / "harness" / "opencode-hostless-rehearsal-report.json"
+    rehearsal_runner = profile_string(profile, "opencode_hostless_rehearsal_runner", default="fake/fixture")
+    rehearsal_runner = rehearsal_runner or "fake/fixture"
+    preflight = artifact_binding_from_value(run_result.get("opencode_preflight_report"), repo_root=repo_root)
+    runtime = opencode_agent_runtime_evidence(run_result, repo_root=repo_root)
+    workers = []
+    for worker in run_result.get("workers") if isinstance(run_result.get("workers"), list) else []:
+        if not isinstance(worker, dict):
+            continue
+        entry: dict[str, Any] = {
+            "worker_id": str(worker.get("worker_id", "")),
+            "slice_id": worker.get("slice_id"),
+            "function": worker.get("function"),
+            "summary_status": worker.get("summary_status"),
+            "exit_code": int(worker.get("exit_code", 1)),
+            "recorded": bool(worker.get("recorded")),
+            "semantic_gate": False,
+        }
+        for field in ("summary_path", "report_path"):
+            binding = path_ref_from_text(worker.get(field), repo_root=repo_root)
+            if binding is not None:
+                entry[field.removesuffix("_path")] = binding
+        for field in (
+            "handoff_contract",
+            "opencode_session_evidence",
+            "opencode_safety_transform_attempt",
+            "opencode_preflight_report",
+        ):
+            binding = artifact_binding_from_value(worker.get(field), repo_root=repo_root)
+            if binding is not None:
+                entry[field] = binding
+        if isinstance(worker.get("opencode_contract_verification"), dict):
+            entry["opencode_contract_verification"] = json.loads(json.dumps(worker["opencode_contract_verification"]))
+        if isinstance(worker.get("opencode_runtime_env"), dict):
+            entry["opencode_runtime_env"] = json.loads(json.dumps(worker["opencode_runtime_env"]))
+        if isinstance(worker.get("final_decision"), dict):
+            entry["final_decision"] = json.loads(json.dumps(worker["final_decision"]))
+        workers.append(entry)
+
+    payload: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "opencode-hostless-rehearsal-report",
+        "status": str(run_result.get("status", "unknown")),
+        "exit_code": int(run_result.get("exit_code", 1)),
+        "run_id": run_id,
+        "profile_id": profile.get("profile_id"),
+        "proof_class": proof_class,
+        "mode": mode,
+        "rehearsal_runner": rehearsal_runner,
+        "closes_p0_h9": False,
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "h9_contract": {
+            "status": "blocked",
+            "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
+            "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+            "required_agent": COMPETITION_OPENCODE_AGENT,
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "required_variant": COMPETITION_OPENCODE_VARIANT,
+            "required_proof_class": "competition-exact",
             "local_simulation_closes_p0_h9": False,
         },
         "batch_profile_report": {
@@ -198,31 +498,3 @@ def write_evaluate_profile_report(
         batch_result=batch_result,
         profile_path=profile_path,
         run_id=run_id,
-        out_root=out_root,
-        extra_artifact_refs={"resume_manifest": payload["resume_manifest"]}
-        if isinstance(payload.get("resume_manifest"), dict)
-        else None,
-        repo_root=repo_root,
-    )
-    if db_path is not None:
-        with closing(connect(db_path)) as connection:
-            ensure_schema(connection)
-            record_artifact(
-                connection,
-                run_id=run_id,
-                worker_id="planner",
-                kind="judge-evidence-index",
-                path=repo_path(Path(judge_index_artifact["binding"]["path"]), repo_root=repo_root),
-                status=str(judge_index_artifact["binding"]["status"]),
-                semantic_role="judge-evidence-index",
-                payload=judge_index_artifact["payload"],
-                repo_root=repo_root,
-            )
-            record_event(
-                connection,
-                run_id=run_id,
-                event_type="judge_evidence_index_written",
-                payload=judge_index_artifact["binding"],
-            )
-            connection.commit()
-    return payload

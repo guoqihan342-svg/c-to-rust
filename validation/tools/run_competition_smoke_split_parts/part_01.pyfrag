@@ -1,0 +1,411 @@
+        return "passed"
+    if failure_class in {"required_c_compiler_missing", "opencode_model_unavailable"}:
+        return "failed"
+    if step == "environment-check" and proof_class != "competition-exact":
+        return "degraded"
+    return "failed"
+
+
+def run_logged_step(
+    step: str,
+    command: list[str],
+    *,
+    command_runner: CommandRunner,
+    repo_root: Path,
+    logs_dir: Path,
+    out_root: Path,
+    run_id: str,
+    timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    timed_out = False
+    try:
+        result = command_runner(
+            command,
+            cwd=repo_root,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        timed_out = True
+        result = subprocess.CompletedProcess(
+            command,
+            124,
+            timeout_output_text(error.output),
+            timeout_output_text(error.stderr) or f"timed out after {timeout_seconds} seconds",
+        )
+        setattr(result, "timed_out", True)
+    failure_class = smoke_step_failure_class(step, result)
+    if failure_class:
+        setattr(result, "failure_class", failure_class)
+    entry = {
+        "step": step,
+        "command": command_for_log(command, repo_root=repo_root, out_root=out_root),
+        "returncode": result.returncode,
+        "stdout": output_text_for_log(result.stdout),
+        "stderr": output_text_for_log(result.stderr),
+        "log_path": summary_log_path(logs_dir / "commands.jsonl", repo_root=repo_root, out_root=out_root),
+        "workdir": summary_path(repo_root, repo_root=repo_root, out_root=out_root),
+        "run_id": run_id,
+        "canonical": True,
+        **({"timed_out": True, "timeout_seconds": timeout_seconds} if timed_out else {}),
+        **({"failure_class": failure_class} if failure_class else {}),
+    }
+    with (logs_dir / "commands.jsonl").open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(entry, sort_keys=True) + "\n")
+    return result
+
+
+def smoke_step_failure_class(step: str, result: subprocess.CompletedProcess[str]) -> str | None:
+    if step != "environment-check" or result.returncode == 0:
+        return None
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    if any(pattern in output for pattern in REQUIRED_TOOL_MISSING_PATTERNS):
+        return "required_c_compiler_missing"
+    return None
+
+
+def opencode_model_listed(models_output: str, required_model: str) -> bool:
+    for token in re.split(r"\s+", models_output):
+        if token == required_model or token.rsplit("/", 1)[-1] == required_model:
+            return True
+    return False
+
+
+def opencode_model_availability_from_probe_result(
+    result: subprocess.CompletedProcess[str],
+    *,
+    logs_dir: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Any]:
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    stdout_path.write_text(str(result.stdout or ""), encoding="utf-8", newline="\n")
+    stderr_path.write_text(str(result.stderr or ""), encoding="utf-8", newline="\n")
+    model_listed = result.returncode == 0 and opencode_model_listed(str(result.stdout or ""), COMPETITION_OPENCODE_MODEL)
+    if result.returncode != 0:
+        status = "probe_failed"
+    elif model_listed:
+        status = "available"
+    else:
+        status = "unavailable"
+    return {
+        "status": status,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "model_listed": model_listed,
+        "opencode_command": COMPETITION_OPENCODE_COMMAND,
+        "argv": [COMPETITION_OPENCODE_COMMAND, "models"],
+        "process_returncode": result.returncode,
+        "logs": {
+            "stdout": summary_path(stdout_path, repo_root=repo_root, out_root=out_root),
+            "stderr": summary_path(stderr_path, repo_root=repo_root, out_root=out_root),
+        },
+        "stdout_sha256": sha256(stdout_path),
+        "stderr_sha256": sha256(stderr_path),
+    }
+
+
+def timeout_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def detect_execution_environment() -> dict[str, Any]:
+    uname = platform.uname()
+    release_lower = uname.release.lower()
+    detected_ci = any(os.environ.get(name) for name in ["CI", "GITHUB_ACTIONS", "BUILD_BUILDID"])
+    detected_wsl = "microsoft" in release_lower or bool(os.environ.get("WSL_DISTRO_NAME"))
+    if detected_ci:
+        kind = "linux-ci"
+    elif detected_wsl:
+        kind = "wsl"
+    elif platform.system() == "Linux":
+        kind = "local-linux"
+    elif platform.system() == "Windows":
+        kind = "windows-local"
+    else:
+        kind = "local"
+    return {
+        "kind": kind,
+        "detected_ci": bool(detected_ci),
+        "detected_wsl": detected_wsl,
+        "competition_exact_host_attested": os.environ.get(COMPETITION_EXACT_HOST_ENV) == "1",
+        "system": platform.system(),
+        "release": uname.release,
+        "version": uname.version,
+        "machine": uname.machine,
+        "kernel": uname.release,
+        "python_version": platform.python_version(),
+        "runner_name": os.environ.get("GITHUB_ACTIONS") and "github-actions" or "local",
+    }
+
+
+def environment_deviations(
+    profile: dict[str, Any],
+    environment: dict[str, Any],
+    *,
+    proof_class: str,
+) -> list[dict[str, Any]]:
+    expected_os = profile.get("os", {}) if isinstance(profile.get("os"), dict) else {}
+    expected_toolchain = profile.get("toolchain", {}) if isinstance(profile.get("toolchain"), dict) else {}
+    deviations = []
+    append_deviation(
+        deviations,
+        field="os.name",
+        expected=expected_os.get("name"),
+        actual=environment["system"],
+        limit=limit_for_environment(environment),
+    )
+    append_deviation(
+        deviations,
+        field="os.kernel",
+        expected=expected_os.get("kernel"),
+        actual=environment["kernel"],
+        limit=limit_for_environment(environment),
+    )
+    append_deviation(
+        deviations,
+        field="python.version",
+        expected=expected_toolchain.get("python"),
+        actual=environment["python_version"],
+        limit=limit_for_environment(environment),
+    )
+    if proof_class != "competition-exact":
+        deviations.append(
+            {
+                "field": "proof_class",
+                "expected": "competition-exact only on the real competition host",
+                "actual": proof_class,
+                "severity": "diagnostic",
+                "limits_proof_class_to": proof_class,
+            }
+        )
+    return deviations
+
+
+def append_deviation(
+    deviations: list[dict[str, Any]],
+    *,
+    field: str,
+    expected: Any,
+    actual: Any,
+    limit: str,
+) -> None:
+    if expected != actual:
+        deviations.append(
+            {
+                "field": field,
+                "expected": expected,
+                "actual": actual,
+                "severity": "proof-class-limiting",
+                "limits_proof_class_to": limit,
+            }
+        )
+
+
+def limit_for_environment(environment: dict[str, Any]) -> str:
+    if environment["detected_ci"]:
+        return "ci-approximation"
+    if environment["detected_wsl"]:
+        return "wsl-local-simulation"
+    return "local-simulation"
+
+
+def competition_profile_match(
+    profile: dict[str, Any],
+    environment: dict[str, Any],
+    *,
+    profile_sha256_actual: str,
+    clang_lane_verified_value: bool,
+    repo_root: Path,
+) -> dict[str, Any]:
+    expected_os = profile.get("os", {}) if isinstance(profile.get("os"), dict) else {}
+    expected_toolchain = profile.get("toolchain", {}) if isinstance(profile.get("toolchain"), dict) else {}
+    return {
+        "profile_id": str(profile.get("profile_id", "unknown")),
+        "profile_sha256_actual": profile_sha256_actual,
+        "os_name_match": expected_os.get("name") == environment["system"],
+        "kernel_match": expected_os.get("kernel") == environment["kernel"],
+        "python_version_match": expected_toolchain.get("python") == environment["python_version"],
+        "clang_lane_verified": clang_lane_verified_value,
+        "cargo_mirror_config_present": (repo_root / "config" / "competition-env" / "cargo" / "config.toml").exists(),
+    }
+
+
+def step_status(steps: list[dict[str, Any]], step_name: str) -> str:
+    for step in steps:
+        if step["step"] == step_name:
+            return str(step["status"])
+    return "missing"
+
+
+def final_gate_reasons_for(
+    *,
+    proof_class: str,
+    steps: list[dict[str, Any]],
+    deviations: list[dict[str, Any]],
+    environment: dict[str, Any],
+) -> list[str]:
+    reasons = [f"step_failed:{step['step']}" for step in steps if step["status"] == "failed"]
+    reasons.extend(
+        f"{step['failure_class']}:{step['step']}"
+        for step in steps
+        if step.get("status") == "failed" and step.get("failure_class")
+    )
+    if proof_class == "ci-approximation" and not environment.get("detected_ci"):
+        reasons.append("proof_class_incompatible_with_environment")
+    if proof_class == "wsl-local-simulation" and not environment.get("detected_wsl"):
+        reasons.append("proof_class_incompatible_with_environment")
+    if proof_class == "competition-exact" and not environment.get("competition_exact_host_attested"):
+        reasons.append("proof_class_requires_exact_host_evidence")
+    if proof_class == "competition-exact" and any(
+        item.get("severity") == "proof-class-limiting" for item in deviations
+    ):
+        reasons.append("proof_class_limited_by_environment")
+    return reasons
+
+
+def load_profile(repo_root: Path) -> dict[str, Any]:
+    return json.loads(profile_path(repo_root).read_text(encoding="utf-8"))
+
+
+def profile_path(repo_root: Path) -> Path:
+    return repo_root / "config" / "competition-env" / "environment.json"
+
+
+def clang_source(repo_root: Path) -> str:
+    if os.environ.get("CLANG_PATH"):
+        return "CLANG_PATH"
+    for candidate in (
+        "tools/llvm/bin/clang-18",
+        "tools/llvm/bin/clang",
+        "tools/clang/bin/clang",
+        "tools/llvm/bin/clang.exe",
+        "tools/clang/bin/clang.exe",
+    ):
+        if (repo_root / candidate).exists():
+            return "vendored"
+    return "missing"
+
+
+def summary_log_path(path: Path, *, repo_root: Path, out_root: Path) -> str:
+    return summary_path(path, repo_root=repo_root, out_root=out_root)
+
+
+def summary_path(path: Path, *, repo_root: Path, out_root: Path) -> str:
+    resolved = path.resolve()
+    for root in [repo_root.resolve(), out_root.resolve()]:
+        try:
+            return resolved.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    return resolved.as_posix()
+
+
+def rel_path(path: Path, repo_root: Path) -> str:
+    resolved = path if path.is_absolute() else repo_root / path
+    try:
+        return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
+def repo_relative_path(path: Path, repo_root: Path, field_name: str) -> str:
+    if not path.is_absolute():
+        raw_text = str(path)
+        if "\\" in raw_text or raw_text.startswith("~"):
+            raise ValueError(f"{field_name} must be repo-relative POSIX")
+        if ".." in Path(raw_text.replace("\\", "/")).parts:
+            raise ValueError(f"{field_name} must be repo-relative POSIX")
+    resolved = path if path.is_absolute() else repo_root / path
+    try:
+        return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError as error:
+        raise ValueError(f"{field_name} must be repo-relative") from error
+
+
+def command_for_log(command: list[str], *, repo_root: Path, out_root: Path) -> list[str]:
+    return [command_argument_for_log(argument, repo_root=repo_root, out_root=out_root) for argument in command]
+
+
+def command_argument_for_log(argument: str, *, repo_root: Path, out_root: Path) -> str:
+    if not argument or not any(separator in argument for separator in ["/", "\\"]):
+        return argument
+    sanitized_argument = sanitize_host_paths_in_command_text(argument)
+    is_shell_fragment = any(token in argument for token in [";", "|", "&&"])
+    is_compiler_path_flag = argument.startswith(
+        ("-I", "-L", "-o", "-isystem", "-iquote", "-idirafter", "-include", "-isysroot", "--sysroot=")
+    )
+    if sanitized_argument != argument and (is_shell_fragment or re.search(r"\s", argument) or is_compiler_path_flag):
+        return sanitized_argument
+    if is_shell_fragment:
+        return sanitized_argument
+    path = Path(argument)
+    resolved = path if path.is_absolute() else repo_root / path
+    resolved_path = resolved.resolve()
+    repo_root_resolved = repo_root.resolve()
+    out_root_resolved = out_root.resolve()
+    try:
+        return resolved_path.relative_to(repo_root_resolved).as_posix()
+    except ValueError:
+        pass
+    try:
+        out_root_relative = resolved_path.relative_to(out_root_resolved).as_posix()
+    except ValueError:
+        out_root_relative = None
+    if out_root_relative is not None:
+        try:
+            out_root_resolved.relative_to(repo_root_resolved)
+            return out_root_relative
+        except ValueError:
+            return f"out-root:{out_root_relative}"
+    return path_basename(argument)
+
+
+def sanitize_host_paths_in_command_text(argument: str) -> str:
+    def replace_match(match: re.Match[str]) -> str:
+        if match.group("double_quoted_path") is not None:
+            return f'"{path_basename(match.group("double_quoted_path"))}"'
+        if match.group("single_quoted_path") is not None:
+            return f"'{path_basename(match.group('single_quoted_path'))}'"
+        return path_basename(match.group("plain_path"))
+
+    return LOCAL_HOST_PATH_IN_COMMAND.sub(replace_match, argument)
+
+
+def output_text_for_log(value: str) -> str:
+    return sanitize_host_paths_in_command_text(value)
+
+
+def path_basename(path_text: str) -> str:
+    # Path(...).name is platform-dependent: PosixPath does not treat
+    # backslashes as separators, so Windows/UNC/WSL paths logged by a Windows
+    # producer would leak through unsanitized when this runs on a Linux host
+    # (judge CI, competition machine). Normalize both separator families
+    # before taking the final component.
+    normalized = path_text.replace("\\", "/").rstrip("/")
+    if not normalized:
+        return path_text
+    return normalized.rsplit("/", 1)[-1]
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sha256_lf_stable(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")).hexdigest()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

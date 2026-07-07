@@ -1,0 +1,64 @@
+
+def required_str(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise SystemExit(f"slice spec missing required string: {key}")
+    return value
+
+
+def profile_id(repo_root: Path) -> str:
+    profile_path = repo_root / "config" / "competition-env" / "environment.json"
+    return str(json.loads(profile_path.read_text(encoding="utf-8")).get("profile_id", "unknown"))
+
+
+def clang_source(repo_root: Path) -> str:
+    if os.environ.get("CLANG_PATH"):
+        return "CLANG_PATH"
+    for candidate in ("tools/llvm/bin/clang-18", "tools/llvm/bin/clang", "tools/clang/bin/clang"):
+        if (repo_root / candidate).exists():
+            return "vendored"
+    return "missing"
+
+
+def unsafe_budget_summary(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        report = {}
+    if not isinstance(report, dict):
+        report = {}
+    status = report.get("status") if isinstance(report.get("status"), str) else "failed"
+    if status not in {"passed", "failed"}:
+        status = "failed"
+    unsafe_count = report.get("first_party_non_test_unsafe_count")
+    unsafe_ratio = report.get("unsafe_ratio")
+    return {
+        "status": status if result.returncode == 0 else "failed",
+        "total_first_party_non_test_unsafe": unsafe_count
+        if isinstance(unsafe_count, int) and unsafe_count >= 0
+        else 0,
+        "ratio": unsafe_ratio if isinstance(unsafe_ratio, (int, float)) and unsafe_ratio >= 0 else 0.0,
+    }
+
+
+def rel_script(path: Path, repo_root: Path) -> str:
+    return rel_path(path, repo_root)
+
+
+def rel_path(path: Path, repo_root: Path) -> str:
+    resolved = path if path.is_absolute() else repo_root / path
+    try:
+        return resolved.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return resolved.as_posix()
+
+
+def sha256(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

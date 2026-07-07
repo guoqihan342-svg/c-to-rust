@@ -1,0 +1,407 @@
+                "plain_char_signed": True,
+                "short_width": 16,
+                "short_align": 16,
+                "long_width": 64,
+                "long_align": 64,
+                "long_long_width": 64,
+                "long_long_align": 64,
+                "pointer_width": 64,
+                "pointer_align": 64,
+            }
+            spec = {
+                "target_id": "demo",
+                "slice_id": "target-abi-width",
+                "source_commit": "1234567",
+                "function_name": "count",
+                "c_source": "size_t count(size_t value) { return value; }",
+                "fixture_hash": "fixture-sha",
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "target": target,
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(translator_input["build_profile"]["target"], target)
+            self.assertEqual(
+                translator_input["build_profile"]["target_triple"],
+                "x86_64-unknown-linux-gnu",
+            )
+            self.assertEqual(
+                translator_input["build_profile"]["abi"],
+                "x86_64-unknown-linux-gnu",
+            )
+
+    def test_translator_input_preserves_scalar_arithmetic_contract(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            spec = {
+                "target_id": "demo",
+                "slice_id": "signed-rshift-contract",
+                "source": {"source_root": "C:/src/project"},
+                "source_commit": "1234567",
+                "function_name": "signed_rshift_contract",
+                "c_source": "int signed_rshift_contract(int value, int count) { return value >> count; }",
+                "fixture_hash": "fixture-sha",
+                "c_boundary": {
+                    "scalar_arithmetic_contract": {
+                        "wrapping_profile": "not_declared",
+                        "signed_overflow": "not_declared",
+                        "division_by_zero": "not_declared",
+                        "signed_division_overflow": "not_declared",
+                        "shift_count": "runtime_precondition_in_range",
+                        "signed_right_shift": "explicit_implementation_defined_contract",
+                    },
+                    "files": [
+                        {
+                            "path": "src/signed_rshift_contract.c",
+                            "role": "source",
+                            "sha256": "declared-source-sha",
+                        }
+                    ],
+                    "signatures": [
+                        {
+                            "function": "signed_rshift_contract",
+                            "source_span": {
+                                "file": "src/signed_rshift_contract.c",
+                                "line_start": 1,
+                                "line_end": 1,
+                                "byte_start": 0,
+                                "byte_end": 72,
+                                "sha256": "span-sha",
+                            },
+                        }
+                    ],
+                },
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "compiler_command_source": "unit-test",
+                },
+            }
+            spec_path = Path(tmp) / "slice.json"
+
+            translator_spec = module.write_translator_spec(spec, spec_path, evidence_dir)
+            translator_input = json.loads(translator_spec.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                translator_input["c_boundary"]["scalar_arithmetic_contract"]["signed_right_shift"],
+                "explicit_implementation_defined_contract",
+            )
+            self.assertEqual(
+                translator_input["c_boundary"]["scalar_arithmetic_contract"]["shift_count"],
+                "runtime_precondition_in_range",
+            )
+
+    def test_run_translator_emit_clang_dry_run_enables_clang_frontend_feature(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = Path(tmp) / "translator-input.json"
+            slice_spec.write_text("{}", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "target_id": "demo",
+                        "slice_id": "add-one",
+                        "status": "generated",
+                        "artifact_paths": [],
+                    }
+                ),
+                stderr="",
+            )
+
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                module.run_translator(slice_spec, evidence_dir, emit_clang_dry_run=True)
+
+            cmd = run.call_args.args[0]
+            kwargs = run.call_args.kwargs
+            self.assertIn("--features", cmd)
+            self.assertIn("clang-frontend", cmd)
+            self.assertLess(cmd.index("--features"), cmd.index("--bin"))
+            self.assertEqual(kwargs["cwd"], module.REPO_ROOT)
+            self.assertTrue(kwargs["text"])
+            self.assertTrue(kwargs["capture_output"])
+
+    def test_run_translator_emit_clang_dry_run_does_not_enable_lowering_report_feature(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = Path(tmp) / "translator-input.json"
+            slice_spec.write_text("{}", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "target_id": "demo",
+                        "slice_id": "add-one",
+                        "status": "generated",
+                        "artifact_paths": [],
+                    }
+                ),
+                stderr="",
+            )
+
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                module.run_translator(slice_spec, evidence_dir, emit_clang_dry_run=True)
+
+            cmd = run.call_args.args[0]
+            features = cmd[cmd.index("--features") + 1].split(",")
+            self.assertEqual(features, ["clang-frontend"])
+            self.assertNotIn("clang-lowering-report", features)
+
+    def test_run_translator_default_does_not_enable_clang_features(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = Path(tmp) / "translator-input.json"
+            slice_spec.write_text("{}", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "target_id": "demo",
+                        "slice_id": "add-one",
+                        "status": "generated",
+                        "artifact_paths": [],
+                    }
+                ),
+                stderr="",
+            )
+
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                module.run_translator(slice_spec, evidence_dir)
+
+            cmd = run.call_args.args[0]
+            self.assertNotIn("--features", cmd)
+
+    def test_run_translator_emit_clang_lowering_report_enables_report_feature(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = Path(tmp) / "translator-input.json"
+            slice_spec.write_text("{}", encoding="utf-8")
+            completed = subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "target_id": "demo",
+                        "slice_id": "add-one",
+                        "status": "generated",
+                        "artifact_paths": [],
+                    }
+                ),
+                stderr="",
+            )
+
+            with mock.patch.object(module.subprocess, "run", return_value=completed) as run:
+                module.run_translator(
+                    slice_spec,
+                    evidence_dir,
+                    emit_clang_lowering_report=True,
+                )
+
+            cmd = run.call_args.args[0]
+            self.assertIn("--features", cmd)
+            features = cmd[cmd.index("--features") + 1].split(",")
+            self.assertEqual(features, ["clang-lowering-report"])
+            self.assertLess(cmd.index("--features"), cmd.index("--bin"))
+
+    def test_cache_identity_records_emit_clang_dry_run_opt_in(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text("{}", encoding="utf-8")
+            spec = {
+                "target_id": "demo",
+                "slice_id": "add-one",
+                "source": {"source_file_hashes": {"src/add_one.c": "source-sha"}},
+                "fixture": {"sha256": "fixture-sha"},
+                "build_profile": {},
+            }
+
+            identity = module.cache_identity(spec, spec_path, emit_clang_dry_run=True)
+
+            self.assertIn("--emit-clang-dry-run", identity["command_arguments"])
+
+    def test_cache_identity_keeps_clang_lowering_report_fields_out_by_default(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text("{}", encoding="utf-8")
+            spec = {
+                "target_id": "demo",
+                "slice_id": "add-one",
+                "source": {"source_file_hashes": {"src/add_one.c": "source-sha"}},
+                "fixture": {"sha256": "fixture-sha"},
+                "build_profile": {},
+            }
+
+            identity = module.cache_identity(spec, spec_path, environment={})
+
+            self.assertNotIn("--emit-clang-lowering-report", identity["command_arguments"])
+            self.assertNotIn("translator_feature_set", identity)
+            self.assertNotIn("clang_lowering_identity", identity)
+
+    def test_cache_identity_records_emit_clang_lowering_report_opt_in(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text("{}", encoding="utf-8")
+            spec = {
+                "target_id": "demo",
+                "slice_id": "add-one",
+                "source": {"source_file_hashes": {"src/add_one.c": "source-sha"}},
+                "fixture": {"sha256": "fixture-sha"},
+                "build_profile": {},
+            }
+            environment = {
+                "CLANG_PATH": "C:/LLVM/bin/clang.exe",
+                "LIBCLANG_PATH": "C:/LLVM/bin/libclang.dll",
+            }
+
+            with mock.patch.object(module, "command_version", return_value="clang version unit-test"):
+                identity = module.cache_identity(
+                    spec,
+                    spec_path,
+                    emit_clang_lowering_report=True,
+                    environment=environment,
+                )
+
+            self.assertIn("--emit-clang-lowering-report", identity["command_arguments"])
+            self.assertEqual(identity["translator_feature_set"], ["clang-lowering-report"])
+            self.assertEqual(
+                identity["clang_lowering_identity"],
+                {
+                    "enabled": True,
+                    "frontend": "clang_ast_dump_json",
+                    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+                    "features": ["clang-lowering-report"],
+                    "requires_env": ["CLANG_PATH"],
+                    "clang_path_status": "configured",
+                    "clang_path": "C:/LLVM/bin/clang.exe",
+                    "ignored_env_for_ast_dump": {
+                        "LIBCLANG_PATH": {
+                            "status": "configured",
+                            "value": "C:/LLVM/bin/libclang.dll",
+                            "reason": "ignored_for_ast_dump",
+                        },
+                    },
+                    "clang_version": "clang version unit-test",
+                },
+            )
+
+    def test_cache_identity_records_competition_clang_lane(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "slice.json"
+            spec_path.write_text("{}", encoding="utf-8")
+            spec = {
+                "target_id": "demo",
+                "slice_id": "add-one",
+                "source": {"source_file_hashes": {"src/add_one.c": "source-sha"}},
+                "fixture": {"sha256": "fixture-sha"},
+                "build_profile": {},
+            }
+            environment = {"CLANG_PATH": "/usr/bin/clang"}
+
+            with mock.patch.object(module, "command_version", return_value="clang version unit-test"):
+                identity = module.cache_identity(
+                    spec,
+                    spec_path,
+                    competition_clang_lane=True,
+                    environment=environment,
+                )
+
+            self.assertIn("--emit-clang-lowering-report", identity["command_arguments"])
+            self.assertIn("--competition-clang-lane", identity["command_arguments"])
+            self.assertEqual(identity["translator_feature_set"], ["clang-lowering-report"])
+            self.assertTrue(identity["clang_lowering_identity"]["required"])
+            self.assertEqual(identity["clang_lowering_identity"]["lane"], "competition-clang-lane")
+            self.assertEqual(identity["clang_lowering_identity"]["requires_env"], ["CLANG_PATH"])
+            self.assertEqual(identity["clang_lowering_identity"]["frontend"], "clang_ast_dump_json")
+            self.assertEqual(
+                identity["clang_lowering_identity"]["ignored_env_for_ast_dump"]["LIBCLANG_PATH"][
+                    "reason"
+                ],
+                "ignored_for_ast_dump",
+            )
+            self.assertEqual(identity["clang_lowering_identity"]["clang_path_status"], "configured")
+
+    def test_competition_clang_lane_accepts_project_local_clang(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            repo_root = Path(tmp)
+            vendored = repo_root / "tools" / "llvm" / "bin" / "clang"
+            vendored.parent.mkdir(parents=True)
+            vendored.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            vendored.chmod(0o755)
+
+            resolved = module.resolve_competition_clang_path(
+                environment={}, repo_root=repo_root
+            )
+
+            self.assertEqual(resolved, ("tools/llvm/bin/clang", "vendored:tools/llvm/bin/clang"))
+
+    def test_enrich_clang_lowering_report_records_durable_hashes(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-demo"
+            function_ir = {"name": "demo", "body": [{"Return": {"expr": {"Literal": 1}}}]}
+            report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+            report_path.write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "rust_draft_generated": True,
+                        },
+                        "lowering_report": {
+                            "function_ir": function_ir,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            draft_path.write_text("pub fn demo() -> i32 { 1 }\n", encoding="utf-8")
+            identity = {
+                "clang_path": "/usr/bin/clang",
+                "clang_version": "clang version unit-test",
+                "frontend": "clang_ast_dump_json",
+            }
+
+            module.enrich_clang_lowering_report(evidence_dir, prefix, identity)
+
+            enriched = json.loads(report_path.read_text(encoding="utf-8"))
+            typed_ir_sha = module.sha256_json(function_ir)
+            rust_draft_sha = module.sha256(draft_path)
+            self.assertEqual(enriched["typed_ir_candidate"]["typed_ir_sha256"], typed_ir_sha)
+            self.assertEqual(enriched["typed_ir_candidate"]["rust_draft_sha256"], rust_draft_sha)
+            self.assertEqual(enriched["durable_evidence"]["hash_algorithm"], "sha256")
+            self.assertEqual(enriched["durable_evidence"]["typed_ir_sha256"], typed_ir_sha)
+            self.assertEqual(enriched["durable_evidence"]["rust_draft_sha256"], rust_draft_sha)
+            self.assertEqual(enriched["durable_evidence"]["clang_path"], "/usr/bin/clang")
+            self.assertEqual(enriched["durable_evidence"]["clang_version"], "clang version unit-test")
+            self.assertEqual(
+                enriched["durable_evidence"]["competition_environment"],
+                module.competition_environment_identity(),
+            )

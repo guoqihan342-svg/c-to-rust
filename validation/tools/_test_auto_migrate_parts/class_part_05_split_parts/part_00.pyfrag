@@ -1,0 +1,500 @@
+class _AutoMigrateTestsPart05:
+    def test_output_only_pointer_write_does_not_trigger_input_output_alias_risk(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "fill-i32-output-only",
+            "source_commit": "1234567",
+            "function_name": "fill_i32_output_only",
+            "c_source": "int fill_i32_output_only(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i) = value; } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["return_code", "status", "out_values"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "fill-i32-output-only.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "fill-i32-output-only"
+            pointer_graph = json.loads(
+                (evidence_dir / "l3-fill-i32-output-only-pointer-graph.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-fill-i32-output-only-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertNotIn("alias_sensitive_state", pointer_graph["applicability"]["triggers"])
+            self.assertEqual(pointer_graph["schema_version"], 2)
+            self.assertEqual(pointer_graph["alias_sets"], [])
+            self.assertEqual(pointer_graph["alias_risks"], [])
+            self.assertEqual(pointer_graph["alias_contract"]["decision"], "not_applicable")
+            self.assertFalse(pointer_graph["alias_contract"]["requires_noalias"])
+            effect_graph = pointer_graph["effect_graph"]
+            self.assertFalse(any(effect["kind"] == "read" for effect in effect_graph["effects"]))
+            self.assertTrue(
+                any(
+                    effect["pointer_node"] == "out"
+                    and effect["kind"] == "write"
+                    and effect["expression"] == "out[i]"
+                    for effect in effect_graph["effects"]
+                )
+            )
+            self.assertEqual(effect_graph["summary"]["reads"], [])
+            self.assertEqual(effect_graph["summary"]["writes"], ["out"])
+            self.assertFalse(effect_graph["summary"]["alias_sensitive"])
+            self.assertEqual(effect_graph["summary"]["alias_gate_decision"], "not_applicable")
+            self.assertEqual(plan["translation_summary"]["alias_gate"]["decision"], "not_applicable")
+            self.assertEqual(manifest["claim_boundary"]["alias_gate"]["decision"], "not_applicable")
+
+    def test_cache_identity_tracks_alias_gate_inputs(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "copy-i32-alias-cache",
+            "source_commit": "1234567",
+            "function_name": "copy_i32_alias_cache",
+            "c_source": "int copy_i32_alias_cache(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"target_triple": "x86_64-unknown-linux-gnu"},
+            "c_boundary": {
+                "pointer_contract": {
+                    "input_buffers": [
+                        {
+                            "name": "values",
+                            "c_type": "const int*",
+                            "length_companion": "len",
+                            "read_effects": ["*(values + i)", "values[i]"],
+                        }
+                    ],
+                    "output_pointers": [
+                        {
+                            "name": "out",
+                            "c_type": "int*",
+                            "length_companion": "len",
+                            "write_effects": ["*(out + i)", "out[i]"],
+                        }
+                    ],
+                    "aliasing_proven": False,
+                }
+            },
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            spec_path = Path(tmp) / "copy-i32-alias-cache.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            identity = auto_migrate.cache_identity(spec, spec_path)
+
+            self.assertIn("alias_gate_identity", identity)
+            self.assertEqual(identity["alias_gate_identity"]["decision"], "requires_noalias_contract")
+            self.assertEqual(identity["alias_gate_identity"]["risk_count"], 1)
+            self.assertFalse(identity["alias_gate_identity"]["aliasing_proven"])
+            self.assertTrue(identity["alias_gate_identity"]["requires_noalias"])
+            self.assertIn("effect_graph_identity", identity)
+            self.assertEqual(identity["effect_graph_identity"]["read_effect_count"], 2)
+            self.assertEqual(identity["effect_graph_identity"]["write_effect_count"], 2)
+            self.assertTrue(identity["effect_graph_identity"]["alias_sensitive"])
+            self.assertEqual(
+                identity["effect_graph_identity"]["alias_gate_decision"],
+                "requires_noalias_contract",
+            )
+            self.assertEqual(identity["c2rust_baseline_identity"]["status"], "missing")
+            self.assertEqual(identity["route_decision_identity"]["status"], "missing")
+            self.assertEqual(identity["validation_profile_identity"]["status"], "missing")
+
+    def test_unsupported_lvalue_blocks_auto_migrate_candidate_generation(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "unbounded-index",
+            "source_commit": "1234567",
+            "function_name": "unbounded_index",
+            "c_source": "int unbounded_index(int* out, int i, int value) { out[i] = value; return 0; }",
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["value"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "unbounded-index.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "unbounded-index"
+            cfg = json.loads((evidence_dir / "l3-unbounded-index-cfg.json").read_text(encoding="utf-8"))
+            plan = json.loads(
+                (evidence_dir / "l3-unbounded-index-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            route = json.loads((evidence_dir / "l3-unbounded-index-route-decision.json").read_text(encoding="utf-8"))
+            profile = json.loads(
+                (evidence_dir / "l3-unbounded-index-validation-profile.json").read_text(encoding="utf-8")
+            )
+            blocked = json.loads(
+                (evidence_dir / "l3-unbounded-index-self-healing-blocked-repairs.json").read_text(encoding="utf-8")
+            )
+            block = cfg["functions"][0]["basic_blocks"][0]
+
+            self.assertEqual(manifest["translator"]["status"], "blocked")
+            self.assertEqual(plan["status"], "blocked")
+            self.assertEqual(route["level"], "L4")
+            self.assertEqual(route["status"], "refused")
+            self.assertEqual(route["translator"]["kind"], "refuse")
+            self.assertFalse(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(profile["route_level"], "L4")
+            self.assertEqual(profile["status"], "blocked")
+            self.assertIn({"gate": "candidate_generation", "reason": "route_refused"}, profile["skipped_gates"])
+            self.assertEqual(manifest["status"], "candidate_refused")
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertIsNone(manifest["accepted_evidence_binding"])
+            self.assertTrue(
+                all(artifact["status"] == "blocked" for artifact in plan["generated_artifacts"])
+            )
+            events = [
+                json.loads(line)
+                for line in (evidence_dir / "l3-unbounded-index-auto-translation-events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            rust_draft_events = [
+                event for event in events if event["event_kind"] == "rust_draft_generated"
+            ]
+            self.assertEqual(rust_draft_events[0]["status"], "blocked")
+            self.assertEqual(manifest["replay"]["evidence_links"]["rust_draft"]["status"], "blocked")
+            replay_evidence = json.loads(
+                (evidence_dir / "l3-unbounded-index-test-translation-generated.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertEqual(blocked["status"], "recorded")
+            repair = blocked["blocked_repairs"][0]
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "unsupported_lvalue")
+            self.assertEqual(repair["oracle_fixture_gap"]["status"], "not_blocking")
+            self.assertEqual(
+                [route["route"] for route in repair["candidate_routes"]],
+                ["typed_ir", "c2rust", "llm", "manual"],
+            )
+            self.assertEqual(repair["smallest_next_test"]["kind"], "route_refusal_regression")
+            self.assertIn("human_intervention_point", repair)
+            self.assertEqual(plan["translation_summary"]["unsupported_lvalue_count"], 1)
+            self.assertIn("unsupported_lvalue", block["lvalue_kinds"])
+            self.assertTrue(
+                any(decision["decision"] == "unsupported_lvalue" for decision in block["lvalue_decisions"])
+            )
+
+    def test_unsupported_control_flow_blocks_auto_migrate_candidate_generation(self) -> None:
+        cfg_schema = json.loads(
+            (REPO_ROOT / "validation/cfg-template/cfg.schema.json").read_text(encoding="utf-8")
+        )
+        cases = [
+            (
+                "goto-loop",
+                "again",
+                "goto",
+                "int again(int x) { again: x++; if (x < 10) goto again; return x; }",
+            ),
+            (
+                "switch-return",
+                "choose",
+                "switch",
+                "int choose(int x) { switch (x) { case 1: return 1; default: return 0; } }",
+            ),
+        ]
+        for slice_id, function_name, expected_kind, c_source in cases:
+            with self.subTest(slice_id=slice_id), tempfile.TemporaryDirectory(
+                prefix="auto-migrate-test-"
+            ) as tmp:
+                spec = {
+                    "target_id": "demo",
+                    "slice_id": slice_id,
+                    "source_commit": "1234567",
+                    "function_name": function_name,
+                    "c_source": c_source,
+                    "fixture_hash": "fixture",
+                    "build_profile": {
+                        "include_paths": [],
+                        "defines": [],
+                        "target_triple": "x86_64-unknown-linux-gnu",
+                        "abi": "linux-gnu",
+                        "compiler_command_source": "unit-test",
+                        "clang_available": True,
+                    },
+                    "fixture_contract": {
+                        "input": "unit-test-fixture.json",
+                        "behavior_fields": ["value"],
+                    },
+                    "non_goals": ["unit test only"],
+                }
+                tmp_path = Path(tmp)
+                spec_path = tmp_path / f"{slice_id}.json"
+                spec_path.write_text(json.dumps(spec), encoding="utf-8")
+                out_root = tmp_path / "evidence"
+
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(AUTO_MIGRATE),
+                        "--slice-spec",
+                        str(spec_path),
+                        "--out-root",
+                        str(out_root),
+                        "--skip-c-oracle",
+                    ],
+                    cwd=REPO_ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                )
+
+                manifest = json.loads(result.stdout)
+                evidence_dir = out_root / "demo" / "auto-translation" / slice_id
+                prefix = f"l3-{slice_id}"
+                cfg = json.loads((evidence_dir / f"{prefix}-cfg.json").read_text(encoding="utf-8"))
+                jsonschema.Draft7Validator(cfg_schema).validate(cfg)
+                plan = json.loads(
+                    (evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8")
+                )
+                route = json.loads(
+                    (evidence_dir / f"{prefix}-route-decision.json").read_text(encoding="utf-8")
+                )
+                profile = json.loads(
+                    (evidence_dir / f"{prefix}-validation-profile.json").read_text(encoding="utf-8")
+                )
+                blocked = json.loads(
+                    (evidence_dir / f"{prefix}-self-healing-blocked-repairs.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+
+                self.assertEqual(cfg["status"], "blocked")
+                self.assertTrue(cfg["unsupported_control_flow"])
+                unsupported_kinds = {item["kind"] for item in cfg["unsupported_control_flow"]}
+                self.assertTrue(any(item["kind"] == expected_kind for item in cfg["unsupported_control_flow"]))
+                self.assertNotIn("unknown", unsupported_kinds)
+                self.assertIn("relooper_refusal", unsupported_kinds)
+                if expected_kind == "goto":
+                    self.assertIn("label", unsupported_kinds)
+                if expected_kind == "switch":
+                    self.assertIn("case", unsupported_kinds)
+                    self.assertIn("default", unsupported_kinds)
+                structured = cfg["functions"][0]["structured_control_flow"]
+                self.assertTrue(structured["relooper_required"])
+                self.assertEqual(structured["has_goto"], expected_kind == "goto")
+                self.assertEqual(structured["has_switch"], expected_kind == "switch")
+                if expected_kind == "goto":
+                    self.assertIn("goto_target_resolved", structured["relooper_preconditions"])
+                    self.assertIn(
+                        "goto_requires_structured_recovery",
+                        structured["relooper_refusals"],
+                    )
+                if expected_kind == "switch":
+                    self.assertIn(
+                        "switch_cases_enumerated",
+                        structured["relooper_preconditions"],
+                    )
+                    self.assertIn(
+                        "switch_requires_structured_recovery",
+                        structured["relooper_refusals"],
+                    )
+                self.assertIn("no Rust candidate lowering", structured["scope_note"])
+                block_ids = {block["id"] for block in cfg["functions"][0]["basic_blocks"]}
+                edge_pairs = {
+                    (edge["from"], edge["to"], edge["kind"])
+                    for edge in cfg["functions"][0]["edges"]
+                }
+                if expected_kind == "goto":
+                    self.assertTrue({"label-again", "goto-again"}.issubset(block_ids))
+                    self.assertIn(("entry", "label-again", "unsupported"), edge_pairs)
+                    self.assertIn(("entry", "goto-again", "unsupported"), edge_pairs)
+                    self.assertIn(("goto-again", "label-again", "unsupported"), edge_pairs)
+                if expected_kind == "switch":
+                    self.assertTrue({"switch-0", "case-1", "default"}.issubset(block_ids))
+                    self.assertIn(("entry", "switch-0", "unsupported"), edge_pairs)
+                    self.assertIn(("switch-0", "case-1", "unsupported"), edge_pairs)
+                    self.assertIn(("switch-0", "default", "unsupported"), edge_pairs)
+                self.assertEqual(manifest["translator"]["status"], "blocked")
+                self.assertEqual(plan["status"], "blocked")
+                self.assertEqual(route["level"], "L4")
+                self.assertEqual(route["status"], "refused")
+                self.assertEqual(route["translator"]["kind"], "refuse")
+                self.assertFalse(route["translator"]["candidate_generation_allowed"])
+                self.assertIn(
+                    "unsupported_control_flow",
+                    [item.get("feature") for item in route["rationale"]],
+                )
+                self.assertEqual(profile["route_level"], "L4")
+                self.assertEqual(profile["status"], "blocked")
+                self.assertIn({"gate": "candidate_generation", "reason": "route_refused"}, profile["skipped_gates"])
+                self.assertEqual(manifest["status"], "candidate_refused")
+                self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+                self.assertIsNone(manifest["accepted_evidence_binding"])
+                self.assertTrue(
+                    all(artifact["status"] == "blocked" for artifact in plan["generated_artifacts"])
+                )
+                events = [
+                    json.loads(line)
+                    for line in (evidence_dir / f"{prefix}-auto-translation-events.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                    if line.strip()
+                ]
+                rust_draft_events = [
+                    event for event in events if event["event_kind"] == "rust_draft_generated"
+                ]
+                self.assertEqual(rust_draft_events[0]["status"], "blocked")
+                self.assertEqual(manifest["replay"]["evidence_links"]["rust_draft"]["status"], "blocked")
+                replay_evidence = json.loads(
+                    (evidence_dir / f"{prefix}-test-translation-generated.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
+                self.assertEqual(blocked["status"], "recorded")
+                repair = blocked["blocked_repairs"][0]
+                self.assertEqual(repair["ir_feature_gap"]["kind"], "unsupported_control_flow")
+                self.assertEqual(repair["oracle_fixture_gap"]["status"], "not_blocking")
+                self.assertEqual(
+                    [route["route"] for route in repair["candidate_routes"]],
+                    ["typed_ir", "c2rust", "llm", "manual"],
+                )
+                self.assertEqual(repair["smallest_next_test"]["kind"], "route_refusal_regression")
+                self.assertIn("human_intervention_point", repair)
+
+    def test_l4_refused_accept_existing_evidence_keeps_generated_draft_blocked(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec = self._accepted_evidence_spec(tmp_path, include_toolchain_marker=True)
+            spec.update(
+                {
+                    "target_id": "demo",
+                    "slice_id": "unbounded-accepted",
+                    "function_name": "unbounded_index",
+                    "c_source": "int unbounded_index(int* out, int i, int value) { out[i] = value; return 0; }",
+                    "build_profile": {
+                        "include_paths": [],
+                        "defines": [],
+                        "target_triple": "x86_64-unknown-linux-gnu",
+                        "abi": "linux-gnu",
+                        "compiler_command_source": "unit-test",
+                        "clang_available": True,
+                    },
+                    "non_goals": ["unit test only"],
+                }
+            )
+            spec_path = tmp_path / "unbounded-accepted.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--accept-existing-evidence",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "unbounded-accepted"
+            replay_evidence = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-test-translation-generated.json").read_text(encoding="utf-8")
+            )
+            rust_report = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-rust-report.json").read_text(encoding="utf-8")
+            )
+            profile = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-validation-profile.json").read_text(encoding="utf-8")
+            )
+            final = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-final-verification.json").read_text(encoding="utf-8")
+            )
+            diff = json.loads((evidence_dir / "l3-unbounded-accepted-diff.json").read_text(encoding="utf-8"))
+            negative = json.loads(
+                (evidence_dir / "l3-unbounded-accepted-negative-diff.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["status"], "candidate_refused")
+            self.assertFalse(manifest["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["accepted_evidence_authoritative"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertEqual(manifest["route_decision"]["status"], "refused")
+            self.assertEqual(manifest["replay"]["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertEqual(replay_evidence["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertEqual(rust_report["generated_draft"]["status"], "blocked")
+            self.assertFalse(profile["accepted_evidence_authoritative"])
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(final["accepted_evidence_authoritative"])
+            self.assertFalse(final["generated_draft_semantic_pass"])
+            self.assertEqual(diff["diff_gate"], "schema_aware_c_rust_diff")
+            self.assertEqual(diff["blocked_by"], [])
+            self.assertTrue(diff["accepted_diff_required"])
+            self.assertEqual(diff["required_inputs"]["c_oracle_actual_status"], "C_ORACLE_GENERATED")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "passed")
+            self.assertEqual(diff["required_inputs"]["schema_diff_actual_status"], "passed")
+            self.assertIn("accepted_diff", diff)
+            self.assertEqual(negative["negative_diff_gate"], "schema_aware_negative_diff")
+            self.assertEqual(negative["blocked_by"], [])

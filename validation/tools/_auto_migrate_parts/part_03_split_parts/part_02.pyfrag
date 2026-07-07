@@ -1,0 +1,229 @@
+        write_text(stderr_log, "cargo not found on PATH\n")
+        return {
+            "status": "rustc_not_found",
+            "attempted": False,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust generated crate compile check skipped because cargo was not found on PATH"],
+        }
+
+    argv = [cargo, "build"]
+    command["argv"] = argv
+    env = os.environ.copy()
+    env.update(env_overrides)
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=str(crate_root),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        write_text(stdout_log, exc.stdout or "")
+        write_text(stderr_log, exc.stderr or f"cargo build timed out after {timeout_seconds} seconds\n")
+        command["exit_status"] = "timeout"
+        command["returncode"] = -1
+        return {
+            "status": "compile_timeout",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust generated crate cargo compile check timed out"],
+        }
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        command["exit_status"] = "error"
+        command["returncode"] = -1
+        return {
+            "status": "compile_error",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust generated crate cargo compile check could not start: {exc}"],
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    command["returncode"] = result.returncode
+    if result.returncode != 0:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust generated crate cargo compile check exited with {result.returncode}"],
+        }
+
+    artifact_path = c2rust_generated_crate_artifact(crate_root)
+    if artifact_path is None:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust generated crate cargo compile check passed without producing an rlib artifact"],
+        }
+
+    stable_artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+    shutil.copyfile(artifact_path, stable_artifact_path)
+    return {
+        "status": "passed",
+        "attempted": True,
+        "semantic_pass": False,
+        "candidate_output": candidate_output,
+        "command": command,
+        "artifact": {
+            "path": rel(stable_artifact_path),
+            "status": "compiled",
+            "sha256": sha256(stable_artifact_path),
+        },
+        "diagnostics": [],
+    }
+
+
+def compile_c2rust_baseline_output(
+    output_path: Path,
+    evidence_dir: Path,
+    prefix: str,
+    *,
+    crate_root: Path | None = None,
+) -> dict[str, Any]:
+    timeout_seconds = 120
+    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stdout.log"
+    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stderr.log"
+    artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
+    candidate_output = {
+        "path": rel(output_path),
+        "status": "generated",
+        "sha256": sha256(output_path),
+    }
+    if crate_root is not None and (crate_root / "Cargo.toml").exists():
+        return compile_c2rust_generated_crate(
+            output_path=output_path,
+            evidence_dir=evidence_dir,
+            prefix=prefix,
+            crate_root=crate_root,
+            candidate_output=candidate_output,
+            timeout_seconds=timeout_seconds,
+        )
+    rustc = shutil.which("rustc")
+    command: dict[str, Any] = {
+        "argv": [],
+        "working_directory": rel(evidence_dir),
+        "stdout_log": rel(stdout_log),
+        "stderr_log": rel(stderr_log),
+        "timeout_seconds": timeout_seconds,
+        "exit_status": "not_executed",
+        "returncode": None,
+    }
+    if rustc is None:
+        write_text(stdout_log, "")
+        write_text(stderr_log, "rustc not found on PATH\n")
+        return {
+            "status": "rustc_not_found",
+            "attempted": False,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output compile check skipped because rustc was not found on PATH"],
+        }
+
+    argv = [
+        rustc,
+        "--crate-type",
+        "lib",
+        str(output_path),
+        "-o",
+        str(artifact_path),
+    ]
+    command["argv"] = argv
+    try:
+        result = subprocess.run(
+            argv,
+            cwd=str(evidence_dir),
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        write_text(stdout_log, exc.stdout or "")
+        write_text(stderr_log, exc.stderr or f"rustc timed out after {timeout_seconds} seconds\n")
+        command["exit_status"] = "timeout"
+        command["returncode"] = -1
+        return {
+            "status": "compile_timeout",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output rustc compile check timed out"],
+        }
+    except Exception as exc:
+        write_text(stdout_log, "")
+        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
+        command["exit_status"] = "error"
+        command["returncode"] = -1
+        return {
+            "status": "compile_error",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust baseline output rustc compile check could not start: {exc}"],
+        }
+
+    write_text(stdout_log, result.stdout or "")
+    write_text(stderr_log, result.stderr or "")
+    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
+    command["returncode"] = result.returncode
+    if result.returncode != 0:
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": [f"C2Rust baseline output rustc compile check exited with {result.returncode}"],
+        }
+    if not artifact_path.exists():
+        return {
+            "status": "failed",
+            "attempted": True,
+            "semantic_pass": False,
+            "candidate_output": candidate_output,
+            "command": command,
+            "artifact": None,
+            "diagnostics": ["C2Rust baseline output rustc compile check passed without producing an artifact"],
+        }
+
+    return {
+        "status": "passed",
+        "attempted": True,
+        "semantic_pass": False,
+        "candidate_output": candidate_output,
+        "command": command,
+        "artifact": {
+            "path": rel(artifact_path),
+            "status": "compiled",
+            "sha256": sha256(artifact_path),
+        },
+        "diagnostics": [],
+    }

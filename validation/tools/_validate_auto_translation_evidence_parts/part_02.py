@@ -7,16 +7,19 @@ _C2R_SPLIT_PARTS_DIR = _C2RSplitPath(_C2RSplitFrame().f_code.co_filename).with_n
 _C2R_SPLIT_PART_NAMES = (
     "part_00.pyfrag",
     "part_01.pyfrag",
+    "part_02.pyfrag",
 )
 _C2R_SPLIT_SOURCE = "".join(
     (_C2R_SPLIT_PARTS_DIR / _C2R_SPLIT_PART_NAME).read_text(encoding="utf-8")
     for _C2R_SPLIT_PART_NAME in _C2R_SPLIT_PART_NAMES
 )
 exec(compile(_C2R_SPLIT_SOURCE, __file__, "exec"), globals())
-del (
-    _C2RSplitPath,
-    _C2RSplitFrame,
-    _C2R_SPLIT_PARTS_DIR,
-    _C2R_SPLIT_PART_NAMES,
-    _C2R_SPLIT_SOURCE,
-)
+for _C2R_SPLIT_TEMP_NAME in (
+    "_C2RSplitPath",
+    "_C2RSplitFrame",
+    "_C2R_SPLIT_PARTS_DIR",
+    "_C2R_SPLIT_PART_NAMES",
+    "_C2R_SPLIT_SOURCE",
+):
+    globals().pop(_C2R_SPLIT_TEMP_NAME, None)
+del _C2R_SPLIT_TEMP_NAME

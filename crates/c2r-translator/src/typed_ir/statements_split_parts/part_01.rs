@@ -1,3 +1,322 @@
+fn emit_for_stmt(
+    init: &[IrStmt],
+    condition: Option<&IrExpr>,
+    step: Option<&IrStmt>,
+    body: &[IrStmt],
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let indent = "    ".repeat(indent_level);
+    let inner_indent = "    ".repeat(indent_level + 1);
+    let mut loop_symbols = symbols.clone();
+    let mut block = String::new();
+    block.push_str(&format!("{indent}{{\n"));
+
+    for (index, init) in init.iter().enumerate() {
+        validate_for_init_stmt(init)?;
+        let line = emit_stmt(
+            init,
+            return_type,
+            indent_level + 1,
+            &mut loop_symbols,
+            context,
+            LoopContext::None,
+        )
+        .map_err(|detail| format!("for init[{index}] {detail}"))?;
+        block.push_str(&line);
+    }
+
+    let condition = match condition {
+        Some(condition) => emit_condition_expr(condition, &loop_symbols, context)
+            .map_err(|detail| format!("for condition {detail}"))?,
+        None => "true".to_string(),
+    };
+    block.push_str(&format!("{inner_indent}while {condition} {{\n"));
+
+    let mut body_symbols = loop_symbols.clone();
+    let body_loop_context = step
+        .map(|step| LoopContext::For { step })
+        .unwrap_or(LoopContext::While);
+    for (index, stmt) in body.iter().enumerate() {
+        let line = emit_stmt(
+            stmt,
+            return_type,
+            indent_level + 2,
+            &mut body_symbols,
+            context,
+            body_loop_context,
+        )
+        .map_err(|detail| format!("for body[{index}].{detail}"))?;
+        block.push_str(&line);
+    }
+
+    if let Some(step) = step {
+        validate_for_step_stmt(step)?;
+        let line = emit_stmt(
+            step,
+            return_type,
+            indent_level + 2,
+            &mut loop_symbols,
+            context,
+            LoopContext::None,
+        )
+        .map_err(|detail| format!("for step {detail}"))?;
+        block.push_str(&line);
+    }
+
+    block.push_str(&format!("{inner_indent}}}\n"));
+    block.push_str(&format!("{indent}}}\n"));
+    Ok(block)
+}
+
+fn validate_for_init_stmt(stmt: &IrStmt) -> Result<(), String> {
+    match stmt {
+        IrStmt::Decl { .. } | IrStmt::Assign { .. } => Ok(()),
+        _ => Err("for init must be a Decl or Assign statement".to_string()),
+    }
+}
+
+fn validate_for_step_stmt(stmt: &IrStmt) -> Result<(), String> {
+    match stmt {
+        IrStmt::Assign { .. } => Ok(()),
+        _ => Err("for step must be an Assign statement".to_string()),
+    }
+}
+
+fn emit_assignment_target<'a>(
+    target: &'a IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<(String, &'a IrType), String> {
+    match target {
+        IrExpr::Var { name, ty, .. } => {
+            if !symbols.contains(name) {
+                return Err(format!("assign target {name} is not declared"));
+            }
+            let name = emit_identifier(name, "assign target")?;
+            Ok((name, ty))
+        }
+        IrExpr::Index {
+            base, index, ty, ..
+        } => {
+            let target = emit_index_assignment_target(base, index, ty, symbols, context)?;
+            Ok((target, ty))
+        }
+        IrExpr::Deref { ptr, ty, .. } => {
+            let target = emit_mutable_pointer_deref_assignment_target(ptr, ty, symbols, context)?;
+            Ok((target, ty))
+        }
+        IrExpr::Member {
+            base,
+            field,
+            ty,
+            is_arrow,
+            ..
+        } => {
+            if *is_arrow {
+                let target = emit_mutable_record_pointer_member_assignment_target(
+                    base, field, ty, symbols, context,
+                )?;
+                return Ok((target, ty));
+            }
+            let target = emit_member_expr(base, field, ty, *is_arrow, symbols, context)?;
+            Ok((target, ty))
+        }
+        _ => Err(
+            "assign target must be Var, local fixed array Index, pointer Deref, or by-value record Member"
+                .to_string(),
+        ),
+    }
+}
+
+fn emit_mutable_record_pointer_identity_return(
+    value: &IrExpr,
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    if mutable_record_pointer_pointee_type(return_type).is_none() {
+        return Ok(None);
+    }
+    let IrExpr::Var { name, ty, .. } = value else {
+        return Err(
+            "mutable record pointer return must return the owned record pointer parameter"
+                .to_string(),
+        );
+    };
+    if ty != return_type {
+        return Err(format!(
+            "mutable record pointer return type {} does not match function return type {}",
+            type_label(ty),
+            type_label(return_type)
+        ));
+    }
+    if !symbols.contains(name) {
+        return Err(format!(
+            "mutable record pointer return value {name} is not declared"
+        ));
+    }
+    if !context.is_mutable_record_pointer_write_param(name) {
+        return Err(format!(
+            "mutable record pointer return {name} requires mutable record pointer ownership evidence"
+        ));
+    }
+    let indent = "    ".repeat(indent_level);
+    let name = emit_identifier(name, "mutable record pointer return value")?;
+    Ok(Some(format!("{indent}return {name};\n")))
+}
+
+fn emit_mutable_record_pointer_member_assignment_target(
+    base: &IrExpr,
+    field: &str,
+    ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<String, String> {
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base
+    else {
+        return Err("arrow member assignment base must be a record pointer variable".to_string());
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!(
+            "arrow member assignment base {base_name} is not declared"
+        ));
+    }
+    if !context.is_mutable_record_pointer_write_param(base_name) {
+        return Err(format!(
+            "arrow member assignment base {base_name} requires mutable record pointer ownership evidence"
+        ));
+    }
+    mutable_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "arrow member assignment base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    emit_mutable_record_pointer_field_type(ty)
+        .map_err(|detail| format!("mutable record pointer arrow field {field} has {detail}"))?;
+    let base_name = emit_identifier(base_name, "arrow member assignment base")?;
+    let field = emit_identifier(field, "arrow member assignment field")?;
+    Ok(format!("{base_name}.{field}"))
+}
+
+fn emit_mutable_record_pointer_member_compound_assignment_value(
+    target: &IrExpr,
+    value: &IrExpr,
+    emitted_target: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Binary {
+        op, lhs, rhs, ty, ..
+    } = value
+    else {
+        return Ok(None);
+    };
+    if !same_direct_mutable_record_pointer_member(lhs, target, context)? {
+        return Ok(None);
+    }
+    if let Some(reason) = mutable_record_pointer_field_compound_rhs_rejection_reason(rhs) {
+        return Err(reason);
+    }
+    let op_token = emit_binary_op(op)?;
+    validate_binary_operand_types(op_token, lhs, rhs, ty)?;
+    validate_binary_runtime_contract(op, lhs, rhs, ty, &context.policy)?;
+    let rhs = emit_expr(rhs, symbols, context).map_err(|detail| {
+        format!("mutable record pointer field compound assignment RHS {detail}")
+    })?;
+    Ok(Some(emit_binary_result_expr(
+        op,
+        op_token,
+        emitted_target,
+        &rhs,
+        ty,
+    )))
+}
+
+fn emit_opaque_record_pointer_field_assignment_value(
+    target: &IrExpr,
+    value: &IrExpr,
+    target_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<Option<EmittedExpr>, String> {
+    let Some(target_pointer_ty) = emit_opaque_void_pointer_type(target_ty) else {
+        return Ok(None);
+    };
+    let Some((base_name, _, _, _)) =
+        direct_mutable_record_pointer_opaque_member_parts(target, context)?
+    else {
+        return Err(format!(
+            "{path} opaque pointer field target requires direct mutable record pointer ownership evidence"
+        ));
+    };
+    if !context.is_mutable_record_pointer_write_param(base_name) {
+        return Err(format!(
+            "{path} opaque pointer field target {base_name} requires mutable record pointer ownership evidence"
+        ));
+    }
+    let expr = match value {
+        IrExpr::Var { .. } => emit_opaque_record_pointer_field_value_var(
+            value,
+            &target_pointer_ty,
+            symbols,
+            context,
+            path,
+        )?,
+        IrExpr::Cast {
+            target: cast_target,
+            expr,
+            ..
+        } => {
+            let cast_target_ty = emit_opaque_void_pointer_type(cast_target).ok_or_else(|| {
+                format!(
+                    "{path} opaque pointer cast target {} is unsupported",
+                    type_label(cast_target)
+                )
+            })?;
+            if cast_target_ty != target_pointer_ty {
+                return Err(format!(
+                    "{path} opaque pointer cast target {cast_target_ty} does not match field type {target_pointer_ty}"
+                ));
+            }
+            let source_ty = expr_type(expr)
+                .ok_or_else(|| format!("{path} opaque pointer cast source type is unsupported"))?;
+            let source_pointer_ty = emit_opaque_void_pointer_type(source_ty).ok_or_else(|| {
+                format!(
+                    "{path} opaque pointer cast source {} is unsupported",
+                    type_label(source_ty)
+                )
+            })?;
+            let expr = emit_opaque_record_pointer_field_value_var(
+                expr,
+                &source_pointer_ty,
+                symbols,
+                context,
+                &format!("{path} opaque pointer cast source"),
+            )?;
+            format!("({expr} as {target_pointer_ty})")
+        }
+        _ => {
+            return Err(format!(
+                "{path} opaque pointer field write requires an opaque pointer param value or opaque pointer cast"
+            ))
+        }
+    };
+    Ok(Some(EmittedExpr {
+        prelude: String::new(),
+        expr,
+    }))
+}
+
 fn emit_opaque_record_pointer_field_value_var(
     expr: &IrExpr,
     expected_pointer_ty: &str,
@@ -142,337 +461,4 @@ fn mutable_record_pointer_field_compound_rhs_rejection_reason(value: &IrExpr) ->
                 .to_string(),
         ),
     }
-}
-
-fn emit_index_assignment_target(
-    base: &IrExpr,
-    index: &IrExpr,
-    ty: &IrType,
-    symbols: &HashSet<String>,
-    context: &EmitContext,
-) -> Result<String, String> {
-    let IrExpr::Var {
-        name: base_name,
-        ty: base_ty,
-        ..
-    } = base
-    else {
-        return Err("assign index base must be Var".to_string());
-    };
-    if context.readonly_global(base_name).is_some() {
-        return Err(format!(
-            "assign index base {base_name} is a readonly global"
-        ));
-    }
-    if !symbols.contains(base_name) {
-        return Err(format!("assign index base {base_name} is not declared"));
-    }
-    if base_ty.is_const {
-        return Err(format!(
-            "assign index base {base_name} has const type {}",
-            type_label(base_ty)
-        ));
-    }
-    let element_ty = fixed_integer_array_element_type(base_ty)
-        .or_else(|| mutable_pointer_slice_element_type(base_ty))
-        .ok_or_else(|| {
-            format!(
-                "assign index base {base_name} has unsupported type {}",
-                type_label(base_ty)
-            )
-        })?;
-    let element_ty = emit_scalar_type(element_ty)
-        .map_err(|detail| format!("assign index element has {detail}"))?;
-    let result_ty =
-        emit_scalar_type(ty).map_err(|detail| format!("assign index result has {detail}"))?;
-    if result_ty != element_ty {
-        return Err(format!(
-            "assign index result type {result_ty} does not match element type {element_ty}"
-        ));
-    }
-    let index_ty =
-        expr_type(index).ok_or_else(|| "assign index operand type is unsupported".to_string())?;
-    if !is_integer_type(index_ty) {
-        return Err(format!(
-            "assign index operand type {} is unsupported",
-            type_label(index_ty)
-        ));
-    }
-    let base = emit_identifier(base_name, "assign index base")?;
-    let index = emit_expr(index, symbols, context)
-        .map_err(|detail| format!("assign index operand {detail}"))?;
-    Ok(format!("{base}[{index} as usize]"))
-}
-
-fn emit_mutable_pointer_deref_assignment_target(
-    ptr: &IrExpr,
-    ty: &IrType,
-    symbols: &HashSet<String>,
-    context: &EmitContext,
-) -> Result<String, String> {
-    if let Some(target) =
-        emit_mutable_pointer_add_deref_assignment_target(ptr, ty, symbols, context)?
-    {
-        return Ok(target);
-    }
-    let IrExpr::Var {
-        name: ptr_name,
-        ty: ptr_ty,
-        ..
-    } = ptr
-    else {
-        return Err("deref assignment pointer must be Var".to_string());
-    };
-    if !symbols.contains(ptr_name) {
-        return Err(format!(
-            "deref assignment pointer {ptr_name} is not declared"
-        ));
-    }
-    if context.is_nullable_pointer_param(ptr_name) {
-        return Err(format!(
-            "nullable pointer param {ptr_name} cannot be dereference-assigned in the bounded emitter"
-        ));
-    }
-    let element_ty = mutable_pointer_slice_element_type(ptr_ty).ok_or_else(|| {
-        format!(
-            "deref assignment pointer {ptr_name} has unsupported type {}",
-            type_label(ptr_ty)
-        )
-    })?;
-    let element_ty = emit_scalar_type(element_ty)
-        .map_err(|detail| format!("deref assignment element has {detail}"))?;
-    let deref_ty =
-        emit_scalar_type(ty).map_err(|detail| format!("deref assignment result has {detail}"))?;
-    if deref_ty != element_ty {
-        return Err(format!(
-            "deref assignment result type {deref_ty} does not match pointer element type {element_ty}"
-        ));
-    }
-    let ptr_name = emit_identifier(ptr_name, "deref assignment pointer")?;
-    Ok(format!("{ptr_name}[0usize]"))
-}
-
-fn emit_mutable_pointer_add_deref_assignment_target(
-    ptr: &IrExpr,
-    ty: &IrType,
-    symbols: &HashSet<String>,
-    context: &EmitContext,
-) -> Result<Option<String>, String> {
-    let IrExpr::Binary {
-        op: IrBinOp::Add,
-        lhs,
-        rhs,
-        ty: add_ty,
-        ..
-    } = ptr
-    else {
-        return Ok(None);
-    };
-    let Some((base, index)) = mutable_pointer_add_operands(lhs, rhs) else {
-        return Ok(None);
-    };
-    let IrExpr::Var {
-        name: base_name,
-        ty: base_ty,
-        ..
-    } = base
-    else {
-        return Err("deref pointer add assignment base must be Var".to_string());
-    };
-    if add_ty != base_ty {
-        return Err(format!(
-            "deref pointer add assignment result type {} does not match base type {}",
-            type_label(add_ty),
-            type_label(base_ty)
-        ));
-    }
-    if !symbols.contains(base_name) {
-        return Err(format!(
-            "deref pointer add assignment base {base_name} is not declared"
-        ));
-    }
-    if context.is_nullable_pointer_param(base_name) {
-        return Err(format!(
-            "nullable pointer param {base_name} cannot be offset-dereference-assigned in the bounded emitter"
-        ));
-    }
-    let element_ty = mutable_pointer_slice_element_type(base_ty).ok_or_else(|| {
-        format!(
-            "deref pointer add assignment base {base_name} has unsupported type {}",
-            type_label(base_ty)
-        )
-    })?;
-    let element_ty = emit_scalar_type(element_ty)
-        .map_err(|detail| format!("deref assignment element has {detail}"))?;
-    let deref_ty =
-        emit_scalar_type(ty).map_err(|detail| format!("deref assignment result has {detail}"))?;
-    if deref_ty != element_ty {
-        return Err(format!(
-            "deref assignment result type {deref_ty} does not match pointer element type {element_ty}"
-        ));
-    }
-    let index_ty = expr_type(index)
-        .ok_or_else(|| "deref pointer add index type is unsupported".to_string())?;
-    if !is_integer_type(index_ty) {
-        return Err(format!(
-            "deref pointer add index type {} is unsupported",
-            type_label(index_ty)
-        ));
-    }
-    validate_readonly_pointer_add_index_expr(index)?;
-    let base = emit_identifier(base_name, "deref pointer add assignment base")?;
-    let index = emit_expr(index, symbols, context)
-        .map_err(|detail| format!("deref pointer add index {detail}"))?;
-    Ok(Some(format!("{base}[{index} as usize]")))
-}
-
-fn emit_postfix_decrement_while_loop(
-    condition: &IrExpr,
-    body: &[IrStmt],
-    return_type: &IrType,
-    indent_level: usize,
-    symbols: &HashSet<String>,
-    context: &EmitContext,
-) -> Result<Option<String>, String> {
-    let IrExpr::IncDec {
-        target,
-        op: IrIncDecOp::Dec,
-        prefix: false,
-        ty,
-        ..
-    } = condition
-    else {
-        return Ok(None);
-    };
-    let IrExpr::Var {
-        name,
-        ty: target_ty,
-        ..
-    } = target.as_ref()
-    else {
-        return Ok(None);
-    };
-    if !symbols.contains(name) {
-        return Err(format!(
-            "while condition decrement target {name} is not declared"
-        ));
-    }
-    if !is_usize(target_ty) || !is_usize(ty) {
-        return Ok(None);
-    }
-
-    let name = emit_identifier(name, "while condition decrement target")?;
-    let counter_ty = emit_scalar_type(target_ty)
-        .map_err(|detail| format!("while condition decrement target has {detail}"))?;
-    let zero = zero_literal_for_type(target_ty)
-        .map_err(|detail| format!("while condition decrement zero {detail}"))?;
-    let one = emit_integer_literal(1, target_ty)
-        .map_err(|detail| format!("while condition decrement step {detail}"))?;
-    let snapshot = emit_identifier(
-        &first_available_temp_name(&format!("{name}_before_dec"), symbols),
-        "while condition decrement snapshot",
-    )?;
-
-    let indent = "    ".repeat(indent_level);
-    let inner_indent = "    ".repeat(indent_level + 1);
-    let break_indent = "    ".repeat(indent_level + 2);
-    let mut block = String::new();
-    block.push_str(&format!("{indent}loop {{\n"));
-    block.push_str(&format!(
-        "{inner_indent}let {snapshot}: {counter_ty} = {name};\n"
-    ));
-    block.push_str(&format!(
-        "{inner_indent}{name} = {name}.wrapping_sub({one});\n"
-    ));
-    block.push_str(&format!("{inner_indent}if {snapshot} == {zero} {{\n"));
-    block.push_str(&format!("{break_indent}break;\n"));
-    block.push_str(&format!("{inner_indent}}}\n"));
-
-    let mut loop_symbols = symbols.clone();
-    for (index, stmt) in body.iter().enumerate() {
-        let line = emit_stmt(
-            stmt,
-            return_type,
-            indent_level + 1,
-            &mut loop_symbols,
-            context,
-            LoopContext::While,
-        )
-        .map_err(|detail| format!("while body[{index}].{detail}"))?;
-        block.push_str(&line);
-    }
-    block.push_str(&format!("{indent}}}\n"));
-    Ok(Some(block))
-}
-
-fn emit_prefix_decrement_while_loop(
-    condition: &IrExpr,
-    body: &[IrStmt],
-    return_type: &IrType,
-    indent_level: usize,
-    symbols: &HashSet<String>,
-    context: &EmitContext,
-) -> Result<Option<String>, String> {
-    let IrExpr::IncDec {
-        target,
-        op: IrIncDecOp::Dec,
-        prefix: true,
-        ty,
-        ..
-    } = condition
-    else {
-        return Ok(None);
-    };
-    let IrExpr::Var {
-        name,
-        ty: target_ty,
-        ..
-    } = target.as_ref()
-    else {
-        return Ok(None);
-    };
-    if !symbols.contains(name) {
-        return Err(format!(
-            "while condition prefix decrement target {name} is not declared"
-        ));
-    }
-    if !is_usize(target_ty) || !is_usize(ty) {
-        return Ok(None);
-    }
-
-    let name = emit_identifier(name, "while condition prefix decrement target")?;
-    let _counter_ty = emit_scalar_type(target_ty)
-        .map_err(|detail| format!("while condition prefix decrement target has {detail}"))?;
-    let zero = zero_literal_for_type(target_ty)
-        .map_err(|detail| format!("while condition prefix decrement zero {detail}"))?;
-    let one = emit_integer_literal(1, target_ty)
-        .map_err(|detail| format!("while condition prefix decrement step {detail}"))?;
-
-    let indent = "    ".repeat(indent_level);
-    let inner_indent = "    ".repeat(indent_level + 1);
-    let break_indent = "    ".repeat(indent_level + 2);
-    let mut block = String::new();
-    block.push_str(&format!("{indent}loop {{\n"));
-    block.push_str(&format!(
-        "{inner_indent}{name} = {name}.wrapping_sub({one});\n"
-    ));
-    block.push_str(&format!("{inner_indent}if {name} == {zero} {{\n"));
-    block.push_str(&format!("{break_indent}break;\n"));
-    block.push_str(&format!("{inner_indent}}}\n"));
-
-    let mut loop_symbols = symbols.clone();
-    for (index, stmt) in body.iter().enumerate() {
-        let line = emit_stmt(
-            stmt,
-            return_type,
-            indent_level + 1,
-            &mut loop_symbols,
-            context,
-            LoopContext::While,
-        )
-        .map_err(|detail| format!("while body[{index}].{detail}"))?;
-        block.push_str(&line);
-    }
-    block.push_str(&format!("{indent}}}\n"));
-    Ok(Some(block))
 }

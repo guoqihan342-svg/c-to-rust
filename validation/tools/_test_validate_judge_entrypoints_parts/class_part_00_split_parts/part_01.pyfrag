@@ -1,0 +1,428 @@
+        write_json(temp_manifest, manifest)
+        original_load_json = validator.load_json
+
+        def load_json_with_agent_drift(path: Path) -> dict:
+            payload = original_load_json(path)
+            if Path(path).as_posix().endswith(
+                "config/competition-env/review-checklists/opencode-glm-host-acceptance.json"
+            ):
+                payload["required_agent"] = "default"
+            return payload
+
+        with mock.patch.object(validator, "load_json", side_effect=load_json_with_agent_drift):
+            with self.assertRaisesRegex(
+                ValueError,
+                "opencode-glm-host-acceptance required_agent must be c2rust-migrator",
+            ):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_competition_env_bundle_rejects_bootstrap_source_pin_drift(self) -> None:
+        source_manifest = REPO_ROOT / "config/competition-env/bundle-manifest.json"
+        manifest = json.loads(source_manifest.read_text(encoding="utf-8"))
+        temp_config = write_temp_config(load_default_config())
+        temp_manifest = temp_config.parent / "bundle-manifest.json"
+        write_json(temp_manifest, manifest)
+        original_read_text = Path.read_text
+
+        def read_text_with_bootstrap_drift(path: Path, *args: object, **kwargs: object) -> str:
+            text = original_read_text(path, *args, **kwargs)
+            if Path(path).as_posix().endswith("scripts/bootstrap_flashdb_sources.sh"):
+                return text.replace(
+                    'FLASHDB_COMMIT="f9d0421315c564fb890a1b14eee77b290e0d7bbe"',
+                    'FLASHDB_COMMIT="0000000000000000000000000000000000000000"',
+                )
+            return text
+
+        with mock.patch.object(Path, "read_text", read_text_with_bootstrap_drift):
+            with self.assertRaisesRegex(ValueError, "bootstrap_flashdb_sources.sh FLASHDB_COMMIT must match"):
+                validator.validate_competition_env_bundle_contract(
+                    load_default_config(),
+                    manifest_path=temp_manifest,
+                    repo_root=REPO_ROOT,
+                )
+
+    def test_environment_profile_hash_mismatch_preserves_claim_boundary_for_test_contract(self) -> None:
+        config = load_default_config()
+        config["environment_profile"]["sha256"] = "0" * 64
+        temp_config = write_temp_config(config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        joined_errors = "\n".join(result["errors"])
+        self.assertIn("artifact ref sha256 mismatch for config/competition-env/environment.json", joined_errors)
+        self.assertNotIn("test_contract.semantic_claim_source must match claim_boundary", joined_errors)
+
+    def test_test_contract_requires_portable_python3_b_command_contract(self) -> None:
+        config = load_default_config()
+        config["test_contract"].pop("commands_must_use_portable_python3_b", None)
+        config["test_contract"]["commands_must_use_python_b"] = True
+        temp_config = write_temp_config(config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any("test_contract.commands_must_use_portable_python3_b must be true" in error for error in result["errors"]),
+            result["errors"],
+        )
+
+    def test_test_contract_required_harness_features_must_match_canonical_set(self) -> None:
+        config = load_default_config()
+        config["test_contract"]["required_harness_features"] = [
+            feature
+            for feature in config["test_contract"]["required_harness_features"]
+            if feature != "h6_judge_reports"
+        ]
+        temp_config = write_temp_config(config)
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(
+                "test_contract.required_harness_features must be "
+                "['h1_evaluate_one_click', 'h2_multi_worker_fanout', "
+                "'h3_precise_repair_self_heal', 'h4_before_after_exhibit', "
+                "'h5_context_management', 'h6_judge_reports']"
+                in error
+                for error in result["errors"]
+            ),
+            result["errors"],
+        )
+
+    def test_opencode_profile_requires_explicit_launch_policy_fields(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile.pop("opencode_skip_permissions", None)
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-missing-policy.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "opencode-missing-policy-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        opencode_entry = entrypoint_by_id(result, "opencode_multi_worker_evaluate_profile")
+        self.assertEqual(opencode_entry["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile opencode_skip_permissions must be a boolean",
+            result["errors"],
+        )
+
+    def test_opencode_profile_binds_repo_owned_agent_runbook(self) -> None:
+        result = validator.validate_config(validator.DEFAULT_CONFIG, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "passed")
+        opencode_entry = entrypoint_by_id(result, "opencode_multi_worker_evaluate_profile")
+        self.assertEqual(
+            opencode_entry["profile_contract"]["opencode_launch_policy"]["opencode_agent"],
+            "c2rust-migrator",
+        )
+        self.assertIs(opencode_entry["profile_contract"]["opencode_launch_policy"]["auto_retry"], True)
+
+    def test_opencode_profile_requires_auto_retry_enabled(self) -> None:
+        policy = opencode_launch_policy()
+        policy["auto_retry"] = False
+
+        with self.assertRaisesRegex(ValueError, "opencode profile auto_retry must be true"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
+    def test_opencode_profile_rejects_wrong_agent_runbook(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["opencode_agent"] = "default"
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-wrong-agent.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "opencode-wrong-agent-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile opencode_agent must be c2rust-migrator",
+            result["errors"],
+        )
+
+    def test_multi_worker_entrypoint_requires_multi_worker_profile(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["workers"] = source_profile["workers"][:1]
+        source_profile["max_workers"] = 1
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "explicit-workers-single-worker.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "single-worker-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "multi_worker_evaluate_profile multi-worker profile workers must contain at least 2 workers",
+            result["errors"],
+        )
+
+    def test_opencode_profile_requires_explicit_model(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["opencode_model"] = None
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-null-model.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile opencode_model must be a non-empty string",
+            result["errors"],
+        )
+
+    def test_opencode_entrypoint_requires_opencode_profile_mode(self) -> None:
+        config = load_default_config()
+        entry = entrypoint_by_id(config, "opencode_multi_worker_evaluate_profile")
+        source_profile = json.loads((REPO_ROOT / entry["profile"]["path"]).read_text(encoding="utf-8"))
+        source_profile["mode"] = "deterministic"
+        temp_config = write_temp_config(config)
+        profile_path = temp_config.parent / "opencode-profile-deterministic-mode.json"
+        write_json(profile_path, source_profile)
+        profile_rel = repo_relative(profile_path)
+        entry["profile"]["path"] = profile_rel
+        entry["profile"]["sha256"] = validator.sha256_file(profile_path)
+        entry["command"] = entry["command"].replace(
+            "config/competition-env/planned-batches/flashdb-fdb-utils-opencode-explicit-workers.json",
+            profile_rel,
+        )
+        manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+        manifest_profile = validator.manifest_profile_payload(manifest)
+        manifest_profile["path"] = profile_rel
+        manifest_profile["sha256"] = entry["profile"]["sha256"]
+        command_key = validator.expected_manifest_reproduction_command_key(entry)
+        manifest["reproduction"][command_key] = entry["command"]
+        manifest_path = temp_config.parent / "opencode-deterministic-mode-tracked-manifest.json"
+        entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+        temp_config.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        result = validator.validate_config(temp_config, repo_root=REPO_ROOT)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn(
+            "opencode_multi_worker_evaluate_profile opencode profile mode must be opencode",
+            result["errors"],
+        )
+
+    def test_opencode_profile_requires_glm_51_model(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_model"] = "gpt-5.4"
+
+        with self.assertRaisesRegex(ValueError, "opencode profile opencode_model must be GLM-5.1"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
+    def test_opencode_profile_requires_opencode_command(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_command"] = "codex"
+
+        with self.assertRaisesRegex(ValueError, "opencode profile opencode_command must be opencode"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
+    def test_opencode_profile_requires_max_variant(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_variant"] = "default"
+
+        with self.assertRaisesRegex(ValueError, "opencode profile opencode_variant must be max"):
+            validator.validate_opencode_profile_launch_policy(policy, entry_id="opencode_multi_worker_evaluate_profile")
+
+    def test_opencode_launch_policy_binding_requires_glm_51(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_model"] = "gpt-5.4"
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_model must be GLM-5.1"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_opencode_launch_policy_binding_requires_max_variant(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_variant"] = "default"
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_variant must be max"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_opencode_launch_policy_binding_requires_repo_owned_agent(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_agent"] = None
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_agent must be c2rust-migrator"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_opencode_launch_policy_binding_rejects_wrong_agent(self) -> None:
+        policy = opencode_launch_policy()
+        policy["opencode_agent"] = "default"
+        policy_sha = opencode_launch_policy_sha256(policy)
+
+        with self.assertRaisesRegex(ValueError, "launch_policy.opencode_agent must be c2rust-migrator"):
+            validator.validate_opencode_launch_policy_binding(
+                policy,
+                policy_sha,
+                "opencode_agent_runtime.opencode_preflight_report",
+            )
+
+    def test_cli_writes_judge_entrypoints_readiness_report(self) -> None:
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-readiness-", dir=target_dir))
+        report_path = temp_dir / "summary" / "judge-entrypoints-readiness.json"
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "validation.tools.validate_judge_entrypoints",
+                "--config",
+                validator.DEFAULT_CONFIG.relative_to(REPO_ROOT).as_posix(),
+                "--out",
+                repo_relative(report_path),
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertTrue(report_path.is_file())
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["report_kind"], "judge-entrypoints-readiness")
+        self.assertEqual(report["status"], "passed")
+        self.assertFalse(report["semantic_gate"])
+        self.assertEqual(report["claim_boundary"]["semantic_claim_source"], "accepted_evidence_binding")
+        self.assertEqual(report["entrypoint_count"], 4)
+        self.assertIn("4 judge entrypoints ready", report["summary"]["headline"])
+        self.assertEqual(report["summary"]["readiness"]["configured_count"], 4)
+        self.assertEqual(report["summary"]["readiness"]["validation_status"], "passed")
+        self.assertFalse(report["summary"]["claim_boundary"]["semantic_gate"])
+        self.assertEqual(
+            [entry["id"] for entry in report["summary"]["entrypoints"]],
+            [
+                "competition_environment_smoke",
+                "before_after_judge_demo",
+                "multi_worker_evaluate_profile",
+                "opencode_multi_worker_evaluate_profile",
+            ],
+        )
+        smoke_focus = " ".join(report["summary"]["entrypoints"][0]["judge_focus"]).lower()
+        self.assertIn("competition environment", smoke_focus)
+        self.assertIn("smoke", smoke_focus)
+
+    def test_readiness_summary_classifies_stale_opencode_worker_report_artifact(self) -> None:
+        summary = validator.build_readiness_summary(
+            {
+                "status": "failed",
+                "entrypoint_count": 4,
+                "entrypoints": [
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                        "status": "failed",
+                        "proof_class": "local-simulation",
+                        "run_id": "harness-flashdb-opencode-explicit-workers-evaluate-profile-20260701",
+                    }
+                ],
+                "claim_boundary": {
+                    "semantic_claim_source": "accepted_evidence_binding",
+                    "generated_draft_semantic_pass": False,
+                    "translation_coverage_numerator": 0,
+                },
+                "errors": [
+                    "context ledger missing artifacts row for worker report: "
+                    "flashdb-opencode-worker-001-fdb-calc-crc32"
+                ],
+            }
+        )
+
+        self.assertEqual(summary["readiness"]["blocker_count"], 1)
+        self.assertEqual(
+            summary["readiness"]["blocker_root_cause_counts"],
+            {"opencode_artifacts_require_regeneration": 1},
+        )
+        self.assertEqual(
+            summary["blockers"][0]["recommended_action"],
+            "regenerate OpenCode artifacts on a real GLM-5.1/OpenCode host; do not hand-edit target artifacts",
+        )
+        self.assertEqual(summary["blockers"][0]["proof_class_effect"], "h9_release_blocker")

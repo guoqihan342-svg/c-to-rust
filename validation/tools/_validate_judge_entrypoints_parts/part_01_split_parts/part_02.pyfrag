@@ -1,0 +1,5 @@
+        "opencode_agent": agent,
+        "opencode_variant": variant,
+        "opencode_skip_permissions": skip_permissions,
+        "auto_retry": auto_retry,
+    }

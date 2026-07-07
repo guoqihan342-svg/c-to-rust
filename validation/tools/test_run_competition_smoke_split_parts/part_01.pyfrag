@@ -1,3 +1,303 @@
+                module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    confirm_competition_exact=True,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-opencode-glm-required-test",
+                )
+
+            environment_command = next(
+                command for command in fake_runner.commands if "toolchain-check.sh" in " ".join(command)
+            )
+            self.assertIn("REQUIRE_OPENCODE_GLM=1", " ".join(environment_command))
+
+    def test_competition_exact_summary_records_opencode_glm_model_probe(self) -> None:
+        module = load_smoke_module()
+        profile = module.load_profile(REPO_ROOT)
+        expected_os = profile["os"]
+        expected_toolchain = profile["toolchain"]
+        original_detect = module.detect_execution_environment
+        try:
+            module.detect_execution_environment = lambda: {
+                "kind": "competition-host",
+                "detected_ci": False,
+                "detected_wsl": False,
+                "competition_exact_host_attested": True,
+                "system": expected_os["name"],
+                "release": expected_os["kernel"],
+                "version": "competition-host",
+                "machine": "x86_64",
+                "kernel": expected_os["kernel"],
+                "python_version": expected_toolchain["python"],
+                "runner_name": "competition",
+            }
+            with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                out_root = Path(tmp) / "competition-smoke"
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    confirm_competition_exact=True,
+                    command_runner=FakeGlmCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-opencode-glm-probe-test",
+                )
+                self.assertEqual(result.exit_code, 0)
+                summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+                availability = summary["opencode_model_availability"]
+                stdout_text = (out_root / availability["logs"]["stdout"]).read_text(encoding="utf-8")
+                stderr_text = (out_root / availability["logs"]["stderr"]).read_text(encoding="utf-8")
+        finally:
+            module.detect_execution_environment = original_detect
+
+        self.assertIn("opencode_model_availability", summary)
+        availability = summary["opencode_model_availability"]
+        self.assertEqual(availability["status"], "available")
+        self.assertEqual(availability["required_model"], "GLM-5.1")
+        self.assertTrue(availability["model_listed"])
+        self.assertEqual(availability["argv"], ["opencode", "models"])
+        self.assertEqual(
+            availability["logs"],
+            {
+                "stdout": "logs/opencode-models.stdout.log",
+                "stderr": "logs/opencode-models.stderr.log",
+            },
+        )
+        self.assertEqual(stdout_text, "provider/GLM-5.1\n")
+        self.assertEqual(stderr_text, "")
+        self.assertEqual(availability["stdout_sha256"], hashlib.sha256(b"provider/GLM-5.1\n").hexdigest())
+        self.assertEqual(availability["stderr_sha256"], hashlib.sha256(b"").hexdigest())
+
+    def test_competition_exact_requires_vendored_clang_verification(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            with mock.patch.dict(module.os.environ, {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    confirm_competition_exact=True,
+                    command_runner=FakeGlmCommandRunner(fail_commands_containing={"--require-clang"}),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-test",
+                )
+
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(result.exit_code, 1)
+            failed_steps = [step for step in summary["steps"] if step["status"] == "failed"]
+            self.assertIn("vendored-clang-verification", [step["step"] for step in failed_steps])
+
+    def test_competition_exact_fails_when_detected_environment_has_limiting_deviations(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            original_detect = module.detect_execution_environment
+            try:
+                module.detect_execution_environment = lambda: {
+                    "kind": "windows-local",
+                    "detected_ci": False,
+                    "detected_wsl": False,
+                    "competition_exact_host_attested": True,
+                    "system": "Windows",
+                    "release": "11",
+                    "version": "10.0.26220",
+                    "machine": "AMD64",
+                    "kernel": "11",
+                    "python_version": "3.14.2",
+                    "runner_name": "local",
+                }
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="competition-exact",
+                    confirm_competition_exact=True,
+                    command_runner=FakeGlmCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-test",
+                )
+            finally:
+                module.detect_execution_environment = original_detect
+
+            summary = json.loads((out_root / "summary" / "competition-smoke-summary.json").read_text(encoding="utf-8"))
+            limiting_deviations = [
+                item for item in summary["environment_deviations"] if item["severity"] == "proof-class-limiting"
+            ]
+            self.assertTrue(limiting_deviations)
+            self.assertEqual(result.exit_code, 1)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+            self.assertIn("proof_class_limited_by_environment", summary["final_gate"]["reasons"])
+
+    def test_competition_exact_requires_host_attestation_even_when_profile_matches(self) -> None:
+        module = load_smoke_module()
+        profile = module.load_profile(REPO_ROOT)
+        expected_os = profile["os"]
+        expected_toolchain = profile["toolchain"]
+        matching_environment = {
+            "kind": "local-linux",
+            "detected_ci": False,
+            "detected_wsl": False,
+            "system": expected_os["name"],
+            "release": expected_os["kernel"],
+            "version": "competition-host",
+            "machine": "x86_64",
+            "kernel": expected_os["kernel"],
+            "python_version": expected_toolchain["python"],
+            "runner_name": "local",
+            "competition_exact_host_attested": False,
+        }
+
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            fake_runner = FakeCommandRunner()
+            original_detect = module.detect_execution_environment
+            original_clang_source = module.clang_source
+            try:
+                module.detect_execution_environment = lambda: dict(matching_environment)
+                module.clang_source = lambda _: "vendored"
+                with self.assertRaises(SystemExit) as raised:
+                    module.run_competition_smoke(
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        confirm_competition_exact=True,
+                        command_runner=fake_runner,
+                        repo_root=REPO_ROOT,
+                        run_id="smoke-exact-attestation-test",
+                    )
+            finally:
+                module.detect_execution_environment = original_detect
+                module.clang_source = original_clang_source
+
+            self.assertIn("COMPETITION_EXACT_HOST=1", str(raised.exception))
+            self.assertEqual(fake_runner.commands, [])
+            self.assertFalse((out_root / "summary" / "competition-smoke-summary.json").exists())
+
+    def test_competition_exact_stops_after_glm_probe_when_model_missing(self) -> None:
+        module = load_smoke_module()
+        profile = module.load_profile(REPO_ROOT)
+        expected_os = profile["os"]
+        expected_toolchain = profile["toolchain"]
+        original_detect = module.detect_execution_environment
+        try:
+            module.detect_execution_environment = lambda: {
+                "kind": "competition-host",
+                "detected_ci": False,
+                "detected_wsl": False,
+                "competition_exact_host_attested": True,
+                "system": expected_os["name"],
+                "release": expected_os["kernel"],
+                "version": "competition-host",
+                "machine": "x86_64",
+                "kernel": expected_os["kernel"],
+                "python_version": expected_toolchain["python"],
+                "runner_name": "competition",
+            }
+            with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                out_root = Path(tmp) / "competition-smoke"
+                fake_runner = FakeNonGlmCommandRunner()
+                with self.assertRaises(SystemExit) as raised:
+                    module.run_competition_smoke(
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        confirm_competition_exact=True,
+                        command_runner=fake_runner,
+                        repo_root=REPO_ROOT,
+                        run_id="smoke-exact-missing-glm-test",
+                    )
+        finally:
+            module.detect_execution_environment = original_detect
+
+        self.assertIn("opencode_model_unavailable", str(raised.exception))
+        self.assertEqual(len(fake_runner.commands), 2)
+        self.assertTrue(any("toolchain-check.sh" in " ".join(command) for command in fake_runner.commands))
+        self.assertEqual(fake_runner.commands[-1], ["opencode", "models"])
+        self.assertFalse((out_root / "summary" / "competition-smoke-summary.json").exists())
+
+    def test_competition_exact_model_probe_failure_removes_stale_summary(self) -> None:
+        module = load_smoke_module()
+        profile = module.load_profile(REPO_ROOT)
+        expected_os = profile["os"]
+        expected_toolchain = profile["toolchain"]
+        original_detect = module.detect_execution_environment
+        try:
+            module.detect_execution_environment = lambda: {
+                "kind": "competition-host",
+                "detected_ci": False,
+                "detected_wsl": False,
+                "competition_exact_host_attested": True,
+                "system": expected_os["name"],
+                "release": expected_os["kernel"],
+                "version": "competition-host",
+                "machine": "x86_64",
+                "kernel": expected_os["kernel"],
+                "python_version": expected_toolchain["python"],
+                "runner_name": "competition",
+            }
+            with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                out_root = Path(tmp) / "competition-smoke"
+                stale_summary = out_root / "summary" / "competition-smoke-summary.json"
+                stale_summary.parent.mkdir(parents=True)
+                stale_summary.write_text(
+                    json.dumps(
+                        {
+                            "report_kind": "competition-smoke-summary",
+                            "final_gate": {"status": "passed"},
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaises(SystemExit):
+                    module.run_competition_smoke(
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        confirm_competition_exact=True,
+                        command_runner=FakeNonGlmCommandRunner(),
+                        repo_root=REPO_ROOT,
+                        run_id="smoke-exact-stale-summary-test",
+                    )
+                self.assertFalse(stale_summary.exists())
+        finally:
+            module.detect_execution_environment = original_detect
+
+    def test_main_accepts_smoke_cli_args(self) -> None:
+        module = load_smoke_module()
+        calls: dict[str, object] = {}
+
+        def fake_run_competition_smoke(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionSmokeResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_runner = module.run_competition_smoke
+        try:
+            module.run_competition_smoke = fake_run_competition_smoke
+            sys.argv = [
+                "run_competition_smoke.py",
+                "--proof-class",
+                "wsl-local-simulation",
+                "--out-root",
+                "target/competition-smoke",
+                "--run-id",
+                "smoke-cli",
+            ]
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition_smoke = original_runner
+
+        self.assertEqual(calls["proof_class"], "wsl-local-simulation")
+        self.assertEqual(calls["out_root"], Path("target/competition-smoke"))
+        self.assertEqual(calls["run_id"], "smoke-cli")
+
+    def test_core_ci_runs_competition_smoke_tests_and_gate(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "core-translator-validation-ci.yml").read_text(
+            encoding="utf-8"
         )
 
         self.assertIn("validation.tools.test_run_competition_smoke", workflow)
@@ -198,145 +498,3 @@
         }
         for argument, expected in cases.items():
             with self.subTest(argument=argument):
-                logged = module.command_argument_for_log(
-                    argument,
-                    repo_root=REPO_ROOT,
-                    out_root=REPO_ROOT / "target" / "competition-smoke",
-                )
-
-                self.assertEqual(logged, expected)
-                self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
-
-    def test_command_log_sanitizes_stdout_and_stderr_host_paths(self) -> None:
-        module = load_smoke_module()
-
-        def noisy_runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-            return subprocess.CompletedProcess(
-                command,
-                0,
-                (
-                    "include path: /mnt/c/Users/me/FlashDB/inc\n"
-                    "cwd: //wsl.localhost/Ubuntu/home/me/project\n"
-                    "source: //wsl$/Ubuntu/home/me/project/src/fdb.c\n"
-                    "ci source: /workspace/project/src/fdb.c\n"
-                    "unc source: //server/share/project/src/fdb.c\n"
-                ),
-                r"output path: \\wsl$\Ubuntu\home\me\project\target\out.json and \\server\share\project\target\out.json",
-            )
-
-        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
-            out_root = Path(tmp) / "competition-smoke"
-
-            result = module.run_competition_smoke(
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=noisy_runner,
-                repo_root=REPO_ROOT,
-                run_id="smoke-command-log-output-sanitize-test",
-            )
-
-            self.assertEqual(result.exit_code, 0)
-            command_entries = [
-                json.loads(line)
-                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
-            ]
-            assert_no_local_absolute_command_arguments(self, command_entries)
-            assert_no_local_absolute_command_log_text(self, command_entries)
-            joined_output = "\n".join(
-                str(entry.get(field, ""))
-                for entry in command_entries
-                for field in ("stdout", "stderr")
-            )
-            self.assertIn("inc", joined_output)
-            self.assertIn("project", joined_output)
-            self.assertIn("fdb.c", joined_output)
-            self.assertNotIn("//wsl$", joined_output)
-            self.assertIn("out.json", joined_output)
-
-    def test_output_text_for_log_sanitizes_container_absolute_paths(self) -> None:
-        module = load_smoke_module()
-
-        logged = module.output_text_for_log(
-            "cwd: /root/work/project; source: /root/work/project/src/fdb.c; compiler: /usr/bin/clang"
-        )
-
-        self.assertIn("project", logged)
-        self.assertIn("fdb.c", logged)
-        self.assertIn("clang", logged)
-        self.assertNotIn("/root/", logged)
-        self.assertNotIn("/usr/", logged)
-        self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
-
-    def test_command_log_records_repo_relative_workdir(self) -> None:
-        module = load_smoke_module()
-        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
-            out_root = Path(tmp) / "competition-smoke"
-
-            result = module.run_competition_smoke(
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=(fake_runner := FakeCommandRunner()),
-                repo_root=REPO_ROOT,
-                run_id="smoke-command-log-workdir-test",
-            )
-
-            self.assertEqual(result.exit_code, 0)
-            command_entries = [
-                json.loads(line)
-                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
-            ]
-            self.assertTrue(command_entries)
-            self.assertTrue(all(entry.get("workdir") == "." for entry in command_entries))
-            self.assertTrue(all("cwd" not in entry for entry in command_entries))
-            self.assertTrue(all(kwargs.get("cwd") == REPO_ROOT for kwargs in fake_runner.kwargs))
-            assert_no_local_absolute_command_log_text(self, command_entries)
-
-    def test_command_log_records_run_id_and_canonical_flag(self) -> None:
-        module = load_smoke_module()
-        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
-            out_root = Path(tmp) / "competition-smoke"
-
-            result = module.run_competition_smoke(
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=FakeCommandRunner(),
-                repo_root=REPO_ROOT,
-                run_id="smoke-command-log-run-binding-test",
-            )
-
-            self.assertEqual(result.exit_code, 0)
-            command_entries = [
-                json.loads(line)
-                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
-            ]
-            self.assertTrue(command_entries)
-            self.assertTrue(all(entry.get("run_id") == "smoke-command-log-run-binding-test" for entry in command_entries))
-            self.assertTrue(all(entry.get("canonical") is True for entry in command_entries))
-
-    def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
-        module = load_smoke_module()
-        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
-            out_root = Path(tmp) / "competition-smoke"
-            command_log = out_root / "logs" / "commands.jsonl"
-            command_log.parent.mkdir(parents=True)
-            command_log.write_text(
-                json.dumps({"step": "stale", "command": ["C:\\Python314\\python.exe"], "returncode": 0}) + "\n",
-                encoding="utf-8",
-            )
-
-            result = module.run_competition_smoke(
-                out_root=out_root,
-                proof_class="local-simulation",
-                command_runner=FakeCommandRunner(),
-                repo_root=REPO_ROOT,
-                run_id="smoke-command-log-replace-test",
-            )
-
-            self.assertEqual(result.exit_code, 0)
-            command_entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
-            self.assertNotIn("stale", [entry["step"] for entry in command_entries])
-            assert_no_local_absolute_command_arguments(self, command_entries)
-
-
-if __name__ == "__main__":
-    unittest.main()

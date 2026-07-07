@@ -1,0 +1,500 @@
+class _AutoMigrateTestsPart02:
+    def test_scalar_admission_fail_closes_signed_left_shift_and_negation(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "c_boundary": {
+                "scalar_arithmetic_contract": {
+                    "signed_left_shift": "runtime_precondition_no_overflow",
+                    "signed_negation": "runtime_precondition_no_overflow",
+                }
+            },
+            "fixture_contract": {
+                "scalar_input_domain": {
+                    "case_source": "unit-test",
+                    "parameters": [{"name": "value", "type": "int", "range": [-100, 100]}],
+                    "covers_overflow_boundaries": False,
+                }
+            },
+        }
+        preconditions = [
+            {"code": "signed_left_shift_no_overflow"},
+            {"code": "signed_negation_no_overflow"},
+        ]
+
+        covered = module.scalar_admission_from_runtime_preconditions(spec, preconditions)
+        self.assertEqual(covered["status"], "covered")
+        self.assertEqual(
+            covered["covered"][0]["covered_by"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_left_shift",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+        self.assertEqual(
+            covered["covered"][1]["covered_by"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_negation",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+
+        undeclared = module.scalar_admission_from_runtime_preconditions({}, preconditions)
+        self.assertEqual(undeclared["status"], "unresolved")
+        self.assertEqual(
+            undeclared["unresolved"][0]["missing"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_left_shift",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+        self.assertEqual(
+            undeclared["unresolved"][1]["missing"],
+            [
+                "c_boundary.scalar_arithmetic_contract.signed_negation",
+                "fixture_contract.scalar_input_domain",
+            ],
+        )
+
+    def test_route_decision_records_primary_candidate_fallback_source(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "legacy-fallback-route-source",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-legacy-fallback-route-source"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "draft_generated",
+                        "translation_source": {
+                            "selected": "legacy-string-translator",
+                            "fallback_from": "clang-lowered-typed-ir",
+                            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            generation = route["candidate_generation"]
+            self.assertEqual(generation["primary_candidate"]["selected"], "unknown")
+            self.assertEqual(generation["primary_candidate"]["candidate_id"], "primary:unknown")
+            self.assertEqual(generation["selected_candidate_id"], None)
+            self.assertEqual(len(generation["compatibility_sources"]), 1)
+            compatibility = generation["compatibility_sources"][0]
+            self.assertEqual(compatibility["selected"], "legacy-string-translator")
+            self.assertEqual(compatibility["candidate_id"], "compat:legacy-string-translator")
+            self.assertEqual(compatibility["fallback_from"], "clang-lowered-typed-ir")
+            self.assertEqual(compatibility["fallback_reason"], "clang_lowered_typed_ir_unavailable")
+
+    def test_route_decision_records_candidate_set_and_selected_candidate(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "candidate-set-route-source",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-candidate-set-route-source"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "draft_generated",
+                        "translation_source": {
+                            "selected": "legacy-string-translator",
+                            "fallback_from": "clang-lowered-typed-ir",
+                            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            baseline_manifest = {
+                "schema_version": 1,
+                "status": "skipped",
+                "reason": "blocked_by_missing_tools",
+                "correctness_role": "candidate_context_only",
+                "output": None,
+            }
+            (evidence_dir / f"{prefix}-c2rust-baseline-manifest.json").write_text(
+                json.dumps(baseline_manifest), encoding="utf-8"
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {
+                    "status": "skipped",
+                    "reason": "blocked_by_missing_tools",
+                    "correctness_role": "candidate_context_only",
+                },
+            )
+
+            generation = route["candidate_generation"]
+            self.assertFalse(generation["generated_draft_semantic_pass"])
+            self.assertEqual(
+                generation["selection_policy"]["stage"],
+                "p0_route_governance",
+            )
+            self.assertFalse(generation["selection_policy"]["semantic_acceptance"])
+            self.assertEqual(
+                generation["selected_candidate_id"],
+                None,
+            )
+            self.assertEqual(generation["primary_candidate"]["selected"], "unknown")
+            self.assertEqual(generation["primary_candidate"]["candidate_id"], "primary:unknown")
+            self.assertEqual(
+                generation["compatibility_sources"],
+                [
+                    {
+                        "candidate_id": "compat:legacy-string-translator",
+                        "selected": "legacy-string-translator",
+                        "fallback": True,
+                        "semantic_pass": False,
+                        "compatibility_only": True,
+                        "correctness_role": "compatibility_only",
+                        "fallback_from": "clang-lowered-typed-ir",
+                        "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                    }
+                ],
+            )
+            candidates = {item["candidate_id"]: item for item in generation["candidate_set"]}
+            self.assertEqual(
+                set(candidates),
+                {
+                    "compat:legacy-string-translator",
+                    "typed-ir:clang-lowered",
+                    "c2rust-baseline",
+                },
+            )
+            self.assertEqual(candidates["compat:legacy-string-translator"]["kind"], "legacy-string-translator")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["role"], "compatibility_rust_draft")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["correctness_role"], "compatibility_only")
+            self.assertEqual(candidates["compat:legacy-string-translator"]["fallback_from"], "clang-lowered-typed-ir")
+            self.assertEqual(candidates["typed-ir:clang-lowered"]["status"], "missing")
+            self.assertFalse(candidates["typed-ir:clang-lowered"]["semantic_pass"])
+            self.assertEqual(candidates["c2rust-baseline"]["status"], "skipped")
+            self.assertEqual(candidates["c2rust-baseline"]["correctness_role"], "candidate_context_only")
+            self.assertEqual(
+                Path(candidates["c2rust-baseline"]["baseline_manifest"]["path"]).name,
+                f"{prefix}-c2rust-baseline-manifest.json",
+            )
+            self.assertEqual(candidates["c2rust-baseline"]["baseline_manifest"]["status"], "skipped")
+            self.assertIn("sha256", candidates["c2rust-baseline"]["baseline_manifest"])
+            self.assertIsNone(candidates["c2rust-baseline"]["output_ref"])
+            self.assertFalse(candidates["c2rust-baseline"]["semantic_pass"])
+            self.assertEqual(generation["c2rust_baseline"], candidates["c2rust-baseline"])
+
+    def test_route_decision_records_p0_route_governance_summary(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "p0-route-governance",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-p0-route-governance"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "draft_generated",
+                        "translation_source": {"selected": "clang-lowered-typed-ir"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            baseline_manifest = {
+                "schema_version": 1,
+                "status": "skipped",
+                "reason": "blocked_by_missing_tools",
+                "correctness_role": "candidate_context_only",
+                "output": None,
+            }
+            (evidence_dir / f"{prefix}-c2rust-baseline-manifest.json").write_text(
+                json.dumps(baseline_manifest), encoding="utf-8"
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {
+                    "status": "skipped",
+                    "reason": "blocked_by_missing_tools",
+                    "correctness_role": "candidate_context_only",
+                },
+            )
+
+            generation = route["candidate_generation"]
+            self.assertEqual(generation["selection_policy"]["stage"], "p0_route_governance")
+            summary = generation["governance_summary"]
+            self.assertEqual(summary["stage"], "p0_route_governance")
+            self.assertFalse(summary["semantic_acceptance"])
+            self.assertFalse(summary["full_router"])
+            self.assertEqual(summary["route_level"], route["level"])
+            self.assertEqual(summary["route_status"], route["status"])
+            self.assertIn("c_oracle", summary["validation_gate_summary"]["required_acceptance_gates"])
+            self.assertIn("final_verification", summary["validation_gate_summary"]["required_acceptance_gates"])
+            hard_gates = {gate["gate_id"]: gate for gate in summary["hard_gates"]}
+            self.assertEqual(hard_gates["generated_candidate_semantic_acceptance"]["status"], "deferred")
+            self.assertEqual(hard_gates["c2rust_baseline_semantic_source"]["status"], "forbidden")
+            self.assertEqual(summary["fallback_summary"]["legacy_string_translator"]["status"], "not_used")
+
+    def test_normalized_artifacts_preserve_translation_fallback_source(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "normalized-fallback-source",
+            "source_commit": "1234567",
+            "function_name": "identity",
+            "c_source": "int identity(int value) { return value; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec_path = tmp_path / "slice.json"
+            slice_spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            prefix = "l3-normalized-fallback-source"
+            (evidence_dir / f"{prefix}-translator-input.json").write_text(
+                json.dumps({"slice_id": "normalized-fallback-source"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"type_map": {"mappings": [], "uncertainties": []}}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"cfg": {"functions": []}}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"pointer_graph": {"nodes": [], "edges": []}}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps(
+                    {
+                        "status": "generated",
+                        "translation_source": {
+                            "selected": "legacy-string-translator",
+                            "fallback_from": "clang-lowered-typed-ir",
+                            "fallback_reason": "clang_lowered_typed_ir_unavailable",
+                        },
+                        "plan": {
+                            "translation_rule_ids": ["primitive-return"],
+                            "unsupported_node_count": 0,
+                            "unsafe_candidate_count": 0,
+                            "call_expressions": [],
+                        },
+                        "errors": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (evidence_dir / f"{prefix}-rust-draft.rs").write_text(
+                "pub fn identity(value: i32) -> i32 { value }\n", encoding="utf-8"
+            )
+
+            module.normalize_translation_artifacts(spec, slice_spec_path, evidence_dir)
+
+            plan = json.loads((evidence_dir / f"{prefix}-auto-translation-plan.json").read_text(encoding="utf-8"))
+            self.assertEqual(plan["translation_source"]["selected"], "legacy-string-translator")
+            self.assertEqual(plan["translation_source"]["fallback_from"], "clang-lowered-typed-ir")
+            events = [
+                json.loads(line)
+                for line in (evidence_dir / f"{prefix}-auto-translation-events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+            fallback_events = [
+                event for event in events if event.get("event_kind") == "translation_fallback"
+            ]
+            self.assertEqual(len(fallback_events), 1)
+            self.assertEqual(fallback_events[0]["selected"], "legacy-string-translator")
+            self.assertEqual(fallback_events[0]["fallback_from"], "clang-lowered-typed-ir")
+
+    def test_scalar_typed_ir_candidate_without_zero_token_cost_stays_l1(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-missing-token-cost",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-missing-token-cost"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            route = module.emit_route_decision(
+                spec,
+                evidence_dir,
+                {"status": "generated"},
+                {"status": "generated", "correctness_role": "candidate_context_only"},
+            )
+
+            self.assertEqual(route["level"], "L1")
+            self.assertNotIn(
+                {
+                    "feature": "typed_ir_zero_token_deterministic",
+                    "route": "GenericTypedIr",
+                    "token_cost": 0,
+                    "weight": "deterministic_typed_ir",
+                },
+                route["rationale"],
+            )
+            self.assertIn(
+                {
+                    "feature": "typed_ir_candidate_generated",
+                    "route": "GenericTypedIr",
+                    "weight": "generic_typed_ir",
+                },
+                route["rationale"],
+            )
+
+    def test_scalar_typed_ir_candidate_with_nonzero_token_cost_stays_l1(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "typed-ir-nonzero-token-cost",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int value) { return value + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-typed-ir-nonzero-token-cost"
+            (evidence_dir / f"{prefix}-type-map.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-cfg.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-pointer-graph.json").write_text(
+                json.dumps({"status": "not_applicable", "pointer_nodes": []}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-auto-translation-plan.json").write_text(
+                json.dumps({"status": "draft_generated"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-test-translation-generated.json").write_text(
+                json.dumps({"status": "recorded"}), encoding="utf-8"
+            )
+            (evidence_dir / f"{prefix}-clang-lowering-report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "lowered",
+                        "typed_ir_candidate": {
+                            "status": "generated",
+                            "candidate_route": {
+                                "route_id": "generic-typed-ir",
+                                "route": "GenericTypedIr",
+                                "candidate_generator": "GenericTypedIrEmitter",
+                                "token_cost": 1,
+                                "deprecated": False,
+                            },
+                            "readonly_globals": [],
+                            "rust_draft_generated": True,
+                            "semantic_pass": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",

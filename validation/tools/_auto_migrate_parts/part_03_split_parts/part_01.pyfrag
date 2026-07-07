@@ -1,3 +1,303 @@
+) -> dict[str, Any]:
+    effective_emit_clang_lowering_report = emit_clang_lowering_report or competition_clang_lane
+    identity = cache_identity(
+        spec,
+        slice_spec,
+        accept_existing_evidence=accept_existing_evidence,
+        emit_clang_dry_run=emit_clang_dry_run,
+        emit_clang_lowering_report=effective_emit_clang_lowering_report,
+        competition_clang_lane=competition_clang_lane,
+        c2rust_baseline=c2rust_baseline,
+        route_decision=route_decision,
+        validation_profile=validation_profile,
+        oracle=oracle,
+    )
+    dependent_artifacts = {
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+    }
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": spec.get("slice_id"),
+        **identity,
+        "dependent_artifacts": dependent_artifacts,
+        "cache_input_fields": cache_input_fields(
+            emit_clang_lowering_report=effective_emit_clang_lowering_report
+        ),
+        "invalidates": CACHE_INVALIDATED_ARTIFACTS,
+    }
+    write_json(evidence_dir / f"l3-{spec.get('slice_id')}-auto-cache-metadata.json", payload)
+    return payload
+
+
+def cache_input_fields(*, emit_clang_lowering_report: bool = False) -> list[str]:
+    fields = list(CACHE_INPUT_FIELDS)
+    if emit_clang_lowering_report:
+        fields.extend(CLANG_LOWERING_CACHE_INPUT_FIELDS)
+    return fields
+
+
+def artifact_cache_identity(artifact: dict[str, Any] | None) -> dict[str, Any]:
+    if artifact is None:
+        return {"status": "missing", "sha256": "missing"}
+    return {
+        "status": artifact.get("status", "unknown"),
+        "sha256": sha256_json(artifact),
+    }
+
+
+def oracle_boundary_contract_identity(validation_profile: dict[str, Any] | None) -> dict[str, Any]:
+    if validation_profile is None:
+        return {"status": "missing", "sha256": "missing"}
+    contract = validation_profile.get("oracle_boundary_contract")
+    if not isinstance(contract, dict):
+        return {"status": "missing", "sha256": "missing"}
+    return {
+        "status": contract.get("status", "unknown"),
+        "sha256": sha256_json(contract),
+    }
+
+
+def oracle_harness_identity(oracle: dict[str, Any] | None) -> dict[str, Any]:
+    if oracle is None:
+        return {"path": "missing", "status": "missing", "sha256": "missing"}
+    ref = oracle.get("harness_draft_ref")
+    if isinstance(ref, dict):
+        return {
+            "path": ref.get("path", "missing"),
+            "status": ref.get("status", "missing"),
+            "sha256": ref.get("sha256", "missing"),
+        }
+    return {"path": oracle.get("harness_draft", "missing"), "status": "missing", "sha256": "missing"}
+
+
+def emit_c2rust_baseline_manifest(spec: dict[str, Any], slice_spec: Path, evidence_dir: Path) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    commands = c2rust_command_candidates()
+    selected = next((item for item in commands if item.get("path")), None)
+    reference_tree, reference_tree_configured = resolve_c2rust_reference_tree()
+    reference_status = "present" if reference_tree.exists() else "missing"
+    generation_enabled = c2rust_baseline_generation_enabled()
+    generation: dict[str, Any] = {
+        "enabled": generation_enabled,
+        "enabled_by": "C2RUST_BASELINE_GENERATION" if generation_enabled else "",
+        "compile_commands": None,
+        "command": None,
+        "generated_files": [],
+    }
+    output: dict[str, Any] | None = None
+    compile_status: dict[str, Any] | None = None
+    status = "skipped"
+    diagnostics: list[str] = []
+    reason = "blocked_by_missing_tools"
+    if selected is None:
+        diagnostics.append("no executable c2rust-transpile or c2rust command found on PATH")
+    elif not generation_enabled:
+        status = "blocked"
+        reason = "baseline_generation_not_enabled"
+        diagnostics.append("executable C2Rust was detected but baseline generation is not enabled in this bounded MVP")
+    else:
+        compile_commands = resolve_c2rust_compile_commands(spec, slice_spec)
+        if compile_commands is None:
+            status = "blocked"
+            reason = "missing_compile_commands"
+            diagnostics.append(
+                "C2Rust baseline generation was enabled, but build_profile.compiler_command_source "
+                "does not resolve to compile_commands.json"
+            )
+        else:
+            prepared_compile_commands, compile_commands_metadata = prepare_c2rust_compile_commands(
+                compile_commands,
+                evidence_dir,
+                prefix,
+            )
+            generation["source_compile_commands"] = compile_commands_metadata["source"]
+            generation["compile_commands"] = {
+                "path": rel(prepared_compile_commands),
+                "sha256": sha256(prepared_compile_commands),
+                "normalized_for_c2rust": compile_commands_metadata["normalized_for_c2rust"],
+            }
+            generation_result = run_c2rust_baseline_generation(
+                selected,
+                prepared_compile_commands,
+                evidence_dir,
+                prefix,
+            )
+            generation.update(generation_result["generation"])
+            diagnostics.extend(generation_result["diagnostics"])
+            output = generation_result["output"]
+            if output is None:
+                status = "blocked"
+                reason = generation_result["reason"]
+            else:
+                status = "generated"
+                reason = "generated_by_c2rust"
+                compile_status = compile_c2rust_baseline_output(
+                    c2rust_baseline_output_path(output),
+                    evidence_dir,
+                    prefix,
+                    crate_root=c2rust_baseline_crate_root(output),
+                )
+                diagnostics.extend(compile_status.get("diagnostics", []))
+    toolchain_repair = None if status == "generated" else c2rust_toolchain_repair(reason, slice_spec=slice_spec)
+    manifest = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": status,
+        "reason": reason,
+        "correctness_role": "candidate_context_only",
+        "fallback_oracle": "original_c_oracle_required",
+        "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance",
+        "source_commit": source_commit(spec),
+        "slice_spec": {"path": rel(slice_spec), "sha256": sha256(slice_spec)},
+        "build_profile_hash": sha256_json(spec.get("build_profile", {})),
+        "commands": commands,
+        "selected_command": selected,
+        "reference_tree": {
+            "path": rel(reference_tree),
+            "status": reference_status,
+            "cargo_toml": rel(reference_tree / "Cargo.toml") if reference_tree.exists() else "",
+            "diagnostic_only": not reference_tree_configured,
+        },
+        "generation": generation,
+        "output": output,
+        "compile": compile_status,
+        "diagnostics": diagnostics,
+        "toolchain_repair": toolchain_repair,
+        "must_not_claim": [
+            "C2Rust output proves semantic equivalence",
+            "C2Rust baseline was generated" if status != "generated" else "",
+        ],
+        "tool_probe": c2rust_tool_probe(),
+    }
+    manifest["must_not_claim"] = [item for item in manifest["must_not_claim"] if item]
+    write_json(evidence_dir / f"{prefix}-c2rust-baseline-manifest.json", manifest)
+    return manifest
+
+
+def c2rust_baseline_generation_enabled() -> bool:
+    value = os.environ.get("C2RUST_BASELINE_GENERATION", "").strip().lower()
+    return value in {"1", "true", "yes", "on", "enabled"}
+
+
+def resolve_c2rust_compile_commands(spec: dict[str, Any], slice_spec: Path) -> Path | None:
+    build_profile = spec.get("build_profile", {})
+    if not isinstance(build_profile, dict):
+        return None
+    configured = build_profile.get("compiler_command_source") or build_profile.get("compile_commands")
+    if not configured:
+        return None
+    configured_path = Path(str(configured))
+    candidates = [configured_path] if configured_path.is_absolute() else [
+        REPO_ROOT / configured_path,
+        slice_spec.parent / configured_path,
+    ]
+    for candidate in candidates:
+        if candidate.name != "compile_commands.json":
+            continue
+        if candidate.exists() and candidate.is_file() and is_compile_commands_database(candidate):
+            return candidate.resolve()
+    return None
+
+
+def is_compile_commands_database(path: Path) -> bool:
+    try:
+        database = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(database, list) or not database:
+        return False
+    for entry in database:
+        if not isinstance(entry, dict):
+            return False
+        for key in ["directory", "command", "file"]:
+            if not isinstance(entry.get(key), str) or not entry[key]:
+                return False
+    return True
+
+
+def prepare_c2rust_compile_commands(compile_commands: Path, evidence_dir: Path, prefix: str) -> tuple[Path, dict[str, Any]]:
+    database = json.loads(compile_commands.read_text(encoding="utf-8"))
+    normalized = [normalize_c2rust_compile_command_entry(entry) for entry in database]
+    prepared = evidence_dir / f"{prefix}-c2rust-compile-commands" / "compile_commands.json"
+    write_json(prepared, normalized)
+    return prepared, {
+        "source": {"path": rel(compile_commands), "sha256": sha256(compile_commands)},
+        "normalized_for_c2rust": True,
+    }
+
+
+def normalize_c2rust_compile_command_entry(entry: dict[str, Any]) -> dict[str, str]:
+    source_directory = Path(str(entry["directory"]))
+    if not source_directory.is_absolute():
+        source_directory = REPO_ROOT / source_directory
+    source_directory = source_directory.resolve()
+    source_file = resolve_compile_command_path(str(entry["file"]), source_directory)
+    output = entry.get("output")
+    output_path = resolve_compile_command_path(str(output), source_directory) if output else None
+    command = normalize_c2rust_compile_command(str(entry["command"]), source_directory, source_file, output_path)
+    normalized = {
+        "directory": source_directory.as_posix(),
+        "command": command,
+        "file": source_file.as_posix(),
+    }
+    if output_path is not None:
+        normalized["output"] = output_path.as_posix()
+    return normalized
+
+
+def normalize_c2rust_compile_command(
+    command: str,
+    source_directory: Path,
+    source_file: Path,
+    output_path: Path | None,
+) -> str:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        tokens = command.split()
+    normalized: list[str] = []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "-I" and i + 1 < len(tokens):
+            normalized.extend([token, resolve_compile_command_path(tokens[i + 1], source_directory).as_posix()])
+            i += 2
+            continue
+        if token.startswith("-I") and len(token) > 2:
+            normalized.append("-I" + resolve_compile_command_path(token[2:], source_directory).as_posix())
+            i += 1
+            continue
+        if token == "-c" and i + 1 < len(tokens):
+            normalized.extend([token, source_file.as_posix()])
+            i += 2
+            continue
+        if token == "-o" and i + 1 < len(tokens):
+            normalized.extend([token, (output_path or resolve_compile_command_path(tokens[i + 1], source_directory)).as_posix()])
+            i += 2
+            continue
+        if token == source_file.name or token.endswith(".c"):
+            candidate = resolve_compile_command_path(token, source_directory)
+            if candidate == source_file:
+                normalized.append(source_file.as_posix())
+                i += 1
+                continue
+        normalized.append(token)
+        i += 1
+    return shlex.join(normalized)
+
+
+def resolve_compile_command_path(value: str, source_directory: Path) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        path = source_directory / path
+    return path.resolve()
+
+
 def run_c2rust_baseline_generation(
     selected: dict[str, Any],
     compile_commands: Path,
@@ -198,232 +498,3 @@ def compile_c2rust_generated_crate(
     cargo = shutil.which("cargo")
     if cargo is None:
         write_text(stdout_log, "")
-        write_text(stderr_log, "cargo not found on PATH\n")
-        return {
-            "status": "rustc_not_found",
-            "attempted": False,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": ["C2Rust generated crate compile check skipped because cargo was not found on PATH"],
-        }
-
-    argv = [cargo, "build"]
-    command["argv"] = argv
-    env = os.environ.copy()
-    env.update(env_overrides)
-    try:
-        result = subprocess.run(
-            argv,
-            cwd=str(crate_root),
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        write_text(stdout_log, exc.stdout or "")
-        write_text(stderr_log, exc.stderr or f"cargo build timed out after {timeout_seconds} seconds\n")
-        command["exit_status"] = "timeout"
-        command["returncode"] = -1
-        return {
-            "status": "compile_timeout",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": ["C2Rust generated crate cargo compile check timed out"],
-        }
-    except Exception as exc:
-        write_text(stdout_log, "")
-        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
-        command["exit_status"] = "error"
-        command["returncode"] = -1
-        return {
-            "status": "compile_error",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": [f"C2Rust generated crate cargo compile check could not start: {exc}"],
-        }
-
-    write_text(stdout_log, result.stdout or "")
-    write_text(stderr_log, result.stderr or "")
-    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
-    command["returncode"] = result.returncode
-    if result.returncode != 0:
-        return {
-            "status": "failed",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": [f"C2Rust generated crate cargo compile check exited with {result.returncode}"],
-        }
-
-    artifact_path = c2rust_generated_crate_artifact(crate_root)
-    if artifact_path is None:
-        return {
-            "status": "failed",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": ["C2Rust generated crate cargo compile check passed without producing an rlib artifact"],
-        }
-
-    stable_artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
-    shutil.copyfile(artifact_path, stable_artifact_path)
-    return {
-        "status": "passed",
-        "attempted": True,
-        "semantic_pass": False,
-        "candidate_output": candidate_output,
-        "command": command,
-        "artifact": {
-            "path": rel(stable_artifact_path),
-            "status": "compiled",
-            "sha256": sha256(stable_artifact_path),
-        },
-        "diagnostics": [],
-    }
-
-
-def compile_c2rust_baseline_output(
-    output_path: Path,
-    evidence_dir: Path,
-    prefix: str,
-    *,
-    crate_root: Path | None = None,
-) -> dict[str, Any]:
-    timeout_seconds = 120
-    stdout_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stdout.log"
-    stderr_log = evidence_dir / f"{prefix}-c2rust-baseline-rustc.stderr.log"
-    artifact_path = evidence_dir / f"{prefix}-c2rust-baseline-output.rlib"
-    candidate_output = {
-        "path": rel(output_path),
-        "status": "generated",
-        "sha256": sha256(output_path),
-    }
-    if crate_root is not None and (crate_root / "Cargo.toml").exists():
-        return compile_c2rust_generated_crate(
-            output_path=output_path,
-            evidence_dir=evidence_dir,
-            prefix=prefix,
-            crate_root=crate_root,
-            candidate_output=candidate_output,
-            timeout_seconds=timeout_seconds,
-        )
-    rustc = shutil.which("rustc")
-    command: dict[str, Any] = {
-        "argv": [],
-        "working_directory": rel(evidence_dir),
-        "stdout_log": rel(stdout_log),
-        "stderr_log": rel(stderr_log),
-        "timeout_seconds": timeout_seconds,
-        "exit_status": "not_executed",
-        "returncode": None,
-    }
-    if rustc is None:
-        write_text(stdout_log, "")
-        write_text(stderr_log, "rustc not found on PATH\n")
-        return {
-            "status": "rustc_not_found",
-            "attempted": False,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": ["C2Rust baseline output compile check skipped because rustc was not found on PATH"],
-        }
-
-    argv = [
-        rustc,
-        "--crate-type",
-        "lib",
-        str(output_path),
-        "-o",
-        str(artifact_path),
-    ]
-    command["argv"] = argv
-    try:
-        result = subprocess.run(
-            argv,
-            cwd=str(evidence_dir),
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-        )
-    except subprocess.TimeoutExpired as exc:
-        write_text(stdout_log, exc.stdout or "")
-        write_text(stderr_log, exc.stderr or f"rustc timed out after {timeout_seconds} seconds\n")
-        command["exit_status"] = "timeout"
-        command["returncode"] = -1
-        return {
-            "status": "compile_timeout",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": ["C2Rust baseline output rustc compile check timed out"],
-        }
-    except Exception as exc:
-        write_text(stdout_log, "")
-        write_text(stderr_log, f"{type(exc).__name__}: {exc}\n")
-        command["exit_status"] = "error"
-        command["returncode"] = -1
-        return {
-            "status": "compile_error",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": [f"C2Rust baseline output rustc compile check could not start: {exc}"],
-        }
-
-    write_text(stdout_log, result.stdout or "")
-    write_text(stderr_log, result.stderr or "")
-    command["exit_status"] = "passed" if result.returncode == 0 else "failed"
-    command["returncode"] = result.returncode
-    if result.returncode != 0:
-        return {
-            "status": "failed",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": [f"C2Rust baseline output rustc compile check exited with {result.returncode}"],
-        }
-    if not artifact_path.exists():
-        return {
-            "status": "failed",
-            "attempted": True,
-            "semantic_pass": False,
-            "candidate_output": candidate_output,
-            "command": command,
-            "artifact": None,
-            "diagnostics": ["C2Rust baseline output rustc compile check passed without producing an artifact"],
-        }
-
-    return {
-        "status": "passed",
-        "attempted": True,
-        "semantic_pass": False,
-        "candidate_output": candidate_output,
-        "command": command,
-        "artifact": {
-            "path": rel(artifact_path),
-            "status": "compiled",
-            "sha256": sha256(artifact_path),
-        },
-        "diagnostics": [],
-    }

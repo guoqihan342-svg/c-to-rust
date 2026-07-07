@@ -1,0 +1,440 @@
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "external-callee"
+            draft = (evidence_dir / "l3-external-callee-rust-draft.rs").read_text(encoding="utf-8")
+            plan = json.loads(
+                (evidence_dir / "l3-external-callee-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            context_pack = json.loads(
+                (evidence_dir / "l3-external-callee-context-pack.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(manifest["rust_check"]["status"], "passed")
+            self.assertIn("fn helper_add_one(value: i32) -> i32", draft)
+            self.assertIn("external callee context stub: helper_add_one", draft)
+            external_callee = plan["translation_summary"]["external_direct_callees"][0]
+            self.assertEqual(external_callee["name"], "helper_add_one")
+            self.assertEqual(external_callee["signature_ref"], "sig-helper-add-one")
+            self.assertEqual(external_callee["parameters"], [{"name": "value", "c_type": "int"}])
+            self.assertEqual(external_callee["return_type"], "int")
+            self.assertEqual(external_callee["stub_kind"], "compile_only")
+            self.assertFalse(external_callee["semantics_verified"])
+            call_expressions = plan["translation_summary"]["call_expressions"]
+            self.assertEqual(len(call_expressions), 3)
+            self.assertEqual(
+                call_expressions[0]["callee_signature_id"],
+                "sig-helper-add-one",
+            )
+            for call in call_expressions:
+                self.assertEqual(call["callee"], "helper_add_one")
+                self.assertEqual(call["callee_scope"], "external_direct_callee")
+                self.assertEqual(call["callee_signature_id"], "sig-helper-add-one")
+                self.assertEqual(call["callee_source_ref"], "unit/helper.c#helper_add_one")
+                self.assertEqual(call["definition_status"], "real_source_bound")
+                self.assertEqual(call["stub_status"], "compile_only")
+            self.assertEqual(plan["inputs"]["external_callee_context"]["status"], "recorded")
+            self.assertEqual(plan["inputs"]["external_callee_context"]["declared_count"], 1)
+            self.assertEqual(plan["inputs"]["external_callee_context"]["blocked_count"], 0)
+            context_callee = context_pack["external_direct_callees"][0]
+            self.assertEqual(context_callee["name"], "helper_add_one")
+            self.assertEqual(context_callee["parameters"], [{"name": "value", "c_type": "int"}])
+            self.assertEqual(context_callee["return_type"], "int")
+            self.assertEqual(context_callee["stub_kind"], "compile_only")
+            self.assertFalse(context_callee["semantics_verified"])
+            self.assertEqual(context_pack["direct_call_edges"], call_expressions)
+            bindings = context_pack["call_edge_to_callee_binding"]
+            self.assertEqual(len(bindings), 3)
+            for binding, call in zip(bindings, call_expressions):
+                self.assertEqual(binding["callee"], "helper_add_one")
+                self.assertEqual(binding["signature_ref"], "sig-helper-add-one")
+                self.assertEqual(binding["source_expression"], call["source_expression"])
+                self.assertEqual(binding["statement_context"], call["statement_context"])
+                self.assertEqual(binding["stub_kind"], "compile_only")
+                self.assertFalse(binding["semantics_verified"])
+            self.assertEqual(
+                manifest["claim_boundary"]["external_callee_scope"]["status"],
+                "compile_context_only",
+            )
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+
+    def test_undeclared_external_callee_context_blocks_silent_stub_injection(self) -> None:
+        spec = {
+            "target_id": "demo",
+            "slice_id": "missing-external-callee",
+            "source_commit": "1234567",
+            "function_name": "call_missing_helper",
+            "c_source": (
+                "int call_missing_helper(int value) { "
+                "int first = helper_add_one(value); "
+                "return helper_add_one(first); "
+                "}"
+            ),
+            "fixture_hash": "fixture",
+            "build_profile": {
+                "include_paths": [],
+                "defines": [],
+                "target_triple": "x86_64-unknown-linux-gnu",
+                "abi": "linux-gnu",
+                "compiler_command_source": "unit-test",
+                "clang_available": True,
+            },
+            "fixture_contract": {
+                "input": "unit-test-fixture.json",
+                "behavior_fields": ["value"],
+            },
+            "non_goals": ["unit test only"],
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec_path = tmp_path / "missing-external-callee.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "demo" / "auto-translation" / "missing-external-callee"
+            draft = (evidence_dir / "l3-missing-external-callee-rust-draft.rs").read_text(encoding="utf-8")
+            plan = json.loads(
+                (evidence_dir / "l3-missing-external-callee-auto-translation-plan.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertEqual(manifest["rust_check"]["status"], "failed")
+            self.assertNotIn("fn helper_add_one", draft)
+            self.assertEqual(
+                manifest["rust_check"]["external_callee_context"]["status"],
+                "blocked",
+            )
+            self.assertEqual(
+                manifest["rust_check"]["external_callee_context"]["blocked_callees"][0]["name"],
+                "helper_add_one",
+            )
+            self.assertEqual(plan["inputs"]["external_callee_context"]["status"], "blocked")
+            self.assertEqual(plan["inputs"]["external_callee_context"]["declared_count"], 0)
+            self.assertEqual(plan["inputs"]["external_callee_context"]["blocked_count"], 1)
+            self.assertEqual(
+                plan["translation_summary"]["external_direct_callee_blocks"][0]["reason"],
+                "missing_declared_external_direct_callee",
+            )
+
+    def test_real_fdb_kv_set_records_fail_closed_callee_provenance_without_semantic_claim(self) -> None:
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-set-") as tmp:
+            out_root = Path(tmp) / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-dry-run",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-kv-set"
+            translator_input = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-translator-input.json").read_text(encoding="utf-8")
+            )
+            plan = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-auto-translation-plan.json").read_text(encoding="utf-8")
+            )
+            context_pack = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-context-pack.json").read_text(encoding="utf-8")
+            )
+            route = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-route-decision.json").read_text(encoding="utf-8")
+            )
+            profile = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-validation-profile.json").read_text(encoding="utf-8")
+            )
+            blocked = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-self-healing-blocked-repairs.json").read_text(encoding="utf-8")
+            )
+            capability = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-set-capability-delta.json").read_text(encoding="utf-8")
+            )
+            validation_result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-kv-set",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            self.assertEqual(translator_input["function_source_span"]["file"], "src/fdb_kvdb.c")
+            self.assertEqual(translator_input["function_source_span"]["line_start"], 1369)
+            dependency_names = {
+                dependency["name"]
+                for dependency in context_pack["call_edges"]
+                if dependency.get("kind") == "callee"
+            }
+            self.assertEqual(
+                dependency_names,
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertEqual(context_pack["direct_call_edges"], [])
+            external_context = plan["inputs"]["external_callee_context"]
+            self.assertEqual(external_context["status"], "recorded")
+            self.assertEqual(external_context["declared_count"], 4)
+            self.assertEqual(external_context["declared_spec_count"], 4)
+            self.assertEqual(
+                set(external_context["declared_spec_names"]),
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertEqual(external_context["blocked_count"], 0)
+            self.assertEqual(
+                {
+                    item["name"]
+                    for item in context_pack["external_direct_callee_declarations"]
+                },
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertEqual(plan["translation_summary"]["external_direct_callee_blocks"], [])
+            modeled_callees = {
+                item["name"]: item
+                for item in plan["translation_summary"]["external_direct_callees"]
+            }
+            self.assertEqual(
+                set(modeled_callees),
+                {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+            )
+            self.assertIn("strlen", modeled_callees)
+            self.assertEqual(modeled_callees["strlen"]["stub_kind"], "compile_only")
+            self.assertEqual(modeled_callees["strlen"]["stub_boundary"], "stdlib_readonly_string_model")
+            self.assertEqual(modeled_callees["strlen"]["return_type"], "size_t")
+            self.assertEqual(modeled_callees["strlen"]["parameters"][0]["c_type"], "const char*")
+            self.assertFalse(modeled_callees["strlen"]["semantics_verified"])
+            self.assertIn("fdb_blob_make", modeled_callees)
+            blob_make_binding = modeled_callees["fdb_blob_make"]["accepted_named_slice_evidence"]
+            self.assertEqual(modeled_callees["fdb_blob_make"]["stub_kind"], "accepted_named_slice_evidence")
+            self.assertEqual(modeled_callees["fdb_blob_make"]["stub_boundary"], "accepted_named_slice_context_only")
+            self.assertFalse(modeled_callees["fdb_blob_make"]["semantics_verified"])
+            self.assertEqual(blob_make_binding["target_id"], "flashdb")
+            self.assertEqual(blob_make_binding["slice_id"], "real-fdb-blob-make")
+            self.assertTrue(blob_make_binding["semantic_pass"])
+            self.assertTrue(blob_make_binding["accepted_evidence_authoritative"])
+            self.assertFalse(blob_make_binding["generated_draft_semantic_pass"])
+            self.assertTrue(
+                blob_make_binding["final_verification_path"].endswith(
+                    "flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json"
+                )
+            )
+            for name in ("fdb_kv_del", "fdb_kv_set_blob"):
+                self.assertEqual(modeled_callees[name]["stub_kind"], "compile_only")
+                self.assertEqual(
+                    modeled_callees[name]["stub_boundary"],
+                    "flashdb_external_direct_callee_context_only",
+                )
+                self.assertEqual(
+                    modeled_callees[name]["model_contract"],
+                    "flashdb_external_direct_callee_signature_context",
+                )
+                self.assertFalse(modeled_callees[name]["semantics_verified"])
+                self.assertEqual(modeled_callees[name]["unsupported_reasons"], [])
+                self.assertEqual(
+                    modeled_callees[name]["stub_generation"],
+                    "not_emitted_flashdb_signature_context",
+                )
+            self.assertEqual(route["level"], "L4")
+            self.assertEqual(route["status"], "refused")
+            self.assertFalse(route["translator"]["candidate_generation_allowed"])
+            self.assertEqual(route["rationale"][0]["feature"], "blocked_artifact")
+            self.assertEqual(profile["status"], "blocked")
+            self.assertFalse(profile["generated_draft_semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            repair = blocked["blocked_repairs"][0]
+            self.assertEqual(repair["ir_feature_gap"]["kind"], "blocked_artifact")
+            self.assertEqual(repair["smallest_next_test"]["kind"], "route_refusal_regression")
+            self.assertEqual(capability["status"], "recorded")
+            self.assertEqual(json.loads(validation_result.stdout)["status"], "passed")
+            self.assertEqual(capability["slice_id"], "real-fdb-kv-set")
+            self.assertEqual(capability["capability_delta"][0]["construct_id"], "blocked_artifact")
+            self.assertEqual(capability["capability_delta"][0]["generated_candidate_status"], "refused")
+            self.assertFalse(capability["capability_delta"][0]["semantic_pass"])
+            self.assertEqual(capability["capability_delta"][0]["blocked_callees"], [])
+            self.assertTrue(capability["capability_delta"][0]["negative_coverage"])
+            governance = capability["governance_delta"][0]
+            self.assertEqual(governance["construct_id"], "blocked_artifact")
+            self.assertTrue(
+                any(
+                    ref.endswith(
+                        "flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json"
+                    )
+                    for ref in governance["evidence_refs"]
+                )
+            )
+            self.assertIn(
+                "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
+                capability["verification_commands"],
+            )
+
+    def test_real_fdb_kv_set_external_callees_accept_compile_context_only_signatures(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+
+        context = module.external_direct_callee_context(spec, None)
+
+        self.assertEqual(context["status"], "recorded")
+        self.assertEqual(context["declared_spec_count"], 4)
+        self.assertEqual(context["declared_count"], 4)
+        self.assertEqual(context["blocked_count"], 0)
+        declared = {item["name"]: item for item in context["declared"]}
+        self.assertEqual(
+            set(declared),
+            {"strlen", "fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"},
+        )
+        for name in ("fdb_kv_del", "fdb_kv_set_blob"):
+            self.assertEqual(declared[name]["stub_kind"], "compile_only")
+            self.assertEqual(
+                declared[name]["stub_boundary"],
+                "flashdb_external_direct_callee_context_only",
+            )
+            self.assertEqual(
+                declared[name]["model_contract"],
+                "flashdb_external_direct_callee_signature_context",
+            )
+            self.assertFalse(declared[name]["semantics_verified"])
+            self.assertEqual(declared[name]["unsupported_reasons"], [])
+            self.assertEqual(
+                declared[name]["stub_generation"],
+                "not_emitted_flashdb_signature_context",
+            )
+            self.assertNotIn("accepted_named_slice_evidence", declared[name])
+
+    def test_real_fdb_kv_set_rust_check_uses_harness_only_external_bindings(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        real_draft = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-kv-set"
+            / "l3-real-fdb-kv-set-rust-draft.rs"
+        ).read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-set-rust-check-") as tmp:
+            draft_path = Path(tmp) / "l3-real-fdb-kv-set-rust-draft.rs"
+            draft_path.write_text(real_draft, encoding="utf-8")
+            context = module.external_direct_callee_context(spec, None)
+
+            changed = module.inject_external_callee_stubs(draft_path, context)
+            rust_check = module.rust_check_once(draft_path)
+            claim_scope = module.external_callee_claim_scope(context)
+            reported_context = module.rust_check_external_context(context)
+
+            self.assertTrue(changed)
+            self.assertEqual(rust_check["returncode"], 0, rust_check["stderr"])
+            draft = draft_path.read_text(encoding="utf-8")
+            self.assertIn("rust-check harness-only external callee binding: fdb_blob_make", draft)
+            self.assertIn(
+                "pub fn fdb_blob_make(blob: &mut FdbBlob, value_buf: *const core::ffi::c_void, buf_len: usize) -> &mut FdbBlob",
+                draft,
+            )
+            self.assertIn(
+                "pub fn fdb_kv_set_blob(db: *mut core::ffi::c_void, key: *const core::ffi::c_void, blob: &mut FdbBlob) -> i32",
+                draft,
+            )
+            self.assertIn(
+                "pub fn fdb_kv_del(db: *mut core::ffi::c_void, key: *const core::ffi::c_void) -> i32",
+                draft,
+            )
+            self.assertNotIn("fn strlen", draft)
+            self.assertEqual(claim_scope["status"], "compile_context_only")
+            self.assertFalse(claim_scope["semantics_verified"])
+            self.assertFalse(
+                module.semantic_pass_for_run(
+                    None,
+                    {"status": "passed"},
+                    {"status": "blocked", "generated_draft_semantic_pass": False},
+                )
+            )
+            bindings = {
+                item["name"]: item
+                for item in reported_context["declared_callees"]
+            }
+            self.assertEqual(bindings["fdb_blob_make"]["binding_status"], "harness_only")
+            self.assertEqual(bindings["fdb_kv_set_blob"]["binding_status"], "harness_only")
+            self.assertEqual(bindings["fdb_kv_del"]["binding_status"], "harness_only")
+            self.assertFalse(bindings["fdb_blob_make"]["semantics_verified"])
+            self.assertFalse(bindings["fdb_kv_set_blob"]["semantics_verified"])
+            self.assertFalse(bindings["fdb_kv_del"]["semantics_verified"])
+            replay = {
+                "schema_version": 1,
+                "status": "skipped",
+                "generated_draft_replay_pass": False,
+                "generated_draft_semantic_pass": False,
+            }
+            skipped_replay = module.run_generated_rust_replay(
+                spec,
+                Path(tmp),
+                replay,
+                {
+                    "status": "passed",
+                    "rust_check_harness_only_bindings": module.rust_check_external_binding_report(context),
+                },
+            )
+            self.assertEqual(skipped_replay["status"], "not_applicable")
+            self.assertEqual(
+                skipped_replay["skip_reason"],
+                "compile_only_external_bindings_not_executable",
+            )
+            self.assertEqual(
+                skipped_replay["not_applicable_reason"],
+                "compile_only_external_bindings_not_executable",
+            )
+            self.assertFalse(skipped_replay["generated_draft_semantic_pass"])

@@ -1,0 +1,136 @@
+            )
+        return
+    if isinstance(node, list):
+        for index, value in enumerate(node):
+            scan_payload(
+                repo_root=repo_root,
+                artifact_path=artifact_path,
+                payload_label=payload_label,
+                node=value,
+                json_path=f"{json_path}[{index}]",
+                segments=[*segments, "[]"],
+                evidence_dir=evidence_dir,
+                issues=issues,
+                profile_hash_issues=profile_hash_issues,
+                diagnostic_host_metadata=diagnostic_host_metadata,
+            )
+        return
+    if isinstance(node, str) and is_absolute_or_temp_path(node):
+        record = {
+            "artifact": rel_or_posix(repo_root, artifact_path),
+            "payload": payload_label,
+            "json_path": json_path,
+            "value": node,
+        }
+        if is_claim_anchor_path(segments, evidence_dir=evidence_dir):
+            issues.append({"code": "absolute_claim_anchor_path", **record})
+        else:
+            diagnostic_host_metadata.append({"code": "diagnostic_host_metadata_path", **record})
+
+
+def structured_payloads(path: Path) -> list[tuple[str, Any]]:
+    if path.suffix == ".json":
+        payload = load_structured_payload(path)
+        return [("json", payload)] if payload is not None else []
+    if path.suffix == ".jsonl":
+        payloads = []
+        for line_no, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                payloads.append((f"jsonl:{line_no}", json.loads(line)))
+            except json.JSONDecodeError:
+                continue
+        return payloads
+    return []
+
+
+def load_structured_payload(path: Path) -> Any | None:
+    if path.suffix != ".json":
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def find_duration_ms(node: Any) -> list[int]:
+    values = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "duration_ms" and isinstance(value, int):
+                values.append(value)
+            else:
+                values.extend(find_duration_ms(value))
+    elif isinstance(node, list):
+        for value in node:
+            values.extend(find_duration_ms(value))
+    return values
+
+
+def nonnegative_int(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def retention_class_for(relative_path: Path, *, evidence_dir: Path | None = None) -> str:
+    parts = set(relative_path.parts)
+    name = relative_path.name.lower()
+    if is_full_regression_root(evidence_dir):
+        return "ci_smoke"
+    if name.endswith(".log") or "stdout" in name or "stderr" in name or "diagnostic" in parts:
+        return "diagnostic_only"
+    if "ci-smoke" in parts or "ci_smoke" in parts:
+        return "ci_smoke"
+    if "auto-translation" in parts:
+        return "committed_release"
+    return "historical_archive"
+
+
+def is_full_regression_root(evidence_dir: Path | None) -> bool:
+    if evidence_dir is None:
+        return False
+    parts = {part.lower() for part in evidence_dir.parts}
+    return evidence_dir.name.lower() == "full-regression" or (
+        "target" in parts and "full-regression" in parts
+    )
+
+
+def is_claim_anchor_path(segments: list[str], *, evidence_dir: Path | None = None) -> bool:
+    leaf = segments[-1] if segments else ""
+    if is_full_regression_root(evidence_dir) and leaf in {
+        "evidence_root",
+        "events",
+        "log",
+        "working_directory",
+    }:
+        return False
+    if leaf in DIAGNOSTIC_KEYS:
+        return False
+    if any(segment in DIAGNOSTIC_SEGMENTS for segment in segments):
+        return False
+    return leaf in PATH_LIKE_KEYS or any(segment in CLAIM_ANCHOR_SEGMENTS for segment in segments)
+
+
+def looks_like_competition_profile_ref(segments: list[str], node: dict[str, Any]) -> bool:
+    if "competition_environment" in segments or "competition_environment_identity" in segments:
+        return True
+    if node.get("profile_id") == "huawei-competition-ubuntu-24.04":
+        return True
+    return node.get("path") == "config/competition-env/environment.json"
+
+
+def is_absolute_or_temp_path(value: str) -> bool:
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", value):
+        return False
+    return bool(ABSOLUTE_PATH_RE.match(value))
+
+
+def rel_or_posix(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

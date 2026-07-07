@@ -1,0 +1,500 @@
+#!/usr/bin/env python3
+"""Validate the OpenCode competition run summary contract."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path, PurePosixPath
+import re
+from typing import Any
+
+import jsonschema
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = REPO_ROOT / "validation" / "competition-run-summary.schema.json"
+REQUIRED_ARTIFACT_ROOTS = {
+    "target/competition-out/evidence",
+    "target/competition-out/summary",
+    "target/competition-out/logs",
+}
+LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".rs",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_VARIANT = "max"
+REPAIR_ROUND_CAP = 5
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--summary",
+        type=Path,
+        default=REPO_ROOT / "target" / "competition-out" / "summary" / "competition-run-summary.json",
+    )
+    args = parser.parse_args()
+
+    result = validate_summary(args.summary, repo_root=REPO_ROOT)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def validate_summary(summary_path: Path, *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary = load_json(summary_path)
+    schema = load_json(SCHEMA_PATH)
+    try:
+        jsonschema.validate(summary, schema)
+    except jsonschema.ValidationError as error:
+        path = ".".join(str(part) for part in error.absolute_path) or "<root>"
+        raise SystemExit(f"competition run summary schema error at {path}: {error.message}") from error
+
+    validate_artifact_roots(summary.get("artifact_roots", []), repo_root=repo_root)
+    validate_workflow_metrics(summary, summary_path=summary_path, repo_root=repo_root)
+    validate_command_log(summary, summary_path=summary_path, repo_root=repo_root)
+    validate_final_gate(summary)
+    validate_slice_counts(summary)
+    validate_workers(summary)
+    validate_competition_exact_host_attestation(summary, summary_path=summary_path, repo_root=repo_root)
+
+    return {
+        "status": "passed",
+        "summary": repo_relative(summary_path, repo_root),
+        "proof_class": summary["proof_class"],
+        "profile_id": summary["profile_id"],
+        "semantic_pass": summary["slices"]["semantic_pass"],
+        "final_gate": summary["final_gate"]["status"],
+    }
+
+
+def validate_command_log(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:
+    binding = summary["command_log"]
+    log_ref = binding["path"]
+    if not is_repo_relative_posix_path(log_ref):
+        raise SystemExit(f"competition run summary command_log.path must be repo-relative POSIX: {log_ref}")
+    log_path = resolve_summary_artifact(log_ref, summary_path=summary_path, repo_root=repo_root)
+    if log_path is None:
+        raise SystemExit(f"competition run summary command_log.path does not exist: {log_ref}")
+    actual_sha = sha256(log_path)
+    if actual_sha != binding["sha256"]:
+        raise SystemExit("competition run summary command_log.sha256 does not match artifact")
+    checked_entries = 0
+    with log_path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                entry = json.loads(stripped)
+            except json.JSONDecodeError as error:
+                raise SystemExit(f"competition run summary command_log line {line_number} must be valid JSON") from error
+            if not isinstance(entry, dict):
+                raise SystemExit(f"competition run summary command_log line {line_number} must be an object")
+            if entry.get("run_id") != summary["run_id"]:
+                raise SystemExit(
+                    f"competition run summary command_log line {line_number} run_id must match summary run_id"
+                )
+            if entry.get("canonical") is not True:
+                raise SystemExit(f"competition run summary command_log line {line_number} canonical must be true")
+            if entry.get("log_path") != log_ref:
+                raise SystemExit(
+                    f"competition run summary command_log line {line_number} log_path must match command_log.path"
+                )
+            checked_entries += 1
+    if checked_entries == 0:
+        raise SystemExit("competition run summary command_log must contain at least one entry")
+
+
+def validate_competition_exact_host_attestation(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    proof_class = summary["proof_class"]
+    attestation = summary.get("competition_exact_host_attestation")
+    if proof_class != "competition-exact":
+        if attestation is not None:
+            raise SystemExit(
+                "competition run summary competition_exact_host_attestation is allowed only for "
+                "proof_class=competition-exact"
+            )
+        return
+    if not isinstance(attestation, dict):
+        raise SystemExit(
+            "competition run summary proof_class=competition-exact requires "
+            "competition_exact_host_attestation"
+        )
+    if attestation.get("competition_exact_host_attested") is not True:
+        raise SystemExit(
+            "competition run summary proof_class=competition-exact requires "
+            "competition_exact_host_attestation.competition_exact_host_attested=true"
+        )
+    if attestation.get("required_agent_tool") != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit("competition exact host attestation required_agent_tool must be opencode")
+    if attestation.get("required_agent") != COMPETITION_OPENCODE_AGENT:
+        raise SystemExit("competition exact host attestation required_agent must be c2rust-migrator")
+    if attestation.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit("competition exact host attestation required_model must be GLM-5.1")
+    if attestation.get("required_variant") != COMPETITION_OPENCODE_VARIANT:
+        raise SystemExit("competition exact host attestation required_variant must be max")
+    availability = attestation.get("opencode_model_availability")
+    if not isinstance(availability, dict):
+        raise SystemExit("competition exact host attestation opencode_model_availability must be an object")
+    validate_opencode_model_availability_for_exact_host(
+        availability,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+
+
+def validate_opencode_model_availability_for_exact_host(
+    availability: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    if availability.get("status") != "available":
+        raise SystemExit("competition exact host opencode_model_availability.status must be available")
+    if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        raise SystemExit("competition exact host opencode_model_availability.required_model must be GLM-5.1")
+    if availability.get("model_listed") is not True:
+        raise SystemExit("competition exact host opencode_model_availability.model_listed must be true")
+    if availability.get("opencode_command") != COMPETITION_OPENCODE_COMMAND:
+        raise SystemExit("competition exact host opencode_model_availability.opencode_command must be opencode")
+    if int(availability.get("process_returncode", -1)) != 0:
+        raise SystemExit("competition exact host opencode_model_availability.process_returncode must be 0")
+    if not opencode_models_argv_matches(availability.get("argv")):
+        raise SystemExit("competition exact host opencode_model_availability.argv must be opencode models")
+    logs = availability.get("logs")
+    if not isinstance(logs, dict):
+        raise SystemExit("competition exact host opencode_model_availability.logs must be an object")
+    for stream in ("stdout", "stderr"):
+        log_ref = logs.get(stream)
+        if not isinstance(log_ref, str) or not is_repo_relative_posix_path(log_ref):
+            raise SystemExit(f"competition exact host opencode_model_availability.logs.{stream} must be repo-relative POSIX")
+        log_path = resolve_summary_artifact(log_ref, summary_path=summary_path, repo_root=repo_root)
+        if log_path is None:
+            raise SystemExit(f"competition exact host opencode_model_availability.logs.{stream} does not exist")
+        expected_sha = availability.get(f"{stream}_sha256")
+        if not isinstance(expected_sha, str) or not is_sha256(expected_sha):
+            raise SystemExit(f"competition exact host opencode_model_availability.{stream}_sha256 must be a sha256")
+        if sha256(log_path) != expected_sha:
+            raise SystemExit(f"competition exact host opencode_model_availability.logs.{stream} sha256 mismatch")
+        if stream == "stdout":
+            stdout_text = log_path.read_text(encoding="utf-8", errors="replace")
+            if not opencode_models_stdout_lists_required_model(stdout_text):
+                raise SystemExit("competition exact host opencode_model_availability.logs.stdout must list GLM-5.1")
+
+
+def opencode_models_argv_matches(value: Any) -> bool:
+    return value == [COMPETITION_OPENCODE_COMMAND, "models"]
+
+
+def opencode_models_stdout_lists_required_model(stdout: str) -> bool:
+    for token in re.split(r"[\s,;]+", stdout):
+        candidate = token.strip().strip("'\"`[](){}")
+        if candidate == COMPETITION_OPENCODE_MODEL:
+            return True
+        if "/" in candidate and candidate.rsplit("/", 1)[-1] == COMPETITION_OPENCODE_MODEL:
+            return True
+    return False
+
+
+def validate_artifact_roots(artifact_roots: list[str], *, repo_root: Path) -> None:
+    roots = set(artifact_roots)
+    missing = sorted(REQUIRED_ARTIFACT_ROOTS - roots)
+    if missing:
+        raise SystemExit(f"competition run summary artifact_roots missing required roots: {', '.join(missing)}")
+
+    for root in artifact_roots:
+        if not is_repo_relative_posix_path(root):
+            raise SystemExit(f"competition run summary artifact_roots must be repo-relative POSIX paths: {root}")
+        resolved = (repo_root / root).resolve()
+        try:
+            resolved.relative_to(repo_root.resolve())
+        except ValueError as error:
+            raise SystemExit(f"competition run summary artifact_roots escapes repository: {root}") from error
+
+
+def is_repo_relative_posix_path(value: str) -> bool:
+    if not value or "\\" in value:
+        return False
+    if value.startswith("/") or value.startswith("~"):
+        return False
+    if len(value) >= 2 and value[1] == ":":
+        return False
+    parts = PurePosixPath(value).parts
+    return ".." not in parts
+
+
+def validate_workflow_metrics(summary: dict[str, Any], *, summary_path: Path, repo_root: Path) -> None:
+    binding = summary["workflow_metrics"]
+    metrics_ref = binding["path"]
+    if not is_repo_relative_posix_path(metrics_ref):
+        raise SystemExit(f"competition run summary workflow_metrics.path must be repo-relative POSIX: {metrics_ref}")
+    metrics_path = resolve_summary_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None:
+        raise SystemExit(f"competition run summary workflow_metrics.path does not exist: {metrics_ref}")
+    actual_sha = sha256(metrics_path)
+    if actual_sha != binding["sha256"]:
+        raise SystemExit("competition run summary workflow_metrics.sha256 does not match artifact")
+    metrics = load_json(metrics_path)
+    required_fields = [
+        "schema_version",
+        "run_id",
+        "proof_class",
+        "units_total",
+        "units_converged",
+        "units_baseline_only",
+        "unsafe_reduction",
+        "translation_before_after",
+        "avg_repair_rounds",
+        "auto_recovery_rate",
+        "human_interventions",
+        "always_compiles",
+        "always_equivalent",
+        "fail_closed_count",
+        "root_cause_counts",
+        "wall_clock_seconds",
+        "llm_calls",
+        "per_unit_statuses",
+    ]
+    missing = [field for field in required_fields if field not in metrics]
+    if missing:
+        raise SystemExit(f"workflow metrics artifact missing required fields: {', '.join(missing)}")
+    slices = summary["slices"]
+    expected = {
+        "run_id": summary["run_id"],
+        "proof_class": summary["proof_class"],
+        "units_total": slices["attempted"],
+        "units_converged": slices["semantic_pass"],
+        "units_baseline_only": max(0, int(slices["compiled"]) - int(slices["semantic_pass"])),
+        "fail_closed_count": int(slices["refused"]) + int(slices["blocked"]),
+        "wall_clock_seconds": summary["elapsed_seconds"],
+    }
+    for field, value in expected.items():
+        if metrics[field] != value:
+            raise SystemExit(f"workflow metrics artifact {field} does not match competition summary")
+    if not isinstance(metrics["per_unit_statuses"], list):
+        raise SystemExit("workflow metrics artifact per_unit_statuses must be an array")
+    if len(metrics["per_unit_statuses"]) != int(metrics["units_total"]):
+        raise SystemExit("workflow metrics artifact per_unit_statuses count does not match units_total")
+    validate_per_unit_status_rollup(metrics, slices)
+    validate_translation_before_after_summary(metrics)
+    validate_per_unit_statuses(metrics, summary_path=summary_path, repo_root=repo_root)
+    validate_root_unsafe_reduction_consistency(metrics)
+    validate_root_cause_counts(metrics)
+
+
+def validate_per_unit_status_rollup(metrics: dict[str, Any], slices: dict[str, Any]) -> None:
+    counts = {
+        "compiled": 0,
+        "semantic_pass": 0,
+        "refused": 0,
+        "blocked": 0,
+        "failed": 0,
+    }
+    terminal_fields = ("semantic_pass", "refused", "blocked", "failed")
+    for index, unit in enumerate(metrics["per_unit_statuses"]):
+        if not isinstance(unit, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] must be an object")
+        for field in counts:
+            if not isinstance(unit.get(field), bool):
+                raise SystemExit(f"workflow metrics per_unit_statuses[{index}].{field} must be boolean")
+        terminal_true = [field for field in terminal_fields if unit[field] is True]
+        if len(terminal_true) > 1:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}] must have at most one terminal status flag"
+            )
+        if unit["semantic_pass"] is True and unit["compiled"] is not True:
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].semantic_pass requires compiled")
+        if not terminal_true and unit["compiled"] is not True:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}] must have one terminal status flag "
+                "or be compiled baseline-only"
+            )
+        for field in counts:
+            if unit[field] is True:
+                counts[field] += 1
+    for field, count in counts.items():
+        if count != int(slices[field]):
+            raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match competition summary")
+    if metrics["units_converged"] != counts["semantic_pass"]:
+        raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match units_converged")
+    if metrics["units_baseline_only"] != max(0, counts["compiled"] - counts["semantic_pass"]):
+        raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match units_baseline_only")
+    if metrics["fail_closed_count"] != counts["refused"] + counts["blocked"]:
+        raise SystemExit("workflow metrics artifact per_unit_statuses rollup does not match fail_closed_count")
+
+
+def validate_translation_before_after_summary(metrics: dict[str, Any]) -> None:
+    summary = metrics.get("translation_before_after")
+    if not isinstance(summary, dict):
+        raise SystemExit("workflow metrics artifact translation_before_after must be an object")
+    status = summary.get("status")
+    if status not in {"bound", "not_provided"}:
+        raise SystemExit("workflow metrics artifact translation_before_after.status is invalid")
+    unit_count = summary.get("unit_count")
+    measured_count = summary.get("measured_unsafe_unit_count")
+    patch_count = summary.get("accepted_patch_unit_count")
+    if not isinstance(unit_count, int) or unit_count < 0:
+        raise SystemExit("workflow metrics artifact translation_before_after.unit_count must be nonnegative")
+    if not isinstance(measured_count, int) or measured_count < 0:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.measured_unsafe_unit_count must be nonnegative"
+        )
+    if not isinstance(patch_count, int) or patch_count < 0:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.accepted_patch_unit_count must be nonnegative"
+        )
+    units = summary.get("units")
+    if not isinstance(units, list) or len(units) != unit_count:
+        raise SystemExit("workflow metrics artifact translation_before_after.units count must match unit_count")
+    evidence_units: list[tuple[str, dict[str, Any]]] = []
+    for unit in metrics["per_unit_statuses"]:
+        if not isinstance(unit, dict):
+            continue
+        before_after = unit.get("translation_before_after")
+        if not isinstance(before_after, dict):
+            continue
+        unit_id = unit.get("unit_id")
+        if not isinstance(unit_id, str) or not unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after per-unit evidence requires unit_id")
+        evidence_units.append((unit_id, before_after))
+    actual_count = len(evidence_units)
+    if actual_count != unit_count:
+        raise SystemExit("workflow metrics artifact translation_before_after.unit_count does not match per-unit evidence")
+    measured_actual = sum(
+        1
+        for _unit_id, evidence in evidence_units
+        if isinstance(evidence.get("unsafe_reduction"), dict)
+        and evidence["unsafe_reduction"].get("status") == "measured"
+    )
+    if measured_count != measured_actual:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.measured_unsafe_unit_count does not match per-unit evidence"
+        )
+    patch_actual = sum(1 for _unit_id, evidence in evidence_units if isinstance(evidence.get("accepted_patch"), dict))
+    if patch_count != patch_actual:
+        raise SystemExit(
+            "workflow metrics artifact translation_before_after.accepted_patch_unit_count does not match per-unit evidence"
+        )
+    validate_translation_before_after_units_projection(units, evidence_units)
+    if status == "not_provided" and unit_count != 0:
+        raise SystemExit("workflow metrics artifact translation_before_after not_provided status requires zero units")
+    if status == "bound" and unit_count == 0:
+        raise SystemExit("workflow metrics artifact translation_before_after bound status requires units")
+
+
+def validate_translation_before_after_units_projection(
+    units: list[Any],
+    evidence_units: list[tuple[str, dict[str, Any]]],
+) -> None:
+    projected_by_unit_id: dict[str, dict[str, Any]] = {}
+    for projected in units:
+        if not isinstance(projected, dict):
+            raise SystemExit("workflow metrics artifact translation_before_after.units entries must be objects")
+        unit_id = projected.get("unit_id")
+        if not isinstance(unit_id, str) or not unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after.units entries require unit_id")
+        if unit_id in projected_by_unit_id:
+            raise SystemExit("workflow metrics artifact translation_before_after.units contains duplicate unit_id")
+        projected_by_unit_id[unit_id] = projected
+
+    for unit_id, evidence in evidence_units:
+        projected = projected_by_unit_id.get(unit_id)
+        if not isinstance(projected, dict):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+        if projected.get("status") != evidence.get("status"):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+        if projected.get("unsafe_reduction") != evidence.get("unsafe_reduction"):
+            raise SystemExit("workflow metrics artifact translation_before_after.units does not match per-unit evidence")
+
+
+def validate_per_unit_statuses(
+    metrics: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> None:
+    for index, unit in enumerate(metrics["per_unit_statuses"]):
+        if not isinstance(unit, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] must be an object")
+        root_cause = unit.get("root_cause_key")
+        if root_cause is not None and (not isinstance(root_cause, str) or not root_cause):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].root_cause_key must be a non-empty string")
+        contract_verification = unit.get("opencode_contract_verification")
+        if contract_verification is not None:
+            if not isinstance(contract_verification, dict) or not isinstance(contract_verification.get("status"), str):
+                raise SystemExit(
+                    f"workflow metrics per_unit_statuses[{index}].opencode_contract_verification.status "
+                    "must be a string"
+                )
+        before_after = unit.get("translation_before_after")
+        if before_after is not None:
+            validate_translation_before_after_unit(
+                before_after,
+                unit=unit,
+                index=index,
+                summary_path=summary_path,
+                repo_root=repo_root,
+            )
+        if "repair_rounds" not in unit:
+            continue
+        repair_rounds = unit["repair_rounds"]
+        if not isinstance(repair_rounds, int) or repair_rounds < 1:
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].repair_rounds must be a positive integer")
+        if repair_rounds > REPAIR_ROUND_CAP:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_rounds must be between 1 and {REPAIR_ROUND_CAP}"
+            )
+        if not isinstance(unit.get("auto_recovered"), bool):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}].auto_recovered must be boolean")
+        repair_history = unit.get("repair_history")
+        if not isinstance(repair_history, dict):
+            raise SystemExit(f"workflow metrics per_unit_statuses[{index}] missing repair_history")
+        patch_events_ref = repair_history.get("patch_events_path")
+        patch_events_sha = repair_history.get("patch_events_sha256")
+        if not isinstance(patch_events_ref, str) or not is_repo_relative_posix_path(patch_events_ref):
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_path "
+                "must be repo-relative POSIX"
+            )
+        if not isinstance(patch_events_sha, str) or len(patch_events_sha) != 64:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_sha256 must be sha256"
+            )
+        patch_events_path = resolve_summary_artifact(
+            patch_events_ref,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+        if patch_events_path is None:
+            raise SystemExit(
+                f"workflow metrics per_unit_statuses[{index}].repair_history.patch_events_path does not exist: "
+                f"{patch_events_ref}"
+            )
+        if sha256(patch_events_path) != patch_events_sha:

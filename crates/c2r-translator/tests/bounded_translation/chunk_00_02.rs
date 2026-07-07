@@ -1,489 +1,125 @@
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang() {
-    let ast: Value = serde_json::from_str(include_str!(
-        "../../fixtures/clang_ast/implicit_integer_noop_cast_ast.json"
-    ))
-    .expect("fixture JSON");
+fn clang_ast_fixture_replays_record_field_subset_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/record_field_ast.json"))
+            .expect("fixture JSON");
 
-    let identity = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_noop")
-        .expect("lower clang-proven implicit integer NoOp cast fixture without invoking clang");
+    let point_x = lower_function_and_globals_from_clang_ast_json_value(&ast, "point_x")
+        .expect("lower record value field read fixture without invoking clang");
     let [IrStmt::Return {
         value:
-            Some(IrExpr::Cast {
-                implicit: true,
-                target,
-                expr,
+            Some(IrExpr::Member {
+                field,
+                is_arrow: false,
                 ..
             }),
         ..
-    }] = identity.function_ir.body.as_slice()
+    }] = point_x.function_ir.body.as_slice()
     else {
         panic!(
-            "expected integer NoOp return to preserve an IR cast, got {:?}",
-            identity.function_ir.body
+            "expected record value field read return, got {:?}",
+            point_x.function_ir.body
         );
     };
-    assert!(matches!(
-        target.kind,
-        IrTypeKind::Integer {
-            signed: true,
-            width: 32
-        }
-    ));
-    let IrExpr::LValueToRValue {
-        target: read_target,
-        expr: read_expr,
+    assert_eq!(field, "x");
+    let emitted = emit_rust_from_ir_with_globals(&point_x.function_ir, &point_x.globals)
+        .expect("emit Rust from record value field read fixture");
+    let rust = &emitted.rust;
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub fn point_x(p: Point) -> i32"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-value-read", rust);
+
+    let set_point_x = lower_function_and_globals_from_clang_ast_json_value(&ast, "set_point_x")
+        .expect("lower record value field assignment fixture without invoking clang");
+    let [IrStmt::Assign { target, .. }, IrStmt::Return {
+        value: Some(IrExpr::Member { field, .. }),
         ..
-    } = expr.as_ref()
-    else {
-        panic!("expected NoOp cast operand to be an explicit LValueToRValue read, got {expr:?}");
-    };
-    assert!(matches!(
-        read_target.kind,
-        IrTypeKind::Integer {
-            signed: true,
-            width: 32
-        }
-    ));
-    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
-        panic!("expected LValueToRValue operand to be the original parameter, got {read_expr:?}");
-    };
-    assert_eq!(name, "value");
-    assert!(matches!(
-        ty.kind,
-        IrTypeKind::Integer {
-            signed: true,
-            width: 32
-        }
-    ));
-
-    let emitted = emit_rust_from_ir_with_globals(&identity.function_ir, &identity.globals)
-        .expect("emit Rust from clang-proven implicit integer NoOp cast fixture");
-    let rust = &emitted.rust;
-    assert!(
-        rust.contains("pub fn identity_noop(value: i32) -> i32"),
-        "{rust}"
-    );
-    assert!(rust.contains("return (value as i32);"), "{rust}");
-    assert_rust_snippet_runs(
-        "typed-ir-clang-ast-fixture-implicit-integer-noop-cast",
-        rust,
-        "assert_eq!(identity_noop(-7i32), -7i32);",
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang() {
-    let ast: Value = serde_json::from_str(include_str!(
-        "../../fixtures/clang_ast/lvalue_to_rvalue_integer_return_ast.json"
-    ))
-    .expect("fixture JSON");
-
-    let read_value = lower_function_and_globals_from_clang_ast_json_value(&ast, "read_value")
-        .expect("lower clang-proven integer LValueToRValue fixture without invoking clang");
-    let [IrStmt::Return {
-        value: Some(expr), ..
-    }] = read_value.function_ir.body.as_slice()
+    }] = set_point_x.function_ir.body.as_slice()
     else {
         panic!(
-            "expected integer LValueToRValue return expression, got {:?}",
-            read_value.function_ir.body
+            "expected record value field assignment and return, got {:?}",
+            set_point_x.function_ir.body
         );
     };
-    let lowered_json = serde_json::to_value(expr).expect("serialize return expression");
-    let Some(lvalue_to_rvalue) = lowered_json.get("LValueToRValue") else {
-        panic!("expected explicit LValueToRValue IR node, got {lowered_json}");
-    };
-    assert_eq!(lvalue_to_rvalue["target"]["kind"]["Integer"]["width"], 32);
-    assert_eq!(lvalue_to_rvalue["expr"]["Var"]["name"], "value");
-
-    let emitted = emit_rust_from_ir_with_globals(&read_value.function_ir, &read_value.globals)
-        .expect("emit Rust from clang-proven integer LValueToRValue fixture");
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: false, .. } if field == "x"),
+        "expected dot member assignment target, got {target:?}"
+    );
+    assert_eq!(field, "x");
+    let emitted = emit_rust_from_ir_with_globals(&set_point_x.function_ir, &set_point_x.globals)
+        .expect("emit Rust from record value field assignment fixture");
     let rust = &emitted.rust;
     assert!(
-        rust.contains("pub fn read_value(value: i32) -> i32"),
+        rust.contains("pub fn set_point_x(mut p: Point, value: i32) -> i32"),
         "{rust}"
     );
-    assert!(rust.contains("return value;"), "{rust}");
-    assert_rust_snippet_runs(
-        "typed-ir-clang-ast-fixture-integer-lvalue-to-rvalue",
-        rust,
-        "assert_eq!(read_value(-7i32), -7i32);",
-    );
-}
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-value-assignment", rust);
 
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang() {
-    let ast: Value = serde_json::from_str(include_str!(
-        "../../fixtures/clang_ast/usual_arithmetic_ast.json"
-    ))
-    .expect("fixture JSON");
-    let missing_cast =
-        lower_function_and_globals_from_clang_ast_json_value(&ast, "missing_integral_cast")
-            .expect("lower malformed fixture without explicit usual arithmetic cast");
-    let error = emit_rust_from_ir_with_globals(&missing_cast.function_ir, &missing_cast.globals)
-        .expect_err("missing usual arithmetic cast must fail closed");
-    assert!(
-        error.reason.contains(
-            "usual arithmetic conversion requires explicit IntegralCast/IntegralPromotion"
-        ),
-        "{}",
-        error.reason
-    );
-    assert!(
-        error
-            .reason
-            .contains("binary operand types must match result type for +"),
-        "{}",
-        error.reason
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_replays_explicit_enum_constant_without_clang() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-
-    let status_code = lower_function_and_globals_from_clang_ast_json_value(&ast, "status_code")
-        .expect("lower explicit enum constant fixture without invoking clang");
+    let point_x_ptr = lower_function_and_globals_from_clang_ast_json_value(&ast, "point_x_ptr")
+        .expect("lower readonly record pointer field read fixture without invoking clang");
     let [IrStmt::Return {
         value:
-            Some(IrExpr::LitInt {
-                value,
-                spelling,
-                ty,
+            Some(IrExpr::Member {
+                field,
+                is_arrow: true,
                 ..
             }),
         ..
-    }] = status_code.function_ir.body.as_slice()
+    }] = point_x_ptr.function_ir.body.as_slice()
     else {
         panic!(
-            "expected enum constant return literal, got {:?}",
-            status_code.function_ir.body
+            "expected readonly arrow member read return, got {:?}",
+            point_x_ptr.function_ir.body
         );
     };
-    assert_eq!(*value, 7);
-    assert_eq!(spelling, "7");
-    assert!(matches!(
-        ty.kind,
-        IrTypeKind::Integer {
-            signed: true,
-            width: 32
-        }
-    ));
-    let emitted = emit_rust_from_ir_with_globals(&status_code.function_ir, &status_code.globals)
-        .expect("emit Rust from explicit enum constant fixture");
+    assert_eq!(field, "x");
+    let emitted = emit_rust_from_ir_with_globals(&point_x_ptr.function_ir, &point_x_ptr.globals)
+        .expect("emit Rust from readonly record pointer field read fixture");
     let rust = &emitted.rust;
-    assert!(rust.contains("pub fn status_code() -> i32"), "{rust}");
-    assert!(rust.contains("return 7i32;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-constant", rust);
-}
+    assert!(
+        rust.contains("pub fn point_x_ptr(p: &Point) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return p.x;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-arrow-read", rust);
 
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_replays_enum_constant_in_binary_without_clang() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-
-    let add_status = lower_function_and_globals_from_clang_ast_json_value(&ast, "add_status")
-        .expect("lower explicit enum constant binary fixture without invoking clang");
-    let [IrStmt::Return {
-        value: Some(IrExpr::Binary { rhs, ty, .. }),
-        ..
-    }] = add_status.function_ir.body.as_slice()
-    else {
+    let write_point_x = lower_function_and_globals_from_clang_ast_json_value(&ast, "write_point_x")
+        .expect("lower mutable record pointer field write fixture without invoking clang");
+    let [IrStmt::Assign { target, .. }] = write_point_x.function_ir.body.as_slice() else {
         panic!(
-            "expected enum constant binary return, got {:?}",
-            add_status.function_ir.body
+            "expected mutable arrow member assignment, got {:?}",
+            write_point_x.function_ir.body
         );
     };
-    assert!(matches!(
-        rhs.as_ref(),
-        IrExpr::LitInt {
-            value: 7,
-            spelling,
-            ..
-        } if spelling == "7"
-    ));
-    assert!(matches!(
-        ty.kind,
-        IrTypeKind::Integer {
-            signed: true,
-            width: 32
-        }
-    ));
-    let emitted = emit_rust_from_ir_with_globals(&add_status.function_ir, &add_status.globals)
-        .expect("emit Rust from enum constant binary fixture");
+    assert!(
+        matches!(target, IrExpr::Member { field, is_arrow: true, .. } if field == "x"),
+        "expected arrow member assignment target, got {target:?}"
+    );
+    let emitted =
+        emit_rust_from_ir_with_globals(&write_point_x.function_ir, &write_point_x.globals)
+            .expect("emit Rust from mutable record pointer field write fixture");
     let rust = &emitted.rust;
     assert!(
-        rust.contains("pub fn add_status(value: i32) -> i32"),
+        rust.contains("pub fn write_point_x(mut p: &mut Point, value: i32)"),
         "{rust}"
     );
-    assert!(
-        rust.contains("return value.checked_add(7i32).expect(\"signed addition overflow\");"),
-        "{rust}"
-    );
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-constant-binary", rust);
+    assert!(rust.contains("p.x = value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-arrow-write", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without_clang() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-
-    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_status_table")
-        .expect("lower explicit enum constant global initializer fixture without invoking clang");
-    assert_eq!(
-        lowered
-            .globals
-            .iter()
-            .find(|global| global.name == "status_table")
-            .map(|global| &global.init),
-        Some(&IrGlobalInit::IntegerArray(vec![7, 0]))
-    );
-
-    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect("emit Rust from enum constant global initializer fixture");
-    let rust = &emitted.rust;
-    assert!(
-        rust.contains("const STATUS_TABLE: [i32; 2] = [7i32, 0i32];"),
-        "{rust}"
-    );
-    assert!(
-        rust.contains("return STATUS_TABLE[0i32 as usize];"),
-        "{rust}"
-    );
-    assert_rust_snippet_runs(
-        "typed-ir-clang-ast-fixture-enum-constant-global-initializer",
-        rust,
-        r#"
-    assert_eq!(lookup_status_table(), 7);
-"#,
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-
-    let lowered =
-        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_pending_status_table")
-            .expect("function shape should lower before unsupported enum global is emitted");
-    assert!(
-        lowered
-            .globals
-            .iter()
-            .all(|global| global.name != "pending_status_table"),
-        "implicit enum global initializer must not be collected"
-    );
-
-    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect_err("referenced implicit enum global initializer must fail closed");
-    assert!(
-        error
-            .reason
-            .contains("index base pending_status_table is not declared"),
-        "unexpected error: {error:?}"
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_rejects_enum_constant_without_explicit_value_without_clang() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-
-    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "implicit_status_code")
-        .expect_err("implicit enum constant without explicit ConstantExpr must fail closed");
-    assert_eq!(error.kind, "unsupported_clang_expr");
-    assert!(
-        error.message.contains("EnumConstantDecl STATUS_PENDING"),
-        "{}",
-        error.message
-    );
-    assert!(
-        error.message.contains("explicit ConstantExpr value"),
-        "{}",
-        error.message
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-    let target_abi = TargetAbiProfile {
-        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
-        endianness: Some("little".to_string()),
-        int_width: 32,
-        char_width: 8,
-        plain_char_signed: Some(true),
-        short_width: 16,
-        long_width: 64,
-        long_long_width: 64,
-        pointer_width: 64,
-        ..TargetAbiProfile::default()
-    };
-
-    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-        &ast,
-        "identity_status",
-        Some(&target_abi),
-    )
-    .expect_err("enum-typed functions remain unsupported");
-    assert_eq!(error.kind, "unsupported_clang_type");
-    assert!(
-        error.message.contains("EnumConstantDecl STATUS_PENDING"),
-        "{}",
-        error.message
-    );
-    assert!(
-        error.message.contains("explicit ConstantExpr value"),
-        "{}",
-        error.message
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_rejects_explicit_enum_typed_identity_without_target_abi() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
-
-    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_mode")
-        .expect_err("enum-typed scalar lowering requires target ABI profile");
-    assert_eq!(error.kind, "unsupported_clang_type");
-    assert!(error.message.contains("enum mode"), "{}", error.message);
-    assert!(
-        error.message.contains("target ABI profile evidence"),
-        "{}",
-        error.message
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_rejects_named_enum_without_complete_definition_flag() {
-    let ast = serde_json::json!({
-        "kind": "TranslationUnitDecl",
-        "inner": [
-            {
-                "id": "0x3100",
-                "kind": "EnumDecl",
-                "name": "mode",
-                "inner": [
-                    {
-                        "id": "0x3101",
-                        "kind": "EnumConstantDecl",
-                        "name": "MODE_OK",
-                        "type": { "qualType": "int" },
-                        "inner": [
-                            {
-                                "kind": "ConstantExpr",
-                                "type": { "qualType": "int" },
-                                "value": "0",
-                                "inner": [
-                                    {
-                                        "kind": "IntegerLiteral",
-                                        "type": { "qualType": "int" },
-                                        "value": "0"
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            },
-            {
-                "kind": "FunctionDecl",
-                "name": "identity_mode",
-                "type": { "qualType": "enum mode (enum mode)" },
-                "inner": [
-                    {
-                        "kind": "ParmVarDecl",
-                        "name": "value",
-                        "type": { "qualType": "enum mode" }
-                    },
-                    {
-                        "kind": "CompoundStmt",
-                        "inner": [
-                            {
-                                "kind": "ReturnStmt",
-                                "inner": [
-                                    {
-                                        "kind": "ImplicitCastExpr",
-                                        "castKind": "LValueToRValue",
-                                        "type": { "qualType": "enum mode" },
-                                        "inner": [
-                                            {
-                                                "kind": "DeclRefExpr",
-                                                "type": { "qualType": "enum mode" },
-                                                "referencedDecl": {
-                                                    "kind": "ParmVarDecl",
-                                                    "name": "value"
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    });
-    let target_abi = TargetAbiProfile {
-        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
-        endianness: Some("little".to_string()),
-        int_width: 32,
-        char_width: 8,
-        plain_char_signed: Some(true),
-        short_width: 16,
-        long_width: 64,
-        long_long_width: 64,
-        pointer_width: 64,
-        ..TargetAbiProfile::default()
-    };
-
-    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-        &ast,
-        "identity_mode",
-        Some(&target_abi),
-    )
-    .expect_err("named enum without completeDefinition must fail closed");
-
-    assert_eq!(error.kind, "unsupported_clang_type");
-    assert!(
-        error
-            .message
-            .contains("EnumDecl mode is not a complete definition"),
-        "{}",
-        error.message
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
-    let ast: Value =
-        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
-            .expect("fixture JSON");
+fn clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_write_without_clang()
+{
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/record_pointer_field_ast.json"
+    ))
+    .expect("fixture JSON");
     let target_abi = TargetAbiProfile {
         triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
         endianness: Some("little".to_string()),
@@ -499,59 +135,301 @@ fn clang_ast_fixture_lowers_explicit_i32_enum_typed_identity_with_target_abi() {
 
     let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
         &ast,
-        "identity_mode",
+        "make_blob",
         Some(&target_abi),
     )
-    .expect("lower explicit i32 enum-typed identity fixture without invoking clang");
+    .expect("lower opaque pointer record field fixture without invoking clang");
+
+    let [IrStmt::Assign {
+        target: buf_target,
+        value: buf_value,
+        ..
+    }, IrStmt::Assign {
+        target: size_target,
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Var {
+            name: return_name, ..
+        }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected two field assignments and identity return, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert!(
+        matches!(buf_target, IrExpr::Member { field, is_arrow: true, .. } if field == "buf"),
+        "expected blob->buf assignment target, got {buf_target:?}"
+    );
+    assert!(
+        matches!(size_target, IrExpr::Member { field, is_arrow: true, .. } if field == "size"),
+        "expected blob->size assignment target, got {size_target:?}"
+    );
+    match buf_value {
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: false,
+            ..
+        } => {
+            assert!(matches!(target.kind, IrTypeKind::Pointer { .. }));
+            assert!(matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+        }
+        other => panic!("expected opaque pointer cast RHS, got {other:?}"),
+    }
+    assert_eq!(return_name, "blob");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from opaque pointer record field fixture");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Blob"), "{rust}");
+    assert!(rust.contains("pub buf: *mut core::ffi::c_void"), "{rust}");
+    assert!(rust.contains("pub size: usize"), "{rust}");
+    assert!(
+        rust.contains(
+            "pub fn make_blob(mut blob: &mut Blob, value: *const core::ffi::c_void, len: usize) -> &mut Blob"
+        ),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("blob.buf = (value as *mut core::ffi::c_void);"),
+        "{rust}"
+    );
+    assert!(rust.contains("blob.size = len;"), "{rust}");
+    assert!(rust.contains("return blob;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-record-opaque-pointer-field-cast",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_typedef_record_pointer_field_write_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/record_pointer_field_typedef_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "make_blob_typedef",
+        Some(&target_abi),
+    )
+    .expect("lower typedef-backed record pointer field fixture without invoking clang");
+
+    let [IrStmt::Assign {
+        target: buf_target,
+        value: buf_value,
+        ..
+    }, IrStmt::Assign {
+        target: size_target,
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Var {
+            name: return_name, ..
+        }),
+        ..
+    }] = lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected two field assignments and identity return, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert!(
+        matches!(buf_target, IrExpr::Member { field, is_arrow: true, .. } if field == "buf"),
+        "expected blob->buf assignment target, got {buf_target:?}"
+    );
+    assert!(
+        matches!(size_target, IrExpr::Member { field, is_arrow: true, .. } if field == "size"),
+        "expected blob->size assignment target, got {size_target:?}"
+    );
+    match buf_value {
+        IrExpr::Cast {
+            target,
+            expr,
+            implicit: false,
+            ..
+        } => {
+            assert_eq!(target.canonical, "void *");
+            assert!(matches!(expr.as_ref(), IrExpr::Var { name, .. } if name == "value"));
+        }
+        other => panic!("expected opaque pointer cast RHS, got {other:?}"),
+    }
+    assert_eq!(return_name, "blob");
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from typedef-backed record pointer field fixture");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("pub buf: *mut core::ffi::c_void"), "{rust}");
+    assert!(rust.contains("pub size: usize"), "{rust}");
+    assert!(
+        rust.contains(
+            "pub fn make_blob_typedef(mut blob: &mut FdbBlob, value: *const core::ffi::c_void, len: usize) -> &mut FdbBlob"
+        ),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("blob.buf = (value as *mut core::ffi::c_void);"),
+        "{rust}"
+    );
+    assert!(rust.contains("blob.size = len;"), "{rust}");
+    assert!(rust.contains("return blob;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-clang-ast-fixture-typedef-record-pointer-field-cast",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/usual_arithmetic_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let add_byte = lower_function_and_globals_from_clang_ast_json_value(&ast, "add_byte")
+        .expect("lower clang-proven usual arithmetic fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary { rhs, ty, .. }),
+        ..
+    }] = add_byte.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected usual arithmetic return binary, got {:?}",
+            add_byte.function_ir.body
+        );
+    };
     assert!(matches!(
-        lowered.function_ir.return_type.kind,
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 32
+        }
+    ));
+    assert!(
+        matches!(
+            rhs.as_ref(),
+            IrExpr::Cast {
+                implicit: true,
+                target: IrType {
+                    kind: IrTypeKind::Integer {
+                        signed: false,
+                        width: 32
+                    },
+                    ..
+                },
+                ..
+            }
+        ),
+        "expected clang-proven IntegralCast on RHS, got {rhs:?}"
+    );
+    let emitted = emit_rust_from_ir_with_globals(&add_byte.function_ir, &add_byte.globals)
+        .expect("emit Rust from clang-proven usual arithmetic fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn add_byte(acc: u32, byte: u8) -> u32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return acc.wrapping_add((byte as u32));"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-usual-arithmetic-cast", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_unary_plus_integer_promotion_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/unary_integer_conversion_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let promoted = lower_function_and_globals_from_clang_ast_json_value(&ast, "promote_plus")
+        .expect("lower clang-proven unary plus integer promotion fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit: true,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = promoted.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected unary plus return to preserve IntegralPromotion as an IR cast, got {:?}",
+            promoted.function_ir.body
+        );
+    };
+    assert!(matches!(
+        target.kind,
         IrTypeKind::Integer {
             signed: true,
             width: 32
         }
     ));
-    assert!(matches!(
-        lowered.function_ir.params.as_slice(),
-        [IrParam {
-            name,
-            ty:
-                IrType {
-                    kind:
-                        IrTypeKind::Integer {
-                            signed: true,
-                            width: 32
-                        },
-                    ..
-                },
-            ..
-        }] if name == "value"
-    ));
-    let [IrStmt::Return {
-        value: Some(IrExpr::Var { name, ty, .. }),
+    let IrExpr::LValueToRValue {
+        target: read_ty,
+        expr: read_expr,
         ..
-    }] = lowered.function_ir.body.as_slice()
+    } = expr.as_ref()
     else {
-        panic!(
-            "expected enum typed identity return variable, got {:?}",
-            lowered.function_ir.body
-        );
+        panic!("expected promoted unary plus operand to preserve LValueToRValue, got {expr:?}");
+    };
+    assert!(matches!(
+        read_ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 8
+        }
+    ));
+    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
+        panic!("expected promoted unary plus read operand to be the original parameter, got {read_expr:?}");
     };
     assert_eq!(name, "value");
     assert!(matches!(
         ty.kind,
         IrTypeKind::Integer {
             signed: true,
-            width: 32
+            width: 8
         }
     ));
 
-    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect("emit Rust from explicit i32 enum-typed identity fixture");
+    let emitted = emit_rust_from_ir_with_globals(&promoted.function_ir, &promoted.globals)
+        .expect("emit Rust from clang-proven unary plus integer promotion fixture");
     let rust = &emitted.rust;
     assert!(
-        rust.contains("pub fn identity_mode(value: i32) -> i32"),
+        rust.contains("pub fn promote_plus(value: i8) -> i32"),
         "{rust}"
     );
-    assert!(rust.contains("return value;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-typed-identity", rust);
+    assert!(rust.contains("return (value as i32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-unary-plus-integer-promotion",
+        rust,
+        "assert_eq!(promote_plus(-7i8), -7i32);",
+    );
 }

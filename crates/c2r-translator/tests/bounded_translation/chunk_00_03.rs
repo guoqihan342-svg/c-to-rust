@@ -1,588 +1,328 @@
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_lowers_anonymous_typedef_enum_alias_with_target_abi() {
-    let ast = serde_json::json!({
-        "kind": "TranslationUnitDecl",
-        "inner": [
-            {
-                "id": "0x2000",
-                "kind": "EnumDecl",
-                "completeDefinition": true,
-                "inner": [
-                    {
-                        "id": "0x2001",
-                        "kind": "EnumConstantDecl",
-                        "name": "FDB_NO_ERR",
-                        "type": { "qualType": "int" },
-                        "inner": [
-                            {
-                                "kind": "ConstantExpr",
-                                "type": { "qualType": "int" },
-                                "value": "0",
-                                "inner": [
-                                    {
-                                        "kind": "IntegerLiteral",
-                                        "type": { "qualType": "int" },
-                                        "value": "0"
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "id": "0x2002",
-                        "kind": "EnumConstantDecl",
-                        "name": "FDB_INIT_FAILED",
-                        "type": { "qualType": "int" },
-                        "inner": [
-                            {
-                                "kind": "ConstantExpr",
-                                "type": { "qualType": "int" },
-                                "value": "7",
-                                "inner": [
-                                    {
-                                        "kind": "IntegerLiteral",
-                                        "type": { "qualType": "int" },
-                                        "value": "7"
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            },
-            {
-                "kind": "TypedefDecl",
-                "name": "fdb_err_t",
-                "isReferenced": true,
-                "type": { "qualType": "enum fdb_err_t" },
-                "inner": [
-                    {
-                        "kind": "EnumType",
-                        "type": { "qualType": "enum fdb_err_t" },
-                        "decl": {
-                            "id": "0x2000",
-                            "kind": "EnumDecl",
-                            "name": ""
-                        },
-                        "isTagOwned": true
-                    }
-                ]
-            },
-            {
-                "kind": "FunctionDecl",
-                "name": "id_err",
-                "type": {
-                    "qualType": "fdb_err_t (fdb_err_t)"
-                },
-                "inner": [
-                    {
-                        "kind": "ParmVarDecl",
-                        "name": "e",
-                        "type": {
-                            "qualType": "fdb_err_t",
-                            "desugaredQualType": "enum fdb_err_t"
-                        }
-                    },
-                    {
-                        "kind": "CompoundStmt",
-                        "inner": [
-                            {
-                                "kind": "ReturnStmt",
-                                "inner": [
-                                    {
-                                        "kind": "ImplicitCastExpr",
-                                        "castKind": "LValueToRValue",
-                                        "type": {
-                                            "qualType": "fdb_err_t",
-                                            "desugaredQualType": "enum fdb_err_t"
-                                        },
-                                        "inner": [
-                                            {
-                                                "kind": "DeclRefExpr",
-                                                "type": {
-                                                    "qualType": "fdb_err_t",
-                                                    "desugaredQualType": "enum fdb_err_t"
-                                                },
-                                                "referencedDecl": {
-                                                    "kind": "ParmVarDecl",
-                                                    "name": "e"
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    });
-    let target_abi = TargetAbiProfile {
-        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
-        endianness: Some("little".to_string()),
-        int_width: 32,
-        char_width: 8,
-        plain_char_signed: Some(true),
-        short_width: 16,
-        long_width: 64,
-        long_long_width: 64,
-        pointer_width: 64,
-        ..TargetAbiProfile::default()
-    };
+fn clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/implicit_integer_noop_cast_ast.json"
+    ))
+    .expect("fixture JSON");
 
-    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-        &ast,
-        "id_err",
-        Some(&target_abi),
-    )
-    .expect("lower anonymous typedef enum alias identity fixture without invoking clang");
+    let identity = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_noop")
+        .expect("lower clang-proven implicit integer NoOp cast fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Cast {
+                implicit: true,
+                target,
+                expr,
+                ..
+            }),
+        ..
+    }] = identity.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integer NoOp return to preserve an IR cast, got {:?}",
+            identity.function_ir.body
+        );
+    };
     assert!(matches!(
-        lowered.function_ir.return_type.kind,
+        target.kind,
         IrTypeKind::Integer {
             signed: true,
             width: 32
         }
     ));
-    assert!(matches!(
-        lowered.function_ir.params.as_slice(),
-        [IrParam {
-            name,
-            ty:
-                IrType {
-                    kind:
-                        IrTypeKind::Integer {
-                            signed: true,
-                            width: 32
-                        },
-                    ..
-                },
-            ..
-        }] if name == "e"
-    ));
-
-    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect("emit Rust from anonymous typedef enum alias fixture");
-    let rust = &emitted.rust;
-    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
-    assert!(rust.contains("return e;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-typedef-enum-alias", rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_lowers_owned_typedef_enum_alias_without_complete_definition_flag() {
-    let ast = serde_json::json!({
-        "kind": "TranslationUnitDecl",
-        "inner": [
-            {
-                "id": "0x3000",
-                "kind": "TypedefDecl",
-                "name": "fdb_err_t",
-                "isReferenced": true,
-                "type": { "qualType": "enum fdb_err_t" },
-                "inner": [
-                    {
-                        "id": "0x3001",
-                        "kind": "EnumDecl",
-                        "inner": [
-                            {
-                                "id": "0x3002",
-                                "kind": "EnumConstantDecl",
-                                "name": "FDB_NO_ERR",
-                                "type": { "qualType": "int" },
-                                "inner": [
-                                    {
-                                        "kind": "ConstantExpr",
-                                        "type": { "qualType": "int" },
-                                        "value": "0",
-                                        "inner": [
-                                            {
-                                                "kind": "IntegerLiteral",
-                                                "type": { "qualType": "int" },
-                                                "value": "0"
-                                            }
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
-                                "id": "0x3003",
-                                "kind": "EnumConstantDecl",
-                                "name": "FDB_INIT_FAILED",
-                                "type": { "qualType": "int" },
-                                "inner": [
-                                    {
-                                        "kind": "ConstantExpr",
-                                        "type": { "qualType": "int" },
-                                        "value": "7",
-                                        "inner": [
-                                            {
-                                                "kind": "IntegerLiteral",
-                                                "type": { "qualType": "int" },
-                                                "value": "7"
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            },
-            {
-                "kind": "FunctionDecl",
-                "name": "id_err",
-                "type": {
-                    "qualType": "fdb_err_t (fdb_err_t)"
-                },
-                "inner": [
-                    {
-                        "kind": "ParmVarDecl",
-                        "name": "e",
-                        "type": {
-                            "qualType": "fdb_err_t",
-                            "desugaredQualType": "enum fdb_err_t",
-                            "typeAliasDeclId": "0x3000"
-                        }
-                    },
-                    {
-                        "kind": "CompoundStmt",
-                        "inner": [
-                            {
-                                "kind": "ReturnStmt",
-                                "inner": [
-                                    {
-                                        "kind": "ImplicitCastExpr",
-                                        "castKind": "LValueToRValue",
-                                        "type": {
-                                            "qualType": "fdb_err_t",
-                                            "desugaredQualType": "enum fdb_err_t",
-                                            "typeAliasDeclId": "0x3000"
-                                        },
-                                        "inner": [
-                                            {
-                                                "kind": "DeclRefExpr",
-                                                "type": {
-                                                    "qualType": "fdb_err_t",
-                                                    "desugaredQualType": "enum fdb_err_t",
-                                                    "typeAliasDeclId": "0x3000"
-                                                },
-                                                "referencedDecl": {
-                                                    "kind": "ParmVarDecl",
-                                                    "name": "e"
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    });
-    let target_abi = TargetAbiProfile {
-        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
-        endianness: Some("little".to_string()),
-        int_width: 32,
-        char_width: 8,
-        plain_char_signed: Some(true),
-        short_width: 16,
-        long_width: 64,
-        long_long_width: 64,
-        pointer_width: 64,
-        ..TargetAbiProfile::default()
+    let IrExpr::LValueToRValue {
+        target: read_target,
+        expr: read_expr,
+        ..
+    } = expr.as_ref()
+    else {
+        panic!("expected NoOp cast operand to be an explicit LValueToRValue read, got {expr:?}");
     };
-
-    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-        &ast,
-        "id_err",
-        Some(&target_abi),
-    )
-    .expect("lower FlashDB-style owned typedef enum alias without completeDefinition flag");
-
     assert!(matches!(
-        lowered.function_ir.return_type.kind,
+        read_target.kind,
         IrTypeKind::Integer {
             signed: true,
             width: 32
         }
     ));
-    assert!(matches!(
-        lowered.function_ir.params.as_slice(),
-        [IrParam {
-            name,
-            ty:
-                IrType {
-                    kind:
-                        IrTypeKind::Integer {
-                            signed: true,
-                            width: 32
-                        },
-                    ..
-                },
-            ..
-        }] if name == "e"
-    ));
-    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect("emit Rust from FlashDB-style owned typedef enum alias fixture");
-    let rust = &emitted.rust;
-    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
-    assert!(rust.contains("return e;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-owned-typedef-enum-alias", rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_lowers_typedef_enum_alias_reference_with_implicit_values() {
-    let ast = serde_json::json!({
-        "kind": "TranslationUnitDecl",
-        "inner": [
-            {
-                "id": "0x3201",
-                "kind": "EnumDecl",
-                "inner": [
-                    {
-                        "id": "0x3202",
-                        "kind": "EnumConstantDecl",
-                        "name": "FDB_NO_ERR",
-                        "type": { "qualType": "int" }
-                    },
-                    {
-                        "id": "0x3203",
-                        "kind": "EnumConstantDecl",
-                        "name": "FDB_INIT_FAILED",
-                        "type": { "qualType": "int" }
-                    }
-                ]
-            },
-            {
-                "id": "0x3200",
-                "kind": "TypedefDecl",
-                "name": "fdb_err_t",
-                "isReferenced": true,
-                "type": { "qualType": "enum fdb_err_t" },
-                "inner": [
-                    {
-                        "kind": "EnumType",
-                        "type": { "qualType": "enum fdb_err_t" },
-                        "decl": {
-                            "kind": "EnumDecl",
-                            "id": "0x3201"
-                        }
-                    }
-                ]
-            },
-            {
-                "kind": "FunctionDecl",
-                "name": "id_err",
-                "type": {
-                    "qualType": "fdb_err_t (fdb_err_t)"
-                },
-                "inner": [
-                    {
-                        "kind": "ParmVarDecl",
-                        "name": "e",
-                        "type": {
-                            "qualType": "fdb_err_t",
-                            "desugaredQualType": "enum fdb_err_t",
-                            "typeAliasDeclId": "0x3200"
-                        }
-                    },
-                    {
-                        "kind": "CompoundStmt",
-                        "inner": [
-                            {
-                                "kind": "ReturnStmt",
-                                "inner": [
-                                    {
-                                        "kind": "ImplicitCastExpr",
-                                        "castKind": "LValueToRValue",
-                                        "type": {
-                                            "qualType": "fdb_err_t",
-                                            "desugaredQualType": "enum fdb_err_t",
-                                            "typeAliasDeclId": "0x3200"
-                                        },
-                                        "inner": [
-                                            {
-                                                "kind": "DeclRefExpr",
-                                                "type": {
-                                                    "qualType": "fdb_err_t",
-                                                    "desugaredQualType": "enum fdb_err_t",
-                                                    "typeAliasDeclId": "0x3200"
-                                                },
-                                                "referencedDecl": {
-                                                    "kind": "ParmVarDecl",
-                                                    "name": "e"
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        ]
-    });
-    let target_abi = TargetAbiProfile {
-        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
-        endianness: Some("little".to_string()),
-        int_width: 32,
-        char_width: 8,
-        plain_char_signed: Some(true),
-        short_width: 16,
-        long_width: 64,
-        long_long_width: 64,
-        pointer_width: 64,
-        ..TargetAbiProfile::default()
+    let IrExpr::Var { name, ty, .. } = read_expr.as_ref() else {
+        panic!("expected LValueToRValue operand to be the original parameter, got {read_expr:?}");
     };
-
-    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-        &ast,
-        "id_err",
-        Some(&target_abi),
-    )
-    .expect("lower FlashDB-style typedef enum alias reference with implicit values");
-
+    assert_eq!(name, "value");
     assert!(matches!(
-        lowered.function_ir.return_type.kind,
+        ty.kind,
         IrTypeKind::Integer {
             signed: true,
             width: 32
         }
     ));
-    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect("emit Rust from FlashDB-style implicit typedef enum alias fixture");
+
+    let emitted = emit_rust_from_ir_with_globals(&identity.function_ir, &identity.globals)
+        .expect("emit Rust from clang-proven implicit integer NoOp cast fixture");
     let rust = &emitted.rust;
-    assert!(rust.contains("pub fn id_err(e: i32) -> i32"), "{rust}");
-    assert!(rust.contains("return e;"), "{rust}");
-    assert_rust_snippet_compiles(
-        "typed-ir-clang-ast-fixture-typedef-enum-alias-implicit-values",
+    assert!(
+        rust.contains("pub fn identity_noop(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return (value as i32);"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-implicit-integer-noop-cast",
         rust,
+        "assert_eq!(identity_noop(-7i32), -7i32);",
     );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi() {
+fn clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/lvalue_to_rvalue_integer_return_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let read_value = lower_function_and_globals_from_clang_ast_json_value(&ast, "read_value")
+        .expect("lower clang-proven integer LValueToRValue fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(expr), ..
+    }] = read_value.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected integer LValueToRValue return expression, got {:?}",
+            read_value.function_ir.body
+        );
+    };
+    let lowered_json = serde_json::to_value(expr).expect("serialize return expression");
+    let Some(lvalue_to_rvalue) = lowered_json.get("LValueToRValue") else {
+        panic!("expected explicit LValueToRValue IR node, got {lowered_json}");
+    };
+    assert_eq!(lvalue_to_rvalue["target"]["kind"]["Integer"]["width"], 32);
+    assert_eq!(lvalue_to_rvalue["expr"]["Var"]["name"], "value");
+
+    let emitted = emit_rust_from_ir_with_globals(&read_value.function_ir, &read_value.globals)
+        .expect("emit Rust from clang-proven integer LValueToRValue fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn read_value(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return value;"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-integer-lvalue-to-rvalue",
+        rust,
+        "assert_eq!(read_value(-7i32), -7i32);",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_usual_arithmetic_missing_integral_cast_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/usual_arithmetic_ast.json"
+    ))
+    .expect("fixture JSON");
+    let missing_cast =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "missing_integral_cast")
+            .expect("lower malformed fixture without explicit usual arithmetic cast");
+    let error = emit_rust_from_ir_with_globals(&missing_cast.function_ir, &missing_cast.globals)
+        .expect_err("missing usual arithmetic cast must fail closed");
+    assert!(
+        error.reason.contains(
+            "usual arithmetic conversion requires explicit IntegralCast/IntegralPromotion"
+        ),
+        "{}",
+        error.reason
+    );
+    assert!(
+        error
+            .reason
+            .contains("binary operand types must match result type for +"),
+        "{}",
+        error.reason
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_explicit_enum_constant_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
             .expect("fixture JSON");
-    let target_abi = TargetAbiProfile {
-        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
-        endianness: Some("little".to_string()),
-        int_width: 32,
-        char_width: 8,
-        plain_char_signed: Some(true),
-        short_width: 16,
-        long_width: 64,
-        long_long_width: 64,
-        pointer_width: 64,
-        ..TargetAbiProfile::default()
-    };
 
-    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
-        &ast,
-        "choose_mode",
-        Some(&target_abi),
-    )
-    .expect("lower explicit i32 enum local variable fixture without invoking clang");
-    assert!(matches!(
-        lowered.function_ir.return_type.kind,
-        IrTypeKind::Integer {
-            signed: true,
-            width: 32
-        }
-    ));
-    assert!(matches!(
-        lowered.function_ir.params.as_slice(),
-        [IrParam {
-            name,
-            ty:
-                IrType {
-                    kind:
-                        IrTypeKind::Integer {
-                            signed: true,
-                            width: 32
-                        },
-                    ..
-                },
-            ..
-        }] if name == "value"
-    ));
-    let [IrStmt::Decl {
-        name: decl_name,
-        ty: decl_ty,
-        init: Some(IrExpr::LitInt { value: 1, .. }),
+    let status_code = lower_function_and_globals_from_clang_ast_json_value(&ast, "status_code")
+        .expect("lower explicit enum constant fixture without invoking clang");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::LitInt {
+                value,
+                spelling,
+                ty,
+                ..
+            }),
         ..
-    }, IrStmt::If {
-        condition,
-        then_body,
-        else_body,
-        ..
-    }, IrStmt::Return {
-        value: Some(IrExpr::Var {
-            name: return_name, ..
-        }),
-        ..
-    }] = lowered.function_ir.body.as_slice()
+    }] = status_code.function_ir.body.as_slice()
     else {
         panic!(
-            "expected enum local declaration, branch assignment, and return, got {:?}",
-            lowered.function_ir.body
+            "expected enum constant return literal, got {:?}",
+            status_code.function_ir.body
         );
     };
-    assert_eq!(decl_name, "current");
+    assert_eq!(*value, 7);
+    assert_eq!(spelling, "7");
     assert!(matches!(
-        decl_ty.kind,
+        ty.kind,
         IrTypeKind::Integer {
             signed: true,
             width: 32
         }
     ));
-    assert!(matches!(
-        condition,
-        IrExpr::Binary {
-            op: IrBinOp::Eq,
-            lhs,
-            rhs,
-            ..
-        } if matches!(lhs.as_ref(), IrExpr::Var { name, .. } if name == "value")
-            && matches!(rhs.as_ref(), IrExpr::LitInt { value: 2, .. })
-    ));
-    assert!(else_body.is_empty());
-    assert!(matches!(
-        then_body.as_slice(),
-        [IrStmt::Assign {
-            target: IrExpr::Var { name: target_name, .. },
-            value: IrExpr::LitInt { value: 2, .. },
-            ..
-        }] if target_name == "current"
-    ));
-    assert_eq!(return_name, "current");
-
-    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
-        .expect("emit Rust from explicit i32 enum local variable fixture");
+    let emitted = emit_rust_from_ir_with_globals(&status_code.function_ir, &status_code.globals)
+        .expect("emit Rust from explicit enum constant fixture");
     let rust = &emitted.rust;
-    assert!(
-        rust.contains("pub fn choose_mode(value: i32) -> i32"),
-        "{rust}"
-    );
-    assert!(rust.contains("let mut current: i32 = 1i32;"), "{rust}");
-    assert!(rust.contains("if (value == 2i32)"), "{rust}");
-    assert!(rust.contains("current = 2i32;"), "{rust}");
-    assert!(rust.contains("return current;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-local-variable", rust);
+    assert!(rust.contains("pub fn status_code() -> i32"), "{rust}");
+    assert!(rust.contains("return 7i32;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-constant", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
-fn clang_ast_fixture_rejects_sizeof_enum_without_layout_abi() {
+fn clang_ast_fixture_replays_enum_constant_in_binary_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let add_status = lower_function_and_globals_from_clang_ast_json_value(&ast, "add_status")
+        .expect("lower explicit enum constant binary fixture without invoking clang");
+    let [IrStmt::Return {
+        value: Some(IrExpr::Binary { rhs, ty, .. }),
+        ..
+    }] = add_status.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected enum constant binary return, got {:?}",
+            add_status.function_ir.body
+        );
+    };
+    assert!(matches!(
+        rhs.as_ref(),
+        IrExpr::LitInt {
+            value: 7,
+            spelling,
+            ..
+        } if spelling == "7"
+    ));
+    assert!(matches!(
+        ty.kind,
+        IrTypeKind::Integer {
+            signed: true,
+            width: 32
+        }
+    ));
+    let emitted = emit_rust_from_ir_with_globals(&add_status.function_ir, &add_status.globals)
+        .expect("emit Rust from enum constant binary fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn add_status(value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return value.checked_add(7i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-enum-constant-binary", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_enum_constant_in_readonly_global_initializer_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_status_table")
+        .expect("lower explicit enum constant global initializer fixture without invoking clang");
+    assert_eq!(
+        lowered
+            .globals
+            .iter()
+            .find(|global| global.name == "status_table")
+            .map(|global| &global.init),
+        Some(&IrGlobalInit::IntegerArray(vec![7, 0]))
+    );
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from enum constant global initializer fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("const STATUS_TABLE: [i32; 2] = [7i32, 0i32];"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("return STATUS_TABLE[0i32 as usize];"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-enum-constant-global-initializer",
+        rust,
+        r#"
+    assert_eq!(lookup_status_table(), 7);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_implicit_enum_constant_in_readonly_global_initializer_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_pending_status_table")
+            .expect("function shape should lower before unsupported enum global is emitted");
+    assert!(
+        lowered
+            .globals
+            .iter()
+            .all(|global| global.name != "pending_status_table"),
+        "implicit enum global initializer must not be collected"
+    );
+
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("referenced implicit enum global initializer must fail closed");
+    assert!(
+        error
+            .reason
+            .contains("index base pending_status_table is not declared"),
+        "unexpected error: {error:?}"
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_enum_constant_without_explicit_value_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "implicit_status_code")
+        .expect_err("implicit enum constant without explicit ConstantExpr must fail closed");
+    assert_eq!(error.kind, "unsupported_clang_expr");
+    assert!(
+        error.message.contains("EnumConstantDecl STATUS_PENDING"),
+        "{}",
+        error.message
+    );
+    assert!(
+        error.message.contains("explicit ConstantExpr value"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_keeps_enum_typed_function_unsupported_without_clang() {
     let ast: Value =
         serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
             .expect("fixture JSON");
@@ -601,20 +341,138 @@ fn clang_ast_fixture_rejects_sizeof_enum_without_layout_abi() {
 
     let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
         &ast,
-        "sizeof_mode_bytes",
+        "identity_status",
         Some(&target_abi),
     )
-    .expect_err("sizeof(enum) still needs explicit enum layout/ABI proof");
-    assert_eq!(error.kind, "unsupported_sizeof_type");
+    .expect_err("enum-typed functions remain unsupported");
+    assert_eq!(error.kind, "unsupported_clang_type");
     assert!(
-        error.message.contains("sizeof(enum mode)"),
+        error.message.contains("EnumConstantDecl STATUS_PENDING"),
         "{}",
         error.message
     );
     assert!(
+        error.message.contains("explicit ConstantExpr value"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_explicit_enum_typed_identity_without_target_abi() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/enum_constant_ast.json"))
+            .expect("fixture JSON");
+
+    let error = lower_function_and_globals_from_clang_ast_json_value(&ast, "identity_mode")
+        .expect_err("enum-typed scalar lowering requires target ABI profile");
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(error.message.contains("enum mode"), "{}", error.message);
+    assert!(
+        error.message.contains("target ABI profile evidence"),
+        "{}",
+        error.message
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_rejects_named_enum_without_complete_definition_flag() {
+    let ast = serde_json::json!({
+        "kind": "TranslationUnitDecl",
+        "inner": [
+            {
+                "id": "0x3100",
+                "kind": "EnumDecl",
+                "name": "mode",
+                "inner": [
+                    {
+                        "id": "0x3101",
+                        "kind": "EnumConstantDecl",
+                        "name": "MODE_OK",
+                        "type": { "qualType": "int" },
+                        "inner": [
+                            {
+                                "kind": "ConstantExpr",
+                                "type": { "qualType": "int" },
+                                "value": "0",
+                                "inner": [
+                                    {
+                                        "kind": "IntegerLiteral",
+                                        "type": { "qualType": "int" },
+                                        "value": "0"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "kind": "FunctionDecl",
+                "name": "identity_mode",
+                "type": { "qualType": "enum mode (enum mode)" },
+                "inner": [
+                    {
+                        "kind": "ParmVarDecl",
+                        "name": "value",
+                        "type": { "qualType": "enum mode" }
+                    },
+                    {
+                        "kind": "CompoundStmt",
+                        "inner": [
+                            {
+                                "kind": "ReturnStmt",
+                                "inner": [
+                                    {
+                                        "kind": "ImplicitCastExpr",
+                                        "castKind": "LValueToRValue",
+                                        "type": { "qualType": "enum mode" },
+                                        "inner": [
+                                            {
+                                                "kind": "DeclRefExpr",
+                                                "type": { "qualType": "enum mode" },
+                                                "referencedDecl": {
+                                                    "kind": "ParmVarDecl",
+                                                    "name": "value"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    });
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let error = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "identity_mode",
+        Some(&target_abi),
+    )
+    .expect_err("named enum without completeDefinition must fail closed");
+
+    assert_eq!(error.kind, "unsupported_clang_type");
+    assert!(
         error
             .message
-            .contains("requires explicit C layout/ABI provenance"),
+            .contains("EnumDecl mode is not a complete definition"),
         "{}",
         error.message
     );

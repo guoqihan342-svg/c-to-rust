@@ -1,3 +1,413 @@
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_multi_var_decl_stmt_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-multi-var-decl");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("multi_decl.c");
+    fs::write(
+        &source_file,
+        "int multi_decl(void) { int a = 1, b = 2; return a + b; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "multi_decl");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Decl {
+        name: a_name,
+        init: Some(IrExpr::LitInt { value: a_value, .. }),
+        ..
+    }, IrStmt::Decl {
+        name: b_name,
+        init: Some(IrExpr::LitInt { value: b_value, .. }),
+        ..
+    }, IrStmt::Return {
+        value: Some(IrExpr::Binary { .. }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected two declarations followed by return, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(a_name, "a");
+    assert_eq!(*a_value, 1);
+    assert_eq!(b_name, "b");
+    assert_eq!(*b_value, 2);
+
+    let emitted = emit_rust_from_ir(function)
+        .unwrap_or_else(|error| panic!("emit multi var decl: {error:?}"));
+    let rust = &emitted.rust;
+    assert!(rust.contains("pub fn multi_decl() -> i32"), "{rust}");
+    assert!(rust.contains("let mut a: i32 = 1i32;"), "{rust}");
+    assert!(rust.contains("let mut b: i32 = 2i32;"), "{rust}");
+    assert!(
+        rust.contains("return a.checked_add(b).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-real-clang-multi-var-decl", rust);
+}
+
+#[test]
+fn pointer_field_writes_record_lvalue_and_boundary_decisions() {
+    let spec = SliceSpec {
+        target_id: "libuv".to_string(),
+        slice_id: "ip4-addr-fields".to_string(),
+        source_commit: "5e7d51a".to_string(),
+        function_name: "uv_ip4_addr".to_string(),
+        c_source: "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { addr->sin_family = AF_INET; addr->sin_port = port; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("ip4-addr-fields");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.slice_id, "ip4-addr-fields");
+    let plan = json_file(out_dir.join("l3-ip4-addr-fields-auto-translation-plan.json"));
+    assert_eq!(
+        plan["translation_source"]["selected"],
+        "legacy-string-translator"
+    );
+    let plan_errors = plan["errors"].as_array().expect("plan errors");
+    assert!(
+        plan_errors.iter().all(|error| {
+            let kind = error["kind"].as_str().unwrap_or_default();
+            kind.starts_with("legacy_") && kind.ends_with("_retired")
+        }),
+        "expected only retired-legacy diagnostics, got {plan_errors:?}"
+    );
+
+    let pointer_graph = json_file(out_dir.join("l3-ip4-addr-fields-pointer-graph.json"));
+    assert_eq!(pointer_graph["status"], "recorded");
+    let addr = pointer_graph["pointer_graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["id"] == "addr")
+        .expect("addr pointer node");
+    let write_effects = addr["write_effects"]
+        .as_array()
+        .expect("addr write effects");
+    assert!(write_effects
+        .iter()
+        .any(|effect| effect == "addr->sin_family"));
+    assert!(write_effects
+        .iter()
+        .any(|effect| effect == "addr->sin_port"));
+
+    let cfg = json_file(out_dir.join("l3-ip4-addr-fields-cfg.json"));
+    let lvalue_kinds = cfg["cfg"]["functions"][0]["blocks"][0]["lvalue_kinds"]
+        .as_array()
+        .expect("lvalue kinds");
+    let addr_decisions = addr["boundary_decisions"]
+        .as_array()
+        .expect("addr boundary decisions");
+
+    assert!(lvalue_kinds.iter().any(|kind| kind == "pointer_field"));
+    assert!(addr_decisions
+        .iter()
+        .any(|decision| decision == "safe_wrapper_candidate"));
+    assert!(plan["plan"]["translation_rule_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|rule| rule == "pointer-field-write"));
+}
+
+#[test]
+fn unproven_input_buffer_read_blocks_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bad-buffer-read".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "bad_buffer_read".to_string(),
+        c_source: "int bad_buffer_read(const int* values, int i, int* out) { out[0] = values[i]; return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("bad-buffer-read");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft = fs::read_to_string(out_dir.join("l3-bad-buffer-read-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-buffer-read-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
+    assert!(
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_syntax"),
+        "{:?}",
+        plan["errors"]
+    );
+    let events =
+        fs::read_to_string(out_dir.join("l3-bad-buffer-read-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
+}
+
+#[test]
+fn unproven_pointer_arithmetic_read_blocks_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bad-ptr-arith-read".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "bad_ptr_arith_read".to_string(),
+        c_source: "int bad_ptr_arith_read(const int* values, int i, int* out) { out[0] = *(values + i); return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("bad-ptr-arith-read");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-read-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-ptr-arith-read-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
+    assert!(
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_syntax"),
+        "{:?}",
+        plan["errors"]
+    );
+    let events =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-read-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
+}
+
+#[test]
+fn unproven_pointer_arithmetic_output_write_blocks_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bad-ptr-arith-out".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "bad_ptr_arith_out".to_string(),
+        c_source:
+            "int bad_ptr_arith_out(int* out, int i, int value) { *(out + i) = value; return 0; }"
+                .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("bad-ptr-arith-out");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-out-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-ptr-arith-out-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
+    assert!(
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_syntax"),
+        "{:?}",
+        plan["errors"]
+    );
+    let events =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-out-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
+}
+
+#[test]
+fn complex_pointer_arithmetic_output_write_blocks_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "bad-ptr-arith-complex-out".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "bad_ptr_arith_complex_out".to_string(),
+        c_source: "int bad_ptr_arith_complex_out(int* out, int len, int value) { for (int i = 0; i < len; i++) { *(out + i + 1) = value; } return 0; }".to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("bad-ptr-arith-complex-out");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-bad-ptr-arith-complex-out-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-bad-ptr-arith-complex-out-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
+    assert!(
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_lvalue"),
+        "{:?}",
+        plan["errors"]
+    );
+    let events = fs::read_to_string(
+        out_dir.join("l3-bad-ptr-arith-complex-out-auto-translation-events.jsonl"),
+    )
+    .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
+}
+
+#[test]
+fn unsupported_complex_lvalues_block_without_false_success() {
+    for (slice_id, function_name, c_source) in [
+        (
+            "unbounded-index",
+            "unbounded_index",
+            "int unbounded_index(int* out, int i, int value) { out[i] = value; return 0; }",
+        ),
+        (
+            "field-assignment",
+            "field_assignment",
+            "int field_assignment(int value) { state.field = value; return value; }",
+        ),
+        (
+            "pointer-arithmetic-complex",
+            "pointer_arithmetic_complex",
+            "int pointer_arithmetic_complex(int* out, int i, int value) { *(out + i + 1) = value; return 0; }",
+        ),
+    ] {
+        let spec = SliceSpec {
+            target_id: "demo".to_string(),
+            slice_id: slice_id.to_string(),
+            source_commit: "1234567".to_string(),
+            function_name: function_name.to_string(),
+            c_source: c_source.to_string(),
+            fixture_hash: "fixture-sha".to_string(),
+            build_profile: profile(true),
+            ..SliceSpec::default()
+        };
+        let out_dir = unique_out_dir(slice_id);
+
+        let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+        assert_eq!(manifest.status, "blocked", "{slice_id}");
+        let rust_draft =
+            fs::read_to_string(out_dir.join(format!("l3-{slice_id}-rust-draft.rs"))).unwrap();
+        assert!(rust_draft.is_empty(), "{slice_id}: {rust_draft}");
+        let plan = json_file(out_dir.join(format!("l3-{slice_id}-auto-translation-plan.json")));
+        assert_eq!(plan["status"], "blocked", "{slice_id}");
+        assert!(
+            plan["errors"]
+                .as_array()
+                .expect("plan errors")
+                .iter()
+                .any(|error| error["kind"] == "unsupported_lvalue"),
+            "{slice_id}: {:?}",
+            plan["errors"]
+        );
+        let events = fs::read_to_string(
+            out_dir.join(format!("l3-{slice_id}-auto-translation-events.jsonl")),
+        )
+        .unwrap();
+        assert!(
+            !events.contains("\"event\":\"translation_generated\""),
+            "{slice_id}"
+        );
+    }
+}
+
+#[test]
+fn blocks_pointer_out_param_without_observable_write() {
+    let spec = SliceSpec {
+        target_id: "libuv".to_string(),
+        slice_id: "ip4-addr-no-write".to_string(),
+        source_commit: "5e7d51a".to_string(),
+        function_name: "uv_ip4_addr".to_string(),
+        c_source:
+            "int uv_ip4_addr(const char* ip, int port, struct sockaddr_in* addr) { return 0; }"
+                .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(true),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("ip4-addr-no-write");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft =
+        fs::read_to_string(out_dir.join("l3-ip4-addr-no-write-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-ip4-addr-no-write-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
+    assert!(
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_pointer_pattern"),
+        "{:?}",
+        plan["errors"]
+    );
+    let events =
+        fs::read_to_string(out_dir.join("l3-ip4-addr-no-write-auto-translation-events.jsonl"))
+            .unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
+}
+
+#[test]
+fn blocks_unsupported_local_declaration_type_without_false_success() {
+    let spec = SliceSpec {
+        target_id: "demo".to_string(),
+        slice_id: "unknown-local".to_string(),
+        source_commit: "1234567".to_string(),
+        function_name: "unknown_local".to_string(),
+        c_source: "int unknown_local(int value) { alias_t local = value; return value; }"
+            .to_string(),
+        fixture_hash: "fixture-sha".to_string(),
+        build_profile: profile(false),
+        ..SliceSpec::default()
+    };
+    let out_dir = unique_out_dir("unknown-local");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+
+    assert_eq!(manifest.status, "blocked");
+    let rust_draft = fs::read_to_string(out_dir.join("l3-unknown-local-rust-draft.rs")).unwrap();
+    assert!(rust_draft.is_empty(), "{rust_draft}");
+    let plan = json_file(out_dir.join("l3-unknown-local-auto-translation-plan.json"));
+    assert_eq!(plan["status"], "blocked");
+    assert!(
+        plan["errors"]
+            .as_array()
+            .expect("plan errors")
+            .iter()
+            .any(|error| error["kind"] == "unsupported_syntax"),
+        "{:?}",
+        plan["errors"]
+    );
+    let events =
+        fs::read_to_string(out_dir.join("l3-unknown-local-auto-translation-events.jsonl")).unwrap();
+    assert!(!events.contains("\"event\":\"translation_generated\""));
+}
 #[test]
 fn blocks_unsupported_call_expressions_without_rust_draft() {
     for (slice_id, c_source) in [
@@ -56,558 +466,4 @@ fn blocks_unsupported_call_expressions_without_rust_draft() {
             "{slice_id}"
         );
     }
-}
-
-#[test]
-fn blocks_increment_expression_value_without_rust_draft() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "inc-expression".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "inc_expression".to_string(),
-        c_source: "int inc_expression(int value) { return value++; }".to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-    let out_dir = unique_out_dir("inc-expression");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft = fs::read_to_string(out_dir.join("l3-inc-expression-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let plan = json_file(out_dir.join("l3-inc-expression-auto-translation-plan.json"));
-    assert_eq!(plan["status"], "blocked");
-    assert!(
-        plan["errors"]
-            .as_array()
-            .expect("plan errors")
-            .iter()
-            .any(|error| error["kind"] == "unsupported_syntax"),
-        "{:?}",
-        plan["errors"]
-    );
-    let events =
-        fs::read_to_string(out_dir.join("l3-inc-expression-auto-translation-events.jsonl"))
-            .unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn blocks_unknown_or_unsupported_statement_without_rust_draft() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "unsupported-stmt".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "unsupported_stmt".to_string(),
-        c_source: "int unsupported_stmt(int value) { value ? value : 0; return value; }"
-            .to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-    let out_dir = unique_out_dir("unsupported-stmt");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft = fs::read_to_string(out_dir.join("l3-unsupported-stmt-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let plan = json_file(out_dir.join("l3-unsupported-stmt-auto-translation-plan.json"));
-    assert_eq!(plan["status"], "blocked");
-    assert!(
-        plan["errors"]
-            .as_array()
-            .expect("plan errors")
-            .iter()
-            .any(|error| error["kind"] == "unsupported_syntax"),
-        "{:?}",
-        plan["errors"]
-    );
-    let events =
-        fs::read_to_string(out_dir.join("l3-unsupported-stmt-auto-translation-events.jsonl"))
-            .unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn unsupported_goto_blocks_translation_without_false_success() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "goto-case".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "again".to_string(),
-        c_source: "int again(int x) { again: x++; if (x < 10) goto again; return x; }".to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-    let out_dir = unique_out_dir("goto-case");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft = fs::read_to_string(out_dir.join("l3-goto-case-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let plan = json_file(out_dir.join("l3-goto-case-auto-translation-plan.json"));
-    assert_eq!(plan["status"], "blocked");
-    assert!(
-        plan["errors"]
-            .as_array()
-            .expect("plan errors")
-            .iter()
-            .any(|error| error["kind"] == "unsupported_control_flow"),
-        "{:?}",
-        plan["errors"]
-    );
-    let cfg = json_file(out_dir.join("l3-goto-case-cfg.json"));
-    let unsupported = cfg["cfg"]["functions"][0]["unsupported_control_flow"]
-        .as_array()
-        .expect("unsupported control flow nodes");
-    assert!(
-        unsupported.iter().any(|node| node == "goto"),
-        "{unsupported:?}"
-    );
-    let events =
-        fs::read_to_string(out_dir.join("l3-goto-case-auto-translation-events.jsonl")).unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn unsupported_goto_records_minimal_cfg_blocks_and_edges() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "goto-cfg-evidence".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "again".to_string(),
-        c_source: "int again(int x) { again: x++; if (x < 10) goto again; return x; }".to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-
-    let out_dir = unique_out_dir("goto-cfg-evidence");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft =
-        fs::read_to_string(out_dir.join("l3-goto-cfg-evidence-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let cfg = json_file(out_dir.join("l3-goto-cfg-evidence-cfg.json"));
-    let function = &cfg["cfg"]["functions"][0];
-    let unsupported = function["unsupported_control_flow"]
-        .as_array()
-        .expect("unsupported control flow nodes");
-    assert!(unsupported.iter().any(|node| node == "label:again"));
-    assert!(unsupported.iter().any(|node| node == "goto:again"));
-    assert!(unsupported
-        .iter()
-        .any(|node| node == "relooper_refusal:goto"));
-    let structured = &function["structured_control_flow"];
-    assert!(
-        structured.is_object(),
-        "goto refusal should carry structured recovery evidence: {structured:?}"
-    );
-    assert_eq!(structured["has_goto"], true);
-    assert_eq!(structured["has_switch"], false);
-    assert_eq!(structured["relooper_required"], true);
-    assert!(structured["relooper_preconditions"]
-        .as_array()
-        .expect("relooper preconditions")
-        .iter()
-        .any(|item| item == "goto_target_resolved"));
-    assert!(structured["relooper_refusals"]
-        .as_array()
-        .expect("relooper refusals")
-        .iter()
-        .any(|item| item == "goto_requires_structured_recovery"));
-    assert!(structured["scope_note"]
-        .as_str()
-        .expect("scope note")
-        .contains("no Rust candidate lowering"));
-    let blocks = function["blocks"].as_array().expect("cfg blocks");
-    assert!(blocks.iter().any(|block| block["id"] == "label-again"));
-    assert!(blocks.iter().any(|block| block["id"] == "goto-again"));
-    let edges: Vec<&Value> = blocks
-        .iter()
-        .flat_map(|block| block["edges"].as_array().expect("block edges").iter())
-        .collect();
-    assert!(edges.iter().any(|edge| **edge == "entry->goto-again"));
-    assert!(edges.iter().any(|edge| **edge == "goto-again->label-again"));
-    assert!(!edges.iter().any(|edge| **edge == "entry->goto"));
-    let events =
-        fs::read_to_string(out_dir.join("l3-goto-cfg-evidence-auto-translation-events.jsonl"))
-            .unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn unsupported_switch_blocks_translation_until_cfg_relooper_exists() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "switch-case".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "choose".to_string(),
-        c_source: "int choose(int x) { switch (x) { case 1: return 1; default: return 0; } }"
-            .to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-    let out_dir = unique_out_dir("switch-case");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft = fs::read_to_string(out_dir.join("l3-switch-case-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let plan = json_file(out_dir.join("l3-switch-case-auto-translation-plan.json"));
-    assert_eq!(plan["status"], "blocked");
-    assert!(
-        plan["errors"]
-            .as_array()
-            .expect("plan errors")
-            .iter()
-            .any(|error| error["kind"] == "unsupported_control_flow"),
-        "{:?}",
-        plan["errors"]
-    );
-    let cfg = json_file(out_dir.join("l3-switch-case-cfg.json"));
-    let unsupported = cfg["cfg"]["functions"][0]["unsupported_control_flow"]
-        .as_array()
-        .expect("unsupported control flow nodes");
-    assert!(
-        unsupported.iter().any(|node| node == "switch"),
-        "{unsupported:?}"
-    );
-    let events =
-        fs::read_to_string(out_dir.join("l3-switch-case-auto-translation-events.jsonl")).unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn unsupported_switch_records_case_default_cfg_edges() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "switch-cfg-evidence".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "choose".to_string(),
-        c_source: "int choose(int x) { switch (x) { case 1: return 1; default: return 0; } }"
-            .to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-
-    let out_dir = unique_out_dir("switch-cfg-evidence");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft =
-        fs::read_to_string(out_dir.join("l3-switch-cfg-evidence-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let cfg = json_file(out_dir.join("l3-switch-cfg-evidence-cfg.json"));
-    let function = &cfg["cfg"]["functions"][0];
-    let unsupported = function["unsupported_control_flow"]
-        .as_array()
-        .expect("unsupported control flow nodes");
-    assert!(unsupported.iter().any(|node| node == "case:1"));
-    assert!(unsupported.iter().any(|node| node == "default"));
-    assert!(unsupported
-        .iter()
-        .any(|node| node == "relooper_refusal:switch"));
-    let structured = &function["structured_control_flow"];
-    assert!(
-        structured.is_object(),
-        "switch refusal should carry structured recovery evidence: {structured:?}"
-    );
-    assert_eq!(structured["has_goto"], false);
-    assert_eq!(structured["has_switch"], true);
-    assert_eq!(structured["relooper_required"], true);
-    assert!(structured["relooper_preconditions"]
-        .as_array()
-        .expect("relooper preconditions")
-        .iter()
-        .any(|item| item == "switch_cases_enumerated"));
-    assert!(structured["relooper_refusals"]
-        .as_array()
-        .expect("relooper refusals")
-        .iter()
-        .any(|item| item == "switch_requires_structured_recovery"));
-    assert!(structured["scope_note"]
-        .as_str()
-        .expect("scope note")
-        .contains("no Rust candidate lowering"));
-    let blocks = function["blocks"].as_array().expect("cfg blocks");
-    assert!(blocks.iter().any(|block| block["id"] == "switch-0"));
-    assert!(blocks.iter().any(|block| block["id"] == "case-1"));
-    assert!(blocks.iter().any(|block| block["id"] == "default"));
-    let edges: Vec<&Value> = blocks
-        .iter()
-        .flat_map(|block| block["edges"].as_array().expect("block edges").iter())
-        .collect();
-    assert!(edges.iter().any(|edge| **edge == "entry->switch-0"));
-    assert!(edges.iter().any(|edge| **edge == "switch-0->case-1"));
-    assert!(edges.iter().any(|edge| **edge == "switch-0->default"));
-    assert!(!edges.iter().any(|edge| **edge == "entry->switch"));
-    let events =
-        fs::read_to_string(out_dir.join("l3-switch-cfg-evidence-auto-translation-events.jsonl"))
-            .unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn missing_clang_profile_records_type_uncertainty() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "ambiguous".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "uses_alias".to_string(),
-        c_source: "alias_t uses_alias(alias_t value) { return value; }".to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(false),
-        ..SliceSpec::default()
-    };
-    let out_dir = unique_out_dir("ambiguous");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.status, "blocked");
-    let rust_draft = fs::read_to_string(out_dir.join("l3-ambiguous-rust-draft.rs")).unwrap();
-    assert!(rust_draft.is_empty(), "{rust_draft}");
-    let type_map = json_file(out_dir.join("l3-ambiguous-type-map.json"));
-    assert_eq!(type_map["status"], "uncertain");
-    assert!(
-        type_map["type_map"]["uncertainties"]
-            .as_array()
-            .expect("type map uncertainties")
-            .iter()
-            .any(|item| item["reason"]
-                .as_str()
-                .expect("uncertainty reason")
-                .contains("clang-backed type extraction")),
-        "{:?}",
-        type_map["type_map"]["uncertainties"]
-    );
-    let plan = json_file(out_dir.join("l3-ambiguous-auto-translation-plan.json"));
-    assert_eq!(plan["status"], "blocked");
-    assert!(
-        plan["errors"]
-            .as_array()
-            .expect("plan errors")
-            .iter()
-            .any(|error| error["kind"] == "type_uncertainty"),
-        "{:?}",
-        plan["errors"]
-    );
-    let events =
-        fs::read_to_string(out_dir.join("l3-ambiguous-auto-translation-events.jsonl")).unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[test]
-fn writes_translation_artifacts_for_l3_manifest_binding() {
-    let spec = SliceSpec {
-        target_id: "demo".to_string(),
-        slice_id: "add-one".to_string(),
-        source_commit: "1234567".to_string(),
-        function_name: "add_one".to_string(),
-        c_source: "int add_one(int value) { return value + 1; }".to_string(),
-        fixture_hash: "fixture-sha".to_string(),
-        build_profile: profile(true),
-        ..SliceSpec::default()
-    };
-    let out_dir = unique_out_dir("add-one");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert_eq!(manifest.target_id, "demo");
-    assert_eq!(manifest.slice_id, "add-one");
-    for path in [
-        "l3-add-one-auto-translation-plan.json",
-        "l3-add-one-auto-translation-events.jsonl",
-        "l3-add-one-type-map.json",
-        "l3-add-one-cfg.json",
-        "l3-add-one-pointer-graph.json",
-        "l3-add-one-ai-candidate-manifest.json",
-        "l3-add-one-blocked-repairs.json",
-        "l3-add-one-rust-draft.rs",
-    ] {
-        assert!(out_dir.join(path).exists(), "{path}");
-    }
-    let plan = fs::read_to_string(out_dir.join("l3-add-one-auto-translation-plan.json")).unwrap();
-    assert!(plan.contains("\"status\": \"blocked\""));
-    assert!(plan.contains("\"kind\": \"legacy_"));
-    assert!(plan.contains("_retired\""));
-    let events =
-        fs::read_to_string(out_dir.join("l3-add-one-auto-translation-events.jsonl")).unwrap();
-    assert!(!events.contains("\"event\":\"translation_generated\""));
-}
-
-#[cfg(not(feature = "clang-frontend"))]
-#[test]
-fn default_translation_artifacts_do_not_emit_clang_dry_run() {
-    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
-        "target_id": "flashdb",
-        "slice_id": "real-fdb-calc-crc32",
-        "source_commit": "93d1755",
-        "function_name": "fdb_calc_crc32",
-        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
-        "fixture_hash": "fixture-sha",
-        "source_root": "C:/src/FlashDB",
-        "source_file": "src/fdb_utils.c",
-        "source_file_hashes": {
-            "src/fdb_utils.c": "source-file-sha"
-        },
-        "function_source_span": {
-            "file": "src/fdb_utils.c",
-            "line_start": 77,
-            "line_end": 89,
-            "byte_start": 3818,
-            "byte_end": 4075,
-            "sha256": "function-span-sha"
-        },
-        "build_profile": {
-            "include_paths": ["inc"],
-            "defines": ["FDB_USING_FILE_POSIX_MODE"],
-            "target_triple": "x86_64-unknown-linux-gnu",
-            "abi": "linux-gnu",
-            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
-            "clang_available": false
-        }
-    }))
-    .unwrap();
-    let out_dir = unique_out_dir("no-clang-dry-run");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert!(!out_dir
-        .join("l3-real-fdb-calc-crc32-clang-dry-run.json")
-        .exists());
-    assert!(!out_dir
-        .join("l3-real-fdb-calc-crc32-clang-lowering-report.json")
-        .exists());
-    assert!(!manifest
-        .artifact_paths
-        .iter()
-        .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-dry-run.json")));
-    assert!(!manifest
-        .artifact_paths
-        .iter()
-        .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-lowering-report.json")));
-}
-
-#[cfg(feature = "clang-frontend")]
-#[test]
-fn clang_frontend_feature_writes_dry_run_artifact_from_real_tu_metadata() {
-    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
-        "target_id": "flashdb",
-        "slice_id": "real-fdb-calc-crc32",
-        "source_commit": "93d1755",
-        "function_name": "fdb_calc_crc32",
-        "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size) { return crc; }",
-        "fixture_hash": "fixture-sha",
-        "source_root": "C:/src/FlashDB",
-        "source_file": "src/fdb_utils.c",
-        "source_file_hashes": {
-            "src/fdb_utils.c": "source-file-sha"
-        },
-        "function_source_span": {
-            "file": "src/fdb_utils.c",
-            "line_start": 77,
-            "line_end": 89,
-            "byte_start": 3818,
-            "byte_end": 4075,
-            "sha256": "function-span-sha"
-        },
-        "build_profile": {
-            "include_paths": ["inc", "tests"],
-            "defines": ["FDB_USING_FILE_POSIX_MODE"],
-            "target_triple": "x86_64-unknown-linux-gnu",
-            "abi": "linux-gnu",
-            "compiler_command_source": "C:/src/FlashDB/CMakeLists.txt",
-            "clang_available": false
-        }
-    }))
-    .unwrap();
-    let out_dir = unique_out_dir("clang-dry-run");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-    let dry_run = json_file(out_dir.join("l3-real-fdb-calc-crc32-clang-dry-run.json"));
-
-    assert!(manifest
-        .artifact_paths
-        .iter()
-        .any(|path| path.ends_with("l3-real-fdb-calc-crc32-clang-dry-run.json")));
-    assert_eq!(dry_run["schema_version"], 1);
-    assert_eq!(dry_run["artifact_kind"], "clang-dry-run");
-    assert_eq!(dry_run["status"], "diagnostic_only");
-    assert_eq!(dry_run["frontend"], "clang");
-    assert_eq!(dry_run["claim_boundary"]["role"], "diagnostic_only");
-    assert_eq!(dry_run["active_frontend"]["kind"], "clang_ast_dump_json");
-    assert_eq!(dry_run["active_frontend"]["uses_libclang"], false);
-    assert_eq!(dry_run["dry_run"]["status"], "diagnostic_only");
-    assert_eq!(dry_run["dry_run"]["source_file"], "src/fdb_utils.c");
-    assert_eq!(
-        dry_run["dry_run"]["arguments"],
-        serde_json::json!([
-            "-IC:/src/FlashDB/inc",
-            "-IC:/src/FlashDB/tests",
-            "-DFDB_USING_FILE_POSIX_MODE"
-        ])
-    );
-    assert_eq!(
-        dry_run["metadata"]["source_file_hashes"]["src/fdb_utils.c"],
-        "source-file-sha"
-    );
-    assert!(dry_run["errors"].as_array().unwrap().is_empty());
-}
-
-#[cfg(all(feature = "clang-frontend", not(feature = "clang-lowering-report")))]
-#[test]
-fn clang_frontend_feature_does_not_emit_lowering_report_without_opt_in() {
-    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
-        "target_id": "demo",
-        "slice_id": "add-one",
-        "source_commit": "1234567",
-        "function_name": "add_one",
-        "c_source": "int add_one(int value) { return value + 1; }",
-        "fixture_hash": "fixture-sha",
-        "source_root": "C:/src/demo",
-        "source_file": "add_one.c",
-        "source_file_hashes": {
-            "add_one.c": "source-file-sha"
-        },
-        "function_source_span": {
-            "file": "add_one.c",
-            "line_start": 1,
-            "line_end": 1,
-            "byte_start": 0,
-            "byte_end": 43,
-            "sha256": "function-span-sha"
-        },
-        "build_profile": {
-            "include_paths": [],
-            "defines": [],
-            "target_triple": "x86_64-pc-windows-msvc",
-            "abi": "msvc",
-            "compiler_command_source": "clang",
-            "clang_available": true
-        }
-    }))
-    .unwrap();
-    let out_dir = unique_out_dir("no-clang-lowering-report");
-
-    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
-
-    assert!(!out_dir
-        .join("l3-add-one-clang-lowering-report.json")
-        .exists());
-    assert!(!manifest
-        .artifact_paths
-        .iter()
-        .any(|path| path.ends_with("l3-add-one-clang-lowering-report.json")));
 }

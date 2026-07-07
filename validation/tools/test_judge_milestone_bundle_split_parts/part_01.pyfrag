@@ -1,0 +1,101 @@
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline status is candidate context only.",
+    }
+
+
+def evidence_governance_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "evidence_root": "validation/evidence",
+        "failed_gates": [],
+        "policy_compliance": {
+            "policy_tier": "ci",
+            "status": "passed",
+            "failed_gates": [],
+            "gates": [
+                {"name": "portability", "status": "passed"},
+                {"name": "retention_metadata", "status": "passed"},
+            ],
+        },
+        "portability": {
+            "status": "passed",
+            "claim_anchor_issue_count": 0,
+            "profile_hash_issue_count": 0,
+            "diagnostic_host_metadata_count": 3,
+            "issues": [],
+            "profile_hash_issues": [],
+        },
+        "inventory": {
+            "file_count": 3,
+            "total_bytes": 120,
+            "retention_classes": {
+                "committed_release": {"file_count": 2, "total_bytes": 100},
+                "diagnostic_only": {"file_count": 1, "total_bytes": 20},
+            },
+            "pipelines": [
+                {
+                    "pipeline_id": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32",
+                    "artifact_count": 2,
+                    "total_bytes": 100,
+                    "runtime_ms": 40,
+                    "retention_class": "committed_release",
+                    "compression_policy": "do_not_compress_claim_anchors",
+                    "prune_policy": "do_not_prune_without_manifest_update",
+                },
+                {
+                    "pipeline_id": "validation/evidence/flashdb/auto-translation/diagnostic",
+                    "artifact_count": 1,
+                    "total_bytes": 20,
+                    "runtime_ms": 5,
+                    "retention_class": "diagnostic_only",
+                    "compression_policy": "compress_when_large_or_superseded",
+                    "prune_policy": "may_prune_after_replacement_evidence",
+                },
+            ],
+            "runtime": {
+                "observation_count": 2,
+                "total_duration_ms": 45,
+                "max_duration_ms": 40,
+            },
+            "retention_policy": {
+                "compression_policy": "compress large diagnostic_only logs first",
+                "prune_policy": "diagnostic_only may be pruned after replacement evidence is recorded",
+            },
+        },
+    }
+
+from pathlib import Path as _C2RPartPath
+
+_C2R_PARTS_DIR = _C2RPartPath(__file__).with_name("_test_judge_milestone_bundle_parts")
+for _C2R_PART_NAME in (
+    "class_part_00.py",
+    "class_part_01.py",
+    "class_part_02.py",
+    "class_part_03.py",
+):
+    _C2R_PART_PATH = _C2R_PARTS_DIR / _C2R_PART_NAME
+    exec(
+        compile(
+            _C2R_PART_PATH.read_text(encoding="utf-8"),
+            str(_C2R_PART_PATH),
+            "exec",
+        ),
+        globals(),
+    )
+
+class JudgeMilestoneBundleTests(
+    _JudgeMilestoneBundleTestsPart00,
+    _JudgeMilestoneBundleTestsPart01,
+    _JudgeMilestoneBundleTestsPart02,
+    _JudgeMilestoneBundleTestsPart03,
+    unittest.TestCase,
+):
+    pass
+
+del _C2RPartPath, _C2R_PARTS_DIR, _C2R_PART_NAME, _C2R_PART_PATH
+
+
+if __name__ == "__main__":
+    unittest.main()

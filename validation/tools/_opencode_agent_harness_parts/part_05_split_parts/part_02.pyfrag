@@ -1,0 +1,29 @@
+                semantic_role="agent-session-evidence",
+                payload=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_contract_verification is not None:
+            event_payload["opencode_contract_verification"] = opencode_contract_verification
+        if opencode_safety_transform_attempt is not None:
+            event_payload["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-safety-transform-attempt",
+                path=repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-safety-transform-attempt",
+                payload=load_json(repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
+        if repair_hint is not None:
+            record_repair_hint(connection, hint=repair_hint)
+        connection.commit()
+
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    if recorded is not None:
+        result["record_worker_summary"] = recorded
+    return result

@@ -1,0 +1,437 @@
+                text=True,
+                capture_output=True,
+                check=False,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            oracle_status = json.loads(
+                (
+                    out_root
+                    / "demo"
+                    / "auto-translation"
+                    / "compile-run"
+                    / "l3-compile-run-c-oracle-status.json"
+                ).read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(oracle_status["status"], "DRAFT_GENERATED")
+            self.assertEqual(oracle_status["toolchain_status"], "COMPILE_SUCCEEDED_NOT_ORACLE")
+            self.assertFalse(oracle_status["semantic_pass"])
+            self.assertEqual(oracle_status["compile_execution"]["status"], "compile_succeeded_not_oracle")
+            self.assertEqual(
+                oracle_status["compile_execution"]["toolchain_status_after_attempt"],
+                "COMPILE_SUCCEEDED_NOT_ORACLE",
+            )
+            self.assertFalse(oracle_status["compile_execution"]["semantic_pass"])
+            harness_execution = oracle_status["compile_execution"]["harness_execution"]
+            executable_path = str(
+                out_root
+                / "demo"
+                / "auto-translation"
+                / "compile-run"
+                / "l3-compile-run-c-oracle-harness-draft.exe"
+            ).replace("\\", "/")
+            self.assertEqual(harness_execution["status"], "exited_zero_not_oracle")
+            self.assertTrue(harness_execution["attempted"])
+            self.assertEqual(harness_execution["argv"], [executable_path])
+            self.assertEqual(
+                harness_execution["working_directory"],
+                str(out_root / "demo" / "auto-translation" / "compile-run").replace("\\", "/"),
+            )
+            self.assertEqual(harness_execution["executable_path"], executable_path)
+            self.assertEqual(harness_execution["timeout_seconds"], 30)
+            self.assertFalse(harness_execution["semantic_pass"])
+            self.assertEqual(harness_execution["returncode"], 0)
+            self.assertIsInstance(harness_execution["stdout"], str)
+            self.assertIsInstance(harness_execution["stderr"], str)
+            self.assertEqual(
+                harness_execution["diagnostics"],
+                ["C oracle harness executed, but execution output has not passed oracle diff gates."],
+            )
+            self.assertEqual(harness_execution["output_gate"]["status"], "unsupported_not_oracle")
+            self.assertFalse(harness_execution["output_gate"]["semantic_pass"])
+            self.assertEqual(harness_execution["output_gate"]["expected_stdout_fragments"], [])
+
+    def test_cc_compile_command_falls_back_to_gcc_when_cc_is_missing(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fake_bin = tmp_path / "fake-bin"
+            fake_bin.mkdir()
+            fake_cc_helper = fake_bin / "fake_cc.py"
+            fake_cc_helper.write_text(
+                "\n".join(
+                    [
+                        "import os",
+                        "import shutil",
+                        "import stat",
+                        "import sys",
+                        "",
+                        "args = sys.argv[1:]",
+                        "try:",
+                        "    output = args[args.index('-o') + 1]",
+                        "except (ValueError, IndexError):",
+                        "    print('missing -o output', file=sys.stderr)",
+                        "    sys.exit(2)",
+                        "if os.name == 'nt':",
+                        "    system_root = os.environ.get('SystemRoot') or os.environ.get('WINDIR') or r'C:\\Windows'",
+                        "    zero_exit_exe = os.path.join(system_root, 'System32', 'hostname.exe')",
+                        "    shutil.copyfile(zero_exit_exe, output)",
+                        "else:",
+                        "    with open(output, 'w', encoding='utf-8') as fh:",
+                        "        fh.write('#!/bin/sh\\nexit 0\\n')",
+                        "    os.chmod(output, os.stat(output).st_mode | stat.S_IXUSR)",
+                        "print('fake gcc compiled ' + output)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            if os.name == "nt":
+                fake_gcc = fake_bin / "gcc.cmd"
+                fake_gcc.write_text(
+                    f'@echo off\r\n"{sys.executable}" "%~dp0fake_cc.py" %*\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                fake_gcc = fake_bin / "gcc"
+                fake_gcc.write_text(
+                    f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/fake_cc.py" "$@"\n',
+                    encoding="utf-8",
+                )
+                fake_gcc.chmod(0o755)
+
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            harness_name = "l3-compile-run-gcc-c-oracle-harness-draft.c"
+            output_name = "l3-compile-run-gcc-c-oracle-harness-draft.exe"
+            (evidence_dir / harness_name).write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            compile_command = {
+                "argv": ["cc", harness_name, "-o", output_name],
+                "working_directory": evidence_dir.as_posix(),
+            }
+
+            def fake_which(name: str) -> str | None:
+                if name == "gcc":
+                    return str(fake_gcc)
+                return None
+
+            with mock.patch.object(module.shutil, "which", side_effect=fake_which):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_succeeded_not_oracle")
+            self.assertEqual(compile_execution["compiler_name"], "gcc")
+            self.assertIn("gcc", Path(compile_execution["compiler_path"]).name)
+            self.assertIn("harness_execution", compile_execution)
+            self.assertEqual(compile_execution["toolchain_adapter"], "local")
+            self.assertFalse(compile_execution["semantic_pass"])
+
+    def test_build_profile_link_source_files_extend_c_oracle_compile_command(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            harness_path = evidence_dir / "l3-link-only-c-oracle-harness-draft.c"
+            spec = {
+                "source": {"source_root": "unit"},
+                "build_profile": {
+                    "include_paths": [],
+                    "defines": [],
+                    "link_source_files": [
+                        {
+                            "path": "link.c",
+                            "role": "link_dependency",
+                            "sha256": "link-sha",
+                        }
+                    ],
+                },
+                "c_boundary": {
+                    "files": [
+                        {
+                            "path": "entry.c",
+                            "role": "source",
+                            "sha256": "entry-sha",
+                        }
+                    ],
+                },
+            }
+
+            compile_command = module.c_oracle_compile_command(spec, harness_path, evidence_dir)
+
+            self.assertEqual(
+                compile_command["link_source_files"],
+                [
+                    {
+                        "path": "entry.c",
+                        "resolved_path": "unit/entry.c",
+                        "role": "source",
+                        "sha256": "entry-sha",
+                        "resolution": "source_root_relative",
+                    },
+                    {
+                        "path": "link.c",
+                        "resolved_path": "unit/link.c",
+                        "role": "link_dependency",
+                        "sha256": "link-sha",
+                        "resolution": "source_root_relative",
+                    },
+                ],
+            )
+            self.assertEqual(
+                compile_command["link_strategy"],
+                "compile_harness_with_declared_c_boundary_and_build_profile_sources",
+            )
+            self.assertIn("unit/link.c", compile_command["argv"])
+
+    def test_cc_compile_command_uses_wsl_adapter_when_local_candidates_are_missing(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            output_name = "l3-wsl-c-oracle-harness-draft.exe"
+            compile_command = {
+                "argv": [
+                    "cc",
+                    "-std=c99",
+                    "-IC:/src/include",
+                    "l3-wsl-c-oracle-harness-draft.c",
+                    "C:/src/unit.c",
+                    "-o",
+                    output_name,
+                ],
+                "working_directory": evidence_dir.as_posix(),
+            }
+            wsl_launcher = "C:/Windows/System32/wsl.exe"
+            calls: list[list[str]] = []
+
+            def fake_which(name: str) -> str | None:
+                if name in {"wsl.exe", "wsl"}:
+                    return wsl_launcher
+                return None
+
+            def fake_wsl_path(path: Path, launcher: str) -> str:
+                self.assertEqual(launcher, wsl_launcher)
+                text = str(path).replace("\\", "/")
+                if text == "C:/src/include":
+                    return "/mnt/c/src/include"
+                if text == "C:/src/unit.c":
+                    return "/mnt/c/src/unit.c"
+                if text.endswith(output_name):
+                    return f"/mnt/fake/evidence/{output_name}"
+                return "/mnt/fake/evidence"
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                calls.append(args)
+                command = args[-1] if args[:3] == [wsl_launcher, "-e", "sh"] else ""
+                if "command -v cc" in command:
+                    return subprocess.CompletedProcess(args, 0, "/usr/bin/cc\n", "")
+                if "/usr/bin/cc" in command:
+                    (evidence_dir / output_name).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                    return subprocess.CompletedProcess(args, 0, "compiled\n", "")
+                if output_name in command:
+                    return subprocess.CompletedProcess(args, 0, "harness stdout\n", "")
+                return subprocess.CompletedProcess(args, 127, "", "unexpected command")
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module, "wsl_path", side_effect=fake_wsl_path),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_succeeded_not_oracle")
+            self.assertEqual(compile_execution["compiler_name"], "cc")
+            self.assertEqual(compile_execution["compiler_path"], "/usr/bin/cc")
+            self.assertEqual(compile_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(compile_execution["argv"], compile_command["argv"])
+            self.assertIn("-I/mnt/c/src/include", compile_execution["execution_argv"][-1])
+            self.assertIn("/mnt/c/src/unit.c", compile_execution["execution_argv"][-1])
+            harness_execution = compile_execution["harness_execution"]
+            self.assertEqual(harness_execution["status"], "exited_zero_not_oracle")
+            self.assertEqual(harness_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(harness_execution["execution_argv"][0], wsl_launcher)
+            self.assertEqual(harness_execution["output_gate"]["status"], "unsupported_not_oracle")
+            self.assertGreaterEqual(len(calls), 3)
+
+    def test_compile_execution_argv_resolves_evidence_and_repo_relative_paths(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            harness_path = evidence_dir / "harness.c"
+            harness_path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            output_path = evidence_dir / "harness.exe"
+            compile_command = [
+                "cc",
+                "-std=c99",
+                "-Ivalidation",
+                "harness.c",
+                "validation/tools/auto_migrate.py",
+                "-o",
+                "harness.exe",
+            ]
+            compiler_resolution = {
+                "path": "C:/tools/cc.exe",
+                "name": "cc",
+                "candidates": ["cc"],
+                "adapter": "local",
+                "launcher": None,
+            }
+
+            execution_argv = module.c_oracle_compile_execution_argv(
+                compile_command, evidence_dir, compiler_resolution
+            )
+
+            self.assertEqual(execution_argv[0], "C:/tools/cc.exe")
+            self.assertIn(f"-I{REPO_ROOT / 'validation'}", execution_argv)
+            self.assertIn(str(harness_path), execution_argv)
+            self.assertIn(str(REPO_ROOT / "validation" / "tools" / "auto_migrate.py"), execution_argv)
+            self.assertIn(str(output_path), execution_argv)
+
+    def test_compile_execution_argv_resolves_relative_evidence_directory_to_absolute_paths(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-relative-evidence-", dir=REPO_ROOT) as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            harness_path = evidence_dir / "harness.c"
+            harness_path.write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            relative_evidence_dir = evidence_dir.relative_to(REPO_ROOT)
+
+            resolved = module.c_oracle_compile_execution_args_with_resolved_paths(
+                ["cc", "harness.c", "-o", "harness.exe"],
+                relative_evidence_dir,
+            )
+
+            self.assertIn(str(harness_path), resolved)
+            self.assertIn(str(evidence_dir / "harness.exe"), resolved)
+            self.assertNotIn(str(relative_evidence_dir / "harness.c"), resolved)
+
+    def test_c_oracle_compile_execution_handles_missing_subprocess_streams(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            (evidence_dir / "harness.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            compile_command = {
+                "argv": ["cc", "harness.c", "-o", "harness.exe"],
+                "working_directory": evidence_dir.as_posix(),
+            }
+
+            def fake_which(name: str) -> str | None:
+                if name == "cc":
+                    return "C:/tools/cc.exe"
+                return None
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                self.assertEqual(kwargs["encoding"], "utf-8")
+                self.assertEqual(kwargs["errors"], "replace")
+                return subprocess.CompletedProcess(args, 1, None, None)
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_failed")
+            self.assertEqual(compile_execution["stdout"], "")
+            self.assertEqual(compile_execution["stderr"], "")
+            self.assertIn("C oracle compile command failed", compile_execution["diagnostics"][0])
+
+    def test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim(self) -> None:
+        module = load_auto_migrate_module()
+        spec = {
+            "target_id": "flashdb",
+            "slice_id": "real-fdb-blob-make",
+            "source_commit": "1234567",
+        }
+        route_decision = {
+            "level": "L1",
+            "status": "recorded",
+            "translator": {"candidate_generation_allowed": True},
+        }
+        validation_profile = {"generated_draft_semantic_pass": False}
+        c_oracle = {
+            "compile_execution": {
+                "status": "compile_succeeded_not_oracle",
+                "harness_execution": {
+                    "status": "exited_zero_not_oracle",
+                    "output_gate": {
+                        "status": "matched_not_oracle",
+                        "matched_stdout_fragments": [
+                            "fixture case null-empty return_same_blob matched",
+                        ],
+                        "missing_stdout_fragments": [],
+                    },
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-capability-ledger-") as tmp:
+            evidence_dir = Path(tmp)
+
+            payload = module.emit_capability_delta_ledger(
+                spec,
+                evidence_dir,
+                route_decision,
+                validation_profile,
+                c_oracle=c_oracle,
+            )
+
+            c_oracle_delta = next(
+                item
+                for item in payload["capability_delta"]
+                if item["construct_id"] == "c_oracle_harness_matched_not_oracle"
+            )
+            self.assertEqual(payload["source_commit"], "1234567")
+            self.assertEqual(payload["source_identity"]["source_commit"], "1234567")
+            self.assertEqual(c_oracle_delta["kind"], "candidate_verification")
+            self.assertEqual(c_oracle_delta["generated_candidate_status"], "candidate")
+            self.assertFalse(c_oracle_delta["semantic_pass"])
+            self.assertTrue(c_oracle_delta["negative_coverage"])
+
+    def test_wsl_path_failure_records_structured_compile_failure(self) -> None:
+        module = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+            compile_command = {
+                "argv": ["cc", "-IC:/src/include", "harness.c", "-o", "harness.exe"],
+                "working_directory": evidence_dir.as_posix(),
+            }
+            wsl_launcher = "C:/Windows/System32/wsl.exe"
+
+            def fake_which(name: str) -> str | None:
+                if name in {"wsl.exe", "wsl"}:
+                    return wsl_launcher
+                return None
+
+            def fake_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                command = args[-1] if args[:3] == [wsl_launcher, "-e", "sh"] else ""
+                if "command -v cc" in command:
+                    return subprocess.CompletedProcess(args, 0, "/usr/bin/cc\n", "")
+                if args[:3] == [wsl_launcher, "-e", "wslpath"]:
+                    return subprocess.CompletedProcess(args, 1, "", "wslpath failed")
+                return subprocess.CompletedProcess(args, 127, "", "unexpected command")
+
+            with (
+                mock.patch.object(module.shutil, "which", side_effect=fake_which),
+                mock.patch.object(module.subprocess, "run", side_effect=fake_run),
+            ):
+                compile_execution = module.c_oracle_compile_execution(
+                    compile_command, evidence_dir, False, None, None
+                )
+
+            self.assertEqual(compile_execution["status"], "compile_failed")
+            self.assertTrue(compile_execution["attempted"])
+            self.assertFalse(compile_execution["semantic_pass"])
+            self.assertEqual(compile_execution["toolchain_adapter"], "wsl")
+            self.assertEqual(compile_execution["execution_argv"], [])
+            self.assertEqual(compile_execution["toolchain_status_after_attempt"], "COMPILE_FAILED")
+            self.assertIn("wslpath failed", compile_execution["stderr"])

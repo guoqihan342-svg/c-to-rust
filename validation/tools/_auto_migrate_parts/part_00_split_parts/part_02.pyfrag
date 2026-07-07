@@ -1,0 +1,396 @@
+            "--",
+            "--slice-spec",
+            str(slice_spec),
+            "--out-dir",
+            str(evidence_dir),
+        ]
+    )
+    result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    write_log_text(evidence_dir / "translator-command.stdout.log", result.stdout)
+    write_log_text(evidence_dir / "translator-command.stderr.log", result.stderr)
+    if result.returncode != 0:
+        raise SystemExit(f"translator failed with exit code {result.returncode}; see {evidence_dir}")
+    return json.loads(result.stdout)
+
+
+def enrich_clang_lowering_report(
+    evidence_dir: Path,
+    prefix: str,
+    clang_identity: dict[str, Any],
+) -> None:
+    report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    if not report_path.exists():
+        return
+    report = read_json(report_path)
+    typed_ir_candidate = report.get("typed_ir_candidate")
+    if not isinstance(typed_ir_candidate, dict):
+        return
+    lowering_report = report.get("lowering_report")
+    function_ir = lowering_report.get("function_ir") if isinstance(lowering_report, dict) else None
+    if function_ir is None:
+        return
+
+    rust_draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+    typed_ir_sha256 = sha256_json(function_ir)
+    rust_draft_sha256 = sha256(rust_draft_path) if rust_draft_path.exists() else "missing"
+    typed_ir_candidate["typed_ir_sha256"] = typed_ir_sha256
+    typed_ir_candidate["rust_draft_sha256"] = rust_draft_sha256
+    report["durable_evidence"] = {
+        "hash_algorithm": "sha256",
+        "typed_ir_sha256": typed_ir_sha256,
+        "rust_draft_sha256": rust_draft_sha256,
+        "clang_path": str(clang_identity.get("clang_path", "")),
+        "clang_version": str(clang_identity.get("clang_version", "")),
+        "frontend": str(clang_identity.get("frontend", "clang_ast_dump_json")),
+        "competition_environment": competition_environment_identity(),
+    }
+    write_json(report_path, report)
+
+
+def unsupported_control_flow_kind(label: str) -> str:
+    prefix = str(label).split(":", 1)[0]
+    if prefix in {
+        "goto",
+        "switch",
+        "label",
+        "case",
+        "default",
+        "setjmp",
+        "longjmp",
+        "inline_assembly",
+        "relooper_refusal",
+    }:
+        return prefix
+    return "unknown"
+
+
+def structured_control_flow_recovery_evidence(
+    unsupported_labels: list[str], unsupported_items: list[dict[str, Any]]
+) -> dict[str, Any]:
+    kinds = {item.get("kind") for item in unsupported_items}
+    labels = [str(label) for label in unsupported_labels]
+    label_targets = {label.split(":", 1)[1] for label in labels if label.startswith("label:")}
+    goto_targets = {label.split(":", 1)[1] for label in labels if label.startswith("goto:")}
+    preconditions: list[str] = []
+    if "goto" in kinds and goto_targets and goto_targets.issubset(label_targets):
+        preconditions.append("goto_target_resolved")
+    if "switch" in kinds and ({"case", "default"} & kinds):
+        preconditions.append("switch_cases_enumerated")
+
+    refusals: list[str] = []
+    if "goto" in kinds:
+        refusals.append("goto_requires_structured_recovery")
+    if "switch" in kinds:
+        refusals.append("switch_requires_structured_recovery")
+
+    return {
+        "recovery_status": "refused" if unsupported_items else "structured",
+        "relooper_preconditions": preconditions,
+        "relooper_refusals": refusals,
+        "scope_note": (
+            "minimal structured-recovery evidence only; no Rust candidate lowering "
+            "or C/Rust semantic pass is claimed"
+        )
+        if unsupported_items
+        else "structured control flow does not require relooper recovery",
+    }
+
+
+def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path, evidence_dir: Path) -> None:
+    """Rewrite raw translator output into schema-bound candidate evidence.
+
+    Normalization records what the translator observed and generated, but it is
+    still before route selection, validation-profile gating, and any accepted
+    evidence binding. Artifacts written here must therefore remain provenance
+    for candidates, not semantic-pass proof.
+    """
+    target_id = required_str(spec, "target_id")
+    slice_id = required_str(spec, "slice_id")
+    source = source_commit(spec)
+    repo = repo_commit()
+    prefix = f"l3-{slice_id}"
+    slice_ref = {"path": rel(slice_spec_path), "status": "ready", "sha256": sha256(slice_spec_path)}
+    build_profile_ref = {
+        "path": rel(evidence_dir / f"{prefix}-translator-input.json"),
+        "status": "recorded",
+        "sha256": sha256(evidence_dir / f"{prefix}-translator-input.json"),
+    }
+
+    raw_type = read_json(evidence_dir / f"{prefix}-type-map.json")
+    mappings = [
+        {
+            "id": f"type-{idx + 1}",
+            "kind": type_mapping_kind(item.get("c_type", "")),
+            "c_name": item.get("symbol", ""),
+            "c_type": item.get("c_type", ""),
+            "rust_type": item.get("rust_type", ""),
+            "confidence": "proven",
+            "source": "translator_rule",
+            "translation_rule_id": item.get("reason", "supported MVP C subset mapping"),
+        }
+        for idx, item in enumerate(raw_type.get("type_map", {}).get("mappings", []))
+    ]
+    uncertainties = [
+        {
+            "id": f"uncertainty-{idx + 1}",
+            "kind": "declaration_resolution",
+            "reason": item.get("reason", ""),
+            "affected_mapping_ids": [],
+            "resolution": "block_translation",
+        }
+        for idx, item in enumerate(raw_type.get("type_map", {}).get("uncertainties", []))
+    ]
+    write_json(
+        evidence_dir / f"{prefix}-type-map.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "level": "L3",
+            "status": "recorded" if not uncertainties else "blocked",
+            "source_commit": source,
+            "repo_commit": repo,
+            "slice_spec_ref": slice_ref,
+            "build_profile_ref": build_profile_ref,
+            "mappings": mappings,
+            "uncertainties": uncertainties,
+            "unsupported_nodes": [],
+            "global_dependencies": global_dependency_requirements(spec),
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    raw_cfg = read_json(evidence_dir / f"{prefix}-cfg.json")
+    raw_functions = raw_cfg.get("cfg", {}).get("functions", [])
+    unsupported_cf = []
+    functions = []
+    for function in raw_functions:
+        unsupported = function.get("unsupported_control_flow", [])
+        function_unsupported_cf = [
+            {
+                "id": f"unsupported-{idx + 1}",
+                "kind": unsupported_control_flow_kind(item),
+                "reason": f"{item} requires CFG/relooper support",
+                "source_span": source_span(),
+                "translation_effect": "requires_relooper",
+            }
+            for idx, item in enumerate(unsupported)
+        ]
+        unsupported_cf.extend(function_unsupported_cf)
+        blocks = function.get("blocks", [])
+        statements = blocks[0].get("statements", []) if blocks else []
+        functions.append(
+            {
+                "name": function.get("name", required_str(spec, "slice_id")),
+                "signature": function_signature(spec),
+                "source_span": source_span(),
+                "entry_block": "entry",
+                "exit_blocks": ["return"] if blocks and blocks[0].get("terminator") == "return" else ["exit"],
+                "basic_blocks": cfg_basic_blocks(blocks),
+                "edges": cfg_edges(blocks),
+                "branches": [],
+                "returns": [
+                    {"block": "entry", "expression": extract_return_expression(statements), "source_span": source_span()}
+                ],
+                "structured_control_flow": {
+                    "if_count": count_token(spec.get("c_source", ""), "if"),
+                    "loop_count": count_token(spec.get("c_source", ""), "while") + count_token(spec.get("c_source", ""), "for"),
+                    "has_goto": any(item.get("kind") == "goto" for item in function_unsupported_cf),
+                    "has_switch": any(item.get("kind") == "switch" for item in function_unsupported_cf),
+                    "relooper_required": bool(unsupported),
+                    **structured_control_flow_recovery_evidence(unsupported, function_unsupported_cf),
+                },
+            }
+        )
+    write_json(
+        evidence_dir / f"{prefix}-cfg.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "level": "L3",
+            "status": "recorded" if not unsupported_cf else "blocked",
+            "source_commit": source,
+            "repo_commit": repo,
+            "slice_spec_ref": slice_ref,
+            "functions": functions,
+            "unsupported_control_flow": unsupported_cf,
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    raw_pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
+    raw_nodes = raw_pointer.get("pointer_graph", {}).get("nodes", [])
+    pointer_nodes = []
+    for idx, node in enumerate(raw_nodes):
+        kind = pointer_node_kind(node)
+        pointer_node = {
+            "id": node.get("id", f"ptr-{idx + 1}"),
+            "symbol": node.get("id", f"ptr-{idx + 1}"),
+            "kind": kind,
+            "c_type": node.get("c_type", ""),
+            "mutability": "write_only" if node.get("role") == "out_param" else "read_only",
+            "nullability": "unknown",
+            "ownership_role": pointer_ownership_role(node),
+            "read_effects": node.get("read_effects", []),
+            "write_effects": node.get("write_effects", []),
+            "boundary_decisions": node.get("boundary_decisions", []),
+        }
+        if kind == "buffer":
+            pointer_node["buffer_role"] = pointer_buffer_role(node)
+            pointer_node["length_companion"] = input_buffer_length_companion(spec, str(pointer_node["id"]))
+        pointer_nodes.append(pointer_node)
+    dependency_edges = [
+        {
+            "from": edge.get("from", ""),
+            "to": edge.get("to", ""),
+            "relationship": "writes_through",
+            "evidence": edge.get("relationship", "translator pointer dependency"),
+        }
+        for edge in raw_pointer.get("pointer_graph", {}).get("edges", [])
+    ]
+    alias_gate = alias_gate_evidence(spec, pointer_nodes)
+    pointer_triggers = ["pointer_parameter"] if pointer_nodes else ["none"]
+    if alias_gate["is_alias_sensitive"]:
+        pointer_triggers.append("alias_sensitive_state")
+    effect_graph = effect_graph_from_pointer_nodes(pointer_nodes, alias_gate)
+    pointer_cache_keys = (
+        cache_keys(spec, slice_spec_path)
+        + alias_gate["cache_invalidation_keys"]
+        + ["effect_graph", f"effect_graph_sha256={sha256_json(effect_graph)}"]
+    )
+    pointer_status = "recorded" if pointer_nodes else "not_applicable"
+    pointer_payload = {
+        "schema_version": POINTER_GRAPH_SCHEMA_VERSION,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "level": "L3",
+        "status": pointer_status,
+        "source_commit": source,
+        "repo_commit": repo,
+        "context_pack_ref": rel(evidence_dir / f"{prefix}-context-pack.json"),
+        "applicability": {
+            "has_pointer_surface": bool(pointer_nodes),
+            "triggers": pointer_triggers,
+        },
+        "source_boundary": source_boundary(spec),
+        "cache_invalidation_keys": pointer_cache_keys,
+    }
+    if pointer_nodes:
+        pointer_payload.update(
+            {
+                "pointer_nodes": pointer_nodes,
+                "dependency_edges": dependency_edges,
+                "alias_sets": alias_gate["alias_sets"],
+                "alias_risks": alias_gate["alias_risks"],
+                "alias_contract": alias_gate["alias_contract"],
+                "safe_boundary_preconditions": alias_gate["safe_boundary_preconditions"],
+                "effect_graph": effect_graph,
+                "pointer_decisions": pointer_decisions(pointer_nodes),
+                "rust_mapping": [
+                    {
+                        "pointer_node": node["id"],
+                        "strategy": "safe public API boundary generated by bounded translator",
+                        "boundary_kind": "safe_wrapper",
+                        "unsafe_expected": False,
+                    }
+                    for node in pointer_nodes
+                ],
+                "risk_summary": {
+                    "unsafe_expected": False,
+                    "blocked_reasons": alias_gate["blocked_reasons"],
+                    "known_gaps": spec.get("non_goals", []),
+                    "alias_gate": alias_gate["summary"],
+                },
+            }
+        )
+    else:
+        pointer_payload["not_applicable_reason"] = "slice has no pointer surface"
+    write_json(evidence_dir / f"{prefix}-pointer-graph.json", pointer_payload)
+
+    raw_plan = read_json(evidence_dir / f"{prefix}-auto-translation-plan.json")
+    translation_source = translation_source_from_plan(raw_plan)
+    raw_call_expressions = raw_plan.get("plan", {}).get("call_expressions", [])
+    external_callee_context = external_direct_callee_context(spec, raw_call_expressions)
+    call_expressions = bind_external_callee_context(raw_call_expressions, external_callee_context)
+    lvalue_decision_counts = count_occurrences(
+        lvalue_decision_for_kind(kind)
+        for function in functions
+        for block in function.get("basic_blocks", [])
+        for kind in block.get("lvalue_kinds", [])
+        if kind != "none"
+    )
+    pointer_boundary_decision_counts = count_occurrences(
+        decision
+        for node in pointer_nodes
+        for decision in node.get("boundary_decisions", [])
+    )
+    unsupported_lvalue_count = sum(
+        1 for error in raw_plan.get("errors", []) if error.get("kind") == "unsupported_lvalue"
+    )
+    write_json(
+        evidence_dir / f"{prefix}-auto-translation-plan.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "level": "L3",
+            "status": "draft_generated" if raw_plan.get("status") == "generated" else "blocked",
+            "source_commit": source,
+            "repo_commit": repo,
+            "translation_source": translation_source,
+            "inputs": {
+                "slice_spec": slice_ref,
+                "type_map": {"path": rel(evidence_dir / f"{prefix}-type-map.json"), "status": "recorded"},
+                "cfg": {"path": rel(evidence_dir / f"{prefix}-cfg.json"), "status": "recorded"},
+                "pointer_graph": {"path": rel(evidence_dir / f"{prefix}-pointer-graph.json"), "status": pointer_status},
+                "external_callee_context": external_context_input_ref(
+                    evidence_dir,
+                    slice_id,
+                    external_callee_context,
+                ),
+            },
+            "generated_artifacts": [
+                generated_artifact(evidence_dir / f"{prefix}-rust-draft.rs", "rust_draft"),
+                generated_artifact(evidence_dir / f"{prefix}-c-oracle-harness-draft.c", "c_oracle_harness"),
+                generated_artifact(evidence_dir / f"{prefix}-rust-replay-test-draft.rs", "rust_replay_test"),
+            ],
+            "translation_summary": {
+                "translation_rule_ids": raw_plan.get("plan", {}).get("translation_rule_ids", []),
+                "unsupported_node_count": raw_plan.get("plan", {}).get("unsupported_node_count", 0),
+                "unsafe_candidate_count": raw_plan.get("plan", {}).get("unsafe_candidate_count", 0),
+                "safe_public_api": True,
+                "lvalue_decision_counts": lvalue_decision_counts,
+                "unsupported_lvalue_count": unsupported_lvalue_count,
+                "pointer_boundary_decision_counts": pointer_boundary_decision_counts,
+                "alias_gate": alias_gate["summary"],
+                "call_expressions": call_expressions,
+                "external_direct_callee_declarations": external_callee_context["declarations"],
+                "external_direct_callees": external_callee_context["declared"],
+                "external_direct_callee_blocks": external_callee_context["blocked"],
+            },
+            "verification_plan": [
+                {"gate": "rust_check", "command": "rustc --error-format=json <draft>", "required_before_acceptance": True},
+                {"gate": "c_oracle", "command": "generate accepted C oracle", "required_before_acceptance": True},
+                {"gate": "l3_manifest", "command": "emit L3 evidence manifest", "required_before_acceptance": True},
+            ],
+            "cache_invalidation_keys": pointer_cache_keys,
+        },
+    )
+
+    write_json(
+        evidence_dir / f"{prefix}-ai-candidate-manifest.json",
+        {
+            "schema_version": 1,
+            "target_id": target_id,
+            "slice_id": slice_id,
+            "status": "not_used",
+            "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+            "ai_required_for_default_pipeline": False,
+            "candidates": [],
+            "cache_invalidation_keys": cache_keys(spec, slice_spec_path),
+        },
+    )
+
+    write_auto_translation_events(spec, slice_spec_path, evidence_dir)
+    write_context_pack(spec, slice_spec_path, evidence_dir, call_expressions, external_callee_context)

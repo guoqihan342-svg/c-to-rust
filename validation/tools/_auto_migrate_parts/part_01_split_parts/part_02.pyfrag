@@ -1,0 +1,225 @@
+        parameter_text = "void"
+    else:
+        parameter_text = ", ".join(c_parameter_declaration(item) for item in parameters if isinstance(item, dict))
+    return f"{return_type} {function_name}({parameter_text});"
+
+
+def c_oracle_harness_includes(spec: dict[str, Any]) -> list[str]:
+    headers = []
+    for item in spec.get("build_profile", {}).get("oracle_harness_includes", []):
+        header = str(item.get("header") if isinstance(item, dict) else item).strip()
+        if not header:
+            continue
+        if any(ch in header for ch in '\r\n<>"'):
+            raise SystemExit(f"invalid oracle harness include header: {header!r}")
+        headers.append(header)
+    return list(dict.fromkeys(headers))
+
+
+def c_parameter_declaration(parameter: dict[str, Any]) -> str:
+    name = str(parameter.get("name") or "arg")
+    c_type = str(parameter.get("c_type") or "int").strip()
+    if c_type.endswith("*"):
+        return f"{c_type[:-1].rstrip()} *{name}"
+    return f"{c_type} {name}"
+
+
+def normalize_c_type(c_type: str) -> str:
+    text = str(c_type).strip()
+    text = text.replace("*", " * ")
+    return " ".join(text.split())
+
+
+def c_safe_ident(text: str) -> str:
+    identifier = "".join(ch if (ch.isascii() and (ch.isalnum() or ch == "_")) else "_" for ch in str(text))
+    if not identifier:
+        return "case"
+    if identifier[0].isdigit():
+        return f"case_{identifier}"
+    return identifier
+
+
+def is_uint32_value(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= 0xFFFFFFFF
+
+
+def is_size_value(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def is_byte_list(value: Any) -> bool:
+    return isinstance(value, list) and all(type(item) is int and 0 <= item <= 0xFF for item in value)
+
+
+def c_byte_array_initializer(values: list[int]) -> str:
+    if not values:
+        return "0"
+    return ", ".join(f"{item}u" for item in values)
+
+
+def c_integer_literal(c_type: str, value: int) -> str:
+    normalized = normalize_c_type(c_type)
+    suffix = "u" if value >= 0 else ""
+    return f"({normalized}){value}{suffix}"
+
+
+def c_string_literal(value: str) -> str:
+    return json.dumps(str(value))
+
+
+def c_oracle_compile_command(spec: dict[str, Any], harness_path: Path, evidence_dir: Path) -> dict[str, Any]:
+    source_root = compile_source_root(spec)
+    resolved_include_paths = [
+        resolve_source_root_path(source_root, path)
+        for path in spec.get("build_profile", {}).get("include_paths", [])
+    ]
+    defines = [str(item) for item in spec.get("build_profile", {}).get("defines", [])]
+    link_source_files = [] if c_oracle_embeds_slice_source(spec) else compile_link_source_files(spec, source_root)
+    define_args = [f"-D{item}" for item in defines]
+    include_args = [f"-I{path}" for path in resolved_include_paths]
+    link_args = [item["resolved_path"] for item in link_source_files]
+    output_name = harness_path.with_suffix(".exe").name
+    return {
+        "working_directory": rel(evidence_dir),
+        "source_root": source_root,
+        "defines": defines,
+        "resolved_include_paths": resolved_include_paths,
+        "link_source_files": link_source_files,
+        "link_strategy": c_oracle_link_strategy(spec),
+        "oracle_source_mode": c_oracle_source_mode(spec),
+        "argv": [
+            "cc",
+            "-std=c99",
+            *define_args,
+            *include_args,
+            harness_path.name,
+            *link_args,
+            "-o",
+            output_name,
+        ],
+        "status": "draft_not_executed",
+    }
+
+
+def c_oracle_compile_execution(
+    compile_command: dict[str, Any],
+    evidence_dir: Path,
+    skip: bool,
+    spec: dict[str, Any] | None = None,
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base = {
+        "argv": compile_command.get("argv", []),
+        "working_directory": rel(evidence_dir),
+        "semantic_pass": False,
+    }
+    if skip:
+        return {
+            **base,
+            "status": "skipped_by_flag",
+            "attempted": False,
+            "toolchain_adapter": "not_executed",
+            "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+            "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],
+        }
+
+    argv = [str(item) for item in compile_command.get("argv", [])]
+    if not argv:
+        return {
+            **base,
+            "status": "missing_argv",
+            "attempted": False,
+            "toolchain_status_after_attempt": "COMPILE_NOT_EXECUTED",
+            "diagnostics": ["C oracle compile command argv is missing."],
+        }
+
+    compiler_resolution = resolve_c_compiler(argv[0])
+    compiler_path = compiler_resolution["path"]
+    if compiler_path is None:
+        return {
+            **base,
+            "status": "compiler_not_found",
+            "attempted": False,
+            "toolchain_status_after_attempt": "COMPILE_NOT_EXECUTED",
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "diagnostics": [
+                f"C compiler not found on PATH: {argv[0]}",
+                f"Fallback C compilers checked: {', '.join(compiler_resolution['candidates'])}",
+            ],
+        }
+
+    resolved_argv: list[str] = []
+    try:
+        resolved_argv = c_oracle_compile_execution_argv(argv, evidence_dir, compiler_resolution)
+        result = subprocess.run(
+            resolved_argv,
+            cwd=None if compiler_resolution.get("adapter") == "wsl" else evidence_dir,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            **base,
+            "status": "compile_timeout",
+            "attempted": True,
+            "compiler_path": compiler_path,
+            "compiler_name": compiler_resolution["name"],
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "toolchain_adapter": compiler_resolution["adapter"],
+            "execution_argv": resolved_argv,
+            "toolchain_status_after_attempt": "COMPILE_FAILED",
+            "returncode": None,
+            "stdout": truncate_text(exc.stdout or ""),
+            "stderr": truncate_text(exc.stderr or "compile timed out after 30 seconds"),
+            "diagnostics": ["C oracle compile command timed out; no oracle evidence accepted."],
+        }
+    except (OSError, RuntimeError) as exc:
+        return {
+            **base,
+            "status": "compile_failed",
+            "attempted": True,
+            "compiler_path": compiler_path,
+            "compiler_name": compiler_resolution["name"],
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "toolchain_adapter": compiler_resolution["adapter"],
+            "execution_argv": resolved_argv,
+            "toolchain_status_after_attempt": "COMPILE_FAILED",
+            "returncode": None,
+            "stdout": "",
+            "stderr": truncate_text(str(exc)),
+            "diagnostics": ["C oracle compile command could not start; no oracle evidence accepted."],
+        }
+
+    succeeded = result.returncode == 0
+    payload = {
+        **base,
+        "status": "compile_succeeded_not_oracle" if succeeded else "compile_failed",
+        "attempted": True,
+        "compiler_path": compiler_path,
+        "compiler_name": compiler_resolution["name"],
+        "requested_compiler": argv[0],
+        "compiler_candidates": compiler_resolution["candidates"],
+        "toolchain_adapter": compiler_resolution["adapter"],
+        "execution_argv": resolved_argv,
+        "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE" if succeeded else "COMPILE_FAILED",
+        "returncode": result.returncode,
+        "stdout": truncate_text(result.stdout),
+        "stderr": truncate_text(result.stderr),
+        "diagnostics": [
+            "C oracle compile command succeeded, but execution/diff gates are still required."
+            if succeeded
+            else "C oracle compile command failed; no oracle evidence accepted."
+        ],
+    }
+    if succeeded:
+        payload["harness_execution"] = c_oracle_harness_execution(
+            argv, evidence_dir, spec, fixture_binding, compiler_resolution
+        )
+    return payload

@@ -1,0 +1,442 @@
+                repo_rel(marker_path),
+                "--run-id",
+                "preflight-run",
+            ]
+            expected_command = harness.shell_command_line(worker_command)
+            session_evidence = {
+                "session_events": [
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": expected_command, "workdir": str(REPO_ROOT)}},
+                        },
+                    },
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {
+                                    "command": (
+                                        "python3 -B validation/tools/opencode_agent_harness.py "
+                                        "init-run --run-id unexpected"
+                                    ),
+                                    "workdir": str(REPO_ROOT),
+                                },
+                            },
+                        },
+                    },
+                ],
+            }
+
+            verification = harness.verify_opencode_contract_execution(
+                session_evidence=session_evidence,
+                worker_command=worker_command,
+                summary_path=marker_path,
+                repo_root=REPO_ROOT,
+                allow_post_contract_artifact_inspection=True,
+            )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertEqual(
+            verification["contract_failure_reason"],
+            "non_artifact_inspection_shell_command_after_contract",
+        )
+
+    def test_opencode_contract_uses_posix_shell_join_for_prompt_and_verification(self) -> None:
+        worker_command = [
+            "python3",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker a/harness/request 1.json",
+        ]
+        expected_command_line = shlex.join(worker_command)
+        argv = harness.build_opencode_run_argv(
+            opencode_command="opencode",
+            opencode_model=None,
+            opencode_agent="c2rust-migrator",
+            opencode_variant="max",
+            opencode_skip_permissions=False,
+            worker_command=worker_command,
+            request_path=REPO_ROOT / "target/out/workers/worker a/harness/request 1.json",
+            summary_path=REPO_ROOT / "target/out/workers/worker a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+        self.assertIn(f"Command line: {expected_command_line}", argv[-1])
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence={
+                "session_events": [
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": expected_command_line, "workdir": str(REPO_ROOT)}},
+                        },
+                    }
+                ]
+            },
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "executed")
+        self.assertEqual(verification["expected_worker_command_line"], expected_command_line)
+
+    def test_portable_python_script_argv_uses_runnable_non_absolute_interpreter(self) -> None:
+        argv = harness.portable_python_script_argv("-c", "print('portable-python-ok')")
+
+        self.assertFalse(Path(argv[0]).is_absolute())
+        completed = subprocess.run(
+            argv,
+            cwd=REPO_ROOT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+        )
+
+        self.assertEqual(
+            completed.returncode,
+            0,
+            f"argv={argv!r} stdout={completed.stdout!r} stderr={completed.stderr!r}",
+        )
+        self.assertIn("portable-python-ok", completed.stdout)
+
+    def test_opencode_contract_rejects_shell_command_from_wrong_workdir(self) -> None:
+        worker_command = [
+            "python3",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker-a/harness/worker-a-request-attempt-1.json",
+        ]
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "state": {
+                            "input": {
+                                "command": harness.shell_command_line(worker_command),
+                                "workdir": str(REPO_ROOT.parent / "0625ctr"),
+                            }
+                        },
+                    },
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "opencode_workdir_mismatch")
+        self.assertEqual(verification["first_shell_workdir_status"], "non_repo_root")
+        self.assertEqual(verification["expected_workdir_status"], "repo_root")
+
+    def test_opencode_contract_accepts_missing_workdir_when_expected_artifact_exists(self) -> None:
+        with temp_repo_dir() as tmp:
+            summary_path = Path(tmp) / "harness" / "opencode-preflight-marker.json"
+            write_json(
+                summary_path,
+                {
+                    "schema_version": 1,
+                    "report_kind": "opencode-preflight-marker",
+                    "status": "written",
+                },
+            )
+            worker_command = [
+                "python3",
+                "-B",
+                "validation/tools/opencode_agent_harness.py",
+                "write-preflight-marker",
+                "--marker",
+                repo_rel(summary_path),
+                "--run-id",
+                "run-test",
+            ]
+            session_evidence = {
+                "session_events": [
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {"input": {"command": harness.shell_command_line(worker_command)}},
+                        },
+                    },
+                ],
+            }
+
+            verification = harness.verify_opencode_contract_execution(
+                session_evidence=session_evidence,
+                worker_command=worker_command,
+                summary_path=summary_path,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(verification["status"], "executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "")
+        self.assertEqual(verification["first_shell_workdir_status"], "repo_root_inferred_from_expected_artifact")
+        self.assertTrue(verification["first_shell_workdir_matches_repo_root"])
+
+    def test_opencode_contract_rejects_shell_command_without_workdir(self) -> None:
+        worker_command = [
+            "python3",
+            "-B",
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/workers/worker-a/harness/worker-a-request-attempt-1.json",
+        ]
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {
+                        "tool": "bash",
+                        "state": {"input": {"command": harness.shell_command_line(worker_command)}},
+                    },
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertTrue(verification["worker_command_seen"])
+        self.assertTrue(verification["first_shell_command_matches_worker_command"])
+        self.assertEqual(verification["contract_failure_reason"], "opencode_workdir_mismatch")
+        self.assertEqual(verification["first_shell_workdir_status"], "non_repo_root")
+        self.assertFalse(verification["first_shell_workdir_matches_repo_root"])
+
+    def test_opencode_contract_rejects_any_tool_before_first_shell_command(self) -> None:
+        worker_command = [
+            sys.executable,
+            "scripts/c2rust-migrator.py",
+            "--phase",
+            "migrate",
+            "--input",
+            "target/out/harness/assignments/worker-a-request.json",
+        ]
+        expected_command = harness.shell_command_line(worker_command)
+        session_evidence = {
+            "session_events": [
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "read", "state": {"input": {"file": "README.md"}}},
+                },
+                {
+                    "type": "tool_use",
+                    "part": {"tool": "bash", "state": {"input": {"command": expected_command}}},
+                },
+            ],
+        }
+
+        verification = harness.verify_opencode_contract_execution(
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(verification["status"], "not-executed")
+        self.assertEqual(verification["first_tool_name"], "read")
+        self.assertEqual(verification["first_shell_tool_name"], "bash")
+        self.assertEqual(verification["tools_before_first_shell"], ["read"])
+        self.assertEqual(verification["contract_failure_reason"], "tool_before_first_shell_command")
+
+    def test_opencode_worker_argv_resolves_path_command_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="opencode-command-shim-") as tmp:
+            shim_name = "opencode.cmd" if os.name == "nt" else "opencode"
+            shim_path = Path(tmp) / shim_name
+            shim_path.write_text("@echo off\n" if os.name == "nt" else "#!/bin/sh\n", encoding="utf-8")
+            if os.name != "nt":
+                shim_path.chmod(0o755)
+            old_path = os.environ.get("PATH", "")
+            os.environ["PATH"] = str(Path(tmp)) + os.pathsep + old_path
+            try:
+                argv = harness.build_opencode_run_argv(
+                    opencode_command="opencode",
+                    opencode_model=None,
+                    opencode_agent="c2rust-migrator",
+                    opencode_variant="max",
+                    opencode_skip_permissions=False,
+                    worker_command=[
+                        sys.executable,
+                        "scripts/c2rust-migrator.py",
+                        "--phase",
+                        "migrate",
+                        "--input",
+                        "target/out/harness/assignments/worker-a-request.json",
+                    ],
+                    request_path=REPO_ROOT / "target/out/harness/assignments/worker-a-request.json",
+                    summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+                    repo_root=REPO_ROOT,
+                )
+            finally:
+                os.environ["PATH"] = old_path
+
+            self.assertEqual(Path(argv[0]).resolve(), shim_path.resolve())
+
+    def test_opencode_worker_argv_rejects_non_opencode_command(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_command must be opencode"):
+            harness.build_opencode_run_argv(
+                opencode_command="codex",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                opencode_variant="max",
+                opencode_skip_permissions=False,
+                worker_command=[
+                    sys.executable,
+                    "scripts/c2rust-migrator.py",
+                    "--phase",
+                    "migrate",
+                    "--input",
+                    "target/out/harness/assignments/worker-a-request.json",
+                ],
+                request_path=REPO_ROOT / "target/out/harness/assignments/worker-a-request.json",
+                summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+                repo_root=REPO_ROOT,
+            )
+
+    def test_opencode_worker_argv_rejects_non_max_variant(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "opencode_variant must be max"):
+            harness.build_opencode_run_argv(
+                opencode_command="opencode",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                opencode_variant="lite",
+                opencode_skip_permissions=False,
+                worker_command=[
+                    sys.executable,
+                    "scripts/c2rust-migrator.py",
+                    "--phase",
+                    "migrate",
+                    "--input",
+                    "target/out/harness/assignments/worker-a-request.json",
+                ],
+                request_path=REPO_ROOT / "target/out/harness/assignments/worker-a-request.json",
+                summary_path=REPO_ROOT / "target/out/workers/worker-a/summary/competition-run-summary.json",
+                repo_root=REPO_ROOT,
+            )
+
+    def test_opencode_preflight_requires_exact_first_shell_command_and_marker(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                write_valid_preflight_marker(marker_path, run_id="preflight-run")
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                opencode_model="GLM-5.1",
+                opencode_agent="c2rust-migrator",
+                opencode_skip_permissions=True,
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(result["contract_verification"]["status"], "executed")
+            self.assertTrue(result["marker_exists"])
+            self.assertTrue((REPO_ROOT / result["marker_path"]).exists())
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["contract_verification"]["status"], "executed")
+            expected_policy = {
+                "opencode_command": "opencode",
+                "opencode_model": "GLM-5.1",
+                "opencode_agent": "c2rust-migrator",
+                "opencode_variant": "max",
+                "opencode_skip_permissions": True,
+            }
+            self.assertEqual(report["launch_policy"], expected_policy)
+            self.assertRegex(report["launch_policy_sha256"], r"^[0-9a-f]{64}$")
+            contract = json.loads((out_root / "harness" / "opencode-preflight-contract.json").read_text(encoding="utf-8"))
+            self.assertEqual(contract["launch_policy"], expected_policy)
+
+    def test_opencode_preflight_rejects_invalid_marker_payload(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                marker_path.parent.mkdir(parents=True, exist_ok=True)
+                marker_path.write_text(
+                    json.dumps({"schema_version": 1, "run_id": "preflight-run", "status": "written"}, sort_keys=True)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["root_cause_key"], "invalid_preflight_marker")
+            self.assertEqual(result["contract_verification"]["status"], "executed")
+            self.assertTrue(result["marker_exists"])

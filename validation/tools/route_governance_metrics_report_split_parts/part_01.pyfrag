@@ -1,0 +1,229 @@
+    gap_kinds: dict[str, int] = {}
+    forbidden_changes: dict[str, int] = {}
+    blocked_reasons: dict[str, int] = {}
+    source_span_kinds: dict[str, int] = {}
+    smallest_tests: list[dict[str, Any]] = []
+    next_actions: list[dict[str, Any]] = []
+    for entry in entries:
+        append_unique(human_points, entry.get("human_intervention_point"))
+        for callee in list_or_empty(entry.get("blocked_callees")):
+            append_unique(callees, callee)
+        increment_count(blocked_reasons, entry.get("blocked_reason"))
+        increment_count(source_span_kinds, entry.get("source_span_kind"))
+        increment_count(gap_kinds, entry.get("ir_feature_gap_kind"))
+        increment_count(forbidden_changes, entry.get("forbidden_change"))
+        test = entry.get("smallest_next_test")
+        if isinstance(test, dict) and any(test.get(key) is not None for key in ["kind", "command", "expected_gate"]):
+            append_unique_dict(smallest_tests, test)
+        for action in blocked_repair_next_actions(entry):
+            append_unique_dict(next_actions, action)
+    count = len(entries)
+    return {
+        "status": status if status is not None else ("observed" if count else "none"),
+        "blocked_repair_count": count,
+        "slice_count": slice_count if slice_count is not None else (1 if count else 0),
+        "human_action_required_count": sum(1 for entry in entries if entry.get("human_action_required") is True),
+        "status_counts": {status: 1} if status else ({"observed": 1} if count else {"none": 1}),
+        "human_intervention_points": human_points,
+        "blocked_callees": callees,
+        "ir_feature_gap_kinds": gap_kinds,
+        "forbidden_change_counts": forbidden_changes,
+        "blocked_reason_counts": blocked_reasons,
+        "source_span_kind_counts": source_span_kinds,
+        "smallest_next_tests": smallest_tests,
+        "next_actions": next_actions,
+        "entries": entries,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Blocked repairs summarize fail-closed self-healing evidence only. They are not semantic "
+            "acceptance and do not increase translator-generated coverage."
+        ),
+    }
+
+
+def blocked_repair_next_actions(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    actions: list[dict[str, Any]] = []
+    smallest = entry.get("smallest_next_test") if isinstance(entry.get("smallest_next_test"), dict) else {}
+    source_span = entry.get("source_span") if isinstance(entry.get("source_span"), dict) else {}
+    for route in list_or_empty(entry.get("candidate_routes")):
+        if not isinstance(route, dict) or not isinstance(route.get("next_action"), str):
+            continue
+        action: dict[str, Any] = {
+            "route": route.get("route"),
+            "status": route.get("status"),
+            "next_action": route.get("next_action"),
+        }
+        copy_string(action, "repair_id", entry.get("repair_id"))
+        copy_string(action, "target_id", entry.get("target_id"))
+        copy_string(action, "slice_id", entry.get("slice_id"))
+        copy_string(action, "pipeline_id", entry.get("pipeline_id"))
+        copy_string(action, "smallest_next_test_kind", smallest.get("kind"))
+        copy_string(action, "smallest_next_test_command", smallest.get("command"))
+        copy_string(action, "expected_gate", smallest.get("expected_gate"))
+        copy_string(action, "human_intervention_point", entry.get("human_intervention_point"))
+        copy_string(action, "source_span_kind", entry.get("source_span_kind"))
+        if source_span and any(source_span.get(key) is not None for key in ["file", "line_start", "line_end"]):
+            action["source_span"] = source_span
+        actions.append(action)
+    return actions
+
+
+def classify_source_span(source_span: dict[str, Any]) -> str:
+    raw_file = source_span.get("file")
+    if not isinstance(raw_file, str) or not raw_file:
+        return "unknown"
+    normalized = raw_file.replace("\\", "/")
+    if normalized == "slice-spec":
+        return "slice_spec"
+    if normalized.endswith((".c", ".h")):
+        return "c_source"
+    if normalized.endswith(".rs"):
+        return "generated_rust"
+    if normalized.startswith("validation/evidence/") or "/auto-translation/" in normalized:
+        return "generated_artifact"
+    return "unknown"
+
+
+def increment_count(counts: dict[str, int], value: Any) -> None:
+    if isinstance(value, str) and value:
+        counts[value] = counts.get(value, 0) + 1
+
+
+def copy_string(target: dict[str, Any], key: str, value: Any) -> None:
+    if isinstance(value, str) and value:
+        target[key] = value
+
+
+def fixture_case_count(manifest: dict[str, Any]) -> int | None:
+    fixture = manifest.get("fixture")
+    if isinstance(fixture, dict) and isinstance(fixture.get("operation_count"), int):
+        return fixture["operation_count"]
+    oracle = manifest.get("oracle")
+    if isinstance(oracle, dict) and isinstance(oracle.get("case_count"), int):
+        return oracle["case_count"]
+    binding = oracle.get("fixture_binding") if isinstance(oracle, dict) else None
+    if isinstance(binding, dict) and isinstance(binding.get("case_count"), int):
+        return binding["case_count"]
+    return None
+
+
+def append_unique(items: list[str], value: Any) -> None:
+    if isinstance(value, str) and value and value not in items:
+        items.append(value)
+
+
+def append_unique_dict(items: list[dict[str, Any]], value: dict[str, Any]) -> None:
+    if value not in items:
+        items.append(value)
+
+
+def rel(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def coverage_metrics_from(coverage_report: dict[str, Any]) -> dict[str, Any]:
+    require(coverage_report.get("schema_version") == 1, "coverage report schema_version must be 1")
+    require(coverage_report.get("status") == "passed", "coverage report status must be passed")
+    ledger = require_dict(coverage_report, "capability_delta_ledger")
+    require(ledger.get("schema_version") == 1, "capability_delta_ledger schema_version must be 1")
+    require(ledger.get("status") == "recorded", "capability_delta_ledger status must be recorded")
+
+    legacy_semantic_pass_count = require_int(ledger, "semantic_pass_count")
+    translator_generated_semantic_pass_count = optional_int(
+        ledger,
+        "translator_generated_semantic_pass_count",
+        legacy_semantic_pass_count,
+    )
+    accepted_evidence_semantic_pass_count = optional_int(ledger, "accepted_evidence_semantic_pass_count", 0)
+    ledger_count = require_int(ledger, "ledger_count")
+    delta_count = require_int(ledger, "delta_count")
+    generated_status = require_dict(ledger, "generated_candidate_status")
+    route_levels = require_dict(ledger, "route_levels")
+    route_statuses = require_dict(ledger, "route_statuses")
+    ledgers = ledger.get("ledgers", [])
+    require(isinstance(ledgers, list), "capability_delta_ledger ledgers must be a list")
+    if translator_generated_semantic_pass_count > 0 and ledgers and all(
+        milestone_release_report.is_l4_refused(item) for item in ledgers
+    ):
+        raise SystemExit("L4/refused ledger entries cannot be the translation coverage numerator")
+
+    candidate_classification = milestone_release_report.classify_candidate_statuses(
+        generated_status,
+        route_levels=route_levels,
+        route_statuses=route_statuses,
+        semantic_pass_count=translator_generated_semantic_pass_count,
+    )
+    return {
+        "translation_coverage_numerator": translator_generated_semantic_pass_count,
+        "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
+        "tracked_capability_delta_ledgers": ledger_count,
+        "tracked_capability_delta_count": delta_count,
+        "candidate_classification": candidate_classification,
+        "capability_delta_ledger": {
+            "ledger_count": ledger_count,
+            "delta_count": delta_count,
+            "governance_delta_count": optional_int(ledger, "governance_delta_count", 0),
+            "verification_command_count": optional_int(ledger, "verification_command_count", 0),
+            "translator_generated_semantic_pass_count": translator_generated_semantic_pass_count,
+            "semantic_pass_count": legacy_semantic_pass_count,
+            "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
+            "generated_candidate_status": generated_status,
+            "route_levels": route_levels,
+            "route_statuses": route_statuses,
+            "by_construct": ledger.get("by_construct", {}),
+            "blocked_callee_count": optional_int(ledger, "blocked_callee_count", 0),
+        },
+    }
+
+
+def build_retention_policy() -> dict[str, Any]:
+    return {
+        "report_kind": "route-governance-metrics-retention-policy",
+        "report_role": "p0-route-governance-and-capability-metrics",
+        "target_artifacts": {
+            "retention_class": "reproducible-local-output",
+            "committed": False,
+            "policy": "Regenerate from validation evidence, translator coverage matrix, and competition summaries; bind published runs by repo-relative path and sha256.",
+        },
+        "committed_anchors": {
+            "retention_class": "release-evidence",
+            "policy": "Use validation/evidence manifests, validation/translator-coverage-matrix.json, and config/competition-env profiles as committed anchors.",
+        },
+        "claim_boundary": "Retention policy does not expand semantic acceptance, generated-draft pass counts, or translation coverage.",
+    }
+
+
+def require_dict(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    require(isinstance(value, dict), f"{key} must be an object")
+    return value
+
+
+def require_int(payload: dict[str, Any], key: str) -> int:
+    value = payload.get(key)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def optional_int(payload: dict[str, Any], key: str, default: int) -> int:
+    value = payload.get(key, default)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def require_nonnegative_int(value: Any, message: str) -> int:
+    require(isinstance(value, int) and value >= 0, f"{message} must be a non-negative integer")
+    return value
+
+
+def require(condition: Any, message: str) -> None:
+    if not condition:
+        raise SystemExit(message)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

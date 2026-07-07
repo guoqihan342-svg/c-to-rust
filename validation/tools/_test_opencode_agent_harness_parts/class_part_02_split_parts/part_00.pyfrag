@@ -1,0 +1,500 @@
+class _OpenCodeAgentHarnessTestPart02:
+    def test_c_source_sha256_is_stable_across_line_endings(self) -> None:
+        with temp_repo_dir() as tmp:
+            source_file = Path(tmp) / "FlashDB" / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_bytes(b"int first_unit(int value) {\r\n    return value + 1;\r\n}\r\n")
+
+            expected = hashlib.sha256(b"int first_unit(int value) {\n    return value + 1;\n}\n").hexdigest()
+
+            self.assertEqual(harness.sha256_file(source_file), expected)
+
+    def test_run_batch_profile_opencode_passes_preflight_report_to_workers(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text(
+                """
+                int first_unit(int value) {
+                    return value + 1;
+                }
+                """,
+                encoding="utf-8",
+            )
+            profile_path = Path(tmp) / "planned-batch.json"
+            preflight_report = write_passing_opencode_preflight_report(
+                out_root / "harness" / "opencode-preflight-report.json",
+                run_id="run-profile-opencode",
+            )
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-preflight",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "opencode_preflight_report": repo_rel(preflight_report),
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "timeout_seconds": 13,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            handoff_contract = {"path": "target/opencode/handoff-contract.json", "sha256": "a" * 64}
+            session_evidence = {"path": "target/opencode/session-evidence.json", "sha256": "b" * 64}
+            contract_verification = {"status": "executed", "matched_command": "python3 -B scripts/c2rust-migrator.py"}
+            preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": harness.sha256_file(preflight_report),
+                "status": "passed",
+            }
+            with patch.object(
+                harness,
+                "run_worker",
+                return_value={
+                    "exit_code": 0,
+                    "summary_status": "passed",
+                    "summary_path": "",
+                    "report_path": "target/report.json",
+                    "recorded": False,
+                    "handoff_contract": handoff_contract,
+                    "opencode_session_evidence": session_evidence,
+                    "opencode_contract_verification": contract_verification,
+                    "opencode_preflight_report": preflight_binding,
+                },
+            ) as runner:
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile-opencode",
+                    out_root=out_root,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(result["mode"], "opencode")
+            runner.assert_called_once()
+            self.assertEqual(runner.call_args.kwargs["mode"], "opencode")
+            self.assertEqual(runner.call_args.kwargs["opencode_preflight_report"], Path(repo_rel(preflight_report)))
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            context_worker = context_pack["workers"][0]
+            indexed_agent = agent_index["agents_by_worker_id"][context_worker["worker_id"]]
+            self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
+            self.assertEqual(agent_index["reports"]["opencode_preflight_report"]["path"], repo_rel(preflight_report))
+            for indexed in (context_worker, indexed_agent):
+                self.assertEqual(indexed["handoff_contract"], handoff_contract)
+                self.assertEqual(indexed["opencode_session_evidence"], session_evidence)
+                self.assertEqual(indexed["opencode_contract_verification"], contract_verification)
+                self.assertEqual(indexed["opencode_preflight_report"], preflight_binding)
+
+    def test_run_batch_profile_rejects_competition_exact_without_exact_host_before_preflight(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-competition-exact-overclaim",
+                        "proof_class": "competition-exact",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "mode": "opencode",
+                        "execute_merge": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"competition-exact overclaim should fail before launch: {argv}")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": "0"}):
+                with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
+                    harness.run_batch_profile(
+                        profile_path=profile_path,
+                        run_id="run-profile-competition-exact-overclaim",
+                        out_root=out_root,
+                        command_runner=fail_if_called,
+                        repo_root=REPO_ROOT,
+                    )
+
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+
+    def test_run_batch_profile_rejects_cli_competition_exact_override_without_exact_host(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-cli-exact-override",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "mode": "opencode",
+                        "execute_merge": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"competition-exact override should fail before launch: {argv}")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": ""}):
+                with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
+                    harness.run_batch_profile(
+                        profile_path=profile_path,
+                        run_id="run-profile-cli-exact-override",
+                        out_root=out_root,
+                        proof_class_override="competition-exact",
+                        command_runner=fail_if_called,
+                        repo_root=REPO_ROOT,
+                    )
+
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+
+    def test_run_batch_profile_records_cli_proof_class_override(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-cli-exact-override",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo",
+                        "worker_prefix": "worker",
+                        "mode": "deterministic",
+                        "execute_merge": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if "scripts/c2rust-migrator.py" not in argv:
+                    raise AssertionError(f"unexpected command for no-merge profile: {argv}")
+                request_path = REPO_ROOT / argv[argv.index("--input") + 1]
+                request = json.loads(request_path.read_text(encoding="utf-8"))
+                summary_path = REPO_ROOT / request["out_root"] / "summary" / "competition-run-summary.json"
+                write_worker_summary(summary_path, request["run_id"], status="passed", failed=0, semantic_pass=1)
+                return subprocess.CompletedProcess(argv, 0, stdout="worker ok\n", stderr="")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": "1"}):
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile-cli-exact-override",
+                    out_root=out_root,
+                    proof_class_override="competition-exact",
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["profile_proof_class"], "local-simulation")
+            self.assertEqual(result["proof_class"], "competition-exact")
+            self.assertEqual(
+                result["proof_class_resolution"],
+                {
+                    "source": "cli-override",
+                    "profile_proof_class": "local-simulation",
+                    "effective_proof_class": "competition-exact",
+                    "override_requested": True,
+                    "changed": True,
+                    "override_proof_class": "competition-exact",
+                },
+            )
+            rows = fetch_rows(
+                Path(REPO_ROOT / result["db_path"]),
+                "select proof_class from runs where run_id=?",
+                ("run-profile-cli-exact-override",),
+            )
+            self.assertEqual(rows, [("competition-exact",)])
+            report = json.loads((out_root / "harness" / "batch-profile-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["profile_proof_class"], "local-simulation")
+            self.assertEqual(report["proof_class"], "competition-exact")
+            self.assertEqual(report["proof_class_resolution"], result["proof_class_resolution"])
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["proof_class_resolution"], result["proof_class_resolution"])
+            self.assertEqual(agent_index["proof_class_resolution"], result["proof_class_resolution"])
+
+    def test_evaluate_rejects_competition_exact_without_exact_host_before_init_run(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+
+            def fail_if_called(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                raise AssertionError(f"competition-exact overclaim should fail before worker launch: {argv}")
+
+            with patch.dict(os.environ, {"COMPETITION_EXACT_HOST": ""}):
+                with self.assertRaisesRegex(SystemExit, "COMPETITION_EXACT_HOST=1"):
+                    harness.evaluate(
+                        run_id="run-evaluate-competition-exact-overclaim",
+                        target_id="demo",
+                        source_repo_root=source_root,
+                        source_file="src/demo.c",
+                        source_commit="abc123",
+                        out_root=out_root,
+                        proof_class="competition-exact",
+                        functions=["first_unit"],
+                        mode="deterministic",
+                        execute_merge=False,
+                        command_runner=fail_if_called,
+                        repo_root=REPO_ROOT,
+                    )
+
+            self.assertFalse((out_root / "state" / "opencode-agent-harness.sqlite3").exists())
+
+    def test_run_batch_profile_opencode_auto_runs_preflight_when_profile_omits_report(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-auto-preflight",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "timeout_seconds": 13,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            preflight_kwargs: dict[str, object] = {}
+
+            def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                preflight_kwargs.update(kwargs)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                contract_path = out_root / "harness" / "opencode-preflight-contract.json"
+                contract = json.loads(contract_path.read_text(encoding="utf-8"))
+                marker_path = REPO_ROOT / contract["expected_marker_path"]
+                write_valid_preflight_marker(marker_path, run_id="run-profile-opencode-auto")
+                stdout = json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "tool": "bash",
+                            "state": {
+                                "input": {"command": contract["worker_command_line"], "workdir": str(REPO_ROOT)},
+                                "status": "completed",
+                            },
+                        },
+                    }
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout=stdout + "\n", stderr="")
+
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": "",
+                "status": "passed",
+            }
+
+            with patch.object(
+                harness,
+                "run_worker",
+                return_value={
+                    "exit_code": 0,
+                    "summary_status": "passed",
+                    "summary_path": "",
+                    "report_path": "target/report.json",
+                    "recorded": False,
+                    "opencode_preflight_report": preflight_binding,
+                },
+            ) as runner:
+                result = harness.run_batch_profile(
+                    profile_path=profile_path,
+                    run_id="run-profile-opencode-auto",
+                    out_root=out_root,
+                    command_runner=fake_preflight_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            preflight_report_payload = json.loads(preflight_report.read_text(encoding="utf-8"))
+            expected_preflight_binding = {
+                "path": repo_rel(preflight_report),
+                "sha256": harness.sha256_file(preflight_report),
+                "status": "passed",
+                "run_id": "run-profile-opencode-auto",
+                "contract_status": "executed",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "opencode_agent": "c2rust-migrator",
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": False,
+                },
+                "launch_policy_sha256": harness.sha256_text(
+                    json.dumps(
+                        {
+                            "opencode_agent": "c2rust-migrator",
+                            "opencode_command": "opencode",
+                            "opencode_model": "GLM-5.1",
+                            "opencode_skip_permissions": False,
+                            "opencode_variant": "max",
+                        },
+                        sort_keys=True,
+                    )
+                ),
+                "opencode_model_availability": {
+                    "status": "available",
+                    "opencode_command": "opencode",
+                    "required_model": "GLM-5.1",
+                    "argv": preflight_report_payload["opencode_model_availability"]["argv"],
+                    "process_returncode": 0,
+                    "model_listed": True,
+                },
+                "opencode_runtime_env": preflight_report_payload["opencode_runtime_env"],
+                "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
+            }
+            self.assertEqual(result["mode"], "opencode")
+            self.assertEqual(result["opencode_preflight_report"], expected_preflight_binding)
+            self.assertEqual(preflight_kwargs["timeout"], 13)
+            runner.assert_called_once()
+            self.assertEqual(runner.call_args.kwargs["opencode_preflight_report"], Path(repo_rel(preflight_report)))
+            self.assertEqual(runner.call_args.kwargs["timeout_seconds"], 13)
+            run_plan = result["run_plan"]
+            self.assertEqual(run_plan["opencode_preflight_report"], expected_preflight_binding)
+            self.assertEqual(
+                run_plan["graph"]["opencode_worker"]["preflight_report"]["path"],
+                repo_rel(preflight_report),
+            )
+            self.assertEqual(run_plan["graph"]["opencode_worker"]["opencode_variant"], "max")
+            context_pack = json.loads((REPO_ROOT / result["context_pack"]["path"]).read_text(encoding="utf-8"))
+            agent_index = json.loads((REPO_ROOT / result["agent_index"]["path"]).read_text(encoding="utf-8"))
+            self.assertEqual(context_pack["entrypoints"]["opencode_preflight_report"], repo_rel(preflight_report))
+            self.assertEqual(agent_index["reports"]["opencode_preflight_report"], expected_preflight_binding)
+
+    def test_run_batch_profile_opencode_auto_preflight_failure_writes_blocked_report_before_planning(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            source_root = Path(tmp) / "FlashDB"
+            source_file = source_root / "src" / "demo.c"
+            source_file.parent.mkdir(parents=True)
+            source_file.write_text("int first_unit(int value) { return value + 1; }\n", encoding="utf-8")
+            profile_path = Path(tmp) / "planned-batch.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile_id": "demo-opencode-auto-preflight-blocked",
+                        "proof_class": "local-simulation",
+                        "target_id": "demo",
+                        "source_repo_root": repo_rel(source_root),
+                        "source_file": "src/demo.c",
+                        "source_commit": "abc123",
+                        "functions": ["first_unit"],
+                        "slice_id_prefix": "demo-opencode",
+                        "worker_prefix": "worker",
+                        "mode": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "execute_merge": False,
+                        "auto_retry": False,
+                        "timeout_seconds": 13,
+                        "emit_route_governance_metrics_report": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stale_files = [
+                out_root / "summary" / "competition-run-summary.json",
+                out_root / "summary" / "workflow-metrics.json",
+                out_root / "summary" / "route-governance-metrics-report.json",
+                out_root / "harness" / "run-plan-report.json",
+                out_root / "harness" / "judge-evidence-index.json",
+                out_root / "harness" / "context-pack.json",
+                out_root / "harness" / "agent-index.json",
+                out_root / "state" / "opencode-agent-harness.sqlite3",
+                out_root / "workers" / "old-worker" / "summary" / "competition-run-summary.json",
+                out_root / "harness" / "plans" / "old-workers.json",
+            ]
+            for stale_file in stale_files:
+                stale_file.parent.mkdir(parents=True, exist_ok=True)
+                stale_file.write_text(json.dumps({"stale": True}), encoding="utf-8")
+
+            def fake_preflight_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="gpt-5.4\n", stderr="")
+                raise AssertionError(f"batch preflight failure must not launch OpenCode worker or marker command: {argv}")
+
+            result = harness.run_batch_profile(
+                profile_path=profile_path,
+                run_id="run-profile-opencode-preflight-blocked",
+                out_root=out_root,
+                command_runner=fake_preflight_runner,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(result["report_kind"], "batch-profile-report")
+            self.assertEqual(result["status"], "blocked")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["blocked_phase"], "opencode-preflight")
+            self.assertEqual(result["root_cause_key"], "opencode_model_unavailable")
+            self.assertEqual(result["profile_proof_class"], "local-simulation")
+            self.assertEqual(result["proof_class"], "local-simulation")
+            self.assertEqual(
+                result["proof_class_resolution"],
+                {
+                    "source": "profile",
+                    "profile_proof_class": "local-simulation",
+                    "effective_proof_class": "local-simulation",
+                    "override_requested": False,

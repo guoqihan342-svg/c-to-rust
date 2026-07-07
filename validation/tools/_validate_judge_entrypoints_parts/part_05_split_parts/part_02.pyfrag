@@ -1,0 +1,48 @@
+            entrypoint_proof_class=str(smoke_contract.get("proof_class")),
+            entrypoint_run_id=str(smoke_contract.get("run_id")),
+            repo_root=repo_root,
+            verify_command_log_sha=True,
+        )
+        if "command_log" in artifacts:
+            command_log_path = repo_path(str(artifacts["command_log"]), repo_root=repo_root)
+            expected_log_steps = [
+                require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+                for step in smoke_summary_payload.get("steps", [])
+                if isinstance(step, dict)
+            ]
+            expected_step_results = {
+                require_string(step.get("step"), "competition_smoke_summary.steps[].step"): step
+                for step in smoke_summary_payload.get("steps", [])
+                if isinstance(step, dict)
+            }
+            result["competition_smoke_command_log"] = validate_competition_smoke_command_log_contract(
+                command_log_path,
+                expected_steps=expected_log_steps,
+                expected_step_results=expected_step_results,
+                expected_run_id=require_string(smoke_summary_payload.get("run_id"), "competition_smoke_summary.run_id"),
+                require_canonical=True,
+                require_opencode_glm_model=smoke_summary_payload.get("proof_class") == "competition-exact",
+            )
+        if "vendored_clang_verification" in artifacts:
+            vendored_clang_path = repo_path(str(artifacts["vendored_clang_verification"]), repo_root=repo_root)
+            result["vendored_clang_verification"] = validate_vendored_clang_verification_contract(
+                load_json(vendored_clang_path),
+                smoke_summary=smoke_summary_payload,
+                environment_profile=environment_profile,
+            )
+        if "evidence_governance_report" in artifacts:
+            evidence_governance_path = repo_path(str(artifacts["evidence_governance_report"]), repo_root=repo_root)
+            result["evidence_governance_report"] = validate_evidence_governance_report_contract(
+                load_json(evidence_governance_path),
+            )
+        if "translator_coverage_matrix" in artifacts:
+            coverage_matrix_path = repo_path(str(artifacts["translator_coverage_matrix"]), repo_root=repo_root)
+            result["translator_coverage_matrix"] = validate_translator_coverage_matrix_report_contract(
+                load_json(coverage_matrix_path),
+            )
+        if "milestone_release_report" in artifacts:
+            milestone_report_path = repo_path(str(artifacts["milestone_release_report"]), repo_root=repo_root)
+            result["milestone_release_report"] = validate_milestone_release_report_contract(
+                load_json(milestone_report_path),
+            )
+    return result

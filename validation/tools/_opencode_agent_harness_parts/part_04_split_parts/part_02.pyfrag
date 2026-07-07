@@ -1,0 +1,59 @@
+                timeout_seconds=timeout_seconds,
+                command_runner=command_runner,
+                repo_root=repo_root,
+            )
+        merge_failed = int(merge_execution["exit_code"]) != 0
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "completed" if failed_workers == 0 and not merge_failed else "failed",
+        "run_id": run_id,
+        "mode": mode,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "worker_count": len(worker_results),
+        "failed_workers": failed_workers,
+        "graph": build_run_plan_graph_contract(
+            mode=mode,
+            auto_retry=auto_retry,
+            max_workers=max_workers,
+            effective_workers=effective_workers,
+            opencode_variant=opencode_variant,
+            opencode_preflight_report=opencode_preflight_binding,
+        ),
+        "parallelism": {
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+        },
+        "auto_retry": {
+            "enabled": auto_retry,
+            "retried_worker_count": sum(1 for worker in worker_results if isinstance(worker.get("auto_retry"), dict)),
+        },
+        "exit_code": 0 if failed_workers == 0 and not merge_failed else 1,
+        "elapsed_seconds": int(time.monotonic() - started),
+        "workers": worker_results,
+        "merge_plan": merge_plan,
+    }
+    if opencode_preflight_binding is not None:
+        report["opencode_preflight_report"] = opencode_preflight_binding
+    if merge_execution is not None:
+        report["merge_execution"] = merge_execution
+    report_path = out_root / "harness" / "run-plan-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, report)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="planned-worker-batch-report",
+            path=report_path,
+            status=report["status"],
+            semantic_role="worker-batch-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="planned_workers_executed", payload=report)
+        connection.commit()
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    return result

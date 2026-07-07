@@ -63,7 +63,14 @@ class AutoMigrateTests(
 ):
     pass
 
-del _C2RPartPath, _C2R_PARTS_DIR, _C2R_PART_NAME, _C2R_PART_PATH
+for _C2R_PART_TEMP_NAME in (
+    "_C2RPartPath",
+    "_C2R_PARTS_DIR",
+    "_C2R_PART_NAME",
+    "_C2R_PART_PATH",
+):
+    globals().pop(_C2R_PART_TEMP_NAME, None)
+del _C2R_PART_TEMP_NAME
 
 
 if __name__ == "__main__":

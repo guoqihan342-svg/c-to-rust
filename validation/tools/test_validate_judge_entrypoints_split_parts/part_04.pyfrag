@@ -1,0 +1,221 @@
+              payload_json text not null,
+              created_at text not null
+            );
+            """
+        )
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"{run_id}-context-pack",
+                run_id,
+                "flashdb",
+                None,
+                1,
+                20000,
+                repo_relative(context_pack_path),
+                validator.sha256_file(context_pack_path),
+                json.dumps(context_pack_payload, sort_keys=True),
+            ),
+        )
+        agent_index_payload_json = json.dumps(
+            json.loads(agent_index_path.read_text(encoding="utf-8")),
+            sort_keys=True,
+        )
+        connection.execute(
+            """
+            insert into artifacts(
+              run_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                "agent-index",
+                repo_relative(agent_index_path),
+                validator.sha256_file(agent_index_path),
+                "present",
+                "agent-index",
+                agent_index_payload_json,
+                "2026-07-01T00:00:00Z",
+            ),
+        )
+        for worker in context_pack_payload.get("workers", []):
+            if not isinstance(worker, dict) or not isinstance(worker.get("summary_path"), str):
+                continue
+            summary_path = REPO_ROOT / worker["summary_path"]
+            if not summary_path.is_file():
+                continue
+            connection.execute(
+                """
+                insert into artifacts(
+                  run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    worker.get("worker_id"),
+                    "competition-run-summary",
+                    worker["summary_path"],
+                    validator.sha256_file(summary_path),
+                    "passed",
+                    "run-summary",
+                    "{}",
+                    "2026-07-01T00:00:00Z",
+                ),
+            )
+            if isinstance(worker.get("report_path"), str):
+                report_path = REPO_ROOT / worker["report_path"]
+                if report_path.is_file():
+                    connection.execute(
+                        """
+                        insert into artifacts(
+                          run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            run_id,
+                            worker.get("worker_id"),
+                            "run-worker-report",
+                            worker["report_path"],
+                            validator.sha256_file(report_path),
+                            "passed",
+                            "worker-execution-report",
+                            "{}",
+                            "2026-07-01T00:00:00Z",
+                        ),
+                    )
+        connection.commit()
+
+
+def write_context_ledger_case(
+    temp_dir: Path,
+    *,
+    run_id: str = "context-ledger-case",
+    ledger_run_id: str | None = None,
+    isolated_out_root: str | None = None,
+) -> dict:
+    out_root = temp_dir / "out"
+    context_pack = out_root / "harness" / "context-pack.json"
+    agent_index = out_root / "harness" / "agent-index.json"
+    ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+    worker_root = out_root / "workers" / "worker-001"
+    summary = worker_root / "summary" / "competition-run-summary.json"
+    report = worker_root / "harness" / "run-worker-report.json"
+    write_json(summary, {"final_gate": {"status": "passed"}})
+    write_json(report, {"report_kind": "run-worker-report", "worker_id": "worker-001"})
+    worker = {
+        "worker_id": "worker-001",
+        "summary_path": repo_relative(summary),
+        "report_path": repo_relative(report),
+    }
+    context_payload = {
+        "run_id": run_id,
+        "context_management_contract": {
+            "resume_protocol": {
+                "checkpoint_backend": "sqlite",
+                "ledger_path": repo_relative(ledger),
+            },
+        },
+        "workers": [worker],
+    }
+    agent_payload = {
+        "run_id": run_id,
+        "agents_by_worker_id": {
+            "worker-001": {
+                **worker,
+                "isolated_out_root": (
+                    isolated_out_root if isolated_out_root is not None else repo_relative(worker_root)
+                ),
+            }
+        },
+    }
+    write_json(context_pack, context_payload)
+    write_json(agent_index, agent_payload)
+    write_minimal_context_ledger(
+        ledger,
+        run_id=ledger_run_id if ledger_run_id is not None else run_id,
+        context_pack_path=context_pack,
+        context_pack_payload=context_payload,
+        agent_index_path=agent_index,
+    )
+    return {
+        "context_payload": context_payload,
+        "agent_payload": agent_payload,
+        "context_pack": context_pack,
+        "agent_index": agent_index,
+        "ledger": ledger,
+    }
+
+
+def validate_context_ledger_case(case: dict) -> dict:
+    return validator.validate_context_ledger_contract(
+        case["context_payload"],
+        case["agent_payload"],
+        context_path_text=repo_relative(case["context_pack"]),
+        agent_path_text=repo_relative(case["agent_index"]),
+        repo_root=REPO_ROOT,
+    )
+
+
+def bind_entrypoint_to_out_root(config: dict, temp_config: Path, *, entry_index: int, out_root: Path) -> Path:
+    entry = config["entrypoints"][entry_index]
+    flags = validator.parsed_command_flags(entry["command"])
+    old_out_root = flags["--out-root"]
+    new_out_root = repo_relative(out_root)
+    entry["command"] = entry["command"].replace(f"--out-root {old_out_root}", f"--out-root {new_out_root}")
+    manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+    command_key = validator.expected_manifest_reproduction_command_key(entry)
+    manifest["reproduction"][command_key] = entry["command"]
+    manifest_path = temp_config.parent / f"{entry['id']}-tracked-manifest.json"
+    entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+    return out_root
+
+from pathlib import Path as _C2RPartPath
+
+_C2R_PARTS_DIR = _C2RPartPath(__file__).with_name("_test_validate_judge_entrypoints_parts")
+for _C2R_PART_NAME in (
+    "class_part_00.py",
+    "class_part_01.py",
+    "class_part_02.py",
+    "class_part_03.py",
+    "class_part_04.py",
+    "class_part_05.py",
+    "class_part_06.py",
+    "class_part_07.py",
+    "class_part_08.py",
+    "class_part_09.py",
+):
+    _C2R_PART_PATH = _C2R_PARTS_DIR / _C2R_PART_NAME
+    exec(
+        compile(
+            _C2R_PART_PATH.read_text(encoding="utf-8"),
+            str(_C2R_PART_PATH),
+            "exec",
+        ),
+        globals(),
+    )
+
+class JudgeEntrypointsValidatorTests(
+    _JudgeEntrypointsValidatorTestsPart00,
+    _JudgeEntrypointsValidatorTestsPart01,
+    _JudgeEntrypointsValidatorTestsPart02,
+    _JudgeEntrypointsValidatorTestsPart03,
+    _JudgeEntrypointsValidatorTestsPart04,
+    _JudgeEntrypointsValidatorTestsPart05,
+    _JudgeEntrypointsValidatorTestsPart06,
+    _JudgeEntrypointsValidatorTestsPart07,
+    _JudgeEntrypointsValidatorTestsPart08,
+    _JudgeEntrypointsValidatorTestsPart09,
+    unittest.TestCase,
+):
+    pass
+
+del _C2RPartPath, _C2R_PARTS_DIR, _C2R_PART_NAME, _C2R_PART_PATH
+
+
+if __name__ == "__main__":
+    unittest.main()

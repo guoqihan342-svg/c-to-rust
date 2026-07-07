@@ -1,0 +1,500 @@
+class _JudgeMilestoneBundleTestsPart00:
+    def test_opencode_preflight_proof_summary_binds_runtime_env(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-runtime-env-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["status"], "passed")
+        self.assertEqual(summary["opencode_agent"], "c2rust-migrator")
+        self.assertEqual(summary["opencode_variant"], "max")
+        self.assertEqual(summary["opencode_runtime_env"], preflight_payload["opencode_runtime_env"])
+        self.assertEqual(summary["opencode_runtime_env_sha256"], preflight_payload["opencode_runtime_env"]["env_sha256"])
+
+    def test_opencode_preflight_proof_summary_recomputes_session_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-contract-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        session_path = Path(fixture["session_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+        session_payload["session_events"][0]["part"]["state"]["input"]["command"] = (
+            "python3 -B validation/tools/opencode_agent_harness.py list-workers --db target/fake.sqlite3"
+        )
+        write_json(session_path, session_payload)
+        preflight_payload["opencode_session_evidence"]["sha256"] = bundle.validator.sha256_file(session_path)
+        write_json(preflight_path, preflight_payload)
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertNotEqual(summary["status"], "passed")
+
+    def test_opencode_preflight_proof_summary_rejects_failed_session_evidence_contract(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        cases = [
+            ("nonzero_returncode", {"process_returncode": 1}),
+            ("unparsed_session", {"parsed": False}),
+            ("non_jsonl_format", {"format": "text"}),
+        ]
+        for case_name, updates in cases:
+            with self.subTest(case=case_name):
+                temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-session-contract-", dir=REPO_ROOT / "target"))
+                fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+                preflight_path = Path(fixture["preflight_path"])
+                session_path = Path(fixture["session_path"])
+                preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+                session_payload = json.loads(session_path.read_text(encoding="utf-8"))
+                session_payload.update(updates)
+                write_json(session_path, session_payload)
+                preflight_payload["opencode_session_evidence"]["sha256"] = bundle.validator.sha256_file(session_path)
+                write_json(preflight_path, preflight_payload)
+
+                summary = bundle.opencode_preflight_proof_summary_from_index(
+                    {
+                        "opencode_agent_runtime": {
+                            "opencode_preflight_report": {
+                                "path": repo_relative(preflight_path),
+                                "sha256": bundle.validator.sha256_file(preflight_path),
+                                "status": "present",
+                            }
+                        }
+                    },
+                    entrypoint_id="opencode_multi_worker_evaluate_profile",
+                    proof_class="local-simulation",
+                    repo_root=REPO_ROOT,
+                )
+
+                self.assertNotEqual(summary["status"], "passed")
+
+    def test_opencode_preflight_proof_summary_requires_opencode_run_argv(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-preflight-opencode-argv-", dir=REPO_ROOT / "target"))
+        fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        preflight_path = Path(fixture["preflight_path"])
+        preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+        handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff_payload.pop("opencode_argv")
+        write_json(handoff_path, handoff_payload)
+        preflight_payload["handoff_contract"]["sha256"] = bundle.validator.sha256_file(handoff_path)
+        write_json(preflight_path, preflight_payload)
+
+        summary = bundle.opencode_preflight_proof_summary_from_index(
+            {
+                "opencode_agent_runtime": {
+                    "opencode_preflight_report": {
+                        "path": repo_relative(preflight_path),
+                        "sha256": bundle.validator.sha256_file(preflight_path),
+                        "status": "present",
+                    }
+                }
+            },
+            entrypoint_id="opencode_multi_worker_evaluate_profile",
+            proof_class="local-simulation",
+            repo_root=REPO_ROOT,
+        )
+
+        self.assertEqual(summary["status"], "failed")
+        self.assertFalse(summary.get("opencode_run_argv_bound"))
+
+    def test_bundle_binds_all_entrypoints_metrics_and_opencode_runtime(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-bundle-", dir=REPO_ROOT / "target"))
+        readiness_path = temp_dir / "summary" / "judge-entrypoints-readiness.json"
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        before_metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
+        before_route_metrics_path = temp_dir / "before-after" / "summary" / "route-governance-metrics-report.json"
+        before_exhibit_path = temp_dir / "before-after" / "summary" / "before-after-exhibit.json"
+        evidence_governance_path = temp_dir / "competition-smoke" / "reports" / "evidence-governance.json"
+        before_index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        opencode_metrics_path = temp_dir / "opencode" / "summary" / "workflow-metrics.json"
+        opencode_route_metrics_path = temp_dir / "opencode" / "summary" / "route-governance-metrics-report.json"
+        opencode_index_path = temp_dir / "opencode" / "harness" / "judge-evidence-index.json"
+        c2rust_baseline = c2rust_baseline_rollup_fixture(temp_dir / "c2rust-baseline")
+
+        write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
+        preflight_fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
+        opencode_preflight_path = Path(preflight_fixture["preflight_path"])
+        opencode_models_stdout_path = Path(preflight_fixture["model_stdout_path"])
+        opencode_models_stderr_path = Path(preflight_fixture["model_stderr_path"])
+        launch_policy = dict(preflight_fixture["launch_policy"])
+        launch_policy_sha256 = str(preflight_fixture["launch_policy_sha256"])
+        preflight_binding = {
+            "path": repo_relative(opencode_preflight_path),
+            "sha256": bundle.validator.sha256_file(opencode_preflight_path),
+            "status": "passed",
+            "contract_status": "executed",
+            "run_id": "opencode",
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": launch_policy_sha256,
+        }
+        preflight_artifact_ref = {
+            "path": repo_relative(opencode_preflight_path),
+            "sha256": bundle.validator.sha256_file(opencode_preflight_path),
+            "status": "present",
+        }
+        write_json(
+            before_metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 1,
+                "units_converged": 1,
+                "avg_repair_rounds": 1.0,
+                "auto_recovery_rate": 1.0,
+                "human_interventions": 0,
+                "llm_calls": 1,
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 2,
+                    "current_total_unsafe": 0,
+                    "reduced_by": 2,
+                },
+                "per_unit_statuses": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "repair_history": {"rollback_ids": ["rollback-001"]},
+                    }
+                ],
+            },
+        )
+        write_json(
+            before_route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=1,
+                tracked_route_decision_artifacts=2,
+                tracked_slice_gate_contexts=1,
+                s2_workflow_run_count=1,
+                s2_reduced_by=2,
+                c2rust_baseline=c2rust_baseline,
+            ),
+        )
+        write_json(evidence_governance_path, evidence_governance_payload())
+        write_json(
+            before_exhibit_path,
+            {
+                "report_kind": "before-after-exhibit",
+                "status": "passed",
+                "units": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "baseline_verification": {
+                            "path": "validation/evidence/baseline-verification.json",
+                            "sha256": "e" * 64,
+                            "status": "passed",
+                            "semantic_pass": True,
+                            "semantic_claim_source": "verified_unsafe_baseline_gates",
+                            "generated_draft_semantic_pass": False,
+                        },
+                        "repair_rounds": 1,
+                        "auto_recovered": True,
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                        "repair_history": {
+                            "patch_events_path": "target/demo/retry-repair-history.jsonl",
+                            "patch_events_sha256": "f" * 64,
+                            "rollback_ids": ["rollback-001"],
+                            "statuses": ["failed", "passed", "verified"],
+                            "verified": True,
+                        },
+                        "patch_origin": {
+                            "source": "accepted_safe_evidence",
+                            "accepted_patch_bound": True,
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                        "safety_loop_provenance": {
+                            "status": "accepted_evidence_bound",
+                            "patch_source": "accepted_safe_evidence",
+                            "baseline_verification_status": "passed",
+                            "unsafe_delta": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "repair_rounds": 1,
+                            "auto_recovered": True,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                    }
+                ],
+            },
+        )
+        write_json(
+            before_index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "evidence_artifact_refs": {
+                    "before_after_exhibit": {
+                        "path": repo_relative(before_exhibit_path),
+                        "sha256": bundle.validator.sha256_file(before_exhibit_path),
+                        "status": "present",
+                    }
+                },
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 1,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "core_translation_quality": {
+                    "before_after_units": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "status": "converged",
+                            "baseline": {"path": "validation/evidence/baseline.rs", "sha256": "a" * 64},
+                            "final": {"path": "validation/evidence/final.rs", "sha256": "b" * 64},
+                            "accepted_patch": {"path": "validation/evidence/accepted.patch", "sha256": "c" * 64},
+                            "oracle_evidence": {"path": "validation/evidence/final-verification.json", "sha256": "d" * 64},
+                            "unsafe_reduction": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                        }
+                    ],
+                    "final_gate_status": "passed",
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 1,
+                    },
+                    "semantic_pass_count": 1,
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                    },
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                    },
+                },
+                "judge_headline": {
+                    "report_kind": "judge-headline",
+                    "worker_count": 1,
+                    "repair_round_cap": 5,
+                    "semantic_gate": False,
+                    "opencode_runtime": {"enabled": False, "semantic_gate": False},
+                },
+            },
+        )
+        write_json(
+            opencode_metrics_path,
+            {
+                "report_kind": "workflow-metrics",
+                "units_total": 2,
+                "units_converged": 2,
+                "avg_repair_rounds": 0.0,
+                "auto_recovery_rate": 0.0,
+                "human_interventions": 0,
+                "llm_calls": 0,
+                "unsafe_reduction": {"status": "not_measured"},
+                "per_unit_statuses": [
+                    {"unit_id": "flashdb/real-fdb-blob-make", "repair_rounds": 0, "auto_recovered": False},
+                    {"unit_id": "flashdb/real-fdb-kv-set", "repair_rounds": 0, "auto_recovered": False},
+                ],
+            },
+        )
+        write_json(
+            opencode_route_metrics_path,
+            route_metrics_payload(
+                accepted_evidence_semantic_pass_count=2,
+                tracked_route_decision_artifacts=2,
+                tracked_slice_gate_contexts=2,
+                s2_workflow_run_count=1,
+                s2_reduced_by=0,
+                c2rust_baseline=c2rust_baseline,
+            ),
+        )
+        write_json(
+            opencode_index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "harness_architecture": {
+                    "graph_runtime": "opencode-harness-langgraph-inspired",
+                    "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+                    "worker_count": 2,
+                    "retry_policy": {"round_cap": 5, "checkpoint": "repair_hints"},
+                    "architecture_contracts": {
+                        "agent_coordination": {
+                            "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                            "checkpoint_backend": "sqlite",
+                            "chat_output_is_evidence": False,
+                            "semantic_gate": False,
+                        }
+                    },
+                },
+                "judge_headline": {
+                    "report_kind": "judge-headline",
+                    "worker_count": 2,
+                    "repair_round_cap": 5,
+                    "semantic_gate": False,
+                    "opencode_runtime": {
+                        "enabled": True,
+                        "worker_count": 2,
+                        "all_contracts_executed": True,
+                        "chat_output_is_evidence": False,
+                        "semantic_gate": False,
+                    },
+                },
+                "opencode_agent_runtime": {
+                    "runtime": "opencode",
+                    "worker_count": 2,
+                    "all_contracts_executed": True,
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "contract_status_counts": {"executed": 2},
+                    "worker_ids": ["worker-a", "worker-b"],
+                    "opencode_preflight_report": preflight_binding,
+                },
+                "evidence_artifact_refs": {
+                    "worker_plan": {"path": "target/opencode/harness/plans/workers.json", "sha256": "a" * 64},
+                    "context_pack": {"path": "target/opencode/harness/context-pack.json", "sha256": "b" * 64},
+                    "agent_index": {"path": "target/opencode/harness/agent-index.json", "sha256": "c" * 64},
+                    "opencode_preflight_report": preflight_artifact_ref,
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 2,
+                "readiness_report": {"path": repo_relative(readiness_path), "status": "present"},
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "headline": "Judge entrypoints passed: 2/2 executed; semantic_gate=false",
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 2,
+                        "configured_count": 2,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "semantic_claim_source": "validator-owned-artifacts",
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "purpose": "core-translation-before-after-exhibit",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "run_id": "before-after",
+                        "judge_focus": ["unsafe reduction"],
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(before_metrics_path),
+                            "route_governance_metrics_report": repo_relative(before_route_metrics_path),
+                            "evidence_governance_report": repo_relative(evidence_governance_path),
+                            "judge_evidence_index": repo_relative(before_index_path),
+                        },
+                    },
+                    {
+                        "id": "opencode_multi_worker_evaluate_profile",
+                        "purpose": "harness-architecture-opencode-multi-worker-evaluate",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "run_id": "opencode",
+                        "judge_focus": ["OpenCode multi-worker runtime"],
+                        "key_artifacts": {
+                            "workflow_metrics": repo_relative(opencode_metrics_path),
+                            "route_governance_metrics_report": repo_relative(opencode_route_metrics_path),
+                            "judge_evidence_index": repo_relative(opencode_index_path),
+                        },
+                    },
+                ],
+                "validation": {
+                    "status": "passed",
+                    "source_pin_contract": {
+                        "status": "passed",
+                        "target_id": "flashdb",
+                        "repository": "https://gitcode.com/xwxf/FlashDB.git",
+                        "branch": "competition",
+                        "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+                    },
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(before_metrics_path),
+                                "route_governance_metrics_report": artifact_ref(before_route_metrics_path),
+                                "evidence_governance_report": artifact_ref(evidence_governance_path),
+                                "judge_evidence_index": artifact_ref(before_index_path),
+                            },
+                        },
+                        {
+                            "id": "opencode_multi_worker_evaluate_profile",
+                            "expected_artifacts": {
+                                "workflow_metrics": artifact_ref(opencode_metrics_path),
+                                "route_governance_metrics_report": artifact_ref(opencode_route_metrics_path),
+                                "judge_evidence_index": artifact_ref(opencode_index_path),
+                            },
+                        },

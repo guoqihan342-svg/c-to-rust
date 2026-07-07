@@ -1,0 +1,426 @@
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["compile_command_draft"]["resolved_include_paths"] = ["inc"]
+            oracle["compile_command_draft"]["argv"] = [
+                item.replace("-Iunit/inc", "-Iinc")
+                if isinstance(item, str)
+                else item
+                for item in oracle["compile_command_draft"]["argv"]
+            ]
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("compile command", result.stderr + result.stdout)
+
+    def test_rejects_oracle_compile_execution_argv_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["compile_execution"] = {
+                "status": "skipped_by_flag",
+                "attempted": False,
+                "argv": ["cc", "stale.c"],
+                "working_directory": str(evidence_dir).replace("\\", "/"),
+                "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+                "semantic_pass": False,
+                "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],
+            }
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("compile execution", result.stderr + result.stdout)
+
+    def test_rejects_compile_execution_skipped_spoofing_generated_toolchain(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["toolchain_status"] = "C_ORACLE_GENERATED"
+            oracle["semantic_pass"] = True
+            oracle["compile_execution"]["toolchain_status_after_attempt"] = "C_ORACLE_GENERATED"
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("compile execution", result.stderr + result.stdout)
+
+    def test_rejects_wsl_compile_execution_missing_execution_argv(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["toolchain_status"] = "COMPILE_FAILED"
+            oracle["semantic_pass"] = False
+            oracle["compile_execution"] = {
+                "status": "compile_failed",
+                "attempted": True,
+                "argv": oracle["compile_command_draft"]["argv"],
+                "working_directory": str(evidence_dir).replace("\\", "/"),
+                "toolchain_status_after_attempt": "COMPILE_FAILED",
+                "semantic_pass": False,
+                "compiler_path": "/usr/bin/cc",
+                "toolchain_adapter": "wsl",
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "compile failed",
+                "diagnostics": ["C oracle compile command failed; no oracle evidence accepted."],
+            }
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("toolchain provenance", result.stderr + result.stdout)
+
+    def test_rejects_wsl_compile_execution_launcher_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["toolchain_status"] = "COMPILE_FAILED"
+            oracle["semantic_pass"] = False
+            oracle["compile_execution"] = {
+                "status": "compile_failed",
+                "attempted": True,
+                "argv": oracle["compile_command_draft"]["argv"],
+                "working_directory": str(evidence_dir).replace("\\", "/"),
+                "toolchain_status_after_attempt": "COMPILE_FAILED",
+                "semantic_pass": False,
+                "compiler_path": "/usr/bin/cc",
+                "toolchain_adapter": "wsl",
+                "execution_argv": [
+                    "not-wsl.exe",
+                    "-e",
+                    "sh",
+                    "-lc",
+                    "cd /tmp && /usr/bin/cc harness.c -o harness.exe",
+                ],
+                "returncode": 1,
+                "stdout": "",
+                "stderr": "compile failed",
+                "diagnostics": ["C oracle compile command failed; no oracle evidence accepted."],
+            }
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("toolchain provenance", result.stderr + result.stdout)
+
+    def test_rejects_harness_execution_semantic_pass_spoofing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            executable_path = (
+                evidence_dir / "l3-global-dependency-validator-c-oracle-harness-draft.exe"
+            ).as_posix()
+            oracle["toolchain_status"] = "COMPILE_SUCCEEDED_NOT_ORACLE"
+            oracle["semantic_pass"] = False
+            oracle["compile_execution"] = {
+                "status": "compile_succeeded_not_oracle",
+                "attempted": True,
+                "argv": oracle["compile_command_draft"]["argv"],
+                "working_directory": str(evidence_dir).replace("\\", "/"),
+                "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                "semantic_pass": False,
+                "compiler_path": "unit/cc",
+                "returncode": 0,
+                "stdout": "",
+                "stderr": "",
+                "diagnostics": [
+                    "C oracle compile command succeeded, but execution/diff gates are still required."
+                ],
+                "harness_execution": {
+                    "status": "exited_zero_not_oracle",
+                    "attempted": True,
+                    "argv": [executable_path],
+                    "working_directory": str(evidence_dir).replace("\\", "/"),
+                    "executable_path": executable_path,
+                    "timeout_seconds": 30,
+                    "semantic_pass": True,
+                    "returncode": 0,
+                    "stdout": "",
+                    "stderr": "",
+                    "diagnostics": [
+                        "C oracle harness executed, but execution output has not passed oracle diff gates."
+                    ],
+                },
+            }
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("harness execution", result.stderr + result.stdout)
+
+    def test_rejects_harness_execution_missing_output_gate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            executable_path = (
+                evidence_dir / "l3-global-dependency-validator-c-oracle-harness-draft.exe"
+            ).as_posix()
+            oracle["toolchain_status"] = "COMPILE_SUCCEEDED_NOT_ORACLE"
+            oracle["semantic_pass"] = False
+            oracle["compile_execution"] = {
+                "status": "compile_succeeded_not_oracle",
+                "attempted": True,
+                "argv": oracle["compile_command_draft"]["argv"],
+                "working_directory": str(evidence_dir).replace("\\", "/"),
+                "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                "semantic_pass": False,
+                "compiler_path": "unit/cc",
+                "returncode": 0,
+                "stdout": "",
+                "stderr": "",
+                "diagnostics": [
+                    "C oracle compile command succeeded, but execution/diff gates are still required."
+                ],
+                "harness_execution": {
+                    "status": "exited_zero_not_oracle",
+                    "attempted": True,
+                    "argv": [executable_path],
+                    "working_directory": str(evidence_dir).replace("\\", "/"),
+                    "executable_path": executable_path,
+                    "timeout_seconds": 30,
+                    "semantic_pass": False,
+                    "returncode": 0,
+                    "stdout": "fixture case case-one value matched\n",
+                    "stderr": "",
+                    "diagnostics": [
+                        "C oracle harness executed, but execution output has not passed oracle diff gates."
+                    ],
+                },
+            }
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("harness output gate", result.stderr + result.stdout)
+
+    def test_rejects_compile_success_missing_harness_execution(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            oracle_path = evidence_dir / "l3-global-dependency-validator-c-oracle-status.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            oracle["toolchain_status"] = "COMPILE_SUCCEEDED_NOT_ORACLE"
+            oracle["semantic_pass"] = False
+            oracle["compile_execution"] = {
+                "status": "compile_succeeded_not_oracle",
+                "attempted": True,
+                "argv": oracle["compile_command_draft"]["argv"],
+                "working_directory": str(evidence_dir).replace("\\", "/"),
+                "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+                "semantic_pass": False,
+                "compiler_path": "unit/cc",
+                "returncode": 0,
+                "stdout": "",
+                "stderr": "",
+                "diagnostics": [
+                    "C oracle compile command succeeded, but execution/diff gates are still required."
+                ],
+            }
+            self._write_json(oracle_path, oracle)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("harness execution", result.stderr + result.stdout)
+
+    def test_rejects_schema_diff_missing_draft_blockers(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            diff_path = evidence_dir / "l3-global-dependency-validator-diff.json"
+            diff = json.loads(diff_path.read_text(encoding="utf-8"))
+            diff.pop("blocked_by", None)
+            self._write_json(diff_path, diff)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("schema diff", result.stderr + result.stdout)
+            self.assertIn("blocked_by", result.stderr + result.stdout)
+
+    def test_rejects_negative_diff_missing_draft_requirements(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            spec_path, out_root, evidence_dir = self._global_dependency_evidence(Path(tmp))
+            negative_path = evidence_dir / "l3-global-dependency-validator-negative-diff.json"
+            negative = json.loads(negative_path.read_text(encoding="utf-8"))
+            negative.pop("required_inputs", None)
+            self._write_json(negative_path, negative)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "demo",
+                    "--slice-id",
+                    "global-dependency-validator",
+                    "--slice-spec",
+                    str(spec_path),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("negative diff", result.stderr + result.stdout)
+            self.assertIn("required_inputs", result.stderr + result.stdout)

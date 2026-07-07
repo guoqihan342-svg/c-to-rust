@@ -1,73 +1,500 @@
-        self.assertIn("judge_milestone_bundle.publishability", skill)
-        self.assertIn("milestone_release_notes.py", skill)
-        self.assertIn("preflight_report.path", skill)
-        self.assertIn("model_probe_logs.stdout", skill)
-        self.assertIn("opencode-safety-transform-attempt", skill)
-        self.assertIn("handoff_contract", skill)
-        self.assertIn("opencode_session_evidence", skill)
-        self.assertIn("rollback_ids", skill)
-        self.assertIn("rollback_evidence[].path", skill)
-        self.assertIn("format=jsonl", skill)
-        self.assertIn("parsed=true", skill)
-        self.assertIn("process_returncode=0", skill)
-        self.assertIn("contract_verification", skill)
-        self.assertIn("recompute", skill)
-        self.assertIn("Required Preflight", skill)
-        self.assertIn("OpenSpec", skill)
-        self.assertIn("superpowers", skill)
-        self.assertIn("optional and non-gating", skill)
-        self.assertIn("Keep Codex skills out of the competition config archive", skill)
-        self.assertIn(".codex/skills/*", skill)
-        self.assertIn(".opencode/node_modules/*", skill)
+                            "sha256": sha256_file(handoff_path),
+                        },
+                        "opencode_session_evidence": {
+                            "path": "target/logs/opencode-preflight-session-evidence.json",
+                            "sha256": sha256_file(session_path),
+                        },
+                        "contract_verification": {
+                            "status": "executed",
+                            "expected_worker_command_line": worker_command_line,
+                            "expected_summary_path": "target/harness/opencode-preflight-marker.json",
+                            "expected_worker_command_sha256": judge_validator.sha256_text(worker_command_line),
+                            "executed_shell_command_count": 1,
+                            "executed_shell_commands": [worker_command_line],
+                            "first_tool_name": "bash",
+                            "first_shell_command": worker_command_line,
+                            "first_shell_tool_name": "bash",
+                            "first_shell_workdir_status": "repo_root",
+                            "expected_workdir_status": "repo_root",
+                            "first_shell_command_matches_worker_command": True,
+                            "first_shell_workdir_matches_repo_root": True,
+                            "worker_command_seen": True,
+                            "summary_exists": True,
+                            "tools_before_first_shell": [],
+                            "contract_failure_reason": "",
+                        },
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            binding = {
+                "path": "target/harness/opencode-preflight-report.json",
+                "sha256": sha256_file(preflight_path),
+                "status": "passed",
+                "contract_status": "executed",
+                "run_id": "preflight-run",
+                "launch_policy": launch_policy,
+                "launch_policy_sha256": launch_policy_sha,
+            }
 
-    def test_opencode_runbooks_track_safety_attempt_session_recompute_contract(self) -> None:
-        docs = [
-            PROFILE_DIR / "opencode-single-interaction.md",
-            PROFILE_DIR / "opencode-single-interaction.en.md",
-            REPO_ROOT / ".opencode" / "agents" / "c2rust-migrator.md",
-        ]
+            with self.assertRaisesRegex(ValueError, "opencode_model_availability is required"):
+                judge_validator.validate_opencode_preflight_binding(
+                    binding,
+                    "opencode_agent_runtime.opencode_preflight_report",
+                    repo_root=repo_root,
+                )
 
-        for doc in docs:
-            text = doc.read_text(encoding="utf-8")
-            with self.subTest(doc=doc.relative_to(REPO_ROOT).as_posix()):
-                self.assertIn("opencode-safety-transform-attempt", text)
-                self.assertIn("handoff_contract", text)
-                self.assertIn("opencode_session_evidence", text)
-                self.assertIn("contract_verification", text)
-                self.assertIn("GLM-5.1", text)
-                self.assertIn("c2rust-migrator", text)
-                self.assertIn("max", text)
-
-    def test_legacy_validation_profile_is_readme_only_redirect(self) -> None:
-        self.assertTrue(COMPAT_PROFILE_DIR.exists())
-        files = sorted(
-            path.relative_to(COMPAT_PROFILE_DIR).as_posix()
-            for path in COMPAT_PROFILE_DIR.rglob("*")
-            if path.is_file()
+    def test_judge_validator_rejects_resume_replay_with_non_glm_preflight_model(self) -> None:
+        launch_policy = {
+            "opencode_command": "opencode",
+            "opencode_model": None,
+            "opencode_agent": "c2rust-migrator",
+            "opencode_variant": "max",
+            "opencode_skip_permissions": True,
+        }
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        temp_context = tempfile.TemporaryDirectory(prefix="competition-env-test-", dir=target_dir)
+        self.addCleanup(temp_context.cleanup)
+        preflight = write_minimal_preflight_report(
+            Path(temp_context.name) / "harness" / "opencode-preflight-report.json",
+            launch_policy,
         )
-        self.assertEqual(files, ["README.en.md", "README.md"])
-
-        forbidden_runtime_files = [
-            "environment.json",
-            "env.sh",
-            "smoke.sh",
-            "toolchain-check.sh",
-            "apt/sources.list",
-            "pip/pip.conf",
-            "npm/.npmrc",
-            "cargo/config.toml",
-            "rust/rust-toolchain.toml",
+        worker = {
+            "worker_id": "worker-001",
+            "opencode_preflight_report": preflight,
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-preflight-report",
+            preflight["path"],
         ]
-        for relative_path in forbidden_runtime_files:
-            with self.subTest(relative_path=relative_path):
-                self.assertFalse((COMPAT_PROFILE_DIR / relative_path).exists())
 
-        for readme_name in ["README.md", "README.en.md"]:
-            readme = (COMPAT_PROFILE_DIR / readme_name).read_text(encoding="utf-8")
-            with self.subTest(readme=readme_name):
-                self.assertIn("config/competition-env/", readme)
-                self.assertIn("README-only", readme)
+        with self.assertRaisesRegex(ValueError, "--opencode-model must be GLM-5.1"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
 
+    def test_judge_validator_rejects_resume_replay_with_non_max_opencode_variant(self) -> None:
+        launch_policy = {
+            "opencode_command": "opencode",
+            "opencode_model": "GLM-5.1",
+            "opencode_agent": "c2rust-migrator",
+            "opencode_variant": "max",
+            "opencode_skip_permissions": True,
+        }
+        target_dir = REPO_ROOT / "target"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        temp_context = tempfile.TemporaryDirectory(prefix="competition-env-test-", dir=target_dir)
+        self.addCleanup(temp_context.cleanup)
+        preflight = write_minimal_preflight_report(
+            Path(temp_context.name) / "harness" / "opencode-preflight-report.json",
+            launch_policy,
+        )
+        worker = {
+            "worker_id": "worker-001",
+            "opencode_preflight_report": preflight,
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-preflight-report",
+            preflight["path"],
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
+            "--opencode-variant",
+            "default",
+        ]
 
-if __name__ == "__main__":
-    unittest.main()
+        with self.assertRaisesRegex(ValueError, "--opencode-variant must be max"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_judge_validator_rejects_resume_replay_duplicate_opencode_variant_override(self) -> None:
+        worker = {
+            "worker_id": "worker-001",
+            "opencode_preflight_report": {
+                "path": "target/harness/opencode-preflight-report.json",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "opencode_agent": "c2rust-migrator",
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": True,
+                },
+            },
+        }
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-preflight-report",
+            "target/harness/opencode-preflight-report.json",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-agent",
+            "c2rust-migrator",
+            "--opencode-variant",
+            "default",
+            "--opencode-variant",
+            "max",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "duplicate --opencode-variant"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_judge_validator_rejects_resume_replay_when_replay_safety_not_ready(self) -> None:
+        worker = {"worker_id": "worker-001"}
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "deterministic",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "replay_safety.status must be ready"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "blocked", "reason": "missing_summary"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_judge_validator_rejects_opencode_resume_replay_without_preflight_binding(self) -> None:
+        worker = {"worker_id": "worker-001"}
+        argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "run-worker",
+            "--db",
+            "target/state/opencode-agent-harness.sqlite3",
+            "--run-id",
+            "run-resume",
+            "--worker-id",
+            "worker-001",
+            "--mode",
+            "opencode",
+            "--opencode-model",
+            "GLM-5.1",
+            "--opencode-variant",
+            "max",
+        ]
+
+        with self.assertRaisesRegex(ValueError, "opencode_preflight_report is required"):
+            judge_validator.validate_resume_manifest_replay_command(
+                {
+                    "argv": argv,
+                    "command": " ".join(argv),
+                    "replay_safety": {"status": "ready"},
+                },
+                label="resume_manifest.workers[0].replay_commands.run_worker",
+                expected_subcommand="run-worker",
+                worker=worker,
+                worker_id="worker-001",
+                run_id="run-resume",
+                ledger_path="target/state/opencode-agent-harness.sqlite3",
+                require_hint=False,
+            )
+
+    def test_flashdb_quickstart_examples_follow_competition_source_pin(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        flashdb = profile["source_pins"]["flashdb"]
+        commit = flashdb["commit"]
+
+        quickstarts = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.en.md",
+        ]
+        for quickstart in quickstarts:
+            text = quickstart.read_text(encoding="utf-8")
+            with self.subTest(quickstart=quickstart.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, text)
+                self.assertIn(f"--source-commit {commit}", text)
+                self.assertIn(f"--source-repository {flashdb['repository']}", text)
+                self.assertIn(f"--source-branch {flashdb['branch']}", text)
+                self.assertIn(f"--require-source-commit {commit}", text)
+                for required_flag in flashdb["runner_required_flags"]:
+                    self.assertIn(required_flag, text)
+
+        readmes = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "README.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "README.en.md",
+        ]
+        for readme in readmes:
+            text = readme.read_text(encoding="utf-8")
+            with self.subTest(readme=readme.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, text)
+                self.assertIn(commit, text)
+
+    def test_flashdb_kv_set_slice_and_evidence_follow_competition_source_pin(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        flashdb = profile["source_pins"]["flashdb"]
+        commit = flashdb["commit"]
+
+        slice_spec = load_json(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-set.json")
+        self.assertEqual(slice_spec["source_commit"], commit)
+        self.assertEqual(slice_spec["source"]["source_commit"], commit)
+        self.assertEqual(slice_spec["source"]["source_root"], "sources/FlashDB")
+        self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, json.dumps(slice_spec, sort_keys=True))
+
+        evidence_dir = (
+            REPO_ROOT
+            / "validation"
+            / "evidence"
+            / "flashdb"
+            / "auto-translation"
+            / "real-fdb-kv-set"
+        )
+        evidence_files = [
+            evidence_dir / "l3-real-fdb-kv-set-translator-input.json",
+            evidence_dir / "l3-real-fdb-kv-set-clang-lowering-report.json",
+            evidence_dir / "l3-real-fdb-kv-set-route-decision.json",
+            evidence_dir / "l3-real-fdb-kv-set-validation-profile.json",
+            evidence_dir / "l3-real-fdb-kv-set-capability-delta.json",
+        ]
+        for evidence_file in evidence_files:
+            payload = load_json(evidence_file)
+            with self.subTest(evidence_file=evidence_file.relative_to(REPO_ROOT).as_posix()):
+                serialized = json.dumps(payload, sort_keys=True)
+                self.assertIn(commit, serialized)
+                self.assertNotIn(OLD_FLASHDB_SOURCE_COMMIT, serialized)
+
+    def test_quickstart_runbook_documents_competition_commands_and_outputs(self) -> None:
+        quickstarts = [
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.md",
+            REPO_ROOT / "docs" / "c2rust-migration-agent" / "quickstart.en.md",
+        ]
+        required_terms = [
+            "config/competition-env/environment.json",
+            "config/competition-env/opencode-single-interaction.md",
+            "source config/competition-env/env.sh",
+            "bash config/competition-env/toolchain-check.sh",
+            "validation/tools/run_competition.py",
+            "python3 -B validation/tools/run_competition_smoke.py --proof-class ci-approximation",
+            "python3 -B validation/tools/run_competition_smoke.py --proof-class wsl-local-simulation",
+            "python3 -B validation/tools/run_competition_smoke.py --proof-class competition-exact --confirm-competition-exact",
+            "competition-run-summary.json",
+            "target/competition-smoke/summary/competition-smoke-summary.json",
+            "target/competition-out/summary/competition-run-summary.json",
+            "target/competition-out/slice-specs/flashdb-real-fdb-calc-crc32.json",
+            "target/competition-out/evidence/flashdb/auto-translation/real-fdb-calc-crc32",
+            "l3-real-fdb-calc-crc32-diff.json",
+            "l3-real-fdb-calc-crc32-negative-diff.json",
+            "l3-real-fdb-calc-crc32-final-verification.json",
+            "target/competition-out/logs/commands.jsonl",
+            "python3 -B -m validation.tools.opencode_agent_harness run-worker",
+            "--mode opencode",
+            "--opencode-variant max",
+            "opencode_runtime_env",
+            "opencode-runtime",
+            '"run_id"',
+            '"schema_version"',
+            '"proof_class"',
+            '"profile_id"',
+            '"profile_sha256"',
+            '"clang_source"',
+            '"cargo_mirror_activation"',
+            '"config_file"',
+            '"elapsed_seconds"',
+            '"translator_version"',
+            '"slices"',
+            '"unsafe_budget"',
+            '"artifact_roots"',
+            '"final_gate"',
+            '"validator"',
+            "--source-repo-root sources/FlashDB",
+            "--source-repository https://gitcode.com/xwxf/FlashDB.git",
+            "--source-branch competition",
+            "--source-file src/fdb_utils.c",
+            "fdb_calc_crc32",
+            "--target-id flashdb",
+            "--slice-id real-fdb-calc-crc32",
+            "validate_auto_translation_evidence.py",
+            "--evidence-root target/competition-out/evidence",
+            "--require-semantic-pass",
+            "workers/<worker-id>",
+            "target/competition-out/workers/worker-a",
+            "ci-approximation",
+            "wsl-local-simulation",
+            "local-simulation",
+            "competition-exact",
+        ]
+        forbidden_terms = [
+            "--reuse-accepted-evidence",
+            "--accepted-evidence-root validation/evidence",
+        ]
+        for quickstart in quickstarts:
+            text = quickstart.read_text(encoding="utf-8")
+            with self.subTest(quickstart=quickstart.relative_to(REPO_ROOT).as_posix()):
+                self.assertNotIn("CONTEXT.md", text)
+                for term in forbidden_terms:
+                    self.assertNotIn(term, text)
+                for term in required_terms:
+                    self.assertIn(term, text)
+
+    def test_competition_shell_entrypoints_use_repo_root_and_activate_cargo_mirror(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        activation = profile["cargo_mirror_activation"]
+        self.assertEqual(activation["method"], "CARGO_HOME")
+        self.assertEqual(activation["env_var"], "CARGO_HOME")
+        self.assertEqual(activation["path"], "config/competition-env/cargo")
+        self.assertEqual(activation["config_file"], "config/competition-env/cargo/config.toml")
+
+        expected_clang_paths = [
+            '"${repo_root}/tools/llvm/bin/clang-18"',
+            '"${repo_root}/tools/llvm/bin/clang"',
+            '"${repo_root}/tools/clang/bin/clang"',
+        ]
+        for script_path in [
+            PROFILE_DIR / "env.sh",
+            PROFILE_DIR / "toolchain-check.sh",
+        ]:
+            script = script_path.read_text(encoding="utf-8")
+            with self.subTest(script=script_path.relative_to(REPO_ROOT).as_posix()):
+                self.assertIn("find_repo_root()", script)
+                self.assertIn('repo_root="$(find_repo_root)"', script)
+                for expected_path in expected_clang_paths:
+                    self.assertIn(expected_path, script)
+                self.assertNotIn('"tools/llvm/bin/clang"', script)
+                self.assertNotIn('"${script_dir}/../tools/llvm/bin/clang"', script)
+
+        default_env = (PROFILE_DIR / "env.sh").read_text(encoding="utf-8")
+        self.assertIn('export CARGO_HOME="${script_dir}/cargo"', default_env)
+
+        toolchain_check = (PROFILE_DIR / "toolchain-check.sh").read_text(encoding="utf-8")
+        self.assertIn("check_optional_clang_smoke()", toolchain_check)
+        self.assertIn("check_opencode_model_availability()", toolchain_check)
+        self.assertIn("opencode models", toolchain_check)
+        self.assertIn("REQUIRE_OPENCODE_GLM", toolchain_check)
+        self.assertIn("GLM-5.1", toolchain_check)
+        self.assertIn("-print-resource-dir", toolchain_check)
+        self.assertIn("#include <stdint.h>", toolchain_check)
+        self.assertIn("#include <stddef.h>", toolchain_check)
+
+    def test_toolchain_check_matches_opencode_model_only_from_stdout(self) -> None:
+        toolchain_check = (PROFILE_DIR / "toolchain-check.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("opencode models 2>&1", toolchain_check)
+        self.assertIn('opencode models >"$models_stdout_path" 2>"$models_stderr_path"', toolchain_check)
+        self.assertIn('models_output="$(cat "$models_stdout_path")"', toolchain_check)
+        self.assertIn('models_error="$(cat "$models_stderr_path")"', toolchain_check)
+        self.assertNotIn("grep -Eq", toolchain_check)
+        self.assertIn('python3 - "$required_model" "$models_stdout_path"', toolchain_check)
+        self.assertIn("candidate = token.strip().strip", toolchain_check)
+        self.assertNotIn("casefold()", toolchain_check)
+        self.assertIn("required = sys.argv[1]", toolchain_check)
+        self.assertIn("if candidate == required:", toolchain_check)
+        self.assertIn('if candidate.rsplit("/", 1)[-1] == required:', toolchain_check)
+        self.assertIn("required_model_not_listed", toolchain_check)
+
+    def test_competition_smoke_shell_entrypoint_uses_profile_env_and_smoke_runner(self) -> None:
+        smoke_script = (PROFILE_DIR / "smoke.sh").read_text(encoding="utf-8")
+
+        self.assertIn("find_repo_root()", smoke_script)
+        self.assertIn('repo_root="$(find_repo_root)"', smoke_script)
+        self.assertIn('source "${script_dir}/env.sh"', smoke_script)
+        self.assertIn("validation/tools/run_competition_smoke.py", smoke_script)
+        self.assertIn("--proof-class", smoke_script)
+        self.assertIn("--out-root", smoke_script)
+
+    def test_dependency_admission_policy_governs_current_direct_dependencies(self) -> None:
+        profile = load_json(PROFILE_DIR / "environment.json")
+        policy = profile["dependency_admission_policy"]
+
+        self.assertEqual(policy["schema_version"], 1)
+        self.assertEqual(policy["status"], "enforced")
+        self.assertEqual(policy["source_of_truth"], "config/competition-env/environment.json")
+        self.assertEqual(
+            policy["applies_to"]["manifest_paths"],

@@ -1,0 +1,213 @@
+    write_json(evidence_dir / "rust-check.json", payload)
+    return payload, patch
+
+
+def rust_check_once(path: Path) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c2r-rust-check-") as build_dir:
+        cmd = [
+            "rustc",
+            "--edition=2021",
+            "--crate-type=lib",
+            "--error-format=json",
+            "--out-dir",
+            build_dir,
+            str(path),
+        ]
+        result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    errors = [
+        json.loads(line)
+        for line in result.stderr.splitlines()
+        if line.startswith("{") and '"level":"error"' in line.replace(" ", "")
+    ]
+    return {
+        "command": " ".join(cmd),
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "errors": errors,
+    }
+
+
+RUST_KEYWORDS = {
+    "as",
+    "async",
+    "await",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+}
+
+
+def try_safe_self_heal(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+    *,
+    round_number: int = 1,
+    append_events: bool = False,
+) -> dict[str, Any]:
+    text = draft_path.read_text(encoding="utf-8")
+    keyword_param = next(
+        (
+            match.group(1)
+            for match in re.finditer(
+                r"(?<![#A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)\s*:",
+                text,
+            )
+            if match.group(1) in RUST_KEYWORDS
+        ),
+        None,
+    )
+    if keyword_param is None:
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
+
+    patched = re.sub(
+        rf"(?<![#A-Za-z0-9_]){re.escape(keyword_param)}(?![A-Za-z0-9_])",
+        f"r#{keyword_param}",
+        text,
+    )
+    if patched == text:
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
+
+    draft_path.write_text(patched, encoding="utf-8")
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    base_event = {
+        "schema_version": 1,
+        "patch_id": f"patch-rust-keyword-identifiers-{round_number}",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "round": round_number,
+        "files": [{"path": rel(draft_path), "spans": [{"line_start": 1, "line_end": max(1, len(text.splitlines()))}]}],
+        "reason": "Rust keyword used as generated identifier; convert to raw identifier without changing C oracle or fixture semantics.",
+        "expected_error_delta": {
+            "before": [rustc_error_code(error) for error in first["errors"]],
+            "after_expected": [],
+        },
+        "forbidden_changes": [
+            "c_oracle_contract",
+            "fixture_expected_behavior",
+            "accepted_metadata_differences",
+            "public_api_outside_impact_set",
+            "source_slice_boundary",
+            "unsafe_budget_policy",
+        ],
+        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-{round_number}",
+        "ai_usage": {"used": False},
+        "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
+    }
+    write_patch_events(events_path, [{**base_event, "status": "applied"}], append=append_events)
+    return {
+        "patch_events": rel(events_path),
+        "blocked_repairs": rel(evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"),
+        "blocked_repairs_status": "recorded",
+        "blocked_repairs_items": [],
+        "status": "applied",
+        "self_heal_applied": True,
+        "_last_patch_event": base_event,
+    }
+
+
+def run_safe_self_heal_loop(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    current = first
+    for round_number in range(1, REPAIR_ROUND_LIMIT + 1):
+        patch = try_safe_self_heal(
+            spec,
+            evidence_dir,
+            draft_path,
+            current,
+            round_number=round_number,
+            append_events=round_number > 1,
+        )
+        if not patch.get("self_heal_applied"):
+            return current, patch
+        current = rust_check_once(draft_path)
+        if current["returncode"] == 0:
+            return current, mark_self_heal_verified(spec, evidence_dir, patch)
+    return current, write_blocked_patch(
+        spec,
+        evidence_dir,
+        draft_path,
+        current["errors"],
+        round_number=REPAIR_ROUND_LIMIT,
+        append_events=True,
+    )
+
+
+def mark_self_heal_verified(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    base_event = patch.get("_last_patch_event")
+    if isinstance(base_event, dict):
+        write_patch_events(events_path, [{**base_event, "status": "verified"}], append=True)
+    blocked = blocked_repairs_payload(spec, [])
+    write_json(blocked_path, blocked)
+    visible_patch = dict(patch)
+    visible_patch.pop("_last_patch_event", None)
+    visible_patch.update(
+        {
+            "blocked_repairs": rel(blocked_path),
+            "blocked_repairs_status": blocked["status"],
+            "blocked_repairs_items": blocked["blocked_repairs"],
+            "status": "recorded",
+            "self_heal_applied": True,
+        }
+    )
+    return visible_patch

@@ -1,0 +1,33 @@
+    if flags["--format"] != "json":
+        raise SystemExit(
+            f"{label} --format must be json: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if flags["--variant"] != launch_policy["opencode_variant"]:
+        raise SystemExit(
+            f"{label} --variant must be {launch_policy['opencode_variant']}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if flags["--model"] != launch_policy["opencode_model"]:
+        raise SystemExit(
+            f"{label} --model must be {launch_policy['opencode_model']}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    expected_agent = launch_policy.get("opencode_agent")
+    if expected_agent is None and "--agent" in flags:
+        raise SystemExit(
+            f"{label} --agent must be absent: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    if expected_agent is not None and flags.get("--agent") != expected_agent:
+        raise SystemExit(
+            f"{label} --agent must be {expected_agent}: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    skip_permissions_present = "--dangerously-skip-permissions" in bool_flags
+    if skip_permissions_present != bool(launch_policy.get("opencode_skip_permissions")):
+        raise SystemExit(
+            f"{label} --dangerously-skip-permissions must match launch_policy: "
+            f"{repo_relative(report_path, repo_root=repo_root)}"
+        )
+    return argv

@@ -1,5 +1,303 @@
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_nullable_mutable_record_pointer_arrow_field_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_nullable_set_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::If {
+                condition: ir_binary(
+                    IrBinOp::Eq,
+                    ir_var("p", point_ptr_ty.clone()),
+                    ir_null_ptr(point_ptr_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                then_body: vec![IrStmt::Return {
+                    value: None,
+                    source_span: None,
+                }],
+                else_body: vec![],
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty)),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", i32_ty),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("nullable mutable record pointer field assignment must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("comparison pointer operand")
+            || error
+                .reason
+                .contains("comparison lhs has pointer type struct point *")
+            || error
+                .reason
+                .contains("nullable pointer param p has unsupported type"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_record_pointer_arrow_field_compound_assignment_shape() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let field_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "add_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ptr_ty,
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![IrStmt::Assign {
+            target: field_target.clone(),
+            value: ir_binary(
+                IrBinOp::Add,
+                field_target,
+                ir_var("value", i32_ty.clone()),
+                i32_ty,
+            ),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit mutable record pointer compound field assignment shape");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn add_point_x(mut p: &mut Point, value: i32)"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("p.x = p.x.checked_add(value).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles(
+        "typed-ir-mutable-record-pointer-field-compound-assignment",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_record_pointer_arrow_field_inc_dec_desugar_shape() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let inc_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let dec_target = IrExpr::Member {
+        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: true,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bump_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: inc_target.clone(),
+                value: ir_binary(
+                    IrBinOp::Add,
+                    inc_target,
+                    ir_lit(1, "1", i32_ty.clone()),
+                    i32_ty.clone(),
+                ),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: dec_target.clone(),
+                value: ir_binary(
+                    IrBinOp::Sub,
+                    dec_target,
+                    ir_lit(1, "1", i32_ty.clone()),
+                    i32_ty,
+                ),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted =
+        emit_rust_from_ir(&ir).expect("emit mutable record pointer field inc/dec desugar shape");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(rust.contains("pub x: i32"), "{rust}");
+    assert!(
+        rust.contains("pub fn bump_point_x(mut p: &mut Point)"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("p.x = p.x.checked_sub(1i32).expect(\"signed subtraction overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles(
+        "typed-ir-mutable-record-pointer-field-inc-dec-desugar",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_arrow_field_raw_inc_dec_expr() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
+    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
+    let ir = IrFunction {
+        name: "bad_raw_bump_point_x".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "p".to_string(),
+            ty: point_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                    field: "x".to_string(),
+                    ty: i32_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_lit(0, "0", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Expr {
+                expr: IrExpr::IncDec {
+                    target: Box::new(IrExpr::Member {
+                        base: Box::new(ir_var("p", point_ptr_ty.clone())),
+                        field: "x".to_string(),
+                        ty: i32_ty.clone(),
+                        is_arrow: true,
+                        source_span: None,
+                    }),
+                    op: IrIncDecOp::Inc,
+                    prefix: false,
+                    ty: i32_ty,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("raw mutable record pointer field inc/dec expression must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error.reason.contains("inc/dec expression is unsupported"),
+        "{}",
+        error.reason
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_prefix_inc_statement_for_i32_scalar() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "prefix_inc_i32".to_string(),
+        return_type: ir_void(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::IncDec {
+                target: Box::new(ir_var("value", i32_ty.clone())),
+                op: IrIncDecOp::Inc,
+                prefix: true,
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit prefix inc statement for i32 scalar");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn prefix_inc_i32(mut value: i32)"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert_rust_snippet_compiles("typed-ir-prefix-inc-i32", rust);
+}
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_prefix_inc_value_decl_initializer_for_i32_scalar() {
     let i32_ty = ir_i32();
     let ir = IrFunction {
@@ -190,420 +488,5 @@ fn typed_ir_keeps_prefix_inc_dec_member_target_fail_closed() {
         error.reason.contains("inc/dec expression is unsupported"),
         "{}",
         error.reason
-    );
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_rejects_mutable_record_pointer_arrow_field_compound_assignment_complex_rhs() {
-    let i32_ty = ir_i32();
-    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
-    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
-    let field_target = IrExpr::Member {
-        base: Box::new(ir_var("p", point_ptr_ty.clone())),
-        field: "x".to_string(),
-        ty: i32_ty.clone(),
-        is_arrow: true,
-        source_span: None,
-    };
-    let ir = IrFunction {
-        name: "bad_add_point_x".to_string(),
-        return_type: ir_void(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: point_ptr_ty,
-                source_span: None,
-            },
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![IrStmt::Assign {
-            target: field_target.clone(),
-            value: ir_binary(
-                IrBinOp::Add,
-                field_target,
-                ir_binary(
-                    IrBinOp::Add,
-                    ir_var("value", i32_ty.clone()),
-                    ir_lit(1, "1", i32_ty.clone()),
-                    i32_ty.clone(),
-                ),
-                i32_ty,
-            ),
-            source_span: None,
-        }],
-        source_span: None,
-    };
-
-    let error = emit_rust_from_ir(&ir)
-        .expect_err("mutable record pointer field compound assignment complex RHS must fail");
-
-    assert_eq!(error.route.route, CandidateRoute::Unsupported);
-    assert!(
-        error
-            .reason
-            .contains("mutable record pointer field compound assignment RHS"),
-        "{:?}",
-        error
-    );
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_mutable_record_pointer_arrow_field_read_after_assignment() {
-    let i32_ty = ir_i32();
-    let point_ty =
-        ir_record_with_fields("point", vec![("x", i32_ty.clone()), ("y", i32_ty.clone())]);
-    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
-    let ir = IrFunction {
-        name: "set_then_read_point_x".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: point_ptr_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::Assign {
-                target: IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
-                    field: "x".to_string(),
-                    ty: i32_ty.clone(),
-                    is_arrow: true,
-                    source_span: None,
-                },
-                value: ir_var("value", i32_ty.clone()),
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ptr_ty)),
-                    field: "x".to_string(),
-                    ty: i32_ty.clone(),
-                    is_arrow: true,
-                    source_span: None,
-                }),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let emitted =
-        emit_rust_from_ir(&ir).expect("emit mutable record pointer field read after assignment");
-    let rust = &emitted.rust;
-
-    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
-    assert!(rust.contains("pub struct Point"), "{rust}");
-    assert!(rust.contains("pub x: i32"), "{rust}");
-    assert!(rust.contains("pub y: i32"), "{rust}");
-    assert!(
-        rust.contains("pub fn set_then_read_point_x(mut p: &mut Point, value: i32) -> i32"),
-        "{rust}"
-    );
-    assert!(rust.contains("p.x = value;"), "{rust}");
-    assert!(rust.contains("return p.x;"), "{rust}");
-    assert_rust_snippet_compiles(
-        "typed-ir-mutable-record-pointer-field-read-after-write",
-        rust,
-    );
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_else_return() {
-    let i32_ty = ir_i32();
-    let point_ty =
-        ir_record_with_fields("point", vec![("x", i32_ty.clone()), ("y", i32_ty.clone())]);
-    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
-    let ir = IrFunction {
-        name: "set_then_read_point_x_if_present".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: point_ptr_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "cond".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::If {
-                condition: ir_var("cond", i32_ty.clone()),
-                then_body: vec![IrStmt::Assign {
-                    target: IrExpr::Member {
-                        base: Box::new(ir_var("p", point_ptr_ty.clone())),
-                        field: "x".to_string(),
-                        ty: i32_ty.clone(),
-                        is_arrow: true,
-                        source_span: None,
-                    },
-                    value: ir_var("value", i32_ty.clone()),
-                    source_span: None,
-                }],
-                else_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(0, "0", i32_ty.clone())),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ptr_ty)),
-                    field: "x".to_string(),
-                    ty: i32_ty.clone(),
-                    is_arrow: true,
-                    source_span: None,
-                }),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let emitted = emit_rust_from_ir(&ir)
-        .expect("emit mutable record pointer field read after if/else-return write");
-    let rust = &emitted.rust;
-
-    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
-    assert!(rust.contains("pub struct Point"), "{rust}");
-    assert!(
-        rust.contains(
-            "pub fn set_then_read_point_x_if_present(mut p: &mut Point, cond: i32, value: i32) -> i32"
-        ),
-        "{rust}"
-    );
-    assert!(rust.contains("if cond != 0i32 {"), "{rust}");
-    assert!(rust.contains("p.x = value;"), "{rust}");
-    assert!(rust.contains("return 0i32;"), "{rust}");
-    assert!(rust.contains("return p.x;"), "{rust}");
-    assert_rust_snippet_compiles(
-        "typed-ir-mutable-record-pointer-field-read-after-if-return",
-        rust,
-    );
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_mutable_record_pointer_arrow_field_read_after_if_then_return_else_write() {
-    let i32_ty = ir_i32();
-    let point_ty =
-        ir_record_with_fields("point", vec![("x", i32_ty.clone()), ("y", i32_ty.clone())]);
-    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
-    let ir = IrFunction {
-        name: "set_then_read_point_x_if_absent".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: point_ptr_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "cond".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::If {
-                condition: ir_var("cond", i32_ty.clone()),
-                then_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(0, "0", i32_ty.clone())),
-                    source_span: None,
-                }],
-                else_body: vec![IrStmt::Assign {
-                    target: IrExpr::Member {
-                        base: Box::new(ir_var("p", point_ptr_ty.clone())),
-                        field: "x".to_string(),
-                        ty: i32_ty.clone(),
-                        is_arrow: true,
-                        source_span: None,
-                    },
-                    value: ir_var("value", i32_ty.clone()),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ptr_ty)),
-                    field: "x".to_string(),
-                    ty: i32_ty.clone(),
-                    is_arrow: true,
-                    source_span: None,
-                }),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let emitted = emit_rust_from_ir(&ir)
-        .expect("emit mutable record pointer field read after if-return/else-write");
-    let rust = &emitted.rust;
-
-    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
-    assert!(
-        rust.contains(
-            "pub fn set_then_read_point_x_if_absent(mut p: &mut Point, cond: i32, value: i32) -> i32"
-        ),
-        "{rust}"
-    );
-    assert!(rust.contains("return 0i32;"), "{rust}");
-    assert!(rust.contains("p.x = value;"), "{rust}");
-    assert!(rust.contains("return p.x;"), "{rust}");
-    assert_rust_snippet_compiles(
-        "typed-ir-mutable-record-pointer-field-read-after-then-return",
-        rust,
-    );
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_emits_uninitialized_scalar_local_after_if_return_assignment() {
-    let i32_ty = ir_i32();
-    let ir = IrFunction {
-        name: "assign_local_or_return".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "cond".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::Decl {
-                name: "out".to_string(),
-                ty: i32_ty.clone(),
-                init: None,
-                source_span: None,
-            },
-            IrStmt::If {
-                condition: ir_var("cond", i32_ty.clone()),
-                then_body: vec![IrStmt::Assign {
-                    target: ir_var("out", i32_ty.clone()),
-                    value: ir_var("value", i32_ty.clone()),
-                    source_span: None,
-                }],
-                else_body: vec![IrStmt::Return {
-                    value: Some(ir_lit(0, "0", i32_ty.clone())),
-                    source_span: None,
-                }],
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("out", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let emitted =
-        emit_rust_from_ir(&ir).expect("emit uninitialized scalar local after if-return assignment");
-    let rust = &emitted.rust;
-
-    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
-    assert!(rust.contains("let mut out: i32;"), "{rust}");
-    assert!(rust.contains("out = value;"), "{rust}");
-    assert!(rust.contains("return out;"), "{rust}");
-    assert_rust_snippet_compiles("typed-ir-scalar-local-if-return-assignment", rust);
-}
-
-#[cfg(feature = "typed-ir")]
-#[test]
-fn typed_ir_rejects_mutable_record_pointer_arrow_field_read_before_assignment() {
-    let i32_ty = ir_i32();
-    let point_ty = ir_record_with_fields("point", vec![("x", i32_ty.clone())]);
-    let point_ptr_ty = ir_pointer("struct point *", "struct point *", point_ty, false);
-    let ir = IrFunction {
-        name: "bad_read_then_set_point_x".to_string(),
-        return_type: i32_ty.clone(),
-        params: vec![
-            IrParam {
-                name: "p".to_string(),
-                ty: point_ptr_ty.clone(),
-                source_span: None,
-            },
-            IrParam {
-                name: "value".to_string(),
-                ty: i32_ty.clone(),
-                source_span: None,
-            },
-        ],
-        body: vec![
-            IrStmt::Decl {
-                name: "old".to_string(),
-                ty: i32_ty.clone(),
-                init: Some(IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ptr_ty.clone())),
-                    field: "x".to_string(),
-                    ty: i32_ty.clone(),
-                    is_arrow: true,
-                    source_span: None,
-                }),
-                source_span: None,
-            },
-            IrStmt::Assign {
-                target: IrExpr::Member {
-                    base: Box::new(ir_var("p", point_ptr_ty)),
-                    field: "x".to_string(),
-                    ty: i32_ty.clone(),
-                    is_arrow: true,
-                    source_span: None,
-                },
-                value: ir_var("value", i32_ty.clone()),
-                source_span: None,
-            },
-            IrStmt::Return {
-                value: Some(ir_var("old", i32_ty.clone())),
-                source_span: None,
-            },
-        ],
-        source_span: None,
-    };
-
-    let error = emit_rust_from_ir(&ir)
-        .expect_err("mutable record pointer field read before assignment must fail closed");
-
-    assert_eq!(error.route.route, CandidateRoute::Unsupported);
-    assert!(
-        error
-            .reason
-            .contains("mutable record pointer field p.x is read before definite assignment"),
-        "{:?}",
-        error
     );
 }

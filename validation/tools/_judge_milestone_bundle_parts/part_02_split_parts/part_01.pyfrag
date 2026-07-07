@@ -1,0 +1,426 @@
+        "blocked_repairs": blocked_repairs_source(metrics.get("blocked_repairs")),
+        "s2_workflow_run_count": int_or_zero(s2.get("run_count")),
+        "s2_unsafe_reduction_status": unsafe_reduction.get("status", "unknown"),
+        "s2_reduced_by": int_or_zero(unsafe_reduction.get("reduced_by")),
+        "retention_policy_present": bool(retention),
+        "target_artifacts_committed": target_artifacts.get("committed")
+        if isinstance(target_artifacts.get("committed"), bool)
+        else None,
+        "target_artifacts_retention_class": target_artifacts.get("retention_class")
+        if isinstance(target_artifacts.get("retention_class"), str)
+        else None,
+        "claim_boundary": payload.get("claim_boundary") if isinstance(payload.get("claim_boundary"), str) else None,
+    }
+
+
+def evidence_cost_retention_source_from_artifact(
+    *,
+    entrypoint_id: str,
+    artifact: dict[str, Any] | None,
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    payload = load_present_json_artifact(artifact, repo_root=repo_root)
+    if payload is None:
+        return None
+    inventory = payload.get("inventory", {}) if isinstance(payload.get("inventory"), dict) else {}
+    portability = payload.get("portability", {}) if isinstance(payload.get("portability"), dict) else {}
+    policy_compliance = (
+        payload.get("policy_compliance") if isinstance(payload.get("policy_compliance"), dict) else {}
+    )
+    runtime = inventory.get("runtime", {}) if isinstance(inventory.get("runtime"), dict) else {}
+    retention_classes = inventory.get("retention_classes", {})
+    if not isinstance(retention_classes, dict):
+        retention_classes = {}
+    pipelines = inventory.get("pipelines", [])
+    pipeline_count = (
+        len([pipeline for pipeline in pipelines if isinstance(pipeline, dict)])
+        if isinstance(pipelines, list)
+        else 0
+    )
+    return {
+        "entrypoint_id": entrypoint_id,
+        "artifact": artifact,
+        "status": payload.get("status", "unknown"),
+        "evidence_root": payload.get("evidence_root") if isinstance(payload.get("evidence_root"), str) else None,
+        "failed_gates": payload.get("failed_gates") if isinstance(payload.get("failed_gates"), list) else [],
+        "policy_compliance": {
+            "policy_tier": policy_compliance.get("policy_tier", "unknown"),
+            "status": policy_compliance.get("status", "unknown"),
+            "failed_gates": policy_compliance.get("failed_gates")
+            if isinstance(policy_compliance.get("failed_gates"), list)
+            else [],
+        },
+        "artifact_count": int_or_zero(inventory.get("file_count")),
+        "total_bytes": int_or_zero(inventory.get("total_bytes")),
+        "retention_classes": normalize_retention_classes(retention_classes),
+        "pipeline_count": pipeline_count,
+        "runtime_observation_count": int_or_zero(runtime.get("observation_count")),
+        "runtime_total_duration_ms": int_or_zero(runtime.get("total_duration_ms")),
+        "runtime_max_duration_ms": int_or_zero(runtime.get("max_duration_ms")),
+        "portability_status": portability.get("status", "unknown"),
+        "claim_anchor_issue_count": int_or_zero(portability.get("claim_anchor_issue_count")),
+        "profile_hash_issue_count": int_or_zero(portability.get("profile_hash_issue_count")),
+        "diagnostic_host_metadata_count": int_or_zero(portability.get("diagnostic_host_metadata_count")),
+    }
+
+
+def opencode_source_from_artifact(
+    *,
+    entrypoint_id: str,
+    artifact: dict[str, Any] | None,
+    proof_class: str,
+    repo_root: Path,
+) -> dict[str, Any] | None:
+    payload = load_present_json_artifact(artifact, repo_root=repo_root)
+    if payload is None:
+        return None
+    headline = payload.get("judge_headline", {}) if isinstance(payload.get("judge_headline"), dict) else {}
+    runtime = payload.get("opencode_agent_runtime", {}) if isinstance(payload.get("opencode_agent_runtime"), dict) else {}
+    headline_runtime = headline.get("opencode_runtime", {}) if isinstance(headline.get("opencode_runtime"), dict) else {}
+    enabled = bool(headline_runtime.get("enabled", runtime.get("runtime") == "opencode"))
+    if not enabled:
+        return None
+    chat_value = headline_runtime.get("chat_output_is_evidence", runtime.get("chat_output_is_evidence"))
+    semantic_value = headline_runtime.get("semantic_gate", runtime.get("semantic_gate"))
+    boundary_fields_explicit = isinstance(chat_value, bool) and isinstance(semantic_value, bool)
+    return {
+        "entrypoint_id": entrypoint_id,
+        "artifact": artifact,
+        "worker_count": int_or_zero(headline_runtime.get("worker_count", runtime.get("worker_count"))),
+        "all_contracts_executed": bool(
+            headline_runtime.get("all_contracts_executed", runtime.get("all_contracts_executed"))
+        ),
+        "chat_output_is_evidence": chat_value if isinstance(chat_value, bool) else None,
+        "semantic_gate": semantic_value if isinstance(semantic_value, bool) else None,
+        "boundary_fields_explicit": boundary_fields_explicit,
+        "repair_round_cap": int_or_zero(headline.get("repair_round_cap")),
+        "preflight_proof_summary": opencode_preflight_proof_summary_from_index(
+            payload,
+            entrypoint_id=entrypoint_id,
+            proof_class=proof_class,
+            repo_root=repo_root,
+        ),
+    }
+
+
+def opencode_preflight_proof_summary_from_index(
+    payload: dict[str, Any],
+    *,
+    entrypoint_id: str,
+    proof_class: str,
+    repo_root: Path,
+) -> dict[str, Any]:
+    runtime = payload.get("opencode_agent_runtime") if isinstance(payload.get("opencode_agent_runtime"), dict) else {}
+    refs = payload.get("evidence_artifact_refs") if isinstance(payload.get("evidence_artifact_refs"), dict) else {}
+    raw_ref = runtime.get("opencode_preflight_report")
+    if not isinstance(raw_ref, dict):
+        raw_ref = refs.get("opencode_preflight_report")
+    preflight_ref = artifact_ref_from_existing(raw_ref, repo_root=repo_root)
+    if preflight_ref is None:
+        return opencode_preflight_absent_summary(required=True, entrypoint_id=entrypoint_id)
+
+    result: dict[str, Any] = {
+        "status": "missing" if preflight_ref.get("status") != "present" else "failed",
+        "required_when_opencode_runtime_enabled": True,
+        "entrypoint_id": entrypoint_id,
+        "preflight_report": preflight_ref,
+        "proof_class": proof_class,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode preflight proves GLM-5.1 command-contract availability only; "
+            "it is not semantic acceptance or translator coverage."
+        ),
+    }
+    if preflight_ref.get("status") != "present":
+        return result
+
+    try:
+        preflight_payload = validator.load_json(resolve_input_path(Path(str(preflight_ref["path"])), repo_root=repo_root))
+    except (OSError, ValueError, json.JSONDecodeError):
+        result["status"] = "read_failed"
+        return result
+
+    availability = (
+        preflight_payload.get("opencode_model_availability")
+        if isinstance(preflight_payload.get("opencode_model_availability"), dict)
+        else {}
+    )
+    launch_policy = (
+        preflight_payload.get("launch_policy") if isinstance(preflight_payload.get("launch_policy"), dict) else {}
+    )
+    contract = (
+        preflight_payload.get("contract_verification")
+        if isinstance(preflight_payload.get("contract_verification"), dict)
+        else {}
+    )
+    runtime_env = None
+    try:
+        runtime_env = validator.validate_opencode_runtime_env_contract(
+            preflight_payload.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary",
+        )
+    except ValueError:
+        runtime_env = None
+    result.update(
+        {
+            "run_id": preflight_payload.get("run_id"),
+            "opencode_command": availability.get("opencode_command"),
+            "opencode_agent": launch_policy.get("opencode_agent"),
+            "opencode_model": launch_policy.get("opencode_model"),
+            "opencode_variant": launch_policy.get("opencode_variant"),
+            "required_model": availability.get("required_model"),
+            "model_availability_status": availability.get("status"),
+            "model_listed": availability.get("model_listed"),
+            "model_probe_argv": availability.get("argv") if isinstance(availability.get("argv"), list) else [],
+            "process_returncode": int_or_none(availability.get("process_returncode")),
+            "model_probe_logs": opencode_model_probe_log_refs(availability, repo_root=repo_root),
+            "contract_status": contract.get("status"),
+            "marker_exists": preflight_payload.get("marker_exists"),
+            "opencode_run_launched": preflight_payload.get("opencode_run_launched"),
+            "opencode_run_argv_bound": opencode_preflight_session_contract_passed(
+                preflight_payload,
+                contract=contract,
+                repo_root=repo_root,
+            ),
+        }
+    )
+    if runtime_env is not None:
+        result["opencode_runtime_env"] = runtime_env
+        result["opencode_runtime_env_sha256"] = runtime_env["env_sha256"]
+    result["status"] = (
+        "passed"
+        if opencode_preflight_summary_passed(
+            result,
+            availability,
+            preflight_payload=preflight_payload,
+            contract=contract,
+            repo_root=repo_root,
+        )
+        else "failed"
+    )
+    return result
+
+
+def opencode_preflight_absent_summary(*, required: bool, entrypoint_id: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": "absent",
+        "required_when_opencode_runtime_enabled": required,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "opencode_agent": validator.COMPETITION_OPENCODE_AGENT,
+        "opencode_variant": validator.COMPETITION_OPENCODE_VARIANT,
+        "opencode_run_argv_bound": False,
+        "boundary": (
+            "OpenCode preflight proof is absent; runtime output is not semantic evidence "
+            "and does not increase translator coverage."
+        ),
+    }
+    if entrypoint_id is not None:
+        result["entrypoint_id"] = entrypoint_id
+    return result
+
+
+def opencode_model_probe_log_refs(availability: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    logs = availability.get("logs") if isinstance(availability.get("logs"), dict) else {}
+    result: dict[str, Any] = {}
+    for stream in ("stdout", "stderr"):
+        path_text = logs.get(stream)
+        if not isinstance(path_text, str):
+            result[stream] = {"path": "unknown", "status": "absent"}
+            continue
+        try:
+            result[stream] = artifact_ref(resolve_input_path(Path(path_text), repo_root=repo_root), repo_root=repo_root)
+        except (OSError, ValueError):
+            result[stream] = {"path": path_text, "status": "invalid"}
+    return result
+
+
+def opencode_preflight_summary_passed(
+    summary: dict[str, Any],
+    availability: dict[str, Any],
+    *,
+    preflight_payload: dict[str, Any],
+    contract: dict[str, Any],
+    repo_root: Path,
+) -> bool:
+    if summary.get("opencode_command") != validator.COMPETITION_OPENCODE_COMMAND:
+        return False
+    if summary.get("opencode_agent") != validator.COMPETITION_OPENCODE_AGENT:
+        return False
+    if summary.get("opencode_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("opencode_variant") != validator.COMPETITION_OPENCODE_VARIANT:
+        return False
+    if summary.get("required_model") != validator.COMPETITION_OPENCODE_MODEL:
+        return False
+    if summary.get("model_availability_status") != "available":
+        return False
+    if summary.get("model_listed") is not True:
+        return False
+    if int_or_zero(summary.get("process_returncode")) != 0:
+        return False
+    if summary.get("contract_status") != "executed":
+        return False
+    if summary.get("marker_exists") is not True:
+        return False
+    if summary.get("opencode_run_launched") is not True:
+        return False
+    if summary.get("opencode_run_argv_bound") is not True:
+        return False
+    if not isinstance(summary.get("opencode_runtime_env"), dict):
+        return False
+    if summary.get("opencode_runtime_env_sha256") != summary["opencode_runtime_env"].get("env_sha256"):
+        return False
+    if not validator.opencode_models_argv_matches(
+        summary.get("model_probe_argv"),
+        expected_command=validator.COMPETITION_OPENCODE_COMMAND,
+    ):
+        return False
+    try:
+        validator.validate_opencode_model_probe_log_hashes(
+            availability,
+            "opencode_preflight_proof_summary",
+            repo_root=repo_root,
+        )
+    except ValueError:
+        return False
+    if not opencode_preflight_session_contract_passed(
+        preflight_payload,
+        contract=contract,
+        repo_root=repo_root,
+    ):
+        return False
+    return True
+
+
+def opencode_preflight_session_contract_passed(
+    preflight_payload: dict[str, Any],
+    *,
+    contract: dict[str, Any],
+    repo_root: Path,
+) -> bool:
+    try:
+        if preflight_payload.get("process_returncode") != 0:
+            return False
+        preflight_runtime_env = validator.validate_opencode_runtime_env_contract(
+            preflight_payload.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary",
+        )
+        handoff_binding = validator.validate_hash_bound_artifact_binding(
+            preflight_payload.get("handoff_contract"),
+            "opencode_preflight_proof_summary.handoff_contract",
+            repo_root=repo_root,
+        )
+        handoff_payload = validator.require_object(
+            validator.load_json(validator.repo_path(handoff_binding["path"], repo_root=repo_root)),
+            "opencode_preflight_proof_summary.handoff_contract file",
+        )
+        if handoff_payload.get("runner_kind") != "opencode-preflight":
+            return False
+        if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
+            return False
+        handoff_runtime_env = validator.validate_opencode_runtime_env_contract(
+            handoff_payload.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary.handoff_contract",
+        )
+        if handoff_runtime_env != preflight_runtime_env:
+            return False
+        handoff_policy = validator.validate_opencode_launch_policy_binding(
+            handoff_payload.get("launch_policy"),
+            handoff_payload.get("launch_policy_sha256"),
+            "opencode_preflight_proof_summary.handoff_contract",
+        )
+        preflight_policy = validator.validate_opencode_launch_policy_binding(
+            preflight_payload.get("launch_policy"),
+            preflight_payload.get("launch_policy_sha256"),
+            "opencode_preflight_proof_summary.preflight_report",
+        )
+        if handoff_policy != preflight_policy:
+            return False
+        worker_command = handoff_payload.get("worker_command")
+        if not isinstance(worker_command, list) or not worker_command or not all(
+            isinstance(item, str) and item for item in worker_command
+        ):
+            return False
+        worker_command_line = validator.require_string(
+            handoff_payload.get("worker_command_line"),
+            "opencode_preflight_proof_summary.handoff_contract.worker_command_line",
+        )
+        if worker_command_line != validator.shell_command_line(worker_command):
+            return False
+        if handoff_payload.get("worker_command_sha256") != validator.sha256_text(worker_command_line):
+            return False
+        report_argv = validator.require_string_argv(
+            preflight_payload.get("argv"),
+            "opencode_preflight_proof_summary.preflight_report.argv",
+        )
+        handoff_argv = validator.require_string_argv(
+            handoff_payload.get("opencode_argv"),
+            "opencode_preflight_proof_summary.handoff_contract.opencode_argv",
+        )
+        if report_argv != handoff_argv:
+            return False
+        validator.validate_opencode_run_argv_binding(
+            report_argv,
+            "opencode_preflight_proof_summary.preflight_report.argv",
+            launch_policy=preflight_policy,
+        )
+        handoff_command_line = validator.require_string(
+            handoff_payload.get("opencode_command_line"),
+            "opencode_preflight_proof_summary.handoff_contract.opencode_command_line",
+        )
+        if handoff_command_line != validator.shell_command_line(handoff_argv):
+            return False
+        handoff_prompt = validator.require_string(
+            handoff_payload.get("prompt"),
+            "opencode_preflight_proof_summary.handoff_contract.prompt",
+        )
+        if handoff_prompt != handoff_argv[-1]:
+            return False
+        marker_path_text = validator.require_string(
+            preflight_payload.get("marker_path"),
+            "opencode_preflight_proof_summary.marker_path",
+        )
+        expected_marker_path = validator.require_string(
+            handoff_payload.get("expected_marker_path"),
+            "opencode_preflight_proof_summary.handoff_contract.expected_marker_path",
+        )
+        if marker_path_text != expected_marker_path:
+            return False
+        marker_path = validator.repo_path(marker_path_text, repo_root=repo_root)
+        if not marker_path.is_file():
+            return False
+        session_binding = validator.validate_hash_bound_artifact_binding(
+            preflight_payload.get("opencode_session_evidence"),
+            "opencode_preflight_proof_summary.opencode_session_evidence",
+            repo_root=repo_root,
+        )
+        session_evidence = validator.require_object(
+            validator.load_json(validator.repo_path(session_binding["path"], repo_root=repo_root)),
+            "opencode_preflight_proof_summary.opencode_session_evidence file",
+        )
+        validator.validate_opencode_session_evidence_contract(
+            session_evidence,
+            "opencode_preflight_proof_summary.opencode_session_evidence",
+            repo_root=repo_root,
+        )
+        session_runtime_env = validator.validate_opencode_runtime_env_contract(
+            session_evidence.get("opencode_runtime_env"),
+            "opencode_preflight_proof_summary.opencode_session_evidence",
+        )
+        if session_runtime_env != preflight_runtime_env:
+            return False
+        validator.validate_opencode_contract_recomputed_from_session(
+            embedded_verification=contract,
+            session_evidence=session_evidence,
+            worker_command=worker_command,
+            summary_path=marker_path,
+            label="opencode_preflight_proof_summary",
+            repo_root=repo_root,
+        )
+    except (OSError, ValueError, json.JSONDecodeError, TypeError):
+        return False
+    return True

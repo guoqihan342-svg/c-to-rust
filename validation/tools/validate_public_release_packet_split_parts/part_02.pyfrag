@@ -1,0 +1,499 @@
+    if proof.get("marker_exists") is not True:
+        raise ValueError(f"{label}.marker_exists must be true")
+    if proof.get("opencode_run_launched") is not True:
+        raise ValueError(f"{label}.opencode_run_launched must be true")
+    if proof.get("opencode_run_argv_bound") is not True:
+        raise ValueError(f"{label}.opencode_run_argv_bound must be true")
+    if proof.get("proof_class") == "competition-exact" and not allow_competition_exact:
+        raise ValueError(f"{label}.proof_class must not claim competition-exact without host attestation")
+    if not judge_validator.opencode_models_argv_matches(
+        proof.get("model_probe_argv"),
+        expected_command=judge_validator.COMPETITION_OPENCODE_COMMAND,
+    ):
+        raise ValueError(f"{label}.model_probe_argv must be opencode models")
+
+    preflight_ref = require_object(proof.get("preflight_report"), f"{label}.preflight_report")
+    checked_preflight_ref = judge_validator.validate_ref(preflight_ref, repo_root=repo_root)
+    logs = require_object(proof.get("model_probe_logs"), f"{label}.model_probe_logs")
+    checked_logs: dict[str, dict[str, Any]] = {}
+    for stream in ("stdout", "stderr"):
+        checked_logs[stream] = judge_validator.validate_ref(
+            require_object(logs.get(stream), f"{label}.model_probe_logs.{stream}"),
+            repo_root=repo_root,
+        )
+
+    preflight_payload = judge_validator.load_json(
+        judge_validator.repo_path(str(checked_preflight_ref["path"]), repo_root=repo_root)
+    )
+    if preflight_payload.get("status") != "passed":
+        raise ValueError(f"{label}.preflight_report file status must be passed")
+    if preflight_payload.get("marker_exists") is not True:
+        raise ValueError(f"{label}.preflight_report file marker_exists must be true")
+    if preflight_payload.get("opencode_run_launched") is not True:
+        raise ValueError(f"{label}.preflight_report file opencode_run_launched must be true")
+    launch_policy = require_object(preflight_payload.get("launch_policy"), f"{label}.preflight_report.launch_policy")
+    if launch_policy.get("opencode_agent") != proof.get("opencode_agent"):
+        raise ValueError(f"{label}.opencode_agent must match preflight_report.launch_policy.opencode_agent")
+    if launch_policy.get("opencode_model") != proof.get("opencode_model"):
+        raise ValueError(f"{label}.opencode_model must match preflight_report.launch_policy.opencode_model")
+    if launch_policy.get("opencode_variant") != proof.get("opencode_variant"):
+        raise ValueError(f"{label}.opencode_variant must match preflight_report.launch_policy.opencode_variant")
+    preflight_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        preflight_payload.get("opencode_runtime_env"),
+        f"{label}.preflight_report",
+    )
+    proof_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        proof.get("opencode_runtime_env"),
+        label,
+    )
+    if proof_runtime_env != preflight_runtime_env:
+        raise ValueError(f"{label}.opencode_runtime_env must match preflight_report.opencode_runtime_env")
+    if proof.get("opencode_runtime_env_sha256") != preflight_runtime_env["env_sha256"]:
+        raise ValueError(
+            f"{label}.opencode_runtime_env_sha256 must match preflight_report.opencode_runtime_env.env_sha256"
+        )
+    contract = require_object(
+        preflight_payload.get("contract_verification"),
+        f"{label}.preflight_report.contract_verification",
+    )
+    if contract.get("status") != proof.get("contract_status"):
+        raise ValueError(f"{label}.contract_status must match preflight_report.contract_verification.status")
+    require_opencode_preflight_session_contract(
+        preflight_payload,
+        contract,
+        f"{label}.preflight_report",
+        repo_root=repo_root,
+    )
+
+    availability = require_object(
+        preflight_payload.get("opencode_model_availability"),
+        f"{label}.preflight_report.opencode_model_availability",
+    )
+    if availability.get("status") != proof.get("model_availability_status"):
+        raise ValueError(f"{label}.model_availability_status must match preflight_report.opencode_model_availability.status")
+    if availability.get("required_model") != proof.get("required_model"):
+        raise ValueError(f"{label}.required_model must match preflight_report.opencode_model_availability.required_model")
+    if availability.get("opencode_command") != proof.get("opencode_command"):
+        raise ValueError(f"{label}.opencode_command must match preflight_report.opencode_model_availability.opencode_command")
+    if availability.get("model_listed") is not proof.get("model_listed"):
+        raise ValueError(f"{label}.model_listed must match preflight_report.opencode_model_availability.model_listed")
+    if int(availability.get("process_returncode", -1)) != proof.get("process_returncode"):
+        raise ValueError(f"{label}.process_returncode must match preflight_report.opencode_model_availability.process_returncode")
+    if availability.get("argv") != proof.get("model_probe_argv"):
+        raise ValueError(f"{label}.model_probe_argv must match preflight_report.opencode_model_availability.argv")
+    availability_logs = require_object(availability.get("logs"), f"{label}.preflight_report.opencode_model_availability.logs")
+    for stream in ("stdout", "stderr"):
+        if availability_logs.get(stream) != checked_logs[stream]["path"]:
+            raise ValueError(f"{label}.model_probe_logs.{stream}.path must match preflight_report log path")
+        expected_hash = availability.get(f"{stream}_sha256")
+        if expected_hash != checked_logs[stream]["sha256"]:
+            raise ValueError(f"{label}.model_probe_logs.{stream}.sha256 must match preflight_report log sha256")
+    judge_validator.validate_opencode_model_probe_log_hashes(availability, label, repo_root=repo_root)
+
+
+def require_opencode_preflight_session_contract(
+    preflight_payload: dict[str, Any],
+    contract: dict[str, Any],
+    label: str,
+    *,
+    repo_root: Path,
+) -> None:
+    if preflight_payload.get("process_returncode") != 0:
+        raise ValueError(f"{label} file process_returncode must be 0")
+    handoff_ref = judge_validator.validate_hash_bound_artifact_binding(
+        preflight_payload.get("handoff_contract"),
+        f"{label}.handoff_contract",
+        repo_root=repo_root,
+    )
+    handoff_payload = require_object(
+        judge_validator.load_json(judge_validator.repo_path(handoff_ref["path"], repo_root=repo_root)),
+        f"{label}.handoff_contract file",
+    )
+    if handoff_payload.get("runner_kind") != "opencode-preflight":
+        raise ValueError(f"{label}.handoff_contract.runner_kind must be opencode-preflight")
+    if handoff_payload.get("run_id") != preflight_payload.get("run_id"):
+        raise ValueError(f"{label}.handoff_contract.run_id must match preflight_report.run_id")
+    preflight_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        preflight_payload.get("opencode_runtime_env"),
+        label,
+    )
+    handoff_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        handoff_payload.get("opencode_runtime_env"),
+        f"{label}.handoff_contract",
+    )
+    if handoff_runtime_env != preflight_runtime_env:
+        raise ValueError(f"{label}.handoff_contract.opencode_runtime_env must match preflight_report.opencode_runtime_env")
+    handoff_policy = judge_validator.validate_opencode_launch_policy_binding(
+        handoff_payload.get("launch_policy"),
+        handoff_payload.get("launch_policy_sha256"),
+        f"{label}.handoff_contract",
+    )
+    preflight_policy = judge_validator.validate_opencode_launch_policy_binding(
+        preflight_payload.get("launch_policy"),
+        preflight_payload.get("launch_policy_sha256"),
+        f"{label}.launch_policy",
+    )
+    if handoff_policy != preflight_policy:
+        raise ValueError(f"{label}.handoff_contract.launch_policy must match preflight_report.launch_policy")
+    worker_command = handoff_payload.get("worker_command")
+    if not isinstance(worker_command, list) or not worker_command or not all(
+        isinstance(item, str) and item for item in worker_command
+    ):
+        raise ValueError(f"{label}.handoff_contract.worker_command must be a non-empty string list")
+    worker_command_line = judge_validator.require_string(
+        handoff_payload.get("worker_command_line"),
+        f"{label}.handoff_contract.worker_command_line",
+    )
+    if worker_command_line != judge_validator.shell_command_line(worker_command):
+        raise ValueError(f"{label}.handoff_contract.worker_command_line must match worker_command")
+    worker_command_sha256 = handoff_payload.get("worker_command_sha256")
+    if worker_command_sha256 != judge_validator.sha256_text(worker_command_line):
+        raise ValueError(f"{label}.handoff_contract.worker_command_sha256 must match worker_command_line")
+    report_argv = judge_validator.require_string_argv(preflight_payload.get("argv"), f"{label}.argv")
+    handoff_argv = judge_validator.require_string_argv(
+        handoff_payload.get("opencode_argv"),
+        f"{label}.handoff_contract.opencode_argv",
+    )
+    if report_argv != handoff_argv:
+        raise ValueError(f"{label}.argv must match handoff_contract.opencode_argv")
+    judge_validator.validate_opencode_run_argv_binding(report_argv, f"{label}.argv", launch_policy=preflight_policy)
+    handoff_command_line = judge_validator.require_string(
+        handoff_payload.get("opencode_command_line"),
+        f"{label}.handoff_contract.opencode_command_line",
+    )
+    if handoff_command_line != judge_validator.shell_command_line(handoff_argv):
+        raise ValueError(f"{label}.handoff_contract.opencode_command_line must match opencode_argv")
+    handoff_prompt = judge_validator.require_string(handoff_payload.get("prompt"), f"{label}.handoff_contract.prompt")
+    if handoff_prompt != handoff_argv[-1]:
+        raise ValueError(f"{label}.handoff_contract.prompt must match opencode_argv prompt")
+    marker_path_text = judge_validator.require_string(preflight_payload.get("marker_path"), f"{label}.marker_path")
+    expected_marker_path = judge_validator.require_string(
+        handoff_payload.get("expected_marker_path"),
+        f"{label}.handoff_contract.expected_marker_path",
+    )
+    if marker_path_text != expected_marker_path:
+        raise ValueError(f"{label}.marker_path must match handoff_contract.expected_marker_path")
+    marker_path = judge_validator.repo_path(marker_path_text, repo_root=repo_root)
+    if not marker_path.is_file():
+        raise ValueError(f"{label}.marker_path must exist")
+    marker_payload = require_object(
+        judge_validator.load_json(marker_path),
+        f"{label}.marker file",
+    )
+    if marker_payload.get("report_kind") != "opencode-preflight-marker":
+        raise ValueError(f"{label}.marker.report_kind must be opencode-preflight-marker")
+    if marker_payload.get("run_id") != preflight_payload.get("run_id"):
+        raise ValueError(f"{label}.marker.run_id must match preflight_report.run_id")
+    if marker_payload.get("status") != "written":
+        raise ValueError(f"{label}.marker.status must be written")
+
+    session_ref = judge_validator.validate_hash_bound_artifact_binding(
+        preflight_payload.get("opencode_session_evidence"),
+        f"{label}.opencode_session_evidence",
+        repo_root=repo_root,
+    )
+    session_evidence = require_object(
+        judge_validator.load_json(judge_validator.repo_path(session_ref["path"], repo_root=repo_root)),
+        f"{label}.opencode_session_evidence file",
+    )
+    judge_validator.validate_opencode_session_evidence_contract(
+        session_evidence,
+        f"{label}.opencode_session_evidence",
+        repo_root=repo_root,
+    )
+    session_runtime_env = judge_validator.validate_opencode_runtime_env_contract(
+        session_evidence.get("opencode_runtime_env"),
+        f"{label}.opencode_session_evidence",
+    )
+    if session_runtime_env != preflight_runtime_env:
+        raise ValueError(
+            f"{label}.opencode_session_evidence.opencode_runtime_env must match preflight_report.opencode_runtime_env"
+        )
+    judge_validator.validate_opencode_contract_recomputed_from_session(
+        embedded_verification=contract,
+        session_evidence=session_evidence,
+        worker_command=worker_command,
+        summary_path=marker_path,
+        label=label,
+        repo_root=repo_root,
+    )
+
+
+def require_bundle_consistency(packet: dict[str, Any], *, repo_root: Path) -> None:
+    bundle_ref = require_object(packet.get("judge_milestone_bundle"), "judge_milestone_bundle")
+    bundle_path = judge_validator.repo_path(str(bundle_ref.get("path")), repo_root=repo_root)
+    bundle = judge_validator.load_json(bundle_path)
+    require_bound_bundle_identity_contract(packet, bundle)
+    require_bound_bundle_schema_contract(bundle)
+    publication = require_object(packet.get("publication_manifest"), "publication_manifest")
+    require_published_artifact_refs_are_hash_bound(publication, repo_root=repo_root)
+    require_passed_bundle_published_refs_are_healthy(bundle, publication)
+    require_passed_bundle_publishes_judge_evidence_index(bundle, publication)
+    require_published_judge_evidence_indexes_are_deep_validated(publication, repo_root=repo_root)
+    for field in ("judge_entrypoints_run_report", "readiness_report"):
+        if packet.get(field) != bundle.get(field):
+            raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+        if field in publication and publication.get(field) != packet.get(field):
+            raise ValueError(f"publication_manifest.{field} must match public_release_packet.{field}")
+    run_report = require_competition_config_archive_matches_run_report(packet, repo_root=repo_root)
+
+    for field in (
+        "publication_manifest",
+        "publishability",
+        "competition_host_readiness",
+        "harness_architecture_summary",
+        "evidence_cost_retention",
+        "before_after_repair_exhibit",
+        "known_gaps",
+        "reproduction_commands",
+        "quantitative_evaluation",
+        "progress_delta_ledger",
+    ):
+        if packet.get(field) != bundle.get(field):
+            raise ValueError(f"{field} must match judge_milestone_bundle.{field}")
+    require_before_after_verified_baseline_accounting(
+        require_object(packet.get("before_after_repair_exhibit"), "before_after_repair_exhibit"),
+        "before_after_repair_exhibit",
+    )
+
+    require_publishability_publication_scope_contract(
+        require_object(packet.get("publishability"), "publishability"),
+        competition_host_readiness=require_object(
+            packet.get("competition_host_readiness"),
+            "competition_host_readiness",
+        ),
+    )
+
+    summary = require_object(packet.get("summary"), "summary")
+    if summary.get("blockers") != bundle.get("blockers", []):
+        raise ValueError("summary.blockers must match judge_milestone_bundle.blockers")
+    if summary.get("entrypoint_count") != run_report.get("entrypoint_count"):
+        raise ValueError("summary.entrypoint_count must match judge_entrypoints_run_report.entrypoint_count")
+    if summary.get("publication_scope") != publication.get("publication_scope"):
+        raise ValueError("summary.publication_scope must match judge_milestone_bundle.publication_manifest")
+    run_summary = require_object(run_report.get("summary"), "judge_entrypoints_run_report.summary")
+    run_readiness = require_object(run_summary.get("readiness"), "judge_entrypoints_run_report.summary.readiness")
+    if summary.get("readiness") != run_readiness:
+        raise ValueError("summary.readiness must match judge_entrypoints_run_report.summary.readiness")
+    bundle_summary = require_object(bundle.get("summary"), "judge_milestone_bundle.summary")
+    bundle_readiness = require_object(bundle_summary.get("readiness"), "judge_milestone_bundle.summary.readiness")
+    if summary.get("readiness") != bundle_readiness:
+        raise ValueError("summary.readiness must match judge_milestone_bundle.summary.readiness")
+    if summary.get("published_artifact_ref_status") != expected_published_artifact_ref_status(publication):
+        raise ValueError(
+            "summary.published_artifact_ref_status must match "
+            "judge_milestone_bundle.publication_manifest.published_artifact_refs"
+        )
+    if summary.get("workflow_metrics") != expected_workflow_metrics_summary(bundle):
+        raise ValueError(
+            "summary.workflow_metrics must match judge_milestone_bundle.workflow_metrics.rollup.repair_activity"
+        )
+    if summary.get("progress_delta_ledger") != bundle.get("progress_delta_ledger"):
+        raise ValueError("summary.progress_delta_ledger must match judge_milestone_bundle.progress_delta_ledger")
+    recomputed_proof_class_rollup = expected_proof_class_rollup_from_run_report(run_report)
+    if bundle.get("proof_class_rollup", bundle.get("proof_classes")) != recomputed_proof_class_rollup:
+        raise ValueError(
+            "judge_milestone_bundle.proof_class_rollup must match recomputed "
+            "judge_entrypoints_run_report.entrypoints proof_class_rollup"
+        )
+    expected_proof_class_rollup = bundle.get("proof_class_rollup", bundle.get("proof_classes"))
+    if summary.get("proof_class_rollup") != expected_proof_class_rollup:
+        raise ValueError("summary.proof_class_rollup must match judge_milestone_bundle.proof_class_rollup")
+    require_competition_host_readiness_matches_proof_class_rollup(
+        require_object(packet.get("competition_host_readiness"), "competition_host_readiness"),
+        require_object(expected_proof_class_rollup, "judge_milestone_bundle.proof_class_rollup"),
+    )
+
+    runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
+    boundary = require_object(packet.get("opencode_patch_boundary"), "opencode_patch_boundary")
+    expected_runtime_enabled = int(runtime.get("enabled_entrypoint_count", 0) or 0) > 0
+    if boundary.get("opencode_runtime_enabled") is not expected_runtime_enabled:
+        raise ValueError(
+            "opencode_patch_boundary.opencode_runtime_enabled must match "
+            "judge_milestone_bundle.opencode_runtime.enabled_entrypoint_count"
+        )
+    expected_preflight = runtime.get("preflight_proof_summary")
+    if isinstance(expected_preflight, dict):
+        if boundary.get("opencode_preflight_proof_summary") != expected_preflight:
+            raise ValueError(
+                "opencode_patch_boundary.opencode_preflight_proof_summary must match "
+                "judge_milestone_bundle.opencode_runtime.preflight_proof_summary"
+            )
+
+    require_release_notes_match_bundle(packet, bundle, repo_root=repo_root)
+
+    packet_claims = set(packet.get("must_not_claim", []))
+    bundle_claims = set(bundle.get("must_not_claim", []))
+    missing_claims = sorted(str(claim) for claim in bundle_claims - packet_claims)
+    if missing_claims:
+        raise ValueError(
+            "must_not_claim must include judge_milestone_bundle.must_not_claim entries: "
+            f"{missing_claims}"
+        )
+
+
+def require_competition_host_readiness_matches_proof_class_rollup(
+    readiness: dict[str, Any],
+    proof_class_rollup: dict[str, Any],
+) -> None:
+    field_pairs = (
+        ("actual_highest_proof_class", "highest_proof_class"),
+        ("all_entrypoints_competition_exact", "all_entrypoints_competition_exact"),
+        ("competition_exact_host_verified", "competition_exact_host_verified"),
+    )
+    for readiness_field, rollup_field in field_pairs:
+        if readiness.get(readiness_field) != proof_class_rollup.get(rollup_field):
+            raise ValueError(
+                f"competition_host_readiness.{readiness_field} must match "
+                f"judge_milestone_bundle.proof_class_rollup.{rollup_field}"
+            )
+    if readiness.get("status") == "ready":
+        if proof_class_rollup.get("all_entrypoints_competition_exact") is not True:
+            raise ValueError(
+                "competition_host_readiness.status=ready requires "
+                "judge_milestone_bundle.proof_class_rollup.all_entrypoints_competition_exact=true"
+            )
+        if proof_class_rollup.get("competition_exact_host_verified") is not True:
+            raise ValueError(
+                "competition_host_readiness.status=ready requires "
+                "judge_milestone_bundle.proof_class_rollup.competition_exact_host_verified=true"
+            )
+
+
+def require_bound_bundle_schema_contract(bundle: dict[str, Any]) -> None:
+    schema = judge_validator.load_json(JUDGE_MILESTONE_BUNDLE_SCHEMA)
+    try:
+        jsonschema.validate(bundle, schema)
+    except jsonschema.ValidationError as error:
+        path = judge_validator.jsonschema_error_path(error)
+        raise ValueError(
+            "judge_milestone_bundle must match validation/judge-milestone-bundle.schema.json: "
+            f"{path}: {error.message}"
+        ) from error
+
+
+def require_bound_bundle_identity_contract(packet: dict[str, Any], bundle: dict[str, Any]) -> None:
+    if bundle.get("schema_version") != 1:
+        raise ValueError("judge_milestone_bundle.schema_version must be 1")
+    if bundle.get("report_kind") != "judge-milestone-bundle":
+        raise ValueError("judge_milestone_bundle.report_kind must be judge-milestone-bundle")
+    status = bundle.get("status")
+    if status not in {"passed", "blocked"}:
+        raise ValueError("judge_milestone_bundle.status must be passed or blocked")
+    blockers = bundle.get("blockers")
+    if not isinstance(blockers, list) or not all(isinstance(blocker, str) for blocker in blockers):
+        raise ValueError("judge_milestone_bundle.blockers must be a string list")
+    if status == "passed" and blockers:
+        raise ValueError("judge_milestone_bundle.blockers must be empty when status is passed")
+    if status == "blocked" and not blockers:
+        raise ValueError("judge_milestone_bundle.blockers must be present when status is blocked")
+    if packet.get("status") != status:
+        raise ValueError("public_release_packet.status must match judge_milestone_bundle.status")
+
+
+def require_before_after_verified_baseline_accounting(value: dict[str, Any], label: str) -> None:
+    rollup = require_object(value.get("rollup"), f"{label}.rollup")
+    bound_units = require_non_negative_int(rollup.get("bound_unit_count"), f"{label}.rollup.bound_unit_count")
+    verified_units = require_non_negative_int(
+        rollup.get("verified_baseline_unit_count"),
+        f"{label}.rollup.verified_baseline_unit_count",
+    )
+    missing_units = require_non_negative_int(
+        rollup.get("missing_verified_baseline_unit_count"),
+        f"{label}.rollup.missing_verified_baseline_unit_count",
+    )
+    all_bound = rollup.get("all_units_verified_baseline_bound")
+    if not isinstance(all_bound, bool):
+        raise ValueError(f"{label}.rollup.all_units_verified_baseline_bound must be a boolean")
+    if verified_units + missing_units != bound_units:
+        raise ValueError("before_after_repair_exhibit verified baseline accounting mismatch")
+    expected_all_bound = bound_units > 0 and verified_units == bound_units and missing_units == 0
+    if all_bound is not expected_all_bound:
+        raise ValueError("before_after_repair_exhibit verified baseline all-bound flag mismatch")
+    require_before_after_rollup_matches_sources(value, rollup, label)
+
+
+def require_before_after_rollup_matches_sources(value: dict[str, Any], rollup: dict[str, Any], label: str) -> None:
+    sources = value.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError(f"{label}.sources must be a list")
+    if any(not isinstance(source, dict) for source in sources):
+        raise ValueError(f"{label}.sources must contain objects")
+    before_after_units: list[dict[str, Any]] = []
+    bound_unit_count = 0
+    for source in sources:
+        units = source.get("before_after_units")
+        if isinstance(units, list):
+            bound_unit_count += len(units)
+            before_after_units.extend(unit for unit in units if isinstance(unit, dict))
+
+    verified_units = sum(1 for unit in before_after_units if before_after_unit_has_verified_unsafe_baseline(unit))
+    measured_unsafe_units = sum(1 for unit in before_after_units if before_after_unit_has_measured_unsafe_reduction(unit))
+    accepted_patch_units = sum(1 for unit in before_after_units if isinstance(unit.get("accepted_patch"), dict))
+    unsafe_reduction_totals = before_after_unit_unsafe_reduction_totals(before_after_units)
+    expected = {
+        "source_count": len(sources),
+        "bound_unit_count": bound_unit_count,
+        "measured_unsafe_unit_count": measured_unsafe_units,
+        "accepted_patch_unit_count": accepted_patch_units,
+        "verified_baseline_unit_count": verified_units,
+        "missing_verified_baseline_unit_count": len(before_after_units) - verified_units,
+        "all_units_verified_baseline_bound": bool(before_after_units) and verified_units == len(before_after_units),
+    }
+    for field, expected_value in expected.items():
+        if rollup.get(field) != expected_value:
+            raise ValueError("before_after_repair_exhibit rollup must match sources")
+    if unsafe_reduction_totals is not None:
+        unsafe_reduction = rollup.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            raise ValueError("before_after_repair_exhibit unsafe reduction rollup must match sources")
+        expected_unsafe_reduction = {
+            "baseline_total_unsafe": unsafe_reduction_totals["baseline_total_unsafe"],
+            "current_total_unsafe": unsafe_reduction_totals["current_total_unsafe"],
+            "reduced_by": unsafe_reduction_totals["reduced_by"],
+        }
+        for field, expected_value in expected_unsafe_reduction.items():
+            if unsafe_reduction.get(field) != expected_value:
+                raise ValueError("before_after_repair_exhibit unsafe reduction rollup must match sources")
+        if rollup.get("unsafe_reduced_by") != unsafe_reduction_totals["reduced_by"]:
+            raise ValueError("before_after_repair_exhibit unsafe reduction rollup must match sources")
+
+
+def before_after_unit_unsafe_reduction_totals(before_after_units: list[dict[str, Any]]) -> dict[str, int] | None:
+    measured_units = [
+        unit.get("unsafe_reduction")
+        for unit in before_after_units
+        if isinstance(unit.get("unsafe_reduction"), dict) and unit.get("unsafe_reduction", {}).get("status") == "measured"
+    ]
+    if not measured_units:
+        return None
+    totals = {
+        "baseline_total_unsafe": 0,
+        "current_total_unsafe": 0,
+        "reduced_by": 0,
+    }
+    for unsafe_reduction in measured_units:
+        for field in totals:
+            value = unsafe_reduction.get(field)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("before_after_repair_exhibit unsafe reduction units must be complete")
+            totals[field] += value
+    return totals
+
+
+def before_after_unit_has_verified_unsafe_baseline(unit: dict[str, Any]) -> bool:
+    baseline = unit.get("baseline_verification")
+    if not isinstance(baseline, dict):
+        return False
+    path = baseline.get("path")
+    sha256 = baseline.get("sha256")
+    return (
+        isinstance(path, str)
+        and bool(path)
+        and isinstance(sha256, str)
+        and len(sha256) == 64
+        and baseline.get("status") == "passed"
+        and baseline.get("semantic_pass") is True
+        and baseline.get("semantic_claim_source") == "verified_unsafe_baseline_gates"
+        and baseline.get("generated_draft_semantic_pass") is False
+    )

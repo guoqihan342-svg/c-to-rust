@@ -1,0 +1,32 @@
+                    },
+                },
+                "evidence_boundary": "preflight proves exact-command compliance only; it is not semantic acceptance",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def repo_rel(path: Path) -> str:
+    return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+
+
+def write_valid_preflight_marker(marker_path: Path, *, run_id: str) -> None:
+    harness.write_opencode_preflight_marker(
+        marker_path=Path(repo_rel(marker_path)),
+        run_id=run_id,
+        repo_root=REPO_ROOT,
+    )
+
+
+def temp_repo_dir():
+    target = REPO_ROOT / "target"
+    target.mkdir(exist_ok=True)
+    return tempfile.TemporaryDirectory(prefix="opencode-harness-test-", dir=target)
+
+
+if __name__ == "__main__":
+    unittest.main()

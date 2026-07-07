@@ -1,0 +1,407 @@
+        class HungProcess:
+            pid = 4321
+            returncode = None
+
+            def communicate(self, timeout: int | None = None) -> tuple[str, str]:
+                raise subprocess.TimeoutExpired(
+                    ["opencode", "run"],
+                    timeout,
+                    output="partial stdout",
+                    stderr="partial stderr",
+                )
+
+        def popen_factory(argv: list[str], **kwargs: object) -> HungProcess:
+            seen_kwargs.update(kwargs)
+            return HungProcess()
+
+        def kill_process_tree(process: HungProcess) -> None:
+            killed_pids.append(process.pid)
+            process.returncode = -9
+
+        completed = harness.run_captured_process_with_timeout(
+            ["opencode", "run"],
+            cwd=REPO_ROOT,
+            env={"OPENCODE_CONFIG_HOME": "isolated"},
+            timeout_seconds=3,
+            popen_factory=popen_factory,
+            process_tree_killer=kill_process_tree,
+        )
+
+        self.assertEqual(killed_pids, [4321])
+        self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
+        self.assertTrue(seen_kwargs["text"])
+        self.assertEqual(seen_kwargs["encoding"], "utf-8")
+        self.assertEqual(seen_kwargs["errors"], "replace")
+        self.assertIs(seen_kwargs["stdout"], subprocess.PIPE)
+        self.assertIs(seen_kwargs["stderr"], subprocess.PIPE)
+        self.assertEqual(seen_kwargs["env"], {"OPENCODE_CONFIG_HOME": "isolated"})
+        self.assertEqual(completed.returncode, 124)
+        self.assertIn("partial stdout", completed.stdout)
+        self.assertIn("partial stderr", completed.stderr)
+        self.assertIn("timed out after 3 seconds", completed.stderr)
+
+    def test_run_worker_process_once_real_subprocess_timeout(self) -> None:
+        started_at = time.monotonic()
+
+        completed = harness.run_worker_process_once(
+            argv=[sys.executable, "-B", "-c", "import time; time.sleep(5)"],
+            command_runner=subprocess.run,
+            repo_root=REPO_ROOT,
+            timeout_seconds=1,
+        )
+
+        elapsed = time.monotonic() - started_at
+        self.assertLess(elapsed, 4.0)
+        self.assertEqual(completed.returncode, 124)
+        self.assertEqual(completed.stdout, "")
+        self.assertIn("timed out after 1 seconds", completed.stderr)
+
+    def test_run_captured_process_with_timeout_stops_child_holding_pipes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            heartbeat = Path(tmp) / "child-heartbeat.txt"
+            child_code = (
+                "import pathlib, sys, time\n"
+                "path = pathlib.Path(sys.argv[1])\n"
+                "for idx in range(80):\n"
+                "    path.write_text(str(idx), encoding='utf-8')\n"
+                "    print(f'child heartbeat {idx}', flush=True)\n"
+                "    time.sleep(0.1)\n"
+            )
+            parent_code = (
+                "import os, subprocess, sys, time\n"
+                "heartbeat = sys.argv[1]\n"
+                "child_code = sys.argv[2]\n"
+                "subprocess.Popen(\n"
+                "    [sys.executable, '-B', '-c', child_code, heartbeat],\n"
+                "    stdout=sys.stdout,\n"
+                "    stderr=sys.stderr,\n"
+                "    close_fds=False,\n"
+                ")\n"
+                "deadline = time.time() + 3\n"
+                "while not os.path.exists(heartbeat) and time.time() < deadline:\n"
+                "    time.sleep(0.05)\n"
+                "print('parent ready', flush=True)\n"
+                "time.sleep(30)\n"
+            )
+
+            started_at = time.monotonic()
+            completed = harness.run_captured_process_with_timeout(
+                [sys.executable, "-B", "-c", parent_code, str(heartbeat), child_code],
+                cwd=REPO_ROOT,
+                timeout_seconds=1,
+            )
+
+            elapsed = time.monotonic() - started_at
+            self.assertLess(elapsed, 7.0)
+            self.assertEqual(completed.returncode, 124)
+            self.assertTrue(heartbeat.exists())
+            first_heartbeat = heartbeat.read_text(encoding="utf-8")
+            time.sleep(0.6)
+            self.assertEqual(heartbeat.read_text(encoding="utf-8"), first_heartbeat)
+            self.assertIn("timed out after 1 seconds", completed.stderr)
+
+    def test_opencode_preflight_timeout_records_124_and_logs(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+            seen_kwargs: dict[str, object] = {}
+
+            def timeout_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"), output="", stderr="agent hung")
+
+            result = harness.run_opencode_preflight(
+                out_root=out_root,
+                run_id="preflight-run",
+                command_runner=timeout_runner,
+                timeout_seconds=9,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(seen_kwargs["timeout"], 9)
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["timeout_seconds"], 9)
+            self.assertEqual(result["root_cause_key"], "process_timeout")
+            report = json.loads((REPO_ROOT / result["report_path"]).read_text(encoding="utf-8"))
+            self.assertTrue(report["timed_out"])
+            stderr = (REPO_ROOT / report["logs"]["stderr"]).read_text(encoding="utf-8")
+            self.assertIn("agent hung", stderr)
+            self.assertIn("timed out after 9 seconds", stderr)
+
+    def test_opencode_preflight_default_runner_uses_process_tree_timeout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "opencode-preflight"
+            seen_kwargs: dict[str, object] = {}
+
+            def captured_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                if len(argv) >= 2 and argv[1] == "models":
+                    return subprocess.CompletedProcess(argv, 0, stdout="GLM-5.1\n", stderr="")
+                return subprocess.CompletedProcess(
+                    argv,
+                    124,
+                    stdout="",
+                    stderr="timed out after 5 seconds\n",
+                )
+
+            with patch.object(harness, "run_captured_process_with_timeout", side_effect=captured_runner) as runner:
+                result = harness.run_opencode_preflight(
+                    out_root=out_root,
+                    run_id="preflight-run",
+                    timeout_seconds=5,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(runner.call_count, 2)
+            self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
+            self.assertEqual(seen_kwargs["timeout_seconds"], 5)
+            self.assertIn("XDG_CONFIG_HOME", seen_kwargs["env"])
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["root_cause_key"], "process_timeout")
+
+    def test_run_worker_timeout_writes_blocked_summary_and_repair_hint(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            worker_out_root = out_root / "workers" / "worker-a"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-timeout",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-timeout",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=worker_out_root,
+                repo_root=REPO_ROOT,
+            )
+            seen_kwargs: dict[str, object] = {}
+
+            def timeout_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"), output="worker stdout", stderr="worker stderr")
+
+            result = harness.run_worker(
+                db_path=db_path,
+                run_id="run-timeout",
+                worker_id="worker-a",
+                command_runner=timeout_runner,
+                timeout_seconds=5,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(seen_kwargs["timeout"], 5)
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["timeout_seconds"], 5)
+            self.assertEqual(result["summary_status"], "blocked")
+            self.assertEqual(result["repair_hint"]["root_cause_key"], "process_timeout")
+            summary = json.loads((worker_out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["final_gate"]["status"], "blocked")
+            metrics = json.loads((worker_out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["root_cause_counts"], {"process_timeout": 1})
+
+    def test_execute_merge_plan_timeout_records_124(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-timeout",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            seen_kwargs: dict[str, object] = {}
+
+            def timeout_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                raise subprocess.TimeoutExpired(argv, kwargs.get("timeout"), output="merge stdout", stderr="merge stderr")
+
+            result = harness.execute_merge_plan(
+                db_path=db_path,
+                run_id="run-timeout",
+                out_root=out_root,
+                merge_plan={"argv": ["python3", "-B", "validation/tools/run_competition.py"]},
+                command_runner=timeout_runner,
+                timeout_seconds=11,
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(seen_kwargs["timeout"], 11)
+            self.assertEqual(result["exit_code"], 124)
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["timeout_seconds"], 11)
+            self.assertEqual(result["root_cause_key"], "process_timeout")
+            stderr = (out_root / "harness" / "run-plan-merge.stderr.log").read_text(encoding="utf-8")
+            self.assertIn("merge stderr", stderr)
+            self.assertIn("timed out after 11 seconds", stderr)
+
+    def test_execute_merge_plan_default_runner_uses_process_tree_timeout(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-timeout",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            seen_kwargs: dict[str, object] = {}
+
+            def captured_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                seen_kwargs.update(kwargs)
+                return subprocess.CompletedProcess(
+                    argv,
+                    124,
+                    stdout="",
+                    stderr="timed out after 13 seconds\n",
+                )
+
+            with patch.object(harness, "run_captured_process_with_timeout", side_effect=captured_runner) as runner:
+                result = harness.execute_merge_plan(
+                    db_path=db_path,
+                    run_id="run-timeout",
+                    out_root=out_root,
+                    merge_plan={"argv": ["python3", "-B", "validation/tools/run_competition.py"]},
+                    timeout_seconds=13,
+                    repo_root=REPO_ROOT,
+                )
+
+            runner.assert_called_once()
+            self.assertEqual(seen_kwargs["cwd"], REPO_ROOT)
+            self.assertEqual(seen_kwargs["timeout_seconds"], 13)
+            self.assertIsNone(seen_kwargs.get("env"))
+            self.assertEqual(result["exit_code"], 124)
+            self.assertEqual(result["process_returncode"], 124)
+            self.assertTrue(result["timed_out"])
+            self.assertEqual(result["root_cause_key"], "process_timeout")
+
+    def test_opencode_database_locked_matches_equivalent_sqlite_busy_signals(self) -> None:
+        for stderr in [
+            "sqlite3.OperationalError: database is locked",
+            "sqlite3.OperationalError: database table is locked",
+            "SQLITE_BUSY: database is busy",
+            "sqlite_busy while opening agent store",
+            "sqlite busy while opening agent store",
+        ]:
+            with self.subTest(stderr=stderr):
+                self.assertTrue(harness.opencode_database_locked(subprocess.CompletedProcess(["opencode"], 1, stdout="", stderr=stderr)))
+        self.assertFalse(harness.opencode_database_locked(subprocess.CompletedProcess(["opencode"], 1, stdout="", stderr="syntax error")))
+
+    def test_atomic_write_text_preserves_existing_file_when_replace_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "harness" / "report.json"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("old\n", encoding="utf-8")
+
+            with patch.object(harness.os, "replace", side_effect=OSError("replace failed")):
+                with self.assertRaises(OSError):
+                    harness.atomic_write_text(target, "new\n")
+
+            self.assertEqual(target.read_text(encoding="utf-8"), "old\n")
+            self.assertEqual(list(target.parent.glob(f".{target.name}.*.tmp")), [])
+
+    def test_atomic_write_json_uses_canonical_json_format(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "nested" / "report.json"
+
+            harness.atomic_write_json(target, {"b": 2, "a": 1})
+
+            self.assertEqual(target.read_text(encoding="utf-8"), '{\n  "a": 1,\n  "b": 2\n}\n')
+
+    def test_opencode_preflight_cli_dispatches_flags(self) -> None:
+        argv = [
+            "opencode_agent_harness.py",
+            "opencode-preflight",
+            "--run-id",
+            "preflight-run",
+            "--out-root",
+            "target/opencode-preflight",
+            "--opencode-variant",
+            "max",
+            "--opencode-skip-permissions",
+        ]
+
+        with patch("sys.argv", argv), patch("sys.stdout", io.StringIO()) as stdout, patch.object(
+            harness,
+            "run_opencode_preflight",
+            return_value={"status": "passed", "exit_code": 0},
+        ) as runner:
+            self.assertEqual(harness.main(), 0)
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["status"], "passed")
+        runner.assert_called_once()
+        self.assertEqual(runner.call_args.kwargs["run_id"], "preflight-run")
+        self.assertEqual(runner.call_args.kwargs["out_root"], Path("target/opencode-preflight"))
+        self.assertEqual(runner.call_args.kwargs["opencode_variant"], "max")
+        self.assertTrue(runner.call_args.kwargs["opencode_skip_permissions"])
+
+    def test_run_worker_opencode_rejects_failed_preflight_report_before_launch(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = harness.init_run(
+                out_root=out_root,
+                run_id="run-test",
+                proof_class="local-simulation",
+                repo_root=REPO_ROOT,
+            )
+            harness.assign_slice(
+                db_path=db_path,
+                run_id="run-test",
+                worker_id="worker-a",
+                target_id="demo",
+                slice_id="demo-add-one",
+                source_repo_root=Path("external/demo"),
+                source_file="src/demo.c",
+                function="add_one",
+                source_commit="abc123",
+                out_root=out_root / "workers" / "worker-a",
+                repo_root=REPO_ROOT,
+            )
+            preflight_report = out_root / "harness" / "opencode-preflight-report.json"
+            preflight_report.parent.mkdir(parents=True, exist_ok=True)
+            preflight_report.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "run_id": "run-test",
+                        "status": "failed",
+                        "exit_code": 1,
+                        "marker_exists": False,
+                        "contract_verification": {"status": "not-observed"},
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            calls: list[list[str]] = []
+
+            def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+                calls.append(argv)
+                return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "opencode preflight report is not passed"):
+                harness.run_worker(
+                    db_path=db_path,
+                    run_id="run-test",
+                    worker_id="worker-a",
+                    mode="opencode",
+                    opencode_preflight_report=preflight_report,
+                    command_runner=fake_runner,
+                    repo_root=REPO_ROOT,
+                )
+
+            self.assertEqual(calls, [])

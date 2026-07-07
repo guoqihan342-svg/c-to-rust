@@ -1,0 +1,203 @@
+                "blocked_callee_count": 1,
+                "generated_candidate_status": {"refused": 1},
+                "route_levels": {"L4": 1},
+                "route_statuses": {"refused": 1},
+                "by_construct": {"external_direct_callee_context": {"refused": 1}},
+                "ledgers": [
+                    {
+                        "path": "validation/evidence/demo/auto-translation/refused/l3-refused-capability-delta.json",
+                        "target_id": "demo",
+                        "slice_id": "refused",
+                        "route_level": "L4",
+                        "route_status": "refused",
+                        "delta_count": 1,
+                    }
+                ],
+                "claim_boundary": "Capability-delta ledger entries are not semantic acceptance evidence.",
+            },
+            "claim_boundary": "translator coverage matrix records representative regression evidence only.",
+        }
+
+    def _write_json(self, path: Path, payload: dict) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _write_c2rust_baseline_manifest(
+        self,
+        path: Path,
+        *,
+        target_id: str,
+        slice_id: str,
+        status: str,
+        reason: str,
+        output: dict | None,
+        compile_status: dict | None,
+    ) -> None:
+        self._write_json(
+            path,
+            {
+                "schema_version": 1,
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "status": status,
+                "reason": reason,
+                "correctness_role": "candidate_context_only",
+                "fallback_oracle": "original_c_oracle_required",
+                "validation_impact": "baseline status does not accept or reject candidate",
+                "output": output,
+                "compile": compile_status,
+                "must_not_claim": [
+                    "C2Rust output proves semantic equivalence",
+                    "C2Rust baseline was generated" if status != "generated" else "",
+                ],
+            },
+        )
+
+    def _rel(self, root: Path, path: Path) -> str:
+        return path.resolve().relative_to(root.resolve()).as_posix()
+
+    def _write_competition_summary_with_metrics(self, summary_path: Path) -> None:
+        metrics = {
+            "schema_version": 1,
+            "run_id": "run-measured",
+            "proof_class": "local-simulation",
+            "units_total": 1,
+            "units_converged": 1,
+            "units_baseline_only": 0,
+            "unsafe_reduction": {
+                "status": "measured",
+                "baseline_total_unsafe": 3,
+                "current_total_unsafe": 1,
+                "reduced_by": 2,
+                "ratio": 1 / 3,
+            },
+            "translation_before_after": {
+                "status": "not_provided",
+                "unit_count": 0,
+                "measured_unsafe_unit_count": 0,
+                "accepted_patch_unit_count": 0,
+                "units": [],
+            },
+            "avg_repair_rounds": 1.0,
+            "auto_recovery_rate": 1.0,
+            "human_interventions": 0,
+            "always_compiles": True,
+            "always_equivalent": True,
+            "fail_closed_count": 0,
+            "root_cause_counts": {},
+            "wall_clock_seconds": 8,
+            "llm_calls": 2,
+            "per_unit_statuses": [
+                {
+                    "unit_id": "demo/demo-add-one",
+                    "status": "converged",
+                    "compiled": True,
+                    "semantic_pass": True,
+                    "refused": False,
+                    "blocked": False,
+                    "failed": False,
+                    "repair_rounds": 1,
+                    "auto_recovered": True,
+                    "repair_history": {
+                        "patch_events_path": "retry-repair-history-demo.jsonl",
+                        "patch_events_sha256": "2" * 64,
+                        "statuses": ["failed", "verified"],
+                        "rollback_ids": ["target/competition-out/workers/worker-a/harness/rollback.json"],
+                        "verified": True,
+                    },
+                }
+            ],
+        }
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        for unit in metrics["per_unit_statuses"]:
+            repair_history = unit.get("repair_history")
+            if not isinstance(repair_history, dict):
+                continue
+            patch_events_path = summary_path.parent / repair_history["patch_events_path"]
+            patch_events_path.write_text('{"status":"verified"}\n', encoding="utf-8")
+            repair_history["patch_events_sha256"] = sha256_file(patch_events_path)
+        metrics_path = summary_path.parent / "workflow-metrics.json"
+        metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        command_log_path = summary_path.parent / "commands.jsonl"
+        command_log_path.write_text(
+            json.dumps(
+                {
+                    "canonical": True,
+                    "command": ["python3", "-B", "-m", "validation.tools.validate_competition_run_summary"],
+                    "log_path": "commands.jsonl",
+                    "returncode": 0,
+                    "run_id": "run-measured",
+                    "stderr": "",
+                    "stdout": "",
+                    "step": "validate-competition-summary",
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        summary_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "run_id": "run-measured",
+                    "proof_class": "local-simulation",
+                    "profile_id": "huawei-competition-ubuntu-24.04",
+                    "profile_sha256": "0" * 64,
+                    "clang_source": "missing",
+                    "cargo_mirror_activation": {
+                        "method": "CARGO_HOME",
+                        "path": "config/competition-env/cargo",
+                        "config_file": "config/competition-env/cargo/config.toml",
+                    },
+                    "elapsed_seconds": metrics["wall_clock_seconds"],
+                    "translator_version": "test",
+                    "slices": {
+                        "attempted": metrics["units_total"],
+                        "typed_ir_generated": metrics["units_converged"],
+                        "compiled": metrics["units_total"],
+                        "semantic_pass": metrics["units_converged"],
+                        "refused": 0,
+                        "blocked": 0,
+                        "failed": 0,
+                    },
+                    "unsafe_budget": {
+                        "status": "passed",
+                        "total_first_party_non_test_unsafe": metrics["unsafe_reduction"]["current_total_unsafe"],
+                        "ratio": metrics["unsafe_reduction"]["ratio"],
+                    },
+                    "workflow_metrics": {
+                        "path": "workflow-metrics.json",
+                        "sha256": sha256_file(metrics_path),
+                    },
+                    "command_log": {
+                        "path": "commands.jsonl",
+                        "sha256": sha256_file(command_log_path),
+                    },
+                    "artifact_roots": [
+                        "target/competition-out/evidence",
+                        "target/competition-out/summary",
+                        "target/competition-out/logs",
+                    ],
+                    "final_gate": {
+                        "status": "passed",
+                        "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+
+def sha256_file(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in milestone_release_report.LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
+if __name__ == "__main__":
+    unittest.main()

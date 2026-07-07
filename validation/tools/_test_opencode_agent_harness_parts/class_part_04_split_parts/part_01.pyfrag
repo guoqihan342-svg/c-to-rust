@@ -1,0 +1,467 @@
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": None,
+                        "opencode_agent": "default",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["argv"][replay["argv"].index("--opencode-model") + 1], "GLM-5.1")
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.launch_policy.opencode_model",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_binding_is_not_passed(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            base_preflight = {
+                "path": repo_rel(preflight),
+                "sha256": "a" * 64,
+                "status": "passed",
+                "contract_status": "executed",
+                "launch_policy": {
+                    "opencode_command": "opencode",
+                    "opencode_model": "GLM-5.1",
+                    "opencode_agent": "c2rust-migrator",
+                    "opencode_variant": "max",
+                    "opencode_skip_permissions": True,
+                },
+                "opencode_runtime_env": runtime_env,
+                "opencode_model_availability": {
+                    "status": "available",
+                    "opencode_command": "opencode",
+                    "required_model": "GLM-5.1",
+                    "process_returncode": 0,
+                    "model_listed": True,
+                },
+            }
+            cases = [
+                ("failed-status", {"status": "failed"}, "opencode_preflight_report.status"),
+                ("not-executed-contract", {"contract_status": "not-executed"}, "opencode_preflight_report.contract_status"),
+                ("missing-sha", {"sha256": None}, "opencode_preflight_report.sha256"),
+            ]
+            for _name, patch_payload, missing_constraint in cases:
+                preflight_payload = json.loads(json.dumps(base_preflight))
+                for key, value in patch_payload.items():
+                    if value is None:
+                        preflight_payload.pop(key, None)
+                    else:
+                        preflight_payload[key] = value
+                worker = {
+                    "worker_id": "worker-001",
+                    "opencode_preflight_report": preflight_payload,
+                }
+
+                replay = harness.resume_worker_replay_command(
+                    "run-worker",
+                    worker=worker,
+                    db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                    run_id="run-resume",
+                    mode="opencode",
+                    repo_root=REPO_ROOT,
+                )
+
+                self.assertEqual(replay["replay_safety"]["status"], "blocked")
+                self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+                self.assertIn(missing_constraint, replay["replay_safety"]["missing_constraints"])
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_sha_mismatches_file(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            preflight.parent.mkdir(parents=True, exist_ok=True)
+            preflight.write_text('{"report_kind":"opencode-preflight"}\n', encoding="utf-8")
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "sha256": "a" * 64,
+                    "status": "passed",
+                    "contract_status": "executed",
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": "c2rust-migrator",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "opencode",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.sha256_mismatch",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_file_status_drifts(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            preflight.parent.mkdir(parents=True, exist_ok=True)
+            preflight.write_text(
+                json.dumps(
+                    {
+                        "report_kind": "opencode-preflight",
+                        "status": "failed",
+                        "contract_verification": {"status": "not-observed"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "sha256": harness.sha256_file(preflight),
+                    "status": "passed",
+                    "contract_status": "executed",
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": "c2rust-migrator",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": False,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "opencode",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.file_status",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_command_is_not_opencode(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "launch_policy": {
+                        "opencode_command": "codex",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": "c2rust-migrator",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "codex",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["argv"][replay["argv"].index("--opencode-command") + 1], "codex")
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.launch_policy.opencode_command",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_agent_is_not_repo_owned(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "sha256": "a" * 64,
+                    "status": "passed",
+                    "contract_status": "executed",
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": "default",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "opencode",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.launch_policy.opencode_agent",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_preflight_variant_is_not_competition_max(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": "c2rust-migrator",
+                        "opencode_variant": "lite",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                    "opencode_model_availability": {
+                        "status": "available",
+                        "opencode_command": "opencode",
+                        "required_model": "GLM-5.1",
+                        "process_returncode": 0,
+                        "model_listed": True,
+                    },
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertEqual(replay["argv"][replay["argv"].index("--opencode-variant") + 1], "lite")
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.launch_policy.opencode_variant",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_blocks_opencode_replay_when_model_availability_is_missing(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            preflight = out_root / "harness" / "opencode-preflight-report.json"
+            runtime_env = harness.opencode_runtime_env_contract(
+                base_root=out_root,
+                scope="preflight",
+                repo_root=REPO_ROOT,
+            )
+            worker = {
+                "worker_id": "worker-001",
+                "opencode_preflight_report": {
+                    "path": repo_rel(preflight),
+                    "launch_policy": {
+                        "opencode_command": "opencode",
+                        "opencode_model": "GLM-5.1",
+                        "opencode_agent": "c2rust-migrator",
+                        "opencode_variant": "max",
+                        "opencode_skip_permissions": True,
+                    },
+                    "opencode_runtime_env": runtime_env,
+                },
+            }
+
+            replay = harness.resume_worker_replay_command(
+                "run-worker",
+                worker=worker,
+                db_path=out_root / "state" / "opencode-agent-harness.sqlite3",
+                run_id="run-resume",
+                mode="opencode",
+                repo_root=REPO_ROOT,
+            )
+
+            self.assertIn("--opencode-model", replay["argv"])
+            self.assertEqual(replay["replay_safety"]["status"], "blocked")
+            self.assertEqual(replay["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+            self.assertIn(
+                "opencode_preflight_report.opencode_model_availability",
+                replay["replay_safety"]["missing_constraints"],
+            )
+
+    def test_resume_manifest_marks_opencode_replay_blocked_without_preflight_contract(self) -> None:
+        with temp_repo_dir() as tmp:
+            out_root = Path(tmp) / "competition-out"
+            db_path = out_root / "state" / "opencode-agent-harness.sqlite3"
+            worker_root = out_root / "workers" / "worker-001"
+            assignment = out_root / "harness" / "assignments" / "worker-001.json"
+            request = out_root / "harness" / "assignments" / "worker-001-request.json"
+            summary = worker_root / "summary" / "competition-run-summary.json"
+            report = worker_root / "harness" / "run-worker-report.json"
+            evaluate_report = out_root / "harness" / "evaluate-report.json"
+            judge_index = out_root / "harness" / "judge-evidence-index.json"
+            resume_manifest = out_root / "harness" / "resume-manifest.json"
+            for path in [db_path, assignment, request, summary, report, evaluate_report, judge_index]:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("{}\n", encoding="utf-8")
+
+            worker_fields = {
+                "worker_id": "worker-001",
+                "slice_id": "demo-unit",
+                "function": "demo_unit",
+                "assignment_path": repo_rel(assignment),
+                "request_path": repo_rel(request),
+                "summary_path": repo_rel(summary),
+                "report_path": repo_rel(report),
+                "out_root": repo_rel(worker_root),
+                "source_commit": "abc123",
+                "source_sha256": "f" * 64,
+                "summary_status": "failed",
+                "runtime": "opencode",
+            }
+            manifest = harness.build_resume_manifest(
+                db_path=db_path,
+                run_id="run-resume",
+                out_root=out_root,
+                status="failed",
+                context_pack={"entrypoints": {}, "mode": "opencode", "workers": [worker_fields]},
+                context_pack_ref={"path": "target/context-pack.json", "sha256": "a" * 64},
+                agent_index={
+                    "agents_by_worker_id": {
+                        "worker-001": {
+                            **worker_fields,
+                            "isolated_out_root": repo_rel(worker_root),
+                        }
+                    }
+                },
+                agent_index_ref={"path": "target/agent-index.json", "sha256": "b" * 64},
+                evaluate_report_path=evaluate_report,
+                batch_profile_report_path="target/batch-profile-report.json",
+                judge_evidence_index_path=judge_index,
+                resume_manifest_path=resume_manifest,
+                repair_hints={
+                    "source": "sqlite repair_hints",
+                    "open_count": 1,
+                    "hints": [
+                        {
+                            "hint_id": "repair:run-resume:worker-001:process_timeout",
+                            "status": "open",
+                            "worker_id": "worker-001",
+                        }
+                    ],
+                },
+                repo_root=REPO_ROOT,
+            )
+
+            replay = manifest["workers"][0]["replay_commands"]
+            for command in [replay["run_worker"], replay["retry_worker"]]:
+                self.assertEqual(command["argv"][command["argv"].index("--mode") + 1], "opencode")
+                self.assertEqual(command["replay_safety"]["status"], "blocked")
+                self.assertEqual(command["replay_safety"]["reason"], "opencode_preflight_required_for_replay")
+                self.assertIn("opencode_preflight_report", command["replay_safety"]["missing_constraints"])

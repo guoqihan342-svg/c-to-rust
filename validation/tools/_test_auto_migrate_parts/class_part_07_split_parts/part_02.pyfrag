@@ -1,0 +1,18 @@
+                direct_replay["bound_inputs"]["c2rust_output"]["sha256"],
+                c2rust_baseline["output"]["sha256"],
+            )
+            self.assertEqual(
+                direct_replay["bound_inputs"]["compile_artifact"]["sha256"],
+                c2rust_baseline["compile"]["artifact"]["sha256"],
+            )
+            self.assertEqual(direct_replay["results"]["case_count"], 2)
+            self.assertTrue(all(case["matched"] for case in direct_replay["results"]["cases"]))
+            self.assertEqual(verified["direct_c2rust_replay"]["status"], "passed")
+            self.assertEqual(
+                verified["direct_c2rust_replay"]["artifact"]["sha256"],
+                hashlib.sha256(direct_replay_path.read_bytes()).hexdigest(),
+            )
+            self.assertNotIn("direct_c2rust_replay_not_implemented", verified["blocked_reasons"])
+            self.assertIn("c2rust_bound_gate_refs_not_implemented", verified["blocked_reasons"])
+            self.assertEqual(verified["status"], "blocked")
+            self.assertFalse(verified["semantic_pass"])

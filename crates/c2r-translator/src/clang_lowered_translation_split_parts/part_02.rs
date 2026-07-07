@@ -1,571 +1,175 @@
-#[cfg(all(test, feature = "clang-lowering-report"))]
-mod clang_lowered_ir_evidence_tests {
-    use super::*;
-    use crate::typed_ir::{
-        IrBinOp, IrExpr, IrFunction, IrIncDecOp, IrParam, IrStmt, IrType, IrTypeKind, SourceSpan,
-    };
-
-    fn test_profile() -> BuildProfile {
-        BuildProfile {
-            include_paths: Vec::new(),
-            defines: Vec::new(),
-            target: None,
-            clang_ast_fixture: None,
-            target_triple: None,
-            abi: None,
-            compiler_command_source: "unit-test".to_string(),
-            clang_available: true,
+fn collect_ir_post_increment_deref_vars_from_stmts(
+    statements: &[typed_ir::IrStmt],
+    vars: &mut Vec<String>,
+) {
+    for statement in statements {
+        match statement {
+            typed_ir::IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_ir_post_increment_deref_vars_from_expr(init, vars);
+                }
+            }
+            typed_ir::IrStmt::Assign { target, value, .. } => {
+                collect_ir_post_increment_deref_vars_from_expr(target, vars);
+                collect_ir_post_increment_deref_vars_from_expr(value, vars);
+            }
+            typed_ir::IrStmt::If {
+                condition,
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+                collect_ir_post_increment_deref_vars_from_stmts(then_body, vars);
+                collect_ir_post_increment_deref_vars_from_stmts(else_body, vars);
+            }
+            typed_ir::IrStmt::While {
+                condition, body, ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+                collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+            }
+            typed_ir::IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+                collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+            }
+            typed_ir::IrStmt::For {
+                init,
+                condition,
+                step,
+                body,
+                ..
+            } => {
+                collect_ir_post_increment_deref_vars_from_stmts(init, vars);
+                if let Some(condition) = condition {
+                    collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+                }
+                collect_ir_post_increment_deref_vars_from_stmts(body, vars);
+                if let Some(step) = step.as_deref() {
+                    collect_ir_post_increment_deref_vars_from_stmts(
+                        std::slice::from_ref(step),
+                        vars,
+                    );
+                }
+            }
+            typed_ir::IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_ir_post_increment_deref_vars_from_expr(value, vars);
+                }
+            }
+            typed_ir::IrStmt::Break { .. } | typed_ir::IrStmt::Continue { .. } => {}
+            typed_ir::IrStmt::Expr { expr, .. } => {
+                collect_ir_post_increment_deref_vars_from_expr(expr, vars);
+            }
+            typed_ir::IrStmt::Unsupported { .. } => {}
         }
     }
+}
 
-    fn unsigned_ty(spelled: &str, canonical: &str, width: u16) -> IrType {
-        IrType {
-            spelled: spelled.to_string(),
-            canonical: canonical.to_string(),
-            kind: IrTypeKind::Integer {
-                signed: false,
-                width,
-            },
-            is_const: false,
-            width_bits: Some(width),
-            source_span: None,
+fn collect_ir_post_increment_deref_vars_from_expr(expr: &typed_ir::IrExpr, vars: &mut Vec<String>) {
+    match expr {
+        typed_ir::IrExpr::Deref { ptr, .. } => {
+            if let Some(name) = ir_post_increment_var_name(ptr) {
+                push_unique(vars, name);
+            }
+            collect_ir_post_increment_deref_vars_from_expr(ptr, vars);
         }
-    }
-
-    fn signed_ty(spelled: &str, canonical: &str, width: u16) -> IrType {
-        IrType {
-            spelled: spelled.to_string(),
-            canonical: canonical.to_string(),
-            kind: IrTypeKind::Integer {
-                signed: true,
-                width,
-            },
-            is_const: false,
-            width_bits: Some(width),
-            source_span: None,
+        typed_ir::IrExpr::Binary { lhs, rhs, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(lhs, vars);
+            collect_ir_post_increment_deref_vars_from_expr(rhs, vars);
         }
-    }
-
-    fn void_ty(is_const: bool) -> IrType {
-        IrType {
-            spelled: "void".to_string(),
-            canonical: "void".to_string(),
-            kind: IrTypeKind::Void,
-            is_const,
-            width_bits: None,
-            source_span: None,
+        typed_ir::IrExpr::Unary { operand, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(operand, vars);
         }
-    }
-
-    fn pointer_ty(spelled: &str, canonical: &str, pointee: IrType, is_const: bool) -> IrType {
-        IrType {
-            spelled: spelled.to_string(),
-            canonical: canonical.to_string(),
-            kind: IrTypeKind::Pointer {
-                pointee: Box::new(pointee),
-            },
-            is_const,
-            width_bits: Some(64),
-            source_span: None,
+        typed_ir::IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_ir_post_increment_deref_vars_from_expr(condition, vars);
+            collect_ir_post_increment_deref_vars_from_expr(then_expr, vars);
+            collect_ir_post_increment_deref_vars_from_expr(else_expr, vars);
         }
-    }
-
-    fn record_ty(name: &str) -> IrType {
-        IrType {
-            spelled: name.to_string(),
-            canonical: name.to_string(),
-            kind: IrTypeKind::Record {
-                name: name.to_string(),
-                fields: None,
-            },
-            is_const: false,
-            width_bits: None,
-            source_span: None,
+        typed_ir::IrExpr::Cast { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
         }
-    }
-
-    fn param(name: &str, ty: IrType) -> IrParam {
-        IrParam {
-            name: name.to_string(),
-            ty,
-            source_span: None,
+        typed_ir::IrExpr::LValueToRValue { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
         }
-    }
-
-    fn var(name: &str, ty: IrType) -> IrExpr {
-        IrExpr::Var {
-            name: name.to_string(),
-            ty,
-            source_span: None,
+        typed_ir::IrExpr::ArrayToPointerDecay { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
         }
-    }
-
-    fn call(callee: &str, args: Vec<IrExpr>, ty: IrType) -> IrExpr {
-        IrExpr::Call {
-            callee: callee.to_string(),
-            args,
-            ty,
-            source_span: None,
+        typed_ir::IrExpr::FunctionToPointerDecay { expr, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(expr, vars);
         }
+        typed_ir::IrExpr::Index { base, index, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(base, vars);
+            collect_ir_post_increment_deref_vars_from_expr(index, vars);
+        }
+        typed_ir::IrExpr::Member { base, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(base, vars);
+        }
+        typed_ir::IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_ir_post_increment_deref_vars_from_expr(element, vars);
+            }
+        }
+        typed_ir::IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_ir_post_increment_deref_vars_from_expr(arg, vars);
+            }
+        }
+        typed_ir::IrExpr::IncDec { target, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(target, vars);
+        }
+        typed_ir::IrExpr::AddrOf { operand, .. } => {
+            collect_ir_post_increment_deref_vars_from_expr(operand, vars);
+        }
+        typed_ir::IrExpr::LitInt { .. }
+        | typed_ir::IrExpr::NullPtr { .. }
+        | typed_ir::IrExpr::Var { .. }
+        | typed_ir::IrExpr::Unsupported { .. } => {}
     }
+}
 
-    #[test]
-    fn clang_lowered_ir_records_direct_call_expression_evidence() {
-        let i32_ty = signed_ty("int", "int", 32);
-        let function = IrFunction {
-            name: "call_expression".to_string(),
-            return_type: i32_ty.clone(),
-            params: vec![param("value", i32_ty.clone())],
-            body: vec![
-                IrStmt::Decl {
-                    name: "first".to_string(),
-                    ty: i32_ty.clone(),
-                    init: Some(call(
-                        "helper",
-                        vec![var("value", i32_ty.clone())],
-                        i32_ty.clone(),
-                    )),
-                    source_span: None,
-                },
-                IrStmt::Assign {
-                    target: var("value", i32_ty.clone()),
-                    value: call("helper", vec![var("first", i32_ty.clone())], i32_ty.clone()),
-                    source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(call("helper", vec![var("value", i32_ty.clone())], i32_ty)),
-                    source_span: None,
-                },
-            ],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "call-expression".to_string(),
-            source_commit: "1234567".to_string(),
-            function_name: "call_expression".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        assert_eq!(result.plan.call_expressions.len(), 3);
-        assert!(result
-            .plan
-            .translation_rule_ids
-            .contains(&"bounded-call-expression".to_string()));
-        assert_eq!(result.plan.call_expressions[0].callee, "helper");
-        assert_eq!(result.plan.call_expressions[0].arguments, vec!["value"]);
-        assert_eq!(
-            result.plan.call_expressions[0].source_expression,
-            "helper(value)"
-        );
-        assert_eq!(
-            result.plan.call_expressions[0].statement_context,
-            "declaration_initializer"
-        );
-        assert_eq!(
-            result.plan.call_expressions[1].source_expression,
-            "helper(first)"
-        );
-        assert_eq!(
-            result.plan.call_expressions[1].statement_context,
-            "assignment"
-        );
-        assert_eq!(result.plan.call_expressions[2].statement_context, "return");
+fn ir_post_increment_var_name(expr: &typed_ir::IrExpr) -> Option<&str> {
+    match expr {
+        typed_ir::IrExpr::IncDec {
+            target,
+            op: typed_ir::IrIncDecOp::Inc,
+            prefix: false,
+            ..
+        } => ir_simple_var_name(target),
+        typed_ir::IrExpr::Cast { expr, .. } => ir_post_increment_var_name(expr),
+        _ => None,
     }
+}
 
-    #[test]
-    fn clang_lowered_ir_parenthesizes_complex_member_source_text() {
-        let i32_ty = signed_ty("int", "int", 32);
-        let ptr_ty = pointer_ty(
-            "struct point *",
-            "struct point *",
-            record_ty("point"),
-            false,
-        );
-        let member = IrExpr::Member {
-            base: Box::new(IrExpr::Deref {
-                ptr: Box::new(var("p", ptr_ty)),
-                ty: record_ty("point"),
-                source_span: None,
-            }),
-            field: "x".to_string(),
-            ty: i32_ty,
-            is_arrow: false,
-            source_span: None,
-        };
-
-        assert_eq!(ir_expr_source_text(&member), "(*p).x");
+fn ir_simple_var_name(expr: &typed_ir::IrExpr) -> Option<&str> {
+    match expr {
+        typed_ir::IrExpr::Var { name, .. } => Some(name),
+        _ => None,
     }
+}
 
-    #[test]
-    fn clang_lowered_ir_records_call_inside_member_base() {
-        let i32_ty = signed_ty("int", "int", 32);
-        let point_ty = record_ty("point");
-        let function = IrFunction {
-            name: "member_call".to_string(),
-            return_type: i32_ty.clone(),
-            params: vec![param("value", i32_ty.clone())],
-            body: vec![IrStmt::Return {
-                value: Some(call(
-                    "helper",
-                    vec![IrExpr::Member {
-                        base: Box::new(call("obj_factory", Vec::new(), point_ty)),
-                        field: "x".to_string(),
-                        ty: i32_ty.clone(),
-                        is_arrow: false,
-                        source_span: None,
-                    }],
-                    i32_ty,
-                )),
-                source_span: None,
-            }],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "member-call".to_string(),
-            source_commit: "1234567".to_string(),
-            function_name: "member_call".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        assert_eq!(result.plan.call_expressions.len(), 2);
-        assert_eq!(result.plan.call_expressions[0].callee, "helper");
-        assert_eq!(
-            result.plan.call_expressions[0].source_expression,
-            "helper(obj_factory().x)"
-        );
-        assert_eq!(result.plan.call_expressions[1].callee, "obj_factory");
-        assert_eq!(
-            result.plan.call_expressions[1].source_expression,
-            "obj_factory()"
-        );
+fn ir_pointer_is_const(ty: &typed_ir::IrType) -> bool {
+    match &ty.kind {
+        typed_ir::IrTypeKind::Pointer { pointee } => ty.is_const || pointee.is_const,
+        _ => false,
     }
+}
 
-    #[test]
-    fn clang_lowered_ir_preserves_repeated_direct_call_sites_in_same_context() {
-        let i32_ty = signed_ty("int", "int", 32);
-        let function = IrFunction {
-            name: "repeat_call".to_string(),
-            return_type: i32_ty.clone(),
-            params: vec![param("value", i32_ty.clone())],
-            body: vec![
-                IrStmt::Assign {
-                    target: var("value", i32_ty.clone()),
-                    value: call("helper", vec![var("value", i32_ty.clone())], i32_ty.clone()),
-                    source_span: None,
-                },
-                IrStmt::Assign {
-                    target: var("value", i32_ty.clone()),
-                    value: call("helper", vec![var("value", i32_ty.clone())], i32_ty.clone()),
-                    source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(var("value", i32_ty)),
-                    source_span: None,
-                },
-            ],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "repeat-call".to_string(),
-            source_commit: "1234567".to_string(),
-            function_name: "repeat_call".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        assert_eq!(result.plan.call_expressions.len(), 2);
-        assert!(result
-            .plan
-            .call_expressions
-            .iter()
-            .all(|call| call.source_expression == "helper(value)"));
-        assert!(result
-            .plan
-            .call_expressions
-            .iter()
-            .all(|call| call.statement_context == "assignment"));
+fn push_unique(values: &mut Vec<String>, value: &str) {
+    if !values.iter().any(|item| item == value) {
+        values.push(value.to_string());
     }
+}
 
-    #[test]
-    fn clang_lowered_ir_does_not_record_condition_call_as_success_evidence() {
-        let i32_ty = signed_ty("int", "int", 32);
-        let function = IrFunction {
-            name: "condition_call".to_string(),
-            return_type: i32_ty.clone(),
-            params: vec![param("value", i32_ty.clone())],
-            body: vec![
-                IrStmt::If {
-                    condition: call("helper", vec![var("value", i32_ty.clone())], i32_ty.clone()),
-                    then_body: vec![IrStmt::Return {
-                        value: Some(var("value", i32_ty.clone())),
-                        source_span: None,
-                    }],
-                    else_body: Vec::new(),
-                    source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(var("value", i32_ty)),
-                    source_span: None,
-                },
-            ],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "condition-call".to_string(),
-            source_commit: "1234567".to_string(),
-            function_name: "condition_call".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        assert!(result.plan.call_expressions.is_empty());
-        assert!(!result
-            .plan
-            .translation_rule_ids
-            .contains(&"bounded-call-expression".to_string()));
-    }
-
-    #[test]
-    fn clang_lowered_ir_records_for_statement_evidence_recursively() {
-        let i32_ty = signed_ty("int", "int", 32);
-        let function = IrFunction {
-            name: "for_evidence".to_string(),
-            return_type: i32_ty.clone(),
-            params: vec![param("limit", i32_ty.clone())],
-            body: vec![
-                IrStmt::Decl {
-                    name: "total".to_string(),
-                    ty: i32_ty.clone(),
-                    init: Some(var("limit", i32_ty.clone())),
-                    source_span: None,
-                },
-                IrStmt::For {
-                    init: vec![IrStmt::Decl {
-                        name: "i".to_string(),
-                        ty: i32_ty.clone(),
-                        init: Some(var("limit", i32_ty.clone())),
-                        source_span: None,
-                    }],
-                    condition: Some(IrExpr::Binary {
-                        op: IrBinOp::Lt,
-                        lhs: Box::new(var("i", i32_ty.clone())),
-                        rhs: Box::new(var("limit", i32_ty.clone())),
-                        ty: i32_ty.clone(),
-                        source_span: None,
-                    }),
-                    step: Some(Box::new(IrStmt::Assign {
-                        target: var("i", i32_ty.clone()),
-                        value: call(
-                            "step_helper",
-                            vec![var("i", i32_ty.clone())],
-                            i32_ty.clone(),
-                        ),
-                        source_span: None,
-                    })),
-                    body: vec![IrStmt::Decl {
-                        name: "next".to_string(),
-                        ty: i32_ty.clone(),
-                        init: Some(call(
-                            "body_helper",
-                            vec![var("total", i32_ty.clone())],
-                            i32_ty.clone(),
-                        )),
-                        source_span: None,
-                    }],
-                    source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(var("total", i32_ty.clone())),
-                    source_span: None,
-                },
-            ],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "for-evidence".to_string(),
-            source_commit: "1234567".to_string(),
-            function_name: "for_evidence".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        let block = &result.cfg.functions[0].blocks[0];
-        assert!(block.statement_kinds.contains(&"for".to_string()));
-        assert!(block.edges.contains(&"entry->for-1".to_string()));
-        assert!(result
-            .type_map
-            .mappings
-            .iter()
-            .any(|mapping| mapping.symbol == "i"));
-        assert!(result
-            .type_map
-            .mappings
-            .iter()
-            .any(|mapping| mapping.symbol == "next"));
-        assert_eq!(result.plan.call_expressions.len(), 2);
-        assert_eq!(
-            result.plan.call_expressions[0].source_expression,
-            "body_helper(total)"
-        );
-        assert_eq!(
-            result.plan.call_expressions[0].statement_context,
-            "declaration_initializer"
-        );
-        assert_eq!(
-            result.plan.call_expressions[1].source_expression,
-            "step_helper(i)"
-        );
-        assert_eq!(
-            result.plan.call_expressions[1].statement_context,
-            "assignment"
-        );
-    }
-
-    #[test]
-    fn clang_lowered_pointer_graph_does_not_infer_byte_cursor_from_buf_name_only() {
-        let u32_ty = unsigned_ty("uint32_t", "unsigned int", 32);
-        let usize_ty = unsigned_ty("size_t", "unsigned long", 64);
-        let const_void_ptr = pointer_ty("const void *", "const void *", void_ty(true), true);
-        let function = IrFunction {
-            name: "fdb_calc_crc32".to_string(),
-            return_type: u32_ty.clone(),
-            params: vec![
-                param("crc", u32_ty.clone()),
-                param("buf", const_void_ptr),
-                param("size", usize_ty),
-            ],
-            body: vec![IrStmt::Return {
-                value: Some(IrExpr::Var {
-                    name: "crc".to_string(),
-                    ty: u32_ty,
-                    source_span: None::<SourceSpan>,
-                }),
-                source_span: None,
-            }],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "flashdb".to_string(),
-            slice_id: "real-fdb-calc-crc32".to_string(),
-            source_commit: "93d1755".to_string(),
-            function_name: "fdb_calc_crc32".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        let buf = result
-            .pointer_graph
-            .nodes
-            .iter()
-            .find(|node| node.id == "buf")
-            .expect("buf pointer node");
-        assert!(buf.read_effects.is_empty(), "{:?}", buf.read_effects);
-        assert!(
-            !buf.boundary_decisions
-                .contains(&"byte_cursor_post_increment_read".to_string()),
-            "{:?}",
-            buf.boundary_decisions
-        );
-    }
-
-    #[test]
-    fn clang_lowered_pointer_graph_records_post_increment_deref_inside_member_base() {
-        let u32_ty = unsigned_ty("uint32_t", "unsigned int", 32);
-        let u8_ty = unsigned_ty("uint8_t", "unsigned char", 8);
-        let const_u8_ptr = pointer_ty(
-            "const uint8_t *",
-            "const unsigned char *",
-            u8_ty.clone(),
-            true,
-        );
-        let const_void_ptr = pointer_ty("const void *", "const void *", void_ty(true), true);
-        let function = IrFunction {
-            name: "member_cursor".to_string(),
-            return_type: u32_ty.clone(),
-            params: vec![param("buf", const_void_ptr.clone())],
-            body: vec![
-                IrStmt::Assign {
-                    target: var("cursor", const_u8_ptr.clone()),
-                    value: IrExpr::Cast {
-                        target: const_u8_ptr.clone(),
-                        expr: Box::new(var("buf", const_void_ptr)),
-                        implicit: false,
-                        source_span: None,
-                    },
-                    source_span: None,
-                },
-                IrStmt::Return {
-                    value: Some(IrExpr::Member {
-                        base: Box::new(IrExpr::Deref {
-                            ptr: Box::new(IrExpr::IncDec {
-                                target: Box::new(var("cursor", const_u8_ptr.clone())),
-                                op: IrIncDecOp::Inc,
-                                prefix: false,
-                                ty: const_u8_ptr,
-                                source_span: None,
-                            }),
-                            ty: record_ty("byte_record"),
-                            source_span: None,
-                        }),
-                        field: "value".to_string(),
-                        ty: u32_ty,
-                        is_arrow: false,
-                        source_span: None,
-                    }),
-                    source_span: None,
-                },
-            ],
-            source_span: None,
-        };
-        let spec = SliceSpec {
-            target_id: "demo".to_string(),
-            slice_id: "member-cursor".to_string(),
-            source_commit: "1234567".to_string(),
-            function_name: "member_cursor".to_string(),
-            build_profile: test_profile(),
-            ..SliceSpec::default()
-        };
-        let mut result = TranslationResult::default();
-
-        record_clang_lowered_ir_evidence(&spec, &function, &mut result);
-
-        let buf = result
-            .pointer_graph
-            .nodes
-            .iter()
-            .find(|node| node.id == "buf")
-            .expect("buf pointer node");
-        assert_eq!(buf.read_effects, vec!["*p++"]);
-        assert!(
-            buf.boundary_decisions
-                .contains(&"byte_cursor_post_increment_read".to_string()),
-            "{:?}",
-            buf.boundary_decisions
-        );
+fn push_rule_once(rules: &mut Vec<String>, rule: &str) {
+    if !rules.iter().any(|existing| existing == rule) {
+        rules.push(rule.to_string());
     }
 }

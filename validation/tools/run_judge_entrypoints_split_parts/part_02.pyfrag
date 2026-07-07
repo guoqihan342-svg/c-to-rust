@@ -1,0 +1,206 @@
+            "key_artifacts": dict(entry.get("expected_artifacts", {}))
+            if isinstance(entry.get("expected_artifacts"), dict)
+            else {},
+            "command": command,
+            "argv": [],
+            "effective_argv": [],
+            "timeout_seconds": timeout_seconds,
+            "timeout_policy": {
+                "scope": "entrypoint_command",
+                "timeout_seconds": timeout_seconds,
+                "timeout_exit_code": ENTRYPOINT_TIMEOUT_EXIT_CODE,
+            },
+            "exit_code": ENTRYPOINT_COMMAND_PARSE_EXIT_CODE,
+            "logs": {
+                "stdout": missing_artifact_ref(stdout_path, repo_root=repo_root),
+                "stderr": missing_artifact_ref(stderr_path, repo_root=repo_root),
+            },
+            "status": "failed",
+            "root_cause_key": "invalid_entrypoint_command",
+            "error": {"type": type(error).__name__, "message": str(error)},
+        }
+    effective_argv = argv if dry_run else resolve_local_entrypoint_argv(argv)
+    result = {
+        "id": entry_id,
+        "purpose": entry.get("purpose"),
+        "priority": entry.get("priority"),
+        "proof_class": entry.get("proof_class", "unknown"),
+        "run_id": entry.get("run_id", "unknown"),
+        "judge_focus": list(entry.get("judge_focus", [])) if isinstance(entry.get("judge_focus"), list) else [],
+        "key_artifacts": dict(entry.get("expected_artifacts", {})) if isinstance(entry.get("expected_artifacts"), dict) else {},
+        "command": command,
+        "argv": argv,
+        "effective_argv": effective_argv,
+        "timeout_seconds": timeout_seconds,
+        "timeout_policy": {
+            "scope": "entrypoint_command",
+            "timeout_seconds": timeout_seconds,
+            "timeout_exit_code": ENTRYPOINT_TIMEOUT_EXIT_CODE,
+        },
+        "exit_code": None if dry_run else 1,
+        "logs": {
+            "stdout": missing_artifact_ref(stdout_path, repo_root=repo_root) if dry_run else artifact_ref(stdout_path, repo_root=repo_root),
+            "stderr": missing_artifact_ref(stderr_path, repo_root=repo_root) if dry_run else artifact_ref(stderr_path, repo_root=repo_root),
+        },
+    }
+    if dry_run:
+        result["status"] = "planned"
+        return result
+
+    try:
+        completed = command_runner(effective_argv, cwd=repo_root, text=True, capture_output=True, timeout=timeout_seconds)
+    except Exception as error:
+        stdout_text = stream_text(getattr(error, "stdout", ""))
+        stderr_text = stream_text(getattr(error, "stderr", ""))
+        stderr_text += f"{type(error).__name__}: {error}\n"
+        atomic_write_text(stdout_path, stdout_text)
+        atomic_write_text(stderr_path, stderr_text)
+        result["exit_code"] = command_exception_exit_code(error)
+        result["status"] = "failed"
+        result["error"] = {"type": type(error).__name__, "message": str(error)}
+        if isinstance(error, subprocess.TimeoutExpired):
+            result["root_cause_key"] = "process_timeout"
+        result["logs"] = {
+            "stdout": artifact_ref(stdout_path, repo_root=repo_root),
+            "stderr": artifact_ref(stderr_path, repo_root=repo_root),
+        }
+        return result
+
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
+    result["exit_code"] = int(completed.returncode)
+    result["status"] = "passed" if completed.returncode == 0 else "failed"
+    result["logs"] = {
+        "stdout": artifact_ref(stdout_path, repo_root=repo_root),
+        "stderr": artifact_ref(stderr_path, repo_root=repo_root),
+    }
+    return result
+
+
+def resolve_local_entrypoint_argv(argv: list[str]) -> list[str]:
+    if len(argv) >= 2 and argv[0] == PORTABLE_PYTHON_COMMAND and argv[1] == "-B":
+        return [*portable_python_command_argv(), *argv[1:]]
+    return list(argv)
+
+
+def portable_python_command_argv() -> list[str]:
+    global _RESOLVED_PYTHON_COMMAND
+    override = os.environ.get(PYTHON_COMMAND_OVERRIDE_ENV)
+    if override:
+        return shlex.split(override, posix=os.name != "nt")
+    if _RESOLVED_PYTHON_COMMAND is not None:
+        return list(_RESOLVED_PYTHON_COMMAND)
+    candidates: list[list[str]] = [[PORTABLE_PYTHON_COMMAND], ["python"]]
+    if os.name == "nt":
+        candidates.append(["py", "-3"])
+    for candidate in candidates:
+        if python_command_is_runnable(candidate):
+            _RESOLVED_PYTHON_COMMAND = candidate
+            return list(candidate)
+    _RESOLVED_PYTHON_COMMAND = [PORTABLE_PYTHON_COMMAND]
+    return list(_RESOLVED_PYTHON_COMMAND)
+
+
+def python_command_is_runnable(candidate: list[str]) -> bool:
+    try:
+        completed = subprocess.run(
+            [*candidate, "-B", "-c", "import sys"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return int(completed.returncode) == 0
+
+
+def resolve_input_path(path: Path, *, repo_root: Path) -> Path:
+    if path.is_absolute():
+        resolved = path.resolve()
+        resolved.relative_to(repo_root.resolve())
+        return resolved
+    path_text = path.as_posix()
+    validator.assert_repo_relative_posix(path_text)
+    return validator.repo_path(path_text, repo_root=repo_root)
+
+
+def resolve_output_path(path: Path, *, repo_root: Path) -> Path:
+    if path.is_absolute():
+        resolved = path.resolve()
+        resolved.relative_to(repo_root.resolve())
+        return resolved
+    path_text = path.as_posix()
+    validator.assert_repo_relative_posix(path_text)
+    return validator.repo_path(path_text, repo_root=repo_root)
+
+
+def artifact_ref(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    ref = {
+        "path": validator.repo_relative(path, repo_root),
+        "status": "present" if path.is_file() else "missing",
+    }
+    if path.is_file():
+        ref["sha256"] = validator.sha256_file(path)
+    return ref
+
+
+def missing_artifact_ref(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    return {
+        "path": validator.repo_relative(path, repo_root),
+        "status": "missing",
+    }
+
+
+def invalid_config_ref(path: Path, error: BaseException) -> dict[str, Any]:
+    return {"path": path.name if path.is_absolute() else path.as_posix(), "status": "invalid", "error": str(error)}
+
+
+def stream_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as handle:
+            fd = None
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def command_exception_exit_code(error: Exception) -> int:
+    if isinstance(error, subprocess.TimeoutExpired):
+        return ENTRYPOINT_TIMEOUT_EXIT_CODE
+    if isinstance(error, OSError):
+        return 127
+    return 1
+
+
+def safe_file_component(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value.strip())
+    return safe or "entrypoint"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

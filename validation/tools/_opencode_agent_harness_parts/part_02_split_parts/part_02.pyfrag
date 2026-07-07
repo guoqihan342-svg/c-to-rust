@@ -1,0 +1,11 @@
+    context_refs: dict[str, dict[str, str]],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    report = load_json(batch_report_path)
+    report.update(context_refs)
+    architecture = report.get("judge_summary", {}).get("harness_architecture")
+    if isinstance(architecture, dict):
+        architecture["context_pack"] = context_refs["context_pack"]
+        architecture["agent_index"] = context_refs["agent_index"]
+    atomic_write_json(batch_report_path, report)
+    return artifact_ref(batch_report_path, repo_root=repo_root)

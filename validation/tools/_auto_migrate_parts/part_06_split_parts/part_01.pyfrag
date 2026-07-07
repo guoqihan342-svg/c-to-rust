@@ -1,3 +1,303 @@
+        },
+        "sanitizer_diagnostics": {
+            "sanitizer_status": c_boundary.get("sanitizer_status", build.get("sanitizer_status", "not_run")),
+            "diagnostic_status": "recorded" if diagnostics else "none_recorded",
+            "diagnostics": diagnostics,
+            "clang_type_extraction_available": clang_type.get("available") if isinstance(clang_type, dict) else None,
+        },
+        "ub_and_implementation_defined": {
+            "known_ub": list_of_strings(c_boundary.get("known_ub")),
+            "implementation_defined_behavior": list_of_strings(c_boundary.get("implementation_defined_behavior")),
+            "scalar_arithmetic_contract": c_boundary.get("scalar_arithmetic_contract", {}),
+        },
+        "platform_model": {
+            "hardware_dependencies": hardware_dependencies,
+            "rtos_dependencies": rtos_dependencies,
+            "volatile_dependencies": volatile_dependencies,
+            "hardware_dependency_status": dependency_status(platform, "hardware_dependency_status", hardware_dependencies),
+            "rtos_dependency_status": dependency_status(platform, "rtos_dependency_status", rtos_dependencies),
+            "volatile_dependency_status": dependency_status(platform, "volatile_dependency_status", volatile_dependencies),
+        },
+    }
+    if isinstance(accepted_case_count, int):
+        contract["fixture_representativeness"]["accepted_oracle_case_count"] = accepted_case_count
+    insufficient = oracle_boundary_insufficient_reasons(contract)
+    contract["status"] = "insufficient" if insufficient else "sufficient_for_semantic_pass"
+    contract["insufficient_reasons"] = insufficient
+    return contract
+
+
+def oracle_boundary_contract_sufficient(contract: Any) -> bool:
+    return isinstance(contract, dict) and contract.get("status") == "sufficient_for_semantic_pass"
+
+
+def dependency_status(platform: dict[str, Any], key: str, dependencies: list[str]) -> str:
+    status = platform.get(key)
+    if isinstance(status, str) and status:
+        return status
+    return "unmodeled" if dependencies else "not_applicable"
+
+
+def list_of_strings(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
+
+
+def oracle_boundary_insufficient_reasons(contract: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    if not contract.get("observable_outputs"):
+        reasons.append("observable_outputs_missing")
+    fixture = contract.get("fixture_representativeness", {})
+    declared_case_count = fixture.get("declared_case_count")
+    accepted_case_count = fixture.get("accepted_oracle_case_count")
+    if not positive_int_like(declared_case_count):
+        reasons.append("fixture_declared_case_count_missing")
+    if not positive_int_like(accepted_case_count):
+        reasons.append("fixture_accepted_oracle_case_count_missing")
+    if positive_int_like(declared_case_count) and positive_int_like(accepted_case_count):
+        if accepted_case_count < declared_case_count:
+            reasons.append("fixture_accepted_oracle_case_count_below_declared")
+    compiler = contract.get("compiler", {})
+    if missing_boundary_value(compiler.get("command_source")):
+        reasons.append("compiler_command_source_missing")
+    target = contract.get("target", {})
+    if missing_boundary_value(target.get("triple_or_abi")):
+        reasons.append("target_triple_or_abi_missing")
+    if missing_boundary_value(target.get("endianness")) or target.get("endianness") not in {"little", "big"}:
+        reasons.append("target_endianness_missing")
+    for key in ["int_width", "long_width", "pointer_width", "word_size_bits"]:
+        if missing_boundary_value(target.get(key)):
+            reasons.append(f"target_{key}_missing")
+        elif not positive_int_like(target.get(key)):
+            reasons.append(f"target_{key}_invalid")
+    for key in [
+        "char_width",
+        "short_width",
+        "long_long_width",
+        "int_align",
+        "char_align",
+        "short_align",
+        "long_align",
+        "long_long_align",
+        "pointer_align",
+    ]:
+        if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
+            reasons.append(f"target_{key}_invalid")
+    if (
+        not missing_boundary_value(target.get("plain_char_signed"))
+        and not isinstance(target.get("plain_char_signed"), bool)
+    ):
+        reasons.append("target_plain_char_signed_invalid")
+    sanitizer = contract.get("sanitizer_diagnostics", {})
+    if missing_boundary_value(sanitizer.get("sanitizer_status"), allow_not_run=True):
+        reasons.append("sanitizer_status_missing")
+    ub = contract.get("ub_and_implementation_defined", {})
+    if not isinstance(ub.get("known_ub"), list):
+        reasons.append("known_ub_boundary_missing")
+    if not isinstance(ub.get("implementation_defined_behavior"), list):
+        reasons.append("implementation_defined_boundary_missing")
+    platform = contract.get("platform_model", {})
+    for key in ["hardware_dependency_status", "rtos_dependency_status", "volatile_dependency_status"]:
+        if missing_boundary_value(platform.get(key)) or platform.get(key) == "unmodeled":
+            reasons.append(f"platform_{key}_missing")
+    return reasons
+
+
+def missing_boundary_value(value: Any, allow_not_run: bool = False) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        if allow_not_run and value == "not_run":
+            return False
+        return value.strip() in {"", "unknown", "not_recorded", "missing"}
+    return False
+
+
+def positive_int_like(value: Any) -> bool:
+    return isinstance(value, int) and value > 0
+
+
+def accepted_metadata_differences(spec: dict[str, Any]) -> list[str]:
+    boundary = spec.get("claim_boundary", {})
+    values = spec.get("accepted_metadata_differences") or boundary.get("accepted_metadata_differences") or []
+    return [str(item) for item in values]
+
+
+def non_goals(spec: dict[str, Any]) -> list[str]:
+    boundary = spec.get("claim_boundary", {})
+    values = spec.get("non_goals") or boundary.get("non_goals") or []
+    return [str(item) for item in values]
+
+
+def must_not_claim(spec: dict[str, Any]) -> list[str]:
+    boundary = spec.get("claim_boundary", {})
+    values = boundary.get("must_not_claim") or []
+    return [str(item) for item in values]
+
+
+def defines_to_object(defines: list[Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for item in defines:
+        text = str(item)
+        if "=" in text:
+            key, value = text.split("=", 1)
+            result[key] = value
+        else:
+            result[text] = True
+    if not result:
+        result["none"] = True
+    return result
+
+
+def lvalue_decisions(statements: list[str], lvalue_kinds: list[str]) -> list[dict[str, Any]]:
+    decisions: list[dict[str, Any]] = []
+    for index, kind in enumerate(lvalue_kinds):
+        if kind == "none":
+            continue
+        decision = lvalue_decision_for_kind(kind)
+        decisions.append(
+            {
+                "statement_index": index,
+                "source_statement": statements[index] if index < len(statements) else "",
+                "lvalue_kind": kind,
+                "decision": decision,
+                "translation_rule_id": lvalue_translation_rule(kind),
+                "source_span": source_span(),
+            }
+        )
+    return decisions
+
+
+def cfg_basic_blocks(raw_blocks: list[Any]) -> list[dict[str, Any]]:
+    if not raw_blocks:
+        return [
+            {
+                "id": "entry",
+                "kind": "entry",
+                "statements": [],
+                "statement_kinds": [],
+                "lvalue_kinds": [],
+                "lvalue_decisions": [],
+                "source_span": source_span(),
+            }
+        ]
+    blocks: list[dict[str, Any]] = []
+    for index, raw_block in enumerate(raw_blocks):
+        if not isinstance(raw_block, dict):
+            continue
+        block_id = str(raw_block.get("id") or ("entry" if index == 0 else f"block-{index}"))
+        statements = [str(item) for item in raw_block.get("statements", [])]
+        statement_kinds = [str(item) for item in raw_block.get("statement_kinds", [])]
+        lvalue_kinds = [str(item) for item in raw_block.get("lvalue_kinds", [])]
+        blocks.append(
+            {
+                "id": block_id,
+                "kind": cfg_block_kind(block_id, str(raw_block.get("terminator", "")), index),
+                "statements": statements,
+                "statement_kinds": statement_kinds,
+                "lvalue_kinds": lvalue_kinds,
+                "lvalue_decisions": lvalue_decisions(statements, lvalue_kinds),
+                "terminator": str(raw_block.get("terminator", "")),
+                "source_span": source_span(),
+            }
+        )
+    return blocks
+
+
+def cfg_block_kind(block_id: str, terminator: str, index: int) -> str:
+    if block_id == "entry" or index == 0:
+        return "entry"
+    if terminator.startswith("unsupported_"):
+        return "unsupported"
+    if terminator == "return":
+        return "return"
+    if terminator in {"if", "switch"}:
+        return "branch"
+    if terminator in {"while", "for"}:
+        return "loop_header"
+    return "body"
+
+
+def cfg_edges(raw_blocks: list[Any]) -> list[dict[str, Any]]:
+    edges: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for raw_block in raw_blocks:
+        if not isinstance(raw_block, dict):
+            continue
+        for raw_edge in raw_block.get("edges", []):
+            edge = cfg_edge_from_raw(str(raw_edge))
+            if edge is None:
+                continue
+            key = (edge["from"], edge["to"], edge["kind"])
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append(edge)
+    if not edges:
+        edges.append({"from": "entry", "to": "return", "kind": "return", "source_span": source_span()})
+    return edges
+
+
+def cfg_edge_from_raw(raw_edge: str) -> dict[str, Any] | None:
+    if "->" not in raw_edge:
+        return None
+    from_block, to_block = [part.strip() for part in raw_edge.split("->", 1)]
+    if not from_block or not to_block:
+        return None
+    return {
+        "from": from_block,
+        "to": to_block,
+        "kind": cfg_edge_kind(from_block, to_block),
+        "source_span": source_span(),
+    }
+
+
+def cfg_edge_kind(from_block: str, to_block: str) -> str:
+    if to_block.startswith("return"):
+        return "return"
+    if from_block.startswith("goto-") or to_block.startswith(("goto-", "label-", "switch-", "case-", "default")):
+        return "unsupported"
+    return "unsupported"
+
+
+def lvalue_decision_for_kind(kind: str) -> str:
+    return {
+        "simple_identifier": "value_assignment",
+        "pointer_field": "safe_wrapper",
+        "deref_identifier": "safe_wrapper",
+        "bounded_pointer_index": "bounded_pointer_index",
+        "bounded_input_buffer": "bounded_input_buffer",
+        "bounded_pointer_arithmetic_input_buffer": "bounded_pointer_arithmetic_input_read",
+        "bounded_pointer_arithmetic_output_buffer": "bounded_pointer_arithmetic_output_write",
+        "unsupported_lvalue": "unsupported_lvalue",
+    }.get(kind, "unknown")
+
+
+def lvalue_translation_rule(kind: str) -> str:
+    return {
+        "simple_identifier": "assignment",
+        "pointer_field": "pointer-field-write",
+        "deref_identifier": "pointer-deref-write",
+        "bounded_pointer_index": "bounded-pointer-index-write",
+        "bounded_input_buffer": "bounded-input-buffer-read",
+        "bounded_pointer_arithmetic_input_buffer": "bounded-pointer-arithmetic-input-read",
+        "bounded_pointer_arithmetic_output_buffer": "bounded-pointer-arithmetic-output-write",
+        "unsupported_lvalue": "unsupported-lvalue-block",
+    }.get(kind, "unknown-lvalue")
+
+
+def pointer_decisions(pointer_nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    decisions: list[dict[str, Any]] = []
+    for node in pointer_nodes:
+        for decision in node.get("boundary_decisions", []):
+            decisions.append(
+                {
+                    "id": f"pointer-decision-{len(decisions) + 1}",
+                    "pointer_node": node.get("id", ""),
+                    "source_statement": pointer_decision_source_statement(node),
                     "lvalue_kind": pointer_decision_lvalue_kind(decision),
                     "decision": decision,
                     "reason": "bounded translator pointer/lvalue decision",
@@ -198,206 +498,3 @@ def cache_identity(
         "oracle_boundary_contract_identity": oracle_boundary_contract_identity(validation_profile),
         "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
         "route_decision_identity": artifact_cache_identity(route_decision),
-        "validation_profile_identity": artifact_cache_identity(validation_profile),
-        "global_dependency_identity": {
-            "sha256": sha256_json(global_dependency_requirements(spec)),
-            "count": len(global_dependency_requirements(spec)),
-            "names": [item["name"] for item in global_dependency_requirements(spec)],
-        },
-        "c_oracle_harness_identity": oracle_harness_identity(oracle),
-    }
-    if effective_emit_clang_lowering_report:
-        identity["translator_feature_set"] = translator_feature_set(
-            emit_clang_dry_run=emit_clang_dry_run,
-            emit_clang_lowering_report=effective_emit_clang_lowering_report,
-        )
-        identity["clang_lowering_identity"] = clang_lowering_identity(
-            environment=environment,
-            competition_clang_lane=competition_clang_lane,
-        )
-    return identity
-
-
-def competition_environment_identity() -> dict[str, str]:
-    profile = read_json(COMPETITION_ENVIRONMENT_PROFILE)
-    return {
-        "profile_id": str(profile.get("profile_id", "unknown")),
-        "path": rel(COMPETITION_ENVIRONMENT_PROFILE),
-        "sha256": sha256(COMPETITION_ENVIRONMENT_PROFILE),
-    }
-
-
-LOCAL_CLANG_CANDIDATES = (
-    "tools/llvm/bin/clang",
-    "tools/llvm/bin/clang-18",
-    "tools/clang/bin/clang",
-    "tools/llvm/bin/clang.exe",
-    "tools/llvm/bin/clang-18.exe",
-    "tools/clang/bin/clang.exe",
-)
-
-
-def resolve_competition_clang_path(
-    *, environment: dict[str, str] | None = None, repo_root: Path = REPO_ROOT
-) -> tuple[str, str] | None:
-    env = os.environ if environment is None else environment
-    clang_path = str(env.get("CLANG_PATH", "")).strip()
-    if clang_path:
-        return clang_path, "CLANG_PATH"
-    for candidate in LOCAL_CLANG_CANDIDATES:
-        path = repo_root / candidate
-        if path.exists():
-            return rel(path) if repo_root == REPO_ROOT else candidate, f"vendored:{candidate}"
-    return None
-
-
-def require_competition_clang_lane(*, environment: dict[str, str] | None = None) -> None:
-    if resolve_competition_clang_path(environment=environment) is not None:
-        return
-    raise SystemExit(
-        "competition clang lane requires CLANG_PATH or a project-local clang binary under "
-        "tools/llvm/bin/ or tools/clang/bin/; omit --competition-clang-lane to keep the "
-        "diagnostic/fail-closed non-clang lane."
-    )
-
-
-def clang_lowering_identity(
-    *, environment: dict[str, str] | None = None, competition_clang_lane: bool = False
-) -> dict[str, Any]:
-    env = os.environ if environment is None else environment
-    resolved_clang = resolve_competition_clang_path(environment=env)
-    clang_path = resolved_clang[0] if resolved_clang else ""
-    libclang_path = str(env.get("LIBCLANG_PATH", "")).strip()
-    clang_path_status = "configured" if clang_path else "not_configured"
-    libclang_path_status = "configured" if libclang_path else "not_configured"
-    if clang_path:
-        clang_version = command_version([clang_path, "--version"])
-    else:
-        clang_version = "not_configured"
-    identity = {
-        "enabled": True,
-        "frontend": "clang_ast_dump_json",
-        "command": "clang -Xclang -ast-dump=json -fsyntax-only",
-        "features": ["clang-lowering-report"],
-        "requires_env": ["CLANG_PATH"],
-        "clang_path_status": clang_path_status,
-        "clang_path": clang_path,
-        "ignored_env_for_ast_dump": {
-            "LIBCLANG_PATH": {
-                "status": libclang_path_status,
-                "value": libclang_path,
-                "reason": "ignored_for_ast_dump",
-            }
-        },
-        "clang_version": clang_version,
-    }
-    if competition_clang_lane:
-        identity.update(
-            {
-                "lane": "competition-clang-lane",
-                "required": True,
-                "requires_env": ["CLANG_PATH"],
-                "ignored_env_for_ast_dump": identity["ignored_env_for_ast_dump"],
-            }
-        )
-    return identity
-
-
-def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:
-    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
-    pointer_nodes = pointer_nodes_from_pointer_contract(pointer_contract)
-    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
-    return {
-        "decision": gate["summary"]["decision"],
-        "risk_count": gate["summary"].get("risk_count", 0),
-        "risk_level": gate["summary"]["risk_level"],
-        "aliasing_proven": bool(pointer_contract.get("aliasing_proven", False)),
-        "requires_noalias": bool(gate["summary"]["requires_noalias"]),
-        "precondition_count": len(gate["safe_boundary_preconditions"]),
-        "alias_set_count": len(gate["alias_sets"]),
-    }
-
-
-def effect_graph_identity(spec: dict[str, Any]) -> dict[str, Any]:
-    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
-    pointer_nodes = pointer_nodes_from_pointer_contract(pointer_contract)
-    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
-    graph = effect_graph_from_pointer_nodes(pointer_nodes, gate)
-    summary = graph["summary"]
-    return {
-        "schema_version": POINTER_GRAPH_SCHEMA_VERSION,
-        "sha256": sha256_json(graph),
-        "read_effect_count": summary["read_count"],
-        "write_effect_count": summary["write_count"],
-        "read_nodes": summary["reads"],
-        "write_nodes": summary["writes"],
-        "alias_sensitive": summary["alias_sensitive"],
-        "alias_gate_decision": summary["alias_gate_decision"],
-    }
-
-
-def pointer_nodes_from_pointer_contract(pointer_contract: dict[str, Any]) -> list[dict[str, Any]]:
-    pointer_nodes = []
-    for item in pointer_contract.get("input_buffers", []):
-        pointer_nodes.append(
-            {
-                "id": str(item.get("name", "")),
-                "read_effects": item.get("read_effects", []),
-                "write_effects": item.get("write_effects", []),
-            }
-        )
-    for item in pointer_contract.get("output_pointers", []):
-        pointer_nodes.append(
-            {
-                "id": str(item.get("name", "")),
-                "read_effects": item.get("read_effects", []),
-                "write_effects": item.get("write_effects", []),
-            }
-        )
-    for item in pointer_contract.get("inout_pointers", []):
-        pointer_nodes.append(
-            {
-                "id": str(item.get("name", "")),
-                "read_effects": item.get("read_effects", []),
-                "write_effects": item.get("write_effects", []),
-            }
-        )
-    return pointer_nodes
-
-
-def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
-    fields = cache_drift_input_fields(previous, current)
-    drifted_keys = [
-        key for key in fields if previous.get(key) != current.get(key)
-    ]
-    if not drifted_keys:
-        return {
-            "schema_version": 1,
-            "status": "reusable",
-            "reuse_allowed": True,
-            "drifted_keys": [],
-            "invalidated_artifacts": [],
-        }
-    return {
-        "schema_version": 1,
-        "status": "drift_detected",
-        "reuse_allowed": False,
-        "drifted_keys": drifted_keys,
-        "invalidated_artifacts": CACHE_INVALIDATED_ARTIFACTS,
-        "required_action": "regenerate artifacts or attach explicit evidence review before reuse",
-    }
-
-
-def cache_drift_input_fields(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
-    fields: list[str] = []
-    for source in (
-        CACHE_INPUT_FIELDS,
-        previous.get("cache_input_fields", []),
-        current.get("cache_input_fields", []),
-    ):
-        if not isinstance(source, list):
-            continue
-        for field in source:
-            if isinstance(field, str) and field not in fields:
-                fields.append(field)
-    return fields

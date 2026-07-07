@@ -1,3 +1,303 @@
+        )
+    require_hash_bound_ref(summary.get("preflight_report"), f"{label}.preflight_report")
+    logs = summary.get("model_probe_logs")
+    require(isinstance(logs, dict), f"{label}.model_probe_logs must be an object")
+    require_hash_bound_ref(logs.get("stdout"), f"{label}.model_probe_logs.stdout")
+    require_hash_bound_ref(logs.get("stderr"), f"{label}.model_probe_logs.stderr")
+    require(isinstance(summary.get("boundary"), str) and bool(summary.get("boundary")), f"{label}.boundary must be present")
+
+
+def require_hash_bound_ref(ref: Any, label: str) -> None:
+    require(isinstance(ref, dict), f"{label} must be an object")
+    path = ref.get("path")
+    require(isinstance(path, str) and bool(path), f"{label}.path must be present")
+    require("\\" not in path, f"{label}.path must be POSIX relative")
+    require(not path.startswith("/") and not (len(path) >= 2 and path[1] == ":"), f"{label}.path must be repo-relative")
+    require(".." not in path.split("/"), f"{label}.path must not contain parent traversal")
+    sha = ref.get("sha256")
+    require(
+        isinstance(sha, str) and len(sha) == 64 and all(char in "0123456789abcdefABCDEF" for char in sha),
+        f"{label}.sha256 must be a sha256",
+    )
+    status = ref.get("status")
+    require(isinstance(status, str) and bool(status), f"{label}.status must be present")
+
+
+def require_opencode_evidence_policy_contract(bundle: dict[str, Any]) -> None:
+    policy = bundle.get("opencode_evidence_policy")
+    require(isinstance(policy, dict), "opencode_evidence_policy must be an object")
+    require_true_value(policy.get("boundary_fields_explicit"), "opencode_evidence_policy.boundary_fields_explicit")
+    require_true_value(policy.get("chat_output_is_evidence_false"), "opencode_evidence_policy.chat_output_is_evidence_false")
+    require_true_value(policy.get("semantic_gate_false"), "opencode_evidence_policy.semantic_gate_false")
+    require_false_value(policy.get("semantic_gate"), "opencode_evidence_policy.semantic_gate")
+
+
+def require_evidence_cost_retention_contract(bundle: dict[str, Any]) -> None:
+    evidence_cost = bundle.get("evidence_cost_retention")
+    require(isinstance(evidence_cost, dict), "evidence_cost_retention must be an object")
+    require(
+        evidence_cost.get("report_kind") == "evidence-cost-retention-rollup",
+        "evidence_cost_retention.report_kind must be evidence-cost-retention-rollup",
+    )
+    require(isinstance(evidence_cost.get("sources"), list), "evidence_cost_retention.sources must be an array")
+    require(
+        isinstance(evidence_cost.get("boundary"), str) and bool(evidence_cost.get("boundary")),
+        "evidence_cost_retention.boundary must be present",
+    )
+    rollup = evidence_cost.get("rollup")
+    require(isinstance(rollup, dict), "evidence_cost_retention.rollup must be an object")
+    for key in ["source_count", "artifact_count", "total_bytes", "pipeline_count", "portability_issue_count"]:
+        require_non_negative_int(rollup.get(key), f"evidence_cost_retention.rollup.{key}")
+    if "diagnostic_host_metadata_count" in rollup:
+        require_non_negative_int(
+            rollup.get("diagnostic_host_metadata_count"),
+            "evidence_cost_retention.rollup.diagnostic_host_metadata_count",
+        )
+    require(isinstance(rollup.get("all_sources_passed"), bool), "evidence_cost_retention.rollup.all_sources_passed must be boolean")
+
+    runtime = rollup.get("runtime_ms")
+    require(isinstance(runtime, dict), "evidence_cost_retention.rollup.runtime_ms must be an object")
+    for key in ["observation_count", "total", "max"]:
+        require_non_negative_int(runtime.get(key), f"evidence_cost_retention.rollup.runtime_ms.{key}")
+
+    retention_classes = rollup.get("retention_classes")
+    require(isinstance(retention_classes, dict), "evidence_cost_retention.rollup.retention_classes must be an object")
+    for name, retention_class in retention_classes.items():
+        require(isinstance(retention_class, dict), f"evidence_cost_retention.rollup.retention_classes.{name} must be an object")
+        require_non_negative_int(
+            retention_class.get("file_count"),
+            f"evidence_cost_retention.rollup.retention_classes.{name}.file_count",
+        )
+        require_non_negative_int(
+            retention_class.get("total_bytes"),
+            f"evidence_cost_retention.rollup.retention_classes.{name}.total_bytes",
+        )
+
+    policy = rollup.get("policy_compliance")
+    require(isinstance(policy, dict), "evidence_cost_retention.rollup.policy_compliance must be an object")
+    require(
+        isinstance(policy.get("all_sources_policy_passed"), bool),
+        "evidence_cost_retention.rollup.policy_compliance.all_sources_policy_passed must be boolean",
+    )
+    for key in ["tier_counts", "failed_gate_counts"]:
+        value = policy.get(key)
+        require(isinstance(value, dict), f"evidence_cost_retention.rollup.policy_compliance.{key} must be an object")
+        for name, count in value.items():
+            require_non_negative_int(count, f"evidence_cost_retention.rollup.policy_compliance.{key}.{name}")
+
+
+def require_false_field(
+    payload: dict[str, Any],
+    section: str,
+    key: str,
+    *,
+    optional: bool = False,
+    prefix: str | None = None,
+) -> None:
+    container = payload.get(section)
+    if container is None and optional:
+        return
+    require(isinstance(container, dict), f"{section} must be an object")
+    if key not in container and optional:
+        return
+    require_false_value(container.get(key), dotted_path(prefix, section, key))
+
+
+def require_zero_field(
+    payload: dict[str, Any],
+    section: str,
+    key: str,
+    *,
+    optional: bool = False,
+    prefix: str | None = None,
+) -> None:
+    container = payload.get(section)
+    if container is None and optional:
+        return
+    require(isinstance(container, dict), f"{section} must be an object")
+    if key not in container and optional:
+        return
+    require_zero_value(container.get(key), dotted_path(prefix, section, key))
+
+
+def dotted_path(prefix: str | None, section: str, key: str) -> str:
+    return ".".join(part for part in [prefix, section, key] if part)
+
+
+def require_false_value(value: Any, field: str) -> None:
+    require(value is False, f"{field} must be false")
+
+
+def require_zero_value(value: Any, field: str) -> None:
+    require(value == 0, f"{field} must be 0")
+
+
+def require_true_value(value: Any, field: str) -> None:
+    require(value is True, f"{field} must be true")
+
+
+def require_non_negative_int(value: Any, field: str) -> None:
+    require(isinstance(value, int) and not isinstance(value, bool) and value >= 0, f"{field} must be a non-negative integer")
+
+
+def require(condition: Any, message: str) -> None:
+    if not condition:
+        raise SystemExit(message)
+
+
+def architecture_lines(architecture: dict[str, Any], workflow: dict[str, Any]) -> list[str]:
+    rollup = object_or_empty(architecture.get("rollup"))
+    workflow_rollup = object_or_empty(workflow.get("rollup"))
+    repair = object_or_empty(workflow_rollup.get("repair_activity"))
+    return [
+        f"- Entrypoint sources: `{int_text(rollup.get('source_count'))}`",
+        f"- Worker count: `{int_text(rollup.get('worker_count'))}`",
+        f"- Repair round cap: `{int_text(rollup.get('repair_round_cap'))}`",
+        f"- Roles: `{', '.join(string_list(rollup.get('roles'))) or 'unknown'}`",
+        f"- Repair histories: `{int_text(repair.get('repair_history_unit_count'))}`; auto-recovered units: `{int_text(repair.get('auto_recovered_unit_count'))}`",
+    ]
+
+
+def evidence_cost_retention_lines(evidence_cost: dict[str, Any]) -> list[str]:
+    rollup = object_or_empty(evidence_cost.get("rollup"))
+    runtime = object_or_empty(rollup.get("runtime_ms"))
+    policy = object_or_empty(rollup.get("policy_compliance"))
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Source count | {int_text(rollup.get('source_count'))} |",
+        f"| Artifact count | {int_text(rollup.get('artifact_count'))} |",
+        f"| Total bytes | {int_text(rollup.get('total_bytes'))} |",
+        f"| Pipeline count | {int_text(rollup.get('pipeline_count'))} |",
+        f"| Runtime observations | {int_text(runtime.get('observation_count'))} |",
+        f"| Runtime total ms | {int_text(runtime.get('total'))} |",
+        f"| Runtime max ms | {int_text(runtime.get('max'))} |",
+        f"| Retention classes | {retention_class_text(rollup.get('retention_classes'))} |",
+        f"| All sources passed | {bool_text(rollup.get('all_sources_passed'))} |",
+        f"| Policy compliant | {bool_text(policy.get('all_sources_policy_passed'))} |",
+        f"| Policy tiers | {count_map_text(policy.get('tier_counts'))} |",
+        f"| Policy failed gates | {count_map_text(policy.get('failed_gate_counts'))} |",
+        f"| Portability issues | {int_text(rollup.get('portability_issue_count'))} |",
+        f"| Diagnostic host metadata | {int_text(rollup.get('diagnostic_host_metadata_count'))} |",
+    ]
+
+
+def opencode_preflight_lines(summary: dict[str, Any]) -> list[str]:
+    return [
+        "| Check | Value |",
+        "| --- | --- |",
+        f"| Status | {text(summary.get('status'), 'unknown')} |",
+        f"| OpenCode command | {text(summary.get('opencode_command'), 'unknown')} |",
+        f"| OpenCode agent | {text(summary.get('opencode_agent'), 'unknown')} |",
+        f"| OpenCode variant | {text(summary.get('opencode_variant'), 'unknown')} |",
+        f"| Required model | {text(summary.get('required_model'), 'unknown')} |",
+        f"| Runtime model | {text(summary.get('opencode_model'), 'unknown')} |",
+        f"| Model availability | {text(summary.get('model_availability_status'), 'unknown')} |",
+        f"| Model listed by `opencode models` | {bool_text(summary.get('model_listed'))} |",
+        f"| Model probe argv | `{command_text(summary.get('model_probe_argv'))}` |",
+        f"| Model probe return code | {int_text(summary.get('process_returncode'))} |",
+        f"| Preflight contract | {text(summary.get('contract_status'), 'unknown')} |",
+        f"| Marker exists | {bool_text(summary.get('marker_exists'))} |",
+        f"| OpenCode run launched | {bool_text(summary.get('opencode_run_launched'))} |",
+        f"| OpenCode run argv bound | {bool_text(summary.get('opencode_run_argv_bound'))} |",
+        f"| Proof class | {text(summary.get('proof_class'), 'unknown')} |",
+        f"| Chat output is evidence | {bool_text(summary.get('chat_output_is_evidence'))} |",
+        f"| Semantic gate | {bool_text(summary.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(summary.get('translation_coverage_numerator'))} |",
+    ]
+
+
+def self_heal_classification_lines(classification: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(classification.get('status'), 'unknown')} |",
+        f"| Blocked repairs | {int_text(classification.get('blocked_repair_count'))} |",
+        f"| Human action required | {int_text(classification.get('human_action_required_count'))} |",
+        f"| Status counts | {count_map_text(classification.get('status_counts'))} |",
+        f"| Blocked reasons | {count_map_text(classification.get('blocked_reason_counts'))} |",
+        f"| IR feature gaps | {count_map_text(classification.get('ir_feature_gap_kinds'))} |",
+        f"| Forbidden changes | {count_map_text(classification.get('forbidden_change_counts'))} |",
+        f"| Source span kinds | {count_map_text(classification.get('source_span_kind_counts'))} |",
+        f"| Routes | {count_map_text(classification.get('route_counts'))} |",
+        f"| Next actions | {count_map_text(classification.get('next_action_counts'))} |",
+        f"| Smallest next tests | {count_map_text(classification.get('smallest_next_test_kind_counts'))} |",
+        f"| Next action samples | {int_text(classification.get('next_action_count'))} |",
+        f"| Sample next-action limit | {int_text(classification.get('sample_next_action_limit'))} |",
+        f"| Semantic gate | {bool_text(classification.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(classification.get('translation_coverage_numerator'))} |",
+    ]
+
+
+def progress_delta_lines(progress_delta: dict[str, Any]) -> list[str]:
+    capability = object_or_empty(progress_delta.get("capability_delta"))
+    governance = object_or_empty(progress_delta.get("governance_delta"))
+    workflow = object_or_empty(progress_delta.get("workflow_delta"))
+    return [
+        "| Metric | Value |",
+        "| --- | ---: |",
+        f"| Capability delta count | {int_text(capability.get('delta_count'))} |",
+        f"| Governance delta count | {int_text(governance.get('delta_count'))} |",
+        f"| Verification commands | {int_text(governance.get('verification_command_count'))} |",
+        f"| Route decision artifacts | {int_text(governance.get('route_decision_artifacts'))} |",
+        f"| Workflow units converged | {int_text(workflow.get('workflow_units_converged'))} / {int_text(workflow.get('workflow_units_total'))} |",
+        f"| Repair-history units | {int_text(workflow.get('repair_history_unit_count'))} |",
+        f"| Observed repair units | {int_text(workflow.get('observed_repair_unit_count'))} |",
+        f"| Auto-recovered units | {int_text(workflow.get('auto_recovered_unit_count'))} |",
+        f"| Rollback evidence count | {int_text(workflow.get('rollback_evidence_count'))} |",
+        f"| Before/after repair sources | {int_text(workflow.get('before_after_repair_source_count'))} |",
+        f"| Repair delta sources | {int_text(workflow.get('repair_delta_source_count'))} |",
+    ]
+
+
+def packet_index_lines(publication: dict[str, Any]) -> list[str]:
+    rows = [
+        packet_index_row("Judge config", object_or_empty(publication.get("judge_config"))),
+        packet_index_row(
+            "Competition config archive",
+            object_or_empty(object_or_empty(publication.get("competition_config_archive")).get("bundle_manifest")),
+        ),
+        packet_index_row("Judge run report", object_or_empty(publication.get("judge_entrypoints_run_report"))),
+        packet_index_row("Readiness report", object_or_empty(publication.get("readiness_report"))),
+        packet_index_row("Judge milestone bundle", object_or_empty(publication.get("judge_milestone_bundle"))),
+    ]
+    highlighted_refs = [
+        ref
+        for ref in publication.get("published_artifact_refs", [])
+        if isinstance(ref, dict)
+        and ref.get("artifact_name")
+        in {"resume_manifest", "judge_evidence_index", "context_pack", "agent_index"}
+    ]
+    for ref in highlighted_refs:
+        rows.append(packet_index_row(str(ref.get("artifact_name")), ref))
+    return [
+        "| Artifact | Path | SHA/status | Role status |",
+        "| --- | --- | --- | --- |",
+        *rows,
+    ]
+
+
+def packet_index_row(label: str, ref: dict[str, Any]) -> str:
+    path = text(ref.get("path"), "unknown")
+    sha_or_boundary = short_sha_or_boundary(ref)
+    status = text(ref.get("status"), "unknown")
+    return f"| {label} | {path} | {sha_or_boundary} | {status} |"
+
+
+def competition_config_archive_lines(archive: dict[str, Any]) -> list[str]:
+    lines = [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(archive.get('status'), 'unknown')} |",
+        f"| Root | {text(archive.get('root'), 'unknown')} |",
+        f"| Config files | {int_text(archive.get('file_count'))} |",
+        f"| External refs | {int_text(archive.get('external_ref_count'))} |",
+        "",
+        "| Role | Path | SHA/status | Status |",
+        "| --- | --- | --- | --- |",
+    ]
+    external_refs = object_or_empty(archive.get("external_refs"))
+    if not external_refs:
         lines.append("| none | none | missing | unknown |")
         return lines
     for path in sorted(external_refs):
@@ -198,69 +498,3 @@ def bool_text(value: Any) -> str:
 def command_text(value: Any) -> str:
     if isinstance(value, list) and all(isinstance(item, str) for item in value):
         return " ".join(value)
-    return text(value, "unknown")
-
-
-def string_list_text(value: Any) -> str:
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return ", ".join(value) if value else "none"
-    return "unknown"
-
-
-def int_text(value: Any) -> str:
-    if isinstance(value, bool):
-        return str(int(value))
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return str(value)
-    return "0"
-
-
-def count_map_text(value: Any) -> str:
-    if not isinstance(value, dict) or not value:
-        return "none"
-    parts = []
-    for key in sorted(value):
-        count = value.get(key)
-        if isinstance(count, bool):
-            count_text = str(int(count))
-        elif isinstance(count, (int, float)):
-            count_text = str(int(count))
-        else:
-            count_text = "0"
-        parts.append(f"`{key}`: {count_text}")
-    return ", ".join(parts)
-
-
-def retention_class_text(value: Any) -> str:
-    if not isinstance(value, dict) or not value:
-        return "none"
-    parts = []
-    for key in sorted(value):
-        retention_class = object_or_empty(value.get(key))
-        parts.append(
-            f"`{key}`: {int_text(retention_class.get('file_count'))} files / "
-            f"{int_text(retention_class.get('total_bytes'))} bytes"
-        )
-    return ", ".join(parts)
-
-
-def text(value: Any, default: str) -> str:
-    if isinstance(value, str) and value:
-        return value
-    if isinstance(value, (int, float, bool)):
-        return str(value).lower() if isinstance(value, bool) else str(value)
-    return default
-
-
-def object_or_empty(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def string_list(value: Any) -> list[str]:
-    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

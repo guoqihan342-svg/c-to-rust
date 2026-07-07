@@ -1,0 +1,500 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from validation.tools import milestone_release_report
+
+
+class MilestoneReleaseReportTests(unittest.TestCase):
+    def test_report_promotes_capability_ledger_without_semantic_claim_expansion(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertEqual(report["status"], "internal_preview")
+            self.assertEqual(report["metrics"]["capability_delta_ledger"]["ledger_count"], 1)
+            self.assertEqual(report["metrics"]["capability_delta_ledger"]["translator_generated_semantic_pass_count"], 0)
+            self.assertEqual(report["metrics"]["capability_delta_ledger"]["semantic_pass_count"], 0)
+            self.assertEqual(report["metrics"]["capability_delta_ledger"]["accepted_evidence_semantic_pass_count"], 0)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["metrics"]["candidate_classification"]["refused_delta_count"], 1)
+            self.assertEqual(report["metrics"]["candidate_classification"]["generated_candidate_delta_count"], 0)
+            self.assertEqual(report["metrics"]["candidate_classification"]["semantic_pass_delta_count"], 0)
+            self.assertFalse(report["metrics"]["native_build_catalogue_included_in_translation_coverage"])
+            self.assertFalse(report["metrics"]["handwritten_reference_included_in_translation_coverage"])
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+            self.assertIn("not semantic acceptance evidence", report["claim_boundary"])
+            self.assertIn("capability_delta_ledger", report["release_note_inputs"])
+
+    def test_report_classifies_generated_candidates_without_counting_them_as_acceptance(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {
+                "generated": 2,
+                "refused": 1,
+            }
+            payload["capability_delta_ledger"]["route_levels"] = {"L2": 2, "L4": 1}
+            payload["capability_delta_ledger"]["route_statuses"] = {"candidate": 2, "refused": 1}
+            payload["capability_delta_ledger"]["delta_count"] = 3
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            classes = report["metrics"]["candidate_classification"]
+            self.assertEqual(classes["generated_candidate_delta_count"], 2)
+            self.assertEqual(classes["refused_delta_count"], 1)
+            self.assertEqual(classes["semantic_pass_delta_count"], 0)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_exposes_accepted_evidence_without_translation_numerator(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["accepted_evidence_semantic_pass_count"] = 1
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertEqual(report["metrics"]["accepted_evidence_semantic_pass_count"], 1)
+            self.assertEqual(report["metrics"]["capability_delta_ledger"]["accepted_evidence_semantic_pass_count"], 1)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_summarizes_bound_s2_workflow_metrics_without_semantic_expansion(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            self._write_competition_summary_with_metrics(summary_path, self._measured_workflow_metrics())
+
+            report = milestone_release_report.build_report(
+                root,
+                coverage_report_path=coverage_path,
+                competition_summary_paths=[summary_path],
+            )
+
+            s2 = report["metrics"]["s2_workflow_metrics"]
+            self.assertEqual(s2["run_count"], 1)
+            self.assertEqual(s2["units_total"], 2)
+            self.assertEqual(s2["units_converged"], 2)
+            self.assertEqual(s2["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(s2["unsafe_reduction"]["baseline_total_unsafe"], 5)
+            self.assertEqual(s2["unsafe_reduction"]["current_total_unsafe"], 2)
+            self.assertEqual(s2["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(s2["translation_before_after"]["status"], "not_provided")
+            self.assertEqual(s2["translation_before_after"]["unit_count"], 0)
+            self.assertEqual(s2["avg_repair_rounds"], 1.5)
+            self.assertEqual(s2["auto_recovery_rate"], 0.5)
+            self.assertEqual(s2["repair_history_unit_count"], 1)
+            self.assertEqual(s2["auto_recovered_units"], 1)
+            self.assertEqual(s2["root_cause_counts"], {"rustc_compile_error": 1})
+            self.assertEqual(report["release_note_inputs"]["s2_workflow_metrics"], s2)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["harness_architecture"]["entrypoint"], "milestone-release-report")
+            self.assertEqual(report["harness_architecture"]["workflow_run_count"], 1)
+            self.assertEqual(report["harness_architecture"]["before_after_report_count"], 0)
+            self.assertEqual(report["core_translation_quality"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["core_translation_quality"]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(report["core_translation_quality"]["translation_before_after"]["status"], "not_provided")
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_binds_before_after_exhibit_from_batch_profile_report(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+
+            report = milestone_release_report.build_report(
+                root,
+                coverage_report_path=coverage_path,
+                competition_summary_paths=[summary_path],
+                batch_profile_report_paths=[batch_profile_report],
+            )
+
+            exhibits = report["metrics"]["before_after_exhibits"]
+            self.assertEqual(exhibits["status"], "bound")
+            self.assertEqual(exhibits["report_count"], 1)
+            self.assertEqual(exhibits["passed_report_count"], 1)
+            self.assertEqual(exhibits["unit_count"], 1)
+            self.assertEqual(exhibits["measured_unsafe_unit_count"], 1)
+            self.assertEqual(exhibits["accepted_patch_unit_count"], 1)
+            self.assertEqual(
+                exhibits["input_reports"][0]["batch_profile_report_path"],
+                "target/competition-out/harness/batch-profile-report.json",
+            )
+            self.assertEqual(
+                exhibits["input_reports"][0]["before_after_exhibit_path"],
+                "target/competition-out/summary/before-after-exhibit.json",
+            )
+            self.assertEqual(exhibits["input_reports"][0]["status"], "passed")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["unit_id"], "demo/store-add-one")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["baseline"]["path"], "evidence/before-after/baseline-unsafe.rs")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["final"]["path"], "evidence/before-after/final-safe.rs")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["oracle_evidence"]["path"], "evidence/before-after/oracle-diff.json")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["accepted_patch"]["path"], "evidence/before-after/accepted.patch")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["patch_log"]["path"], "evidence/before-after/step-log.jsonl")
+            self.assertEqual(exhibits["input_reports"][0]["units"][0]["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["patch_origin"]["source"],
+                "accepted_safe_evidence",
+            )
+            self.assertFalse(exhibits["input_reports"][0]["units"][0]["patch_origin"]["semantic_gate"])
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["patch_origin"]["translation_coverage_numerator"],
+                0,
+            )
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["status"],
+                "accepted_evidence_bound",
+            )
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["unsafe_delta"]["reduced_by"],
+                3,
+            )
+            self.assertFalse(exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["semantic_gate"])
+            self.assertEqual(
+                exhibits["input_reports"][0]["units"][0]["safety_loop_provenance"]["translation_coverage_numerator"],
+                0,
+            )
+            self.assertEqual(report["release_note_inputs"]["before_after_exhibits"], exhibits)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["harness_architecture"]["before_after_report_count"], 1)
+            self.assertEqual(report["core_translation_quality"]["before_after_exhibits"], exhibits)
+            self.assertEqual(report["core_translation_quality"]["translation_before_after"]["status"], "bound")
+
+    def test_report_rejects_before_after_exhibit_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(
+                summary_path,
+                workflow_metrics,
+                exhibit_sha256="0" * 64,
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("before_after_exhibit_report.sha256", str(raised.exception))
+
+    def test_report_rejects_before_after_unit_artifact_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            exhibit["units"][0]["baseline"]["sha256"] = "f" * 64
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("units[0].baseline.sha256", str(raised.exception))
+
+    def test_report_rejects_before_after_repair_history_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            exhibit["units"][0]["repair_history"]["patch_events_sha256"] = "f" * 64
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("repair_history.patch_events_sha256", str(raised.exception))
+
+    def test_report_rejects_before_after_unit_retargeted_away_from_workflow_metrics(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            exhibit["units"][0]["baseline"] = dict(exhibit["units"][0]["final"])
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("baseline must match workflow metrics", str(raised.exception))
+
+    def test_report_rejects_verified_repairer_history_without_repair_history_binding(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            workflow_metrics = self._before_after_workflow_metrics()
+            self._write_competition_summary_with_metrics(summary_path, workflow_metrics)
+            batch_profile_report = self._write_batch_profile_report_with_exhibit(summary_path, workflow_metrics)
+            exhibit_path = root / "target/competition-out/summary/before-after-exhibit.json"
+            exhibit = json.loads(exhibit_path.read_text(encoding="utf-8"))
+            del exhibit["stage_contracts"]["repairer"]["histories"][0]["repair_history"]
+            exhibit_path.write_text(json.dumps(exhibit, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            batch = json.loads(batch_profile_report.read_text(encoding="utf-8"))
+            batch["before_after_exhibit_report"]["sha256"] = sha256_file(exhibit_path)
+            batch_profile_report.write_text(json.dumps(batch, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                    batch_profile_report_paths=[batch_profile_report],
+                )
+
+            self.assertIn("repair_history is required", str(raised.exception))
+
+    def test_report_rejects_competition_summary_workflow_metrics_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            summary_path = root / "target/competition-out/summary/competition-run-summary.json"
+            self._write_competition_summary_with_metrics(
+                summary_path,
+                self._measured_workflow_metrics(),
+                metrics_sha256="0" * 64,
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    competition_summary_paths=[summary_path],
+                )
+
+            self.assertIn("workflow_metrics.sha256", str(raised.exception))
+
+    def test_translation_coverage_numerator_uses_canonical_translator_generated_count(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["translator_generated_semantic_pass_count"] = 0
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 1
+            payload["capability_delta_ledger"]["accepted_evidence_semantic_pass_count"] = 1
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"semantic_pass": 1}
+            payload["capability_delta_ledger"]["route_levels"] = {"L4": 1}
+            payload["capability_delta_ledger"]["route_statuses"] = {"refused": 1}
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 0)
+            self.assertEqual(report["metrics"]["accepted_evidence_semantic_pass_count"], 1)
+            self.assertIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+
+    def test_report_defaults_missing_accepted_evidence_count_for_legacy_coverage_json(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"].pop("accepted_evidence_semantic_pass_count")
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertEqual(report["metrics"]["accepted_evidence_semantic_pass_count"], 0)
+
+    def test_report_classifies_l3_semantic_pass_as_translation_numerator(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"semantic_pass": 3}
+            payload["capability_delta_ledger"]["route_levels"] = {"L3": 3}
+            payload["capability_delta_ledger"]["route_statuses"] = {"accepted": 3}
+            payload["capability_delta_ledger"]["translator_generated_semantic_pass_count"] = 3
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 3
+            payload["capability_delta_ledger"]["delta_count"] = 3
+            payload["capability_delta_ledger"]["ledgers"] = [
+                {
+                    "path": f"validation/evidence/demo/auto-translation/slice-{index}/l3-slice-{index}-capability-delta.json",
+                    "target_id": "demo",
+                    "slice_id": f"slice-{index}",
+                    "route_level": "L3",
+                    "route_status": "accepted",
+                    "delta_count": 1,
+                }
+                for index in range(3)
+            ]
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            report = milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            classes = report["metrics"]["candidate_classification"]
+            self.assertEqual(classes["semantic_pass_delta_count"], 3)
+            self.assertEqual(classes["generated_candidate_delta_count"], 0)
+            self.assertEqual(report["metrics"]["translation_coverage_numerator"], 3)
+            self.assertNotIn("no_translator_generated_semantic_pass", report["readiness"]["blockers"])
+            self.assertNotIn("translator_generated_semantic_pass_below_p0_minimum", report["readiness"]["blockers"])
+
+    def test_report_accepts_review_checklist_and_clears_external_review_blocker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"semantic_pass": 3}
+            payload["capability_delta_ledger"]["route_levels"] = {"L3": 3}
+            payload["capability_delta_ledger"]["route_statuses"] = {"accepted": 3}
+            payload["capability_delta_ledger"]["translator_generated_semantic_pass_count"] = 3
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 3
+            payload["capability_delta_ledger"]["delta_count"] = 3
+            payload["capability_delta_ledger"]["ledgers"] = [
+                {
+                    "path": f"validation/evidence/demo/auto-translation/slice-{index}/l3-slice-{index}-capability-delta.json",
+                    "target_id": "demo",
+                    "slice_id": f"slice-{index}",
+                    "route_level": "L3",
+                    "route_status": "accepted",
+                    "delta_count": 1,
+                }
+                for index in range(3)
+            ]
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+            review_path = root / "review-checklist.json"
+            review_path.write_text(json.dumps(self._review_checklist(), sort_keys=True), encoding="utf-8")
+
+            report = milestone_release_report.build_report(
+                root,
+                coverage_report_path=coverage_path,
+                review_checklist_paths=[review_path],
+            )
+
+            self.assertEqual(report["status"], "release_candidate")
+            self.assertEqual(report["review_gate"]["status"], "passed")
+            self.assertEqual(report["review_gate"]["review_count"], 1)
+            self.assertNotIn("external_review_not_recorded", report["readiness"]["blockers"])
+            self.assertEqual(report["release_note_inputs"]["review_gate"], report["review_gate"])
+
+    def test_report_rejects_review_checklist_claiming_semantic_gate(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(self._coverage_report()), encoding="utf-8")
+            review = self._review_checklist()
+            review["claim_boundary"]["semantic_gate"] = True
+            review_path = root / "review-checklist.json"
+            review_path.write_text(json.dumps(review, sort_keys=True), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(
+                    root,
+                    coverage_report_path=coverage_path,
+                    review_checklist_paths=[review_path],
+                )
+
+            self.assertIn("semantic_gate must be false", str(raised.exception))
+
+    def test_rejects_coverage_report_without_capability_delta_ledger(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload.pop("capability_delta_ledger")
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertIn("capability_delta_ledger", str(raised.exception))
+
+    def test_rejects_l4_refused_ledger_counted_as_translation_numerator(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"semantic_pass": 1}
+            payload["capability_delta_ledger"]["route_levels"] = {"L4": 1}
+            payload["capability_delta_ledger"]["route_statuses"] = {"refused": 1}
+            payload["capability_delta_ledger"]["translator_generated_semantic_pass_count"] = 1
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 1
+            coverage_path = root / "coverage.json"
+            coverage_path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaises(SystemExit) as raised:
+                milestone_release_report.build_report(root, coverage_report_path=coverage_path)
+
+            self.assertIn("L4/refused", str(raised.exception))
+
+    def test_rejects_semantic_count_without_semantic_status_backing(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="milestone-release-report-") as tmp:
+            root = Path(tmp)
+            payload = self._coverage_report()
+            payload["capability_delta_ledger"]["generated_candidate_status"] = {"generated": 1}
+            payload["capability_delta_ledger"]["route_levels"] = {"L3": 1}
+            payload["capability_delta_ledger"]["route_statuses"] = {"accepted": 1}
+            payload["capability_delta_ledger"]["translator_generated_semantic_pass_count"] = 1
+            payload["capability_delta_ledger"]["semantic_pass_count"] = 1
+            payload["capability_delta_ledger"]["ledgers"] = [
+                {
+                    "path": "validation/evidence/demo/auto-translation/slice/l3-slice-capability-delta.json",
+                    "target_id": "demo",
+                    "slice_id": "slice",
+                    "route_level": "L3",
+                    "route_status": "accepted",
+                    "delta_count": 1,
+                }
+            ]

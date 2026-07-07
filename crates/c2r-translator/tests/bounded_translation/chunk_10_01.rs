@@ -1,6 +1,142 @@
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_rejects_nested_record_field_inc_dec_statement_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-nested-record-field-inc-dec");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("bad_nested_record_field_inc_dec.c");
+    fs::write(
+        &source_file,
+        "struct inner { int x; };\nstruct outer { struct inner inner; int y; };\nint bad_nested_record_field_inc_dec(struct outer p) { p.inner.x++; return p.inner.x; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(
+        &environment,
+        &source_file,
+        "bad_nested_record_field_inc_dec",
+    );
+
+    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert!(
+        report.errors.iter().any(|error| error
+            .message
+            .contains("record field target must have a direct record variable base")),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_static_const_integer_array_global_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-global-array-emit");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_global_table_emit.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[4] = { 1U, 2U, 0xEDB88320U, 4U };\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir_with_globals(function, &report.globals)
+        .expect("emit global table from clang typed IR");
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(!emitted.route.deprecated);
+    assert!(emitted
+        .rust
+        .contains("const TABLE: [u32; 4] = [1u32, 2u32, 3988292384u32, 4u32];"));
+    assert!(emitted
+        .rust
+        .contains("pub fn read_global_table(idx: u32) -> u32"));
+    assert!(emitted.rust.contains("return TABLE[idx as usize];"));
+    assert!(!emitted.rust.contains("crc32_update_byte"));
+    assert_rust_snippet_compiles("clang_real_global_array_emit", &emitted.rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_records_static_const_incomplete_array_initializer_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-incomplete-global-array-init");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_incomplete_global_table_init.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[] = { 1U, 2U, 0xEDB88320U, 4U };\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert_eq!(report.globals.len(), 1);
+    let global = &report.globals[0];
+    assert_eq!(global.name, "table");
+    assert!(matches!(
+        global.ty.kind,
+        IrTypeKind::Array { len: Some(4), .. }
+    ));
+    assert_eq!(
+        global.init,
+        IrGlobalInit::IntegerArray(vec![1, 2, 0xEDB8_8320, 4])
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_does_not_synthesize_uninitialized_static_const_global_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-uninitialized-global-array");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("read_uninitialized_global_table.c");
+    fs::write(
+        &source_file,
+        "typedef unsigned int uint32_t;\nstatic const uint32_t table[4];\nuint32_t read_global_table(uint32_t idx) { return table[idx]; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report =
+        lower_function_from_clang_ast_dump_report(&environment, &source_file, "read_global_table");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    assert!(report.globals.is_empty());
+    let function = report.function_ir.as_ref().expect("function ir");
+    let error = emit_rust_from_ir_with_globals(function, &report.globals)
+        .expect_err("uninitialized global table must not be synthesized");
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("index base table is not declared"));
+}
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_lowers_bitand_array_index_expr_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-bitand-array-index");
@@ -338,280 +474,4 @@ fn clang_ast_dump_emits_if_without_braces_when_enabled() {
     assert!(rust.contains("value = value.checked_add(!0i32).expect(\"signed addition overflow\");"));
     assert!(rust.contains("return value;"));
     assert_rust_snippet_compiles("typed-ir-real-clang-if-without-braces", &rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-#[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_emits_comparison_if_condition_when_enabled() {
-    let clang_path = real_clang_ast_test_setup();
-    let out_dir = unique_out_dir("clang-real-comparison-if");
-    fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("adjust_positive.c");
-    fs::write(
-        &source_file,
-        "int adjust_positive(int value) { if (value > 0) { value = value + 1; } return value; }\n",
-    )
-    .unwrap();
-    let environment = std::collections::BTreeMap::from([(
-        "CLANG_PATH".to_string(),
-        clang_path.to_string_lossy().into_owned(),
-    )]);
-
-    let report =
-        lower_function_from_clang_ast_dump_report(&environment, &source_file, "adjust_positive");
-
-    assert_eq!(report.status, "lowered", "{:?}", report.errors);
-    let function = report.function_ir.as_ref().expect("function ir");
-    let [IrStmt::If {
-        condition: IrExpr::Binary {
-            op: IrBinOp::Gt, ..
-        },
-        ..
-    }, IrStmt::Return { .. }] = function.body.as_slice()
-    else {
-        panic!(
-            "expected comparison if followed by return, got {:?}",
-            function.body
-        );
-    };
-
-    let rust = emit_rust_from_ir(function).expect("emit comparison if from real clang AST");
-    assert!(rust.contains("pub fn adjust_positive(mut value: i32) -> i32"));
-    assert!(rust.contains("if (value > 0i32) {"));
-    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
-    assert!(rust.contains("return value;"));
-    assert_rust_snippet_compiles("typed-ir-real-clang-if-comparison", &rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-#[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_emits_comparison_return_value_when_enabled() {
-    let clang_path = real_clang_ast_test_setup();
-    let out_dir = unique_out_dir("clang-real-comparison-return");
-    fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("positive_as_int.c");
-    fs::write(
-        &source_file,
-        "int positive_as_int(int value) { return value > 0; }\n",
-    )
-    .unwrap();
-    let environment = std::collections::BTreeMap::from([(
-        "CLANG_PATH".to_string(),
-        clang_path.to_string_lossy().into_owned(),
-    )]);
-
-    let report =
-        lower_function_from_clang_ast_dump_report(&environment, &source_file, "positive_as_int");
-
-    assert_eq!(report.status, "lowered", "{:?}", report.errors);
-    let function = report.function_ir.as_ref().expect("function ir");
-    let [IrStmt::Return {
-        value: Some(IrExpr::Binary {
-            op: IrBinOp::Gt, ..
-        }),
-        ..
-    }] = function.body.as_slice()
-    else {
-        panic!("expected comparison return, got {:?}", function.body);
-    };
-
-    let rust = emit_rust_from_ir(function).expect("emit comparison return from real clang AST");
-    assert!(rust.contains("pub fn positive_as_int(value: i32) -> i32"));
-    assert!(rust.contains("return (if (value > 0i32) { 1i32 } else { 0i32 });"));
-    assert_rust_snippet_compiles("typed-ir-real-clang-return-comparison", &rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-#[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_emits_null_pointer_comparison_return_value_when_enabled() {
-    let clang_path = real_clang_ast_test_setup();
-    let out_dir = unique_out_dir("clang-real-null-pointer-comparison-return");
-    fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("has_values.c");
-    fs::write(
-        &source_file,
-        "#include <stddef.h>\nint has_values(const int *values) { return values != NULL; }\n",
-    )
-    .unwrap();
-    let environment = std::collections::BTreeMap::from([(
-        "CLANG_PATH".to_string(),
-        clang_path.to_string_lossy().into_owned(),
-    )]);
-
-    let report =
-        lower_function_from_clang_ast_dump_report(&environment, &source_file, "has_values");
-
-    assert_eq!(report.status, "lowered", "{:?}", report.errors);
-    let function = report.function_ir.as_ref().expect("function ir");
-    let [IrStmt::Return {
-        value:
-            Some(IrExpr::Binary {
-                op: IrBinOp::Neq,
-                rhs,
-                ..
-            }),
-        ..
-    }] = function.body.as_slice()
-    else {
-        panic!(
-            "expected null pointer comparison return, got {:?}",
-            function.body
-        );
-    };
-    assert!(matches!(rhs.as_ref(), IrExpr::NullPtr { .. }));
-
-    let rust = emit_rust_from_ir(function)
-        .expect("emit null pointer comparison return from real clang AST");
-    assert!(rust.contains("pub fn has_values(values: Option<&[i32]>) -> i32"));
-    assert!(rust.contains("return (if values.is_some() { 1i32 } else { 0i32 });"));
-    assert_rust_snippet_compiles("typed-ir-real-clang-return-null-pointer-comparison", &rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-#[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_emits_record_null_pointer_comparison_return_value_when_enabled() {
-    let clang_path = real_clang_ast_test_setup();
-    let out_dir = unique_out_dir("clang-real-record-null-pointer-comparison-return");
-    fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("has_point.c");
-    fs::write(
-        &source_file,
-        "#include <stddef.h>\n\
-         struct point { int x; };\n\
-         int has_point(const struct point *p) { return p != NULL; }\n",
-    )
-    .unwrap();
-    let environment = std::collections::BTreeMap::from([(
-        "CLANG_PATH".to_string(),
-        clang_path.to_string_lossy().into_owned(),
-    )]);
-
-    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "has_point");
-
-    assert_eq!(report.status, "lowered", "{:?}", report.errors);
-    let function = report.function_ir.as_ref().expect("function ir");
-    let [IrStmt::Return {
-        value:
-            Some(IrExpr::Binary {
-                op: IrBinOp::Neq,
-                rhs,
-                ..
-            }),
-        ..
-    }] = function.body.as_slice()
-    else {
-        panic!(
-            "expected record null pointer comparison return, got {:?}",
-            function.body
-        );
-    };
-    assert!(matches!(rhs.as_ref(), IrExpr::NullPtr { .. }));
-
-    let emitted = emit_rust_from_ir(function)
-        .expect("emit record null pointer comparison return from real clang AST");
-    let rust = &emitted.rust;
-    assert!(rust.contains("pub struct Point"), "{rust}");
-    assert!(rust.contains("pub x: i32"), "{rust}");
-    assert!(
-        rust.contains("pub fn has_point(p: Option<&Point>) -> i32"),
-        "{rust}"
-    );
-    assert!(
-        rust.contains("return (if p.is_some() { 1i32 } else { 0i32 });"),
-        "{rust}"
-    );
-    assert_rust_snippet_compiles(
-        "typed-ir-real-clang-return-record-null-pointer-comparison",
-        rust,
-    );
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-#[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_emits_comparison_decl_initializer_when_enabled() {
-    let clang_path = real_clang_ast_test_setup();
-    let out_dir = unique_out_dir("clang-real-comparison-decl");
-    fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("cmp_init.c");
-    fs::write(
-        &source_file,
-        "int cmp_init(int left, int right) { int out = left == right; return out; }\n",
-    )
-    .unwrap();
-    let environment = std::collections::BTreeMap::from([(
-        "CLANG_PATH".to_string(),
-        clang_path.to_string_lossy().into_owned(),
-    )]);
-
-    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "cmp_init");
-
-    assert_eq!(report.status, "lowered", "{:?}", report.errors);
-    let function = report.function_ir.as_ref().expect("function ir");
-    let [IrStmt::Decl {
-        init: Some(IrExpr::Binary {
-            op: IrBinOp::Eq, ..
-        }),
-        ..
-    }, IrStmt::Return { .. }] = function.body.as_slice()
-    else {
-        panic!(
-            "expected comparison decl initializer followed by return, got {:?}",
-            function.body
-        );
-    };
-
-    let rust =
-        emit_rust_from_ir(function).expect("emit comparison decl initializer from real clang AST");
-    assert!(rust.contains("pub fn cmp_init(left: i32, right: i32) -> i32"));
-    assert!(rust.contains("let mut out: i32 = (if (left == right) { 1i32 } else { 0i32 });"));
-    assert!(rust.contains("return out;"));
-    assert_rust_snippet_compiles("typed-ir-real-clang-decl-comparison", &rust);
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-#[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_emits_comparison_assignment_value_when_enabled() {
-    let clang_path = real_clang_ast_test_setup();
-    let out_dir = unique_out_dir("clang-real-comparison-assign");
-    fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("cmp_assign.c");
-    fs::write(
-        &source_file,
-        "int cmp_assign(int left, int right) { left = left != right; return left; }\n",
-    )
-    .unwrap();
-    let environment = std::collections::BTreeMap::from([(
-        "CLANG_PATH".to_string(),
-        clang_path.to_string_lossy().into_owned(),
-    )]);
-
-    let report =
-        lower_function_from_clang_ast_dump_report(&environment, &source_file, "cmp_assign");
-
-    assert_eq!(report.status, "lowered", "{:?}", report.errors);
-    let function = report.function_ir.as_ref().expect("function ir");
-    let [IrStmt::Assign {
-        value: IrExpr::Binary {
-            op: IrBinOp::Neq, ..
-        },
-        ..
-    }, IrStmt::Return { .. }] = function.body.as_slice()
-    else {
-        panic!(
-            "expected comparison assignment followed by return, got {:?}",
-            function.body
-        );
-    };
-
-    let rust = emit_rust_from_ir(function).expect("emit comparison assignment from real clang AST");
-    assert!(rust.contains("pub fn cmp_assign(mut left: i32, right: i32) -> i32"));
-    assert!(rust.contains("left = (if (left != right) { 1i32 } else { 0i32 });"));
-    assert!(rust.contains("return left;"));
-    assert_rust_snippet_compiles("typed-ir-real-clang-assign-comparison", &rust);
 }

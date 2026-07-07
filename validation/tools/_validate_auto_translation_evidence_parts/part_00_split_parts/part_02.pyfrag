@@ -1,0 +1,7 @@
+        expected_outputs = json.dumps(case.get("expected_outputs", {}), sort_keys=True)
+        fragments.append(
+            "fixture case: "
+            f"{case.get('id')} input_ref={case.get('input_ref')} "
+            f"expected_ref={case.get('expected_ref')} expected_outputs={expected_outputs}"
+        )
+    return fragments

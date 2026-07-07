@@ -1,3 +1,142 @@
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/scalar_runtime_preconditions_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "literal_divide_by_zero")
+            .expect("lower committed clang AST scalar refusal fixture");
+    let error = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect_err("literal division by zero from fixture must fail closed");
+
+    assert!(error.reason.contains("division by zero literal"));
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_scalar_ub_refusals_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/scalar_refusals_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    for (function_name, expected_reason) in [
+        ("literal_modulo_by_zero", "modulo by zero literal"),
+        ("shift_count_out_of_range", "shift count literal 32"),
+        ("signed_right_shift_without_contract", "signed right shift"),
+    ] {
+        let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
+            .unwrap_or_else(|error| {
+                panic!("lower committed clang AST fixture {function_name}: {error}")
+            });
+        let error = match emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals) {
+            Ok(emitted) => panic!(
+                "fixture {function_name} must fail closed, emitted {}",
+                emitted.rust
+            ),
+            Err(error) => error,
+        };
+
+        assert!(
+            error.reason.contains(expected_reason),
+            "expected {function_name} refusal to contain {expected_reason:?}, got {:?}",
+            error.reason
+        );
+    }
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_array_decay_deref_of_local_fixed_array_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/array_decay_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "first_local_table")
+        .expect("array decay through unary deref of local fixed array should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array decay through unary deref of local fixed array should emit");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub fn first_local_table() -> i32"), "{rust}");
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[0i32 as usize];"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-array-decay-deref-local-fixed-array",
+        rust,
+        r#"
+    assert_eq!(first_local_table(), 1);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_allows_array_decay_inside_subscript_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/array_decay_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table")
+        .expect("array decay in array subscript base should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array subscript base decay should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn lookup_local_table(i: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[i as usize];"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-array-decay-subscript", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_lowers_array_decay_pointer_add_deref_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/array_decay_pointer_add_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "lookup_local_table_add")
+            .expect("array decay through pointer-add deref of local fixed array should lower");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("array decay through pointer-add deref should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn lookup_local_table_add(i: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("let table: [i32; 3] = [1i32, 2i32, 3i32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("return table[i as usize];"), "{rust}");
+    assert!(
+        !rust.contains("return table[0i32 as usize];"),
+        "pointer-add deref must not collapse to *table: {rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-array-decay-pointer-add-deref",
+        rust,
+        r#"
+    assert_eq!(lookup_local_table_add(2), 3);
+"#,
+    );
+}
 #[cfg(feature = "typed-ir")]
 #[test]
 fn typed_ir_rejects_array_to_pointer_decay_without_lowering_evidence() {
@@ -348,216 +487,5 @@ fn ir_function_type(spelled: &str) -> IrType {
         is_const: false,
         width_bits: None,
         source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_record(name: &str) -> IrType {
-    IrType {
-        spelled: format!("struct {name}"),
-        canonical: format!("struct {name}"),
-        kind: IrTypeKind::Record {
-            name: name.to_string(),
-            fields: None,
-        },
-        is_const: false,
-        width_bits: None,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_record_with_fields(name: &str, fields: Vec<(&str, IrType)>) -> IrType {
-    IrType {
-        spelled: format!("struct {name}"),
-        canonical: format!("struct {name}"),
-        kind: IrTypeKind::Record {
-            name: name.to_string(),
-            fields: Some(
-                fields
-                    .into_iter()
-                    .map(|(name, ty)| IrRecordField {
-                        name: name.to_string(),
-                        ty,
-                    })
-                    .collect(),
-            ),
-        },
-        is_const: false,
-        width_bits: None,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_var(name: &str, ty: IrType) -> IrExpr {
-    IrExpr::Var {
-        name: name.to_string(),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_null_ptr(ty: IrType) -> IrExpr {
-    IrExpr::NullPtr {
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_lit(value: u64, spelling: &str, ty: IrType) -> IrExpr {
-    IrExpr::LitInt {
-        value,
-        spelling: spelling.to_string(),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_array(element: IrType, len: usize) -> IrType {
-    IrType {
-        spelled: format!("{}[{len}]", element.spelled),
-        canonical: format!("{}[{len}]", element.canonical),
-        kind: IrTypeKind::Array {
-            element: Box::new(element),
-            len: Some(len),
-        },
-        is_const: false,
-        width_bits: None,
-        source_span: None,
-    }
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-fn without_implicit_cast(expr: &IrExpr) -> &IrExpr {
-    match expr {
-        IrExpr::Cast {
-            expr,
-            implicit: true,
-            ..
-        } => without_implicit_cast(expr),
-        _ => expr,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_binary(op: IrBinOp, lhs: IrExpr, rhs: IrExpr, ty: IrType) -> IrExpr {
-    IrExpr::Binary {
-        op,
-        lhs: Box::new(lhs),
-        rhs: Box::new(rhs),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_conditional(condition: IrExpr, then_expr: IrExpr, else_expr: IrExpr, ty: IrType) -> IrExpr {
-    IrExpr::Conditional {
-        condition: Box::new(condition),
-        then_expr: Box::new(then_expr),
-        else_expr: Box::new(else_expr),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_deref(ptr: IrExpr, ty: IrType) -> IrExpr {
-    IrExpr::Deref {
-        ptr: Box::new(ptr),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_bitnot(expr: IrExpr, ty: IrType) -> IrExpr {
-    IrExpr::Unary {
-        op: IrUnOp::BitNot,
-        operand: Box::new(expr),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_neg(expr: IrExpr, ty: IrType) -> IrExpr {
-    IrExpr::Unary {
-        op: IrUnOp::Neg,
-        operand: Box::new(expr),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(feature = "typed-ir")]
-fn ir_not(expr: IrExpr, ty: IrType) -> IrExpr {
-    IrExpr::Unary {
-        op: IrUnOp::Not,
-        operand: Box::new(expr),
-        ty,
-        source_span: None,
-    }
-}
-
-#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
-#[test]
-fn clang_ast_fixture_replays_control_flow_refusals_without_clang() {
-    let ast: Value = serde_json::from_str(include_str!(
-        "../../fixtures/clang_ast/control_flow_refusals_ast.json"
-    ))
-    .expect("fixture JSON");
-
-    for (function_name, expected_reason, expected_range) in [
-        (
-            "label_refusal",
-            "unsupported control-flow LabelStmt",
-            "source_range=2:3-2:15",
-        ),
-        (
-            "goto_refusal",
-            "unsupported control-flow GotoStmt",
-            "source_range=5:3-5:12",
-        ),
-        (
-            "switch_refusal",
-            "unsupported control-flow SwitchStmt",
-            "source_range=8:3-8:48",
-        ),
-        (
-            "case_refusal",
-            "unsupported control-flow CaseStmt",
-            "source_range=11:3-11:18",
-        ),
-        (
-            "default_refusal",
-            "unsupported control-flow DefaultStmt",
-            "source_range=14:3-14:18",
-        ),
-    ] {
-        let error = lower_function_and_globals_from_clang_ast_json_value(&ast, function_name)
-            .expect_err("control-flow fixture must fail closed during clang AST lowering");
-        assert_eq!(error.kind, "unsupported_clang_stmt");
-        assert!(
-            error.message.contains(expected_reason),
-            "expected {function_name} refusal to contain {expected_reason:?}, got {:?}",
-            error.message
-        );
-        assert!(
-            error
-                .message
-                .contains("requires structured CFG/relooper support"),
-            "expected {function_name} refusal to mention CFG/relooper support, got {:?}",
-            error.message
-        );
-        assert!(
-            error.message.contains(expected_range),
-            "expected {function_name} refusal to contain {expected_range:?}, got {:?}",
-            error.message
-        );
     }
 }

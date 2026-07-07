@@ -1,0 +1,71 @@
+            raise SystemExit(f"external callee {name} signature_ref missing from slice spec signatures")
+        if not declared_callee.get("source_files"):
+            raise SystemExit(f"external callee {name} requires real source_files in slice spec")
+        signature = signatures[signature_ref]
+        contract = external_callee_expected_contract(name, declared_callee, signature)
+        if name in plan_blocks or name in context_blocks:
+            validate_external_callee_block_binding(
+                name,
+                plan_blocks.get(name),
+                context_blocks.get(name),
+            )
+            blocked_contracts[name] = {
+                **contract,
+                "blocked_reason": str((plan_blocks.get(name) or context_blocks.get(name) or {}).get("reason") or ""),
+            }
+            if any(item.get("callee") == name for item in call_bindings):
+                raise SystemExit(f"external callee {name} blocked call-site cannot have compile_only binding")
+            continue
+        plan_callee = plan_callees.get(name)
+        if plan_callee is None:
+            raise SystemExit(f"external callee {name} missing from translation plan")
+        context_callee = context_callees.get(name)
+        if context_callee is None:
+            raise SystemExit(f"external callee {name} missing from context pack")
+        if plan_callee.get("signature_ref") != signature_ref:
+            raise SystemExit(f"external callee {name} signature_ref mismatch in translation plan")
+        if context_callee.get("signature_ref") != signature_ref:
+            raise SystemExit(f"external callee {name} signature_ref mismatch in context pack")
+        validate_external_callee_signature_descriptor(name, signature, plan_callee, "translation plan")
+        validate_external_callee_signature_descriptor(name, signature, context_callee, "context pack")
+        stub_kind = str(plan_callee.get("stub_kind") or "")
+        if stub_kind != str(context_callee.get("stub_kind") or ""):
+            raise SystemExit(f"external callee {name} stub_kind mismatch between translation plan and context pack")
+        contract["stub_kind"] = stub_kind
+        contracts[name] = contract
+        validate_external_callee_descriptor_binding(name, contract, plan_callee, "translation plan")
+        validate_external_callee_descriptor_binding(name, contract, context_callee, "context pack")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
+            raise SystemExit(f"external callee {name} has unsupported stub_kind={stub_kind}")
+        if stub_kind == "accepted_named_slice_evidence":
+            validate_external_callee_accepted_named_slice_evidence(name, plan_callee, context_callee)
+        if plan_callee.get("semantics_verified") or context_callee.get("semantics_verified"):
+            raise SystemExit(f"external callee {name} context must not claim semantics_verified")
+        if len(bindings.get(name, [])) != 1:
+            raise SystemExit(f"external callee {name} missing signature binding in context pack")
+        validate_external_callee_signature_binding(name, signature_ref, bindings[name][0])
+        if not source_bindings.get(name):
+            raise SystemExit(f"external callee {name} missing callee source binding in context pack")
+        validate_external_callee_source_bindings(name, contract, source_bindings[name])
+
+    recorded_plan_call_edges = [edge for edge in plan_call_edges if edge.get("callee") in contracts]
+    recorded_context_call_edges = [edge for edge in context_call_edges if edge.get("callee") in contracts]
+    if recorded_plan_call_edges and not call_bindings:
+        raise SystemExit("external callee context requires call_edge_to_callee_binding entries")
+    if recorded_plan_call_edges or recorded_context_call_edges or call_bindings:
+        validate_external_callee_call_site_bindings(
+            contracts,
+            recorded_plan_call_edges,
+            recorded_context_call_edges,
+            call_bindings,
+        )
+    validate_external_callee_blocked_call_sites(blocked_contracts, plan_call_edges, context_call_edges)
+
+    claim_scope = manifest.get("claim_boundary", {}).get("external_callee_scope", {})
+    final_scope = final_verification.get("external_callee_scope", claim_scope)
+    expected_scope_stub_kind = external_callee_scope_stub_kind(contracts.values())
+    for label, scope in [("manifest", claim_scope), ("final_verification", final_scope)]:
+        if scope.get("stub_kind") != expected_scope_stub_kind:
+            raise SystemExit(f"external callee {label} scope must record stub_kind={expected_scope_stub_kind}")
+        if scope.get("semantics_verified"):
+            raise SystemExit(f"external callee {label} scope must keep semantics_verified=false")
