@@ -1,0 +1,4 @@
+interface:
+  display_name: "Close Translator Slice"
+  short_description: "Closure pass for translator slices"
+  default_prompt: "Use $close-translator-slice to sync tests, coverage matrix, docs, and claim boundaries after a translator slice change."

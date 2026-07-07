@@ -305,6 +305,14 @@ fn emit_record_pointer_field_assignment_value(
             )?;
             format!("({expr} as {target_pointer_ty})")
         }
+        IrExpr::Member { .. } => emit_record_pointer_field_value_member(
+            value,
+            &target_pointer_ty,
+            base_name,
+            symbols,
+            context,
+            path,
+        )?,
         _ => {
             return Err(format!(
                 "{path} pointer field write requires a pointer param value or pointer cast"
@@ -344,6 +352,50 @@ fn emit_record_pointer_field_value_var(
         ));
     }
     emit_identifier(name, "pointer field value")
+}
+
+fn emit_record_pointer_field_value_member(
+    expr: &IrExpr,
+    expected_pointer_ty: &str,
+    target_base_name: &str,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<String, String> {
+    let Some((base_name, _, field, ty)) =
+        direct_mutable_record_pointer_pointer_member_parts(expr, context)?
+    else {
+        let source_ty = expr_type(expr).ok_or_else(|| format!("{path} type is unsupported"))?;
+        return Err(format!("{path} {} is unsupported", type_label(source_ty)));
+    };
+    if base_name != target_base_name {
+        return Err(format!(
+            "{path} pointer field read base {base_name} does not match target base {target_base_name}"
+        ));
+    }
+    if !symbols.contains(base_name) {
+        return Err(format!("{path} pointer field read base {base_name} is not declared"));
+    }
+    if !context.is_mutable_record_pointer_read_field(base_name, field) {
+        return Err(format!(
+            "{path} pointer field {base_name}.{field} lacks definite assignment evidence"
+        ));
+    }
+    if emit_opaque_void_pointer_type(ty).is_some() {
+        return Err(format!(
+            "{path} opaque pointer field {base_name}.{field} read still requires pointer provenance evidence"
+        ));
+    }
+    let source_pointer_ty = emit_record_pointer_field_type(ty)
+        .ok_or_else(|| format!("{path} {} is unsupported", type_label(ty)))?;
+    if source_pointer_ty != expected_pointer_ty {
+        return Err(format!(
+            "{path} pointer field read type {source_pointer_ty} does not match expected type {expected_pointer_ty}"
+        ));
+    }
+    let base_name = emit_identifier(base_name, "pointer field read base")?;
+    let field = emit_identifier(field, "pointer field read field")?;
+    Ok(format!("{base_name}.{field}"))
 }
 
 fn direct_mutable_record_pointer_pointer_member_parts<'a>(

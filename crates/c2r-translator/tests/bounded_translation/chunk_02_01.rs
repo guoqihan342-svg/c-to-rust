@@ -282,6 +282,81 @@ fn typed_ir_rejects_mutable_record_pointer_opaque_pointer_field_read() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_rejects_mutable_record_pointer_opaque_pointer_field_copy_after_write() {
+    let const_void_ptr_ty = ir_pointer("const void *", "void *", ir_const(ir_void()), false);
+    let blob_ty = ir_record_with_fields(
+        "blob",
+        vec![
+            ("buf", const_void_ptr_ty.clone()),
+            ("mirror", const_void_ptr_ty.clone()),
+        ],
+    );
+    let blob_ptr_ty = ir_pointer("struct blob *", "struct blob *", blob_ty, false);
+    let ir = IrFunction {
+        name: "bad_mirror_blob_buf".to_string(),
+        return_type: blob_ptr_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "blob".to_string(),
+                ty: blob_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: const_void_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "buf".to_string(),
+                    ty: const_void_ptr_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", const_void_ptr_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "mirror".to_string(),
+                    ty: const_void_ptr_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "buf".to_string(),
+                    ty: const_void_ptr_ty,
+                    is_arrow: true,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("blob", blob_ptr_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("opaque pointer field copy after write must still fail closed");
+    assert!(
+        error
+            .reason
+            .contains("opaque pointer field blob.buf read still requires pointer provenance evidence"),
+        "{:?}",
+        error
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_integer_to_opaque_pointer_field_cast_write() {
     let i32_ty = ir_i32();
     let mut_void_ptr_ty = ir_pointer("void *", "void *", ir_void(), false);

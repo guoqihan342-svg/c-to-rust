@@ -78,3 +78,144 @@ fn typed_ir_emits_mutable_record_pointer_nonvoid_pointer_field_write() {
     assert!(rust.contains("return blob;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-mutable-record-pointer-nonvoid-pointer-field", rust);
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_mutable_record_pointer_nonvoid_pointer_field_read_after_write() {
+    let u8_ty = ir_u8();
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", ir_const(u8_ty), false);
+    let blob_ty = ir_record_with_fields(
+        "blob",
+        vec![
+            ("buf", const_u8_ptr_ty.clone()),
+            ("mirror", const_u8_ptr_ty.clone()),
+        ],
+    );
+    let blob_ptr_ty = ir_pointer("struct blob *", "struct blob *", blob_ty, false);
+    let ir = IrFunction {
+        name: "mirror_blob_bytes".to_string(),
+        return_type: blob_ptr_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "blob".to_string(),
+                ty: blob_ptr_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "value".to_string(),
+                ty: const_u8_ptr_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "buf".to_string(),
+                    ty: const_u8_ptr_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: ir_var("value", const_u8_ptr_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "mirror".to_string(),
+                    ty: const_u8_ptr_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "buf".to_string(),
+                    ty: const_u8_ptr_ty,
+                    is_arrow: true,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("blob", blob_ptr_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir)
+        .expect("emit non-void pointer field read after same-record field write");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub buf: *const u8"), "{rust}");
+    assert!(rust.contains("pub mirror: *const u8"), "{rust}");
+    assert!(rust.contains("blob.buf = value;"), "{rust}");
+    assert!(rust.contains("blob.mirror = blob.buf;"), "{rust}");
+    assert!(rust.contains("return blob;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-mutable-record-pointer-nonvoid-pointer-field-read-after-write",
+        rust,
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_mutable_record_pointer_nonvoid_pointer_field_read_before_write() {
+    let u8_ty = ir_u8();
+    let const_u8_ptr_ty = ir_pointer("const uint8_t *", "uint8_t *", ir_const(u8_ty), false);
+    let blob_ty = ir_record_with_fields(
+        "blob",
+        vec![
+            ("buf", const_u8_ptr_ty.clone()),
+            ("mirror", const_u8_ptr_ty.clone()),
+        ],
+    );
+    let blob_ptr_ty = ir_pointer("struct blob *", "struct blob *", blob_ty, false);
+    let ir = IrFunction {
+        name: "bad_mirror_blob_bytes".to_string(),
+        return_type: blob_ptr_ty.clone(),
+        params: vec![IrParam {
+            name: "blob".to_string(),
+            ty: blob_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "mirror".to_string(),
+                    ty: const_u8_ptr_ty.clone(),
+                    is_arrow: true,
+                    source_span: None,
+                },
+                value: IrExpr::Member {
+                    base: Box::new(ir_var("blob", blob_ptr_ty.clone())),
+                    field: "buf".to_string(),
+                    ty: const_u8_ptr_ty,
+                    is_arrow: true,
+                    source_span: None,
+                },
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_var("blob", blob_ptr_ty)),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("non-void pointer field read before write must fail closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(
+        error
+            .reason
+            .contains("mutable record pointer field blob.buf is read before definite assignment"),
+        "{:?}",
+        error
+    );
+}
