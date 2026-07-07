@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCode Preflight Safety"
+  short_description: "Safe OpenCode GLM worker launch and evidence boundaries"
+  default_prompt: "Use $opencode-preflight-safety to review or launch OpenCode GLM workers with passed preflight, safe credentials, isolated out-roots, and archive boundaries."
