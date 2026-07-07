@@ -6328,6 +6328,58 @@ fn typed_ir_emits_prefix_inc_statement_for_i32_scalar() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_prefix_inc_value_decl_initializer_for_i32_scalar() {
+    let i32_ty = ir_i32();
+    let ir = IrFunction {
+        name: "prefix_inc_value_decl".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![IrParam {
+            name: "value".to_string(),
+            ty: i32_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![
+            IrStmt::Decl {
+                name: "out".to_string(),
+                ty: i32_ty.clone(),
+                init: Some(IrExpr::IncDec {
+                    target: Box::new(ir_var("value", i32_ty.clone())),
+                    op: IrIncDecOp::Inc,
+                    prefix: true,
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                }),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(ir_binary(
+                    IrBinOp::Add,
+                    ir_var("out", i32_ty.clone()),
+                    ir_var("value", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit prefix inc value decl initializer");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub fn prefix_inc_value_decl(mut value: i32) -> i32"));
+    assert!(rust.contains("value = value.checked_add(1i32).expect(\"signed addition overflow\");"));
+    assert!(rust.contains("let mut out: i32 = value;"));
+    assert_rust_snippet_runs(
+        "typed-ir-prefix-inc-value-decl",
+        rust,
+        "    assert_eq!(prefix_inc_value_decl(5), 12);",
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_emits_prefix_dec_statement_for_usize_scalar() {
     let usize_ty = ir_usize();
     let ir = IrFunction {

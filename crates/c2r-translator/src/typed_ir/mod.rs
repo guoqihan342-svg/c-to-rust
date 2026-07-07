@@ -1187,11 +1187,17 @@ fn emit_stmt(
                 emit_scalar_type(ty).map_err(|detail| format!("decl {name} has {detail}"))?;
             if let Some(init) = init {
                 validate_expr_matches_type(init, ty, &format!("decl {name} initializer"))?;
-                let init = emit_expr(init, symbols, context)
-                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
+                let emitted = emit_expr_with_prelude(
+                    init,
+                    symbols,
+                    context,
+                    indent_level,
+                    &format!("decl {name} initializer"),
+                )?;
                 symbols.insert(name.clone());
                 Ok(format!(
-                    "{indent}let mut {decl_name}: {decl_ty} = {init};\n"
+                    "{}{indent}let mut {decl_name}: {decl_ty} = {};\n",
+                    emitted.prelude, emitted.expr
                 ))
             } else {
                 symbols.insert(name.clone());
@@ -3959,6 +3965,9 @@ fn emit_expr_with_prelude(
         IrExpr::ArrayLiteral { .. } => Err(format!(
             "{path} array literal expression is only supported as a declaration initializer"
         )),
+        IrExpr::IncDec { .. } => emit_prefix_inc_dec_value_expr(expr, symbols, indent_level)
+            .map_err(|detail| format!("{path} {detail}"))?
+            .ok_or_else(|| format!("{path} inc/dec expression is unsupported")),
         IrExpr::Deref { ptr, ty, .. } if matches!(ptr.as_ref(), IrExpr::IncDec { .. }) => {
             emit_post_increment_byte_read_expr(ptr, ty, symbols, context, indent_level, path)
         }
@@ -3972,6 +3981,34 @@ fn emit_expr_with_prelude(
             expr: emit_expr(expr, symbols, context).map_err(|detail| format!("{path} {detail}"))?,
         }),
     }
+}
+
+fn emit_prefix_inc_dec_value_expr(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    indent_level: usize,
+) -> Result<Option<EmittedExpr>, String> {
+    let IrExpr::IncDec {
+        target,
+        prefix: true,
+        ..
+    } = expr
+    else {
+        return Ok(None);
+    };
+    let Some(line) = emit_prefix_inc_dec_statement(expr, symbols)? else {
+        return Ok(None);
+    };
+    let IrExpr::Var { name, .. } = target.as_ref() else {
+        return Ok(None);
+    };
+
+    let indent = "    ".repeat(indent_level);
+    let name = emit_identifier(name, "prefix inc/dec value target")?;
+    Ok(Some(EmittedExpr {
+        prelude: format!("{indent}{line}\n"),
+        expr: name,
+    }))
 }
 
 fn emit_post_increment_byte_read_expr(
@@ -8014,22 +8051,32 @@ fn collect_param_symbols(params: &[IrParam]) -> Result<HashSet<String>, String> 
 fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<String>) {
     for stmt in body {
         match stmt {
-            IrStmt::Assign { target, .. } => {
+            IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_assigned_vars_from_expr(init, assigned_vars);
+                }
+            }
+            IrStmt::Assign { target, value, .. } => {
                 if let Some(name) = assigned_var_name_from_target(target) {
                     assigned_vars.insert(name.clone());
                 }
+                collect_assigned_vars_from_expr(target, assigned_vars);
+                collect_assigned_vars_from_expr(value, assigned_vars);
             }
             IrStmt::If {
+                condition,
                 then_body,
                 else_body,
                 ..
             } => {
+                collect_assigned_vars_from_expr(condition, assigned_vars);
                 collect_assigned_vars_from_body(then_body, assigned_vars);
                 collect_assigned_vars_from_body(else_body, assigned_vars);
             }
             IrStmt::While {
                 condition, body, ..
             } => {
+                collect_assigned_vars_from_expr(condition, assigned_vars);
                 if let IrExpr::IncDec {
                     target,
                     op: IrIncDecOp::Dec,
@@ -8045,6 +8092,7 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
             IrStmt::DoWhile {
                 body, condition, ..
             } => {
+                collect_assigned_vars_from_expr(condition, assigned_vars);
                 if let IrExpr::IncDec {
                     target,
                     op: IrIncDecOp::Dec,
@@ -8058,9 +8106,16 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 collect_assigned_vars_from_body(body, assigned_vars);
             }
             IrStmt::For {
-                init, step, body, ..
+                init,
+                condition,
+                step,
+                body,
+                ..
             } => {
                 collect_assigned_vars_from_body(init, assigned_vars);
+                if let Some(condition) = condition {
+                    collect_assigned_vars_from_expr(condition, assigned_vars);
+                }
                 if let Some(step) = step {
                     collect_assigned_vars_from_body(
                         std::slice::from_ref(step.as_ref()),
@@ -8069,12 +8124,18 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
                 }
                 collect_assigned_vars_from_body(body, assigned_vars);
             }
+            IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_assigned_vars_from_expr(value, assigned_vars);
+                }
+            }
             IrStmt::Expr { expr, .. } => {
                 if let Some(name) =
                     c_memset_assigned_var_name(expr).or_else(|| c_memcpy_assigned_var_name(expr))
                 {
                     assigned_vars.insert(name.clone());
                 }
+                collect_assigned_vars_from_expr(expr, assigned_vars);
                 if let IrExpr::IncDec {
                     target,
                     prefix: true,
@@ -8089,6 +8150,84 @@ fn collect_assigned_vars_from_body(body: &[IrStmt], assigned_vars: &mut HashSet<
             _ => {}
         }
     }
+}
+
+fn collect_assigned_vars_from_expr(expr: &IrExpr, assigned_vars: &mut HashSet<String>) {
+    match expr {
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_assigned_vars_from_expr(lhs, assigned_vars);
+            collect_assigned_vars_from_expr(rhs, assigned_vars);
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => {
+            collect_assigned_vars_from_expr(operand, assigned_vars);
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_assigned_vars_from_expr(condition, assigned_vars);
+            collect_assigned_vars_from_expr(then_expr, assigned_vars);
+            collect_assigned_vars_from_expr(else_expr, assigned_vars);
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_assigned_vars_from_expr(base, assigned_vars);
+            collect_assigned_vars_from_expr(index, assigned_vars);
+        }
+        IrExpr::Member { base, .. } => {
+            collect_assigned_vars_from_expr(base, assigned_vars);
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_assigned_vars_from_expr(element, assigned_vars);
+            }
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_assigned_vars_from_expr(arg, assigned_vars);
+            }
+        }
+        IrExpr::IncDec { target, .. } => {
+            if let Some(name) = scalar_prefix_inc_dec_assigned_var_name(expr) {
+                assigned_vars.insert(name.clone());
+            }
+            collect_assigned_vars_from_expr(target, assigned_vars);
+        }
+        IrExpr::Deref { ptr, .. } => {
+            collect_assigned_vars_from_expr(ptr, assigned_vars);
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => {}
+    }
+}
+
+fn scalar_prefix_inc_dec_assigned_var_name(expr: &IrExpr) -> Option<&String> {
+    let IrExpr::IncDec {
+        target,
+        prefix: true,
+        ty,
+        ..
+    } = expr
+    else {
+        return None;
+    };
+    let IrExpr::Var {
+        name,
+        ty: target_ty,
+        ..
+    } = target.as_ref()
+    else {
+        return None;
+    };
+    (target_ty == ty && is_integer_type(target_ty)).then_some(name)
 }
 
 fn c_memset_assigned_var_name(expr: &IrExpr) -> Option<&String> {
