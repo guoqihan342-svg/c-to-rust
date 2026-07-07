@@ -1,0 +1,800 @@
+def evaluate(
+    *,
+    run_id: str,
+    target_id: str,
+    source_repo_root: Path,
+    source_file: str,
+    source_commit: str,
+    out_root: Path,
+    proof_class: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    functions: list[str] | None = None,
+    require_source_commit: str | None = None,
+    slice_specs: list[str] | None = None,
+    compiler_command_source: str | None = None,
+    include_paths: list[str] | None = None,
+    defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    slice_id_prefix: str | None = None,
+    worker_prefix: str = "worker",
+    limit: int | None = None,
+    mode: str = "deterministic",
+    opencode_command: str = "opencode",
+    opencode_model: str | None = None,
+    opencode_agent: str | None = None,
+    opencode_variant: str = "max",
+    opencode_skip_permissions: bool = False,
+    opencode_allow_non_competition_model: bool = False,
+    opencode_preflight_report: Path | None = None,
+    execute_merge: bool = True,
+    auto_retry: bool = True,
+    max_workers: int = 1,
+    timeout_seconds: int = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    if proof_class not in ALLOWED_PROOF_CLASSES:
+        raise SystemExit(f"unsupported proof_class: {proof_class}")
+    require_competition_exact_host_attestation(proof_class, context="evaluate")
+    if mode not in {"deterministic", "opencode"}:
+        raise SystemExit(f"unsupported mode: {mode}")
+    out_root = repo_path(out_root, repo_root=repo_root)
+    if slice_id_prefix is None:
+        slice_id_prefix = f"{slug_id(target_id)}-{slug_id(Path(source_file).stem)}"
+    db_path = init_run(
+        out_root=out_root,
+        run_id=run_id,
+        proof_class=proof_class,
+        repo_root=repo_root,
+    )
+    plan = plan_source_file(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=target_id,
+        source_repo_root=source_repo_root,
+        source_repository=source_repository,
+        source_branch=source_branch,
+        source_file=source_file,
+        functions=functions or [],
+        source_commit=source_commit,
+        require_source_commit=require_source_commit,
+        slice_specs=slice_specs or [],
+        compiler_command_source=compiler_command_source,
+        include_paths=include_paths or [],
+        defines=defines or [],
+        reuse_accepted_evidence=reuse_accepted_evidence,
+        accepted_evidence_root=accepted_evidence_root,
+        out_root=out_root,
+        slice_id_prefix=slice_id_prefix,
+        worker_prefix=worker_prefix,
+        limit=limit,
+        repo_root=repo_root,
+    )
+    run_result = run_plan(
+        db_path=db_path,
+        run_id=run_id,
+        plan_path=Path(str(plan["plan_path"])),
+        out_root=out_root,
+        proof_class=proof_class,
+        mode=mode,
+        opencode_command=opencode_command,
+        opencode_model=opencode_model,
+        opencode_agent=opencode_agent,
+        opencode_variant=opencode_variant,
+        opencode_skip_permissions=opencode_skip_permissions,
+        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+        opencode_preflight_report=opencode_preflight_report,
+        execute_merge=execute_merge,
+        auto_retry=auto_retry,
+        max_workers=max_workers,
+        timeout_seconds=timeout_seconds,
+        command_runner=command_runner,
+        repo_root=repo_root,
+    )
+    result = {
+        "schema_version": SCHEMA_VERSION,
+        "entrypoint": "evaluate",
+        "status": run_result["status"],
+        "exit_code": int(run_result["exit_code"]),
+        "run_id": run_id,
+        "out_root": repo_relative(out_root, repo_root=repo_root),
+        "db_path": repo_relative(db_path, repo_root=repo_root),
+        "proof_class": proof_class,
+        "mode": mode,
+        "target_id": target_id,
+        "source_repo_root": repo_relative(repo_path(source_repo_root, repo_root=repo_root), repo_root=repo_root),
+        "source_file": source_file,
+        "source_commit": source_commit,
+        "worker_count": len(plan["units"]),
+        "plan_path": plan["plan_path"],
+        "plan": plan,
+        "run_plan": run_result,
+    }
+    if source_repository:
+        result["source_repository"] = source_repository
+    if source_branch:
+        result["source_branch"] = source_branch
+    report_path = out_root / "harness" / "evaluate-report.json"
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    context_refs = write_context_pack_and_agent_index(
+        db_path=db_path,
+        run_id=run_id,
+        target_id=target_id,
+        proof_class=proof_class,
+        mode=mode,
+        out_root=out_root,
+        plan=plan,
+        run_result=run_result,
+        primary_report_path=report_path,
+        report_entrypoint="evaluate_report",
+        acceptance_boundary=None,
+        repo_root=repo_root,
+    )
+    result.update(context_refs)
+    result["judge_summary"] = build_judge_summary(
+        entrypoint="evaluate",
+        proof_class=proof_class,
+        mode=mode,
+        plan=plan,
+        run_result=run_result,
+        context_refs=context_refs,
+        acceptance_boundary=None,
+        repo_root=repo_root,
+    )
+    result["judge_headline"] = build_judge_headline(
+        entrypoint="evaluate",
+        status=str(result["status"]),
+        proof_class=proof_class,
+        mode=mode,
+        judge_summary=result["judge_summary"],
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, result)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="evaluate-report",
+            path=report_path,
+            status=str(result["status"]),
+            semantic_role="evaluate-report",
+            payload=result,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="evaluate_executed", payload=result)
+        connection.commit()
+    return result
+
+
+def graph_checkpoint_backend(graph: dict[str, Any]) -> str:
+    backend = graph.get("checkpoint_backend")
+    return str(backend) if isinstance(backend, str) and backend else "sqlite"
+
+
+def graph_retry_round_cap(graph: dict[str, Any]) -> int:
+    retry_policy = graph.get("retry_policy") if isinstance(graph.get("retry_policy"), dict) else {}
+    try:
+        return int(retry_policy.get("round_cap", REPAIR_ROUND_CAP))
+    except (TypeError, ValueError):
+        return REPAIR_ROUND_CAP
+
+
+def build_context_management_contract(
+    *,
+    graph: dict[str, Any],
+    db_path: Path | None = None,
+    primary_report_path: Path | None = None,
+    context_pack_path: Path | None = None,
+    agent_index_path: Path | None = None,
+    report_entrypoint: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    contract: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_kind": "context-management",
+        "role": "context-index-and-resume-map",
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "evidence_policy": "on-disk-artifacts-only",
+        "managed_state": [
+            "entrypoints",
+            "source pins",
+            "worker handoffs",
+            "graph",
+            "retry policy",
+            "artifact refs",
+        ],
+        "pipeline": [
+            {
+                "stage": "plan",
+                "role": "planner",
+                "evidence": "entrypoints.worker_plan",
+            },
+            {
+                "stage": "translate",
+                "role": "worker",
+                "evidence": "workers[*].summary_path",
+                "fanout": True,
+            },
+            {
+                "stage": "verify",
+                "role": "verifier",
+                "evidence": "entrypoints.merge_summary",
+                "reduce": "merge",
+                "on_failure": "repair",
+            },
+            {
+                "stage": "repair",
+                "role": "repairer",
+                "trigger": "exit_code != 0",
+                "loopback_to": "translate",
+                "max_rounds": graph_retry_round_cap(graph),
+            },
+        ],
+        "update_rules": [
+            "all reusable paths are repo-relative",
+            "semantic acceptance remains owned by validators and final summaries",
+            "judge sidecars are path-only in context indexes to avoid hash cycles",
+        ],
+        "resume_protocol": {
+            "checkpoint_backend": graph_checkpoint_backend(graph),
+            "worker_state_source": "agent-index.agents_by_worker_id",
+            "open_repair_hint_source": "sqlite repair_hints plus worker auto_retry records",
+            "merge_precondition": "required worker summaries recorded or final summary fails closed",
+        },
+    }
+    if db_path is not None:
+        contract["resume_protocol"]["ledger_path"] = repo_relative(db_path, repo_root=repo_root)
+    if primary_report_path is not None:
+        contract["primary_report"] = repo_relative(primary_report_path, repo_root=repo_root)
+    if context_pack_path is not None:
+        contract["context_pack"] = repo_relative(context_pack_path, repo_root=repo_root)
+    if agent_index_path is not None:
+        contract["agent_index"] = repo_relative(agent_index_path, repo_root=repo_root)
+    if report_entrypoint:
+        contract["report_entrypoint"] = report_entrypoint
+    return contract
+
+
+def build_agent_coordination_contract(
+    *,
+    graph: dict[str, Any],
+    db_path: Path | None = None,
+    worker_count: int = 0,
+    mode: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    contract: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "contract_kind": "agent-coordination",
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "coordination_state": "sqlite-ledger-and-on-disk-reports",
+        "checkpoint_backend": graph_checkpoint_backend(graph),
+        "runtime": graph.get("runtime"),
+        "mode": mode,
+        "worker_count": int(worker_count),
+        "planner_ownership": {
+            "mode": "single-planner-per-run",
+            "assignment_transaction": "BEGIN IMMEDIATE before lease/out_root checks and writes",
+            "worker_fanout_starts_after": "worker plan and assignment artifacts are written",
+        },
+        "lease_policy": {
+            "fencing_token": "audit-only-monotonic-counter",
+            "enforced_guards": ["resource_key active lease owner", "per-run isolated_out_root uniqueness"],
+            "not_acceptance_gate": True,
+        },
+        "roles": {
+            "planner": {
+                "stage": "plan",
+                "inputs": ["batch profile", "source pins", "slice specs"],
+                "outputs": ["worker plan", "assignments", "context pack", "agent index"],
+                "status_source": "planner artifacts and SQLite ledger",
+                "acceptance_authority": "none",
+            },
+            "worker": {
+                "stage": "fanout-worker",
+                "inputs": ["assignment_path", "request_path"],
+                "outputs": ["summary_path", "report_path", "attempts", "final_decision"],
+                "isolation": "per-worker out_root",
+                "status_source": "worker summary and run-worker-report",
+                "acceptance_authority": "none",
+            },
+            "repairer": {
+                "stage": "repair-retry",
+                "inputs": ["repair_hints", "failed worker summary", "stderr tail"],
+                "outputs": ["retry attempt", "auto_retry", "attempts"],
+                "status_source": "repair_hints ledger and worker attempts",
+                "acceptance_authority": "none",
+                "round_cap": graph_retry_round_cap(graph),
+            },
+            "verifier": {
+                "stage": "merge-verify",
+                "inputs": ["worker summaries", "workflow metrics", "oracle evidence"],
+                "outputs": ["competition-run-summary", "workflow-metrics"],
+                "status_source": "validate_competition_run_summary",
+                "acceptance_authority": "competition-run-summary validator",
+            },
+            "reporter": {
+                "stage": "report",
+                "inputs": ["evaluate report", "context pack", "agent index", "judge evidence index"],
+                "outputs": ["judge-facing indexes"],
+                "status_source": "on-disk artifacts with sha256 where hash-stable",
+                "acceptance_authority": "none",
+            },
+        },
+        "resume_protocol": {
+            "checkpoint_backend": graph_checkpoint_backend(graph),
+            "worker_state_source": "agent-index.agents_by_worker_id",
+            "open_repair_hint_source": "sqlite repair_hints",
+            "merge_precondition": "all required worker summaries recorded before merge",
+            "resume_entrypoints": ["run-plan --plan", "run-worker --assignment", "evaluate --profile"],
+        },
+    }
+    if db_path is not None:
+        contract["resume_protocol"]["ledger_path"] = repo_relative(db_path, repo_root=repo_root)
+    return contract
+
+
+def build_architecture_contracts(graph: dict[str, Any]) -> dict[str, Any]:
+    context_contract = build_context_management_contract(graph=graph)
+    agent_contract = build_agent_coordination_contract(graph=graph)
+    return {
+        "context_management": {
+            "contract_kind": context_contract["contract_kind"],
+            "role": context_contract["role"],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "evidence_policy": context_contract["evidence_policy"],
+            "pipeline": context_contract["pipeline"],
+            "resume_protocol": context_contract["resume_protocol"],
+        },
+        "agent_coordination": {
+            "contract_kind": agent_contract["contract_kind"],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "coordination_state": agent_contract["coordination_state"],
+            "checkpoint_backend": agent_contract["checkpoint_backend"],
+            "planner_ownership": agent_contract["planner_ownership"],
+            "lease_policy": agent_contract["lease_policy"],
+            "roles": list(agent_contract["roles"]),
+            "resume_protocol": agent_contract["resume_protocol"],
+        },
+    }
+
+
+def build_judge_summary(
+    *,
+    entrypoint: str,
+    proof_class: str,
+    mode: str,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    context_refs: dict[str, dict[str, str]],
+    acceptance_boundary: dict[str, Any] | None = None,
+    route_metrics_artifact: dict[str, Any] | None = None,
+    before_after_exhibit_artifact: dict[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
+    merge_execution = (
+        run_result.get("merge_execution")
+        if isinstance(run_result.get("merge_execution"), dict)
+        else {}
+    )
+    final_summary = load_merge_summary(merge_execution, repo_root=repo_root)
+    workflow_metrics = load_merge_workflow_metrics(merge_execution, repo_root=repo_root)
+    slices = final_summary.get("slices") if isinstance(final_summary.get("slices"), dict) else {}
+    final_gate = final_summary.get("final_gate") if isinstance(final_summary.get("final_gate"), dict) else {}
+    final_gate_status = merge_execution.get("final_gate_status") or final_gate.get("status")
+    workers = [
+        {
+            "worker_id": worker.get("worker_id"),
+            "slice_id": worker.get("slice_id"),
+            "function": worker.get("function"),
+            "summary_status": worker.get("summary_status"),
+            "exit_code": int(worker.get("exit_code", 1)),
+            "recorded": bool(worker.get("recorded")),
+            "final_decision": worker.get("final_decision"),
+        }
+        for worker in run_result.get("workers", [])
+        if isinstance(worker, dict)
+    ]
+    semantic_claim_source = "final_gate_and_worker_summaries"
+    generated_draft_semantic_pass = None
+    if isinstance(acceptance_boundary, dict):
+        semantic_claim_source = str(acceptance_boundary.get("semantic_claim_source", semantic_claim_source))
+        if "generated_draft_semantic_pass" in acceptance_boundary:
+            generated_draft_semantic_pass = bool(acceptance_boundary["generated_draft_semantic_pass"])
+
+    core_translation_quality: dict[str, Any] = {
+        "final_gate_status": final_gate_status,
+        "semantic_claim_source": semantic_claim_source,
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "semantic_pass_count": int(slices.get("semantic_pass", 0) or 0),
+        "compiled_count": int(slices.get("compiled", 0) or 0),
+        "failed_count": int(slices.get("failed", 0) or 0),
+        "workers": workers,
+    }
+    if workflow_metrics:
+        unsafe_reduction = workflow_metrics.get("unsafe_reduction")
+        if isinstance(unsafe_reduction, dict):
+            core_translation_quality["unsafe_reduction"] = unsafe_reduction
+        translation_before_after = workflow_metrics.get("translation_before_after")
+        if isinstance(translation_before_after, dict):
+            core_translation_quality["translation_before_after"] = translation_before_after
+        core_translation_quality["repair_summary"] = summarize_workflow_repair_metrics(workflow_metrics)
+    if route_metrics_artifact is not None:
+        core_translation_quality["route_governance_metrics"] = route_metrics_artifact.get("binding", {})
+    if before_after_exhibit_artifact is not None:
+        binding = before_after_exhibit_artifact.get("binding", {})
+        payload = before_after_exhibit_artifact.get("payload", {})
+        core_translation_quality["before_after_exhibit"] = binding
+        if isinstance(payload, dict):
+            translation_before_after = payload.get("translation_before_after")
+            if isinstance(translation_before_after, dict):
+                core_translation_quality["translation_before_after"] = translation_before_after
+            unsafe_reduction = summarize_before_after_unsafe_reduction(payload)
+            if unsafe_reduction is not None:
+                core_translation_quality["unsafe_reduction"] = unsafe_reduction
+
+    return {
+        "report_kind": "judge-summary",
+        "entrypoint": entrypoint,
+        "proof_class": proof_class,
+        "mode": mode,
+        "harness_architecture": {
+            "entrypoint": entrypoint,
+            "planning_mode": plan.get("planning_mode", "source_file"),
+            "pipeline": [
+                "init-run",
+                "plan-explicit-workers" if plan.get("planning_mode") == "explicit_workers" else "plan-source-file",
+                "run-plan",
+                "merge",
+                "report",
+            ],
+            "graph_runtime": graph.get("runtime"),
+            "graph_nodes": graph.get("nodes", []),
+            "parallelism": run_result.get("parallelism"),
+            "auto_retry": run_result.get("auto_retry"),
+            "retry_policy": graph.get("retry_policy"),
+            "context_pack": context_refs.get("context_pack"),
+            "agent_index": context_refs.get("agent_index"),
+            "architecture_contracts": build_architecture_contracts(graph),
+            "worker_count": len(plan.get("units", [])) if isinstance(plan.get("units"), list) else 0,
+        },
+        "core_translation_quality": core_translation_quality,
+        "claim_boundary": (
+            "This summary is an index over verified on-disk reports; semantic acceptance remains owned by "
+            "competition-run-summary.json, workflow metrics, before/after evidence, and validators."
+        ),
+    }
+
+
+def build_judge_headline(
+    *,
+    entrypoint: str,
+    status: str,
+    proof_class: str,
+    mode: str,
+    judge_summary: Any,
+    acceptance_boundary: Any = None,
+    claim_boundary: Any = None,
+    route_metrics: Any = None,
+    opencode_runtime: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    summary = judge_summary if isinstance(judge_summary, dict) else {}
+    architecture = summary.get("harness_architecture") if isinstance(summary.get("harness_architecture"), dict) else {}
+    core_quality = (
+        summary.get("core_translation_quality")
+        if isinstance(summary.get("core_translation_quality"), dict)
+        else {}
+    )
+    boundary = claim_boundary if isinstance(claim_boundary, dict) else {}
+    acceptance = acceptance_boundary if isinstance(acceptance_boundary, dict) else {}
+    route = route_metrics if isinstance(route_metrics, dict) else {}
+    retry_policy = architecture.get("retry_policy") if isinstance(architecture.get("retry_policy"), dict) else {}
+    parallelism = architecture.get("parallelism") if isinstance(architecture.get("parallelism"), dict) else {}
+    worker_count = architecture.get("worker_count")
+    if not isinstance(worker_count, int):
+        workers = core_quality.get("workers")
+        worker_count = len(workers) if isinstance(workers, list) else 0
+
+    generated_draft_semantic_pass = boundary.get(
+        "generated_draft_semantic_pass",
+        acceptance.get("generated_draft_semantic_pass", core_quality.get("generated_draft_semantic_pass", False)),
+    )
+    if not isinstance(generated_draft_semantic_pass, bool):
+        generated_draft_semantic_pass = False
+
+    translation_coverage_numerator = boundary.get(
+        "translation_coverage_numerator",
+        route.get("translation_coverage_numerator", 0),
+    )
+    if isinstance(translation_coverage_numerator, bool):
+        translation_coverage_numerator = 0
+    try:
+        translation_coverage_numerator = int(translation_coverage_numerator)
+    except (TypeError, ValueError):
+        translation_coverage_numerator = 0
+
+    opencode_enabled = opencode_runtime is not None
+    headline = {
+        "report_kind": "judge-headline",
+        "entrypoint": entrypoint,
+        "status": status,
+        "proof_class": proof_class,
+        "mode": mode,
+        "graph_runtime": architecture.get("graph_runtime"),
+        "planning_mode": architecture.get("planning_mode"),
+        "pipeline": architecture.get("pipeline", []),
+        "worker_count": worker_count,
+        "parallelism": parallelism,
+        "repair_round_cap": retry_policy.get("round_cap", REPAIR_ROUND_CAP),
+        "repair_checkpoint": retry_policy.get("checkpoint", "repair_hints"),
+        "semantic_gate": False,
+        "semantic_claim_source": boundary.get(
+            "semantic_claim_source",
+            acceptance.get("semantic_claim_source", core_quality.get("semantic_claim_source", "unknown")),
+        ),
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "translation_coverage_numerator": translation_coverage_numerator,
+        "final_gate_status": core_quality.get("final_gate_status"),
+        "semantic_pass_count": int(core_quality.get("semantic_pass_count", 0) or 0),
+        "compiled_count": int(core_quality.get("compiled_count", 0) or 0),
+        "failed_count": int(core_quality.get("failed_count", 0) or 0),
+        "context_pack": architecture.get("context_pack"),
+        "agent_index": architecture.get("agent_index"),
+        "context_index": {
+            "context_pack": architecture.get("context_pack"),
+            "agent_index": architecture.get("agent_index"),
+            "evidence_policy": "on-disk-artifacts-only",
+            "worker_state_source": "agent-index.agents_by_worker_id",
+        },
+        "opencode_runtime": {
+            "enabled": opencode_enabled,
+            "worker_count": int(opencode_runtime.get("worker_count", 0)) if opencode_runtime else 0,
+            "all_contracts_executed": bool(opencode_runtime.get("all_contracts_executed")) if opencode_runtime else False,
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+        },
+    }
+    unsafe_reduction = core_quality.get("unsafe_reduction")
+    if isinstance(unsafe_reduction, dict):
+        headline["unsafe_reduction"] = unsafe_reduction
+    repair_summary = core_quality.get("repair_summary")
+    if isinstance(repair_summary, dict):
+        headline["repair_summary"] = repair_summary
+    return headline
+
+
+def load_merge_summary(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary_path_text = merge_execution.get("summary_path")
+    if not isinstance(summary_path_text, str) or not summary_path_text:
+        return {}
+    summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+    if not summary_path.exists():
+        return {}
+    return load_json(summary_path)
+
+
+def load_merge_workflow_metrics(merge_execution: dict[str, Any], *, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    summary_path_text = merge_execution.get("summary_path")
+    if not isinstance(summary_path_text, str) or not summary_path_text:
+        return {}
+    summary_path = repo_path(Path(summary_path_text), repo_root=repo_root)
+    if not summary_path.exists():
+        return {}
+    summary = load_json(summary_path)
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return {}
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        return {}
+    metrics_path = validate_competition_run_summary.resolve_summary_artifact(
+        metrics_ref,
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+    if metrics_path is None or sha256_file(metrics_path) != expected_sha:
+        return {}
+    metrics = load_json(metrics_path)
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def summarize_workflow_repair_metrics(workflow_metrics: dict[str, Any]) -> dict[str, Any]:
+    per_unit_statuses = workflow_metrics.get("per_unit_statuses")
+    units = [unit for unit in per_unit_statuses if isinstance(unit, dict)] if isinstance(per_unit_statuses, list) else []
+    histories = [unit for unit in units if isinstance(unit.get("repair_history"), dict)]
+    root_cause_counts = workflow_metrics.get("root_cause_counts")
+    return {
+        "avg_repair_rounds": float(workflow_metrics.get("avg_repair_rounds", 0.0) or 0.0),
+        "auto_recovery_rate": float(workflow_metrics.get("auto_recovery_rate", 0.0) or 0.0),
+        "human_interventions": int(workflow_metrics.get("human_interventions", 0) or 0),
+        "repair_history_unit_count": len(histories),
+        "auto_recovered_units": sum(1 for unit in units if unit.get("auto_recovered") is True),
+        "root_cause_counts": root_cause_counts if isinstance(root_cause_counts, dict) else {},
+    }
+
+
+def summarize_before_after_unsafe_reduction(payload: dict[str, Any]) -> dict[str, Any] | None:
+    units = payload.get("units")
+    if not isinstance(units, list):
+        return None
+    baseline_total = 0
+    current_total = 0
+    reduced_by_total = 0
+    measured = 0
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        unsafe_reduction = unit.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            continue
+        baseline_total += int(unsafe_reduction.get("baseline_total_unsafe", 0) or 0)
+        current_total += int(unsafe_reduction.get("current_total_unsafe", 0) or 0)
+        reduced_by_total += int(unsafe_reduction.get("reduced_by", 0) or 0)
+        measured += 1
+    if measured == 0:
+        return None
+    return {
+        "status": "measured",
+        "unit_count": measured,
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": reduced_by_total,
+    }
+
+
+def write_context_pack_and_agent_index(
+    *,
+    db_path: Path,
+    run_id: str,
+    target_id: str,
+    proof_class: str,
+    mode: str,
+    out_root: Path,
+    plan: dict[str, Any],
+    run_result: dict[str, Any],
+    primary_report_path: Path,
+    report_entrypoint: str,
+    acceptance_boundary: dict[str, Any] | None = None,
+    attempt_evidence_policy: dict[str, Any] | None = None,
+    report_artifacts: dict[str, dict[str, Any]] | None = None,
+    proof_class_resolution: dict[str, Any] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, dict[str, str]]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    harness_dir = out_root / "harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    context_pack_path = harness_dir / "context-pack.json"
+    agent_index_path = harness_dir / "agent-index.json"
+    worker_results_by_id = {
+        str(worker.get("worker_id")): worker
+        for worker in run_result.get("workers", [])
+        if isinstance(worker, dict) and worker.get("worker_id")
+    }
+    workers = []
+    agents = []
+    for unit in plan.get("units", []):
+        if not isinstance(unit, dict):
+            continue
+        worker_id = str(unit.get("worker_id", ""))
+        worker_result = worker_results_by_id.get(worker_id, {})
+        worker_entry = {
+            "worker_id": worker_id,
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "out_root": unit.get("out_root"),
+            "assignment_path": unit.get("assignment_path"),
+            "request_path": unit.get("request_path"),
+            "slice_spec": unit.get("slice_spec"),
+            "source_repo_root": unit.get("source_repo_root"),
+            "source_file": unit.get("source_file"),
+            "source_commit": unit.get("source_commit"),
+            "require_source_commit": unit.get("require_source_commit"),
+            "source_repository": unit.get("source_repository"),
+            "source_branch": unit.get("source_branch"),
+            "source_sha256": unit.get("source_sha256"),
+            "summary_path": worker_result.get("summary_path"),
+            "report_path": worker_result.get("report_path"),
+            "summary_status": worker_result.get("summary_status"),
+            "exit_code": int(worker_result.get("exit_code", 1)),
+            "recorded": bool(worker_result.get("recorded")),
+        }
+        if isinstance(worker_result.get("attempts"), list):
+            worker_entry["attempts"] = worker_result["attempts"]
+        if isinstance(worker_result.get("final_decision"), dict):
+            worker_entry["final_decision"] = worker_result["final_decision"]
+        copy_opencode_worker_evidence(worker_result, worker_entry)
+        agent_entry = {
+            "worker_id": worker_id,
+            "role": "slice-worker",
+            "runtime": mode,
+            "status": worker_entry["summary_status"] or "missing-summary",
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "isolated_out_root": unit.get("out_root"),
+            "assignment_path": unit.get("assignment_path"),
+            "request_path": unit.get("request_path"),
+            "source_repo_root": unit.get("source_repo_root"),
+            "source_file": unit.get("source_file"),
+            "source_commit": unit.get("source_commit"),
+            "require_source_commit": unit.get("require_source_commit"),
+            "source_repository": unit.get("source_repository"),
+            "source_branch": unit.get("source_branch"),
+            "source_sha256": unit.get("source_sha256"),
+            "summary_path": worker_result.get("summary_path"),
+            "report_path": worker_result.get("report_path"),
+            "exit_code": worker_entry["exit_code"],
+            "recorded": worker_entry["recorded"],
+        }
+        if isinstance(worker_result.get("attempts"), list):
+            agent_entry["attempts"] = worker_result["attempts"]
+        if isinstance(worker_result.get("final_decision"), dict):
+            agent_entry["final_decision"] = worker_result["final_decision"]
+        copy_opencode_worker_evidence(worker_result, agent_entry)
+        if isinstance(worker_result.get("auto_retry"), dict):
+            worker_entry["auto_retry"] = worker_result["auto_retry"]
+            agent_entry["auto_retry"] = worker_result["auto_retry"]
+        if isinstance(worker_result.get("auto_retry_suppressed"), dict):
+            worker_entry["auto_retry_suppressed"] = worker_result["auto_retry_suppressed"]
+            agent_entry["auto_retry_suppressed"] = worker_result["auto_retry_suppressed"]
+        workers.append(worker_entry)
+        agents.append(agent_entry)
+    graph = run_result.get("graph") if isinstance(run_result.get("graph"), dict) else {}
+    context_pack_id = f"{run_id}-context-pack"
+    report_artifacts = dict(report_artifacts or {})
+    if isinstance(run_result.get("opencode_preflight_report"), dict):
+        report_artifacts.setdefault("opencode_preflight_report", run_result["opencode_preflight_report"])
+    verified_baseline_ref = verified_unsafe_baseline_binding_from_sources(
+        {"attempt_evidence_policy": attempt_evidence_policy} if attempt_evidence_policy is not None else None,
+        run_result,
+        repo_root=repo_root,
+    )
+    if verified_baseline_ref is not None:
+        report_artifacts.setdefault("verified_unsafe_baseline", verified_baseline_ref)
+    report_entrypoints = {
+        name: artifact.get("path")
+        for name, artifact in report_artifacts.items()
+        if isinstance(artifact, dict) and isinstance(artifact.get("path"), str)
+    }
+    context_management_contract = build_context_management_contract(
+        graph=graph,
+        db_path=db_path,
+        primary_report_path=primary_report_path,
+        context_pack_path=context_pack_path,
+        agent_index_path=agent_index_path,
+        report_entrypoint=report_entrypoint,
+        repo_root=repo_root,
+    )
+    context_pack = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "context-pack",
+        "context_pack_id": context_pack_id,
+        "run_id": run_id,
+        "target_id": target_id,
+        "proof_class": proof_class,
+        **({"proof_class_resolution": proof_class_resolution} if proof_class_resolution is not None else {}),
+        "mode": mode,
+        "status": run_result.get("status"),
+        "budget": {
+            "depth": 1,
+            "max_tokens": 20000,
+        },
+        "source": {
+            "planning_mode": plan.get("planning_mode", "source_file"),
+            "repo_root": plan.get("source_repo_root"),
+            "source_file": plan.get("source_file"),
+            "source_commit": plan.get("source_commit"),
+            "require_source_commit": plan.get("require_source_commit"),
+            "source_repository": plan.get("source_repository"),
+            "source_branch": plan.get("source_branch"),
+            "source_sha256": plan.get("source_sha256"),

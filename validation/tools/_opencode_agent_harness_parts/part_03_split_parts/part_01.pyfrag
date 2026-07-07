@@ -1,0 +1,204 @@
+            "worker_sources": [
+                {
+                    "worker_id": worker.get("worker_id"),
+                    "slice_id": worker.get("slice_id"),
+                    "function": worker.get("function"),
+                    "source_repo_root": worker.get("source_repo_root"),
+                    "source_file": worker.get("source_file"),
+                    "source_commit": worker.get("source_commit"),
+                    "require_source_commit": worker.get("require_source_commit"),
+                    "source_repository": worker.get("source_repository"),
+                    "source_branch": worker.get("source_branch"),
+                    "source_sha256": worker.get("source_sha256"),
+                }
+                for worker in workers
+                if isinstance(worker, dict) and worker.get("source_commit")
+            ],
+        },
+        "entrypoints": {
+            "primary_report": repo_relative(primary_report_path, repo_root=repo_root),
+            report_entrypoint: repo_relative(primary_report_path, repo_root=repo_root),
+            "run_plan_report": run_result.get("report_path"),
+            "worker_plan": plan.get("plan_path"),
+            "merge_plan": run_result.get("merge_plan", {}).get("path") if isinstance(run_result.get("merge_plan"), dict) else None,
+            "merge_summary": run_result.get("merge_execution", {}).get("summary_path")
+            if isinstance(run_result.get("merge_execution"), dict)
+            else None,
+            "agent_index": repo_relative(agent_index_path, repo_root=repo_root),
+            **report_entrypoints,
+        },
+        "graph": graph,
+        "parallelism": run_result.get("parallelism"),
+        "retry_policy": graph.get("retry_policy"),
+        "workers": workers,
+        "context_management_contract": context_management_contract,
+        "acceptance_boundary": {
+            "semantic_acceptance": "final verification and worker summaries decide acceptance; this pack is an index only",
+            "candidate_sources": ["c2rust-baseline", "deterministic-worker", "opencode-worker"],
+        },
+    }
+    if acceptance_boundary is not None:
+        context_pack["acceptance_boundary"]["profile"] = acceptance_boundary
+    if attempt_evidence_policy is not None:
+        context_pack["attempt_evidence_policy"] = attempt_evidence_policy
+    if report_artifacts:
+        context_pack["report_artifacts"] = report_artifacts
+    agents_by_worker_id = {
+        str(agent["worker_id"]): agent
+        for agent in agents
+        if isinstance(agent, dict) and agent.get("worker_id")
+    }
+    agent_index = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "agent-index",
+        "run_id": run_id,
+        "target_id": target_id,
+        "proof_class": proof_class,
+        **({"proof_class_resolution": proof_class_resolution} if proof_class_resolution is not None else {}),
+        "checkpoint_backend": graph.get("checkpoint_backend", "sqlite"),
+        "agent_coordination_contract": build_agent_coordination_contract(
+            graph=graph,
+            db_path=db_path,
+            worker_count=len(workers),
+            mode=mode,
+            repo_root=repo_root,
+        ),
+        "planner": {
+            "plan_path": plan.get("plan_path"),
+            "worker_count": len(workers),
+        },
+        "agents": agents,
+        "agents_by_worker_id": agents_by_worker_id,
+        "merge": {
+            "status": run_result.get("status"),
+            "merge_plan": run_result.get("merge_plan"),
+            "merge_execution": run_result.get("merge_execution"),
+        },
+    }
+    if report_artifacts:
+        agent_index["reports"] = report_artifacts
+    if attempt_evidence_policy is not None:
+        agent_index["attempt_evidence_policy"] = attempt_evidence_policy
+    atomic_write_json(context_pack_path, context_pack)
+    atomic_write_json(agent_index_path, agent_index)
+    context_pack_ref = {"path": repo_relative(context_pack_path, repo_root=repo_root), "sha256": sha256_file(context_pack_path)}
+    agent_index_ref = {"path": repo_relative(agent_index_path, repo_root=repo_root), "sha256": sha256_file(agent_index_path)}
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(context_pack_id) do update set
+              run_id=excluded.run_id,
+              target_id=excluded.target_id,
+              slice_id=excluded.slice_id,
+              depth=excluded.depth,
+              max_tokens=excluded.max_tokens,
+              artifact_path=excluded.artifact_path,
+              artifact_sha256=excluded.artifact_sha256,
+              payload_json=excluded.payload_json
+            """,
+            (
+                context_pack_id,
+                run_id,
+                target_id,
+                None,
+                int(context_pack["budget"]["depth"]),
+                int(context_pack["budget"]["max_tokens"]),
+                context_pack_ref["path"],
+                context_pack_ref["sha256"],
+                json.dumps(context_pack, sort_keys=True),
+            ),
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="context-pack",
+            path=context_pack_path,
+            status=str(run_result.get("status", "unknown")),
+            semantic_role="agent-context-pack",
+            payload=context_pack,
+            repo_root=repo_root,
+        )
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="agent-index",
+            path=agent_index_path,
+            status=str(run_result.get("status", "unknown")),
+            semantic_role="agent-index",
+            payload=agent_index,
+            repo_root=repo_root,
+        )
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="context_pack_written",
+            payload={"context_pack": context_pack_ref, "agent_index": agent_index_ref},
+        )
+        connection.commit()
+    return {"context_pack": context_pack_ref, "agent_index": agent_index_ref}
+
+
+def write_route_governance_metrics_profile_report(
+    *,
+    profile: dict[str, Any],
+    out_root: Path,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any] | None:
+    if not profile_bool(profile, "emit_route_governance_metrics_report", default=False):
+        return None
+    coverage_report_text = profile_string(profile, "route_governance_metrics_coverage_report")
+    evidence_root_text = profile_string(
+        profile,
+        "route_governance_metrics_evidence_root",
+        default="validation/evidence",
+    )
+    payload = route_governance_metrics_report.build_report(
+        repo_root,
+        coverage_report_path=Path(coverage_report_text) if coverage_report_text is not None else None,
+        evidence_root=Path(evidence_root_text or "validation/evidence"),
+        competition_summary_paths=route_governance_competition_summary_paths(out_root),
+    )
+    report_path = out_root / "summary" / "route-governance-metrics-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, payload)
+    metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
+    s2_workflow_metrics = metrics.get("s2_workflow_metrics") if isinstance(metrics.get("s2_workflow_metrics"), dict) else {}
+    unsafe_reduction = (
+        s2_workflow_metrics.get("unsafe_reduction")
+        if isinstance(s2_workflow_metrics.get("unsafe_reduction"), dict)
+        else {}
+    )
+    translation_before_after = (
+        s2_workflow_metrics.get("translation_before_after")
+        if isinstance(s2_workflow_metrics.get("translation_before_after"), dict)
+        else {}
+    )
+    binding = {
+        "path": repo_relative(report_path, repo_root=repo_root),
+        "sha256": sha256_file(report_path),
+        "status": str(payload.get("status", "unknown")),
+        "report_kind": str(payload.get("report_kind", "route-governance-metrics")),
+        "translation_coverage_numerator": int(metrics.get("translation_coverage_numerator", 0)),
+        "accepted_evidence_semantic_pass_count": int(metrics.get("accepted_evidence_semantic_pass_count", 0)),
+        "tracked_slice_gate_contexts": int(metrics.get("tracked_slice_gate_contexts", 0)),
+        "s2_workflow_run_count": int(s2_workflow_metrics.get("run_count", 0)),
+        "s2_unsafe_reduction_status": str(unsafe_reduction.get("status", "not_measured")),
+        "s2_translation_before_after_status": str(translation_before_after.get("status", "not_provided")),
+        "s2_translation_before_after_unit_count": int(translation_before_after.get("unit_count", 0)),
+        "s2_translation_before_after_measured_unsafe_unit_count": int(
+            translation_before_after.get("measured_unsafe_unit_count", 0)
+        ),
+        "s2_translation_before_after_accepted_patch_unit_count": int(
+            translation_before_after.get("accepted_patch_unit_count", 0)
+        ),
+        "claim_boundary": str(payload.get("claim_boundary", "")),
+    }
+    return {"binding": binding, "payload": payload}

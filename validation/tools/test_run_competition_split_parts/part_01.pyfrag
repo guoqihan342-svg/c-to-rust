@@ -1,0 +1,800 @@
+
+        def fake_run_competition(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionRunResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_run_competition = module.run_competition
+        try:
+            module.run_competition = fake_run_competition
+            sys.argv = [
+                "run_competition.py",
+                "--source-repo-root",
+                str(REPO_ROOT / "source-repo"),
+                "--source-file",
+                "src/direct.c",
+                "--function",
+                "direct_slice",
+                "--target-id",
+                "demo",
+                "--slice-id",
+                "direct-slice",
+                "--source-commit",
+                "abc123",
+                "--source-repository",
+                "https://gitcode.com/xwxf/FlashDB.git",
+                "--source-branch",
+                "competition",
+                "--require-source-commit",
+                "abc123",
+                "--compiler-command-source",
+                "compile_commands.json",
+                "--include-path",
+                "include",
+                "--define",
+                "DIRECT=1",
+            ]
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition = original_run_competition
+
+        extraction_specs = calls["extraction_specs"]
+        self.assertEqual(len(extraction_specs), 1)
+        extraction = extraction_specs[0]
+        self.assertEqual(extraction["repo_root"], str(REPO_ROOT / "source-repo"))
+        self.assertEqual(extraction["source_file"], "src/direct.c")
+        self.assertEqual(extraction["function"], "direct_slice")
+        self.assertEqual(extraction["target_id"], "demo")
+        self.assertEqual(extraction["slice_id"], "direct-slice")
+        self.assertEqual(extraction["source_commit"], "abc123")
+        self.assertEqual(extraction["source_repository"], "https://gitcode.com/xwxf/FlashDB.git")
+        self.assertEqual(extraction["source_branch"], "competition")
+        self.assertEqual(extraction["require_source_commit"], "abc123")
+        self.assertEqual(extraction["compiler_command_source"], "compile_commands.json")
+        self.assertEqual(extraction["include_paths"], ["include"])
+        self.assertEqual(extraction["defines"], ["DIRECT=1"])
+
+    def test_main_accepts_optional_governance_check_cli_arg(self) -> None:
+        module = load_runner_module()
+        calls: dict[str, object] = {}
+
+        def fake_run_competition(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionRunResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_run_competition = module.run_competition
+        try:
+            module.run_competition = fake_run_competition
+            sys.argv = [
+                "run_competition.py",
+                "--slice-spec",
+                "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
+                "--run-optional-governance-checks",
+            ]
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition = original_run_competition
+
+        self.assertEqual(calls["slice_specs"], [Path("validation/slice-specs/flashdb-real-fdb-calc-crc32.json")])
+        self.assertTrue(calls["run_optional_governance_checks"])
+
+    def test_main_accepts_worker_summary_cli_args(self) -> None:
+        module = load_runner_module()
+        calls: dict[str, object] = {}
+
+        def fake_run_competition(**kwargs: object) -> object:
+            calls.update(kwargs)
+            return module.CompetitionRunResult(
+                exit_code=0,
+                summary_path=Path("summary.json"),
+                summary={"status": "fake"},
+            )
+
+        original_argv = sys.argv
+        original_run_competition = module.run_competition
+        try:
+            module.run_competition = fake_run_competition
+            sys.argv = [
+                "run_competition.py",
+                "--worker-summary",
+                "target/competition-out/workers/worker-a/summary/competition-run-summary.json",
+            ]
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.main(), 0)
+        finally:
+            sys.argv = original_argv
+            module.run_competition = original_run_competition
+
+        self.assertEqual(
+            calls["worker_summaries"],
+            [Path("target/competition-out/workers/worker-a/summary/competition-run-summary.json")],
+        )
+
+    def test_main_rejects_incomplete_direct_extraction_cli_args(self) -> None:
+        module = load_runner_module()
+        original_argv = sys.argv
+        try:
+            sys.argv = [
+                "run_competition.py",
+                "--source-file",
+                "src/direct.c",
+                "--function",
+                "direct_slice",
+                "--target-id",
+                "demo",
+                "--slice-id",
+                "direct-slice",
+            ]
+
+            stderr = io.StringIO()
+            with self.assertRaises(SystemExit) as raised:
+                with contextlib.redirect_stderr(stderr):
+                    module.main()
+        finally:
+            sys.argv = original_argv
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("direct extraction args require --source-repo-root", stderr.getvalue())
+
+    def test_runner_counts_extract_failure_as_slice_failure_and_logs_it(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            extract_spec = write_extract_spec(tmp_path, "demo", "bad-extract")
+            fake_runner = FakeCommandRunner(fail_commands_containing={"extract_source_slice.py"})
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[extract_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["failed"], 1)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("auto_migrate.py" in text for text in command_texts))
+            entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            extract_entries = [entry for entry in entries if entry["step"] == "extract-slice-bad-extract"]
+            self.assertEqual(len(extract_entries), 1)
+            self.assertEqual(extract_entries[0]["returncode"], 1)
+            self.assertIn("failed extract_source_slice.py", extract_entries[0]["stderr"])
+
+    def test_runner_combines_existing_and_extracted_slice_specs(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            existing_spec = write_slice_spec(tmp_path, "demo", "existing-slice")
+            extract_spec = write_extract_spec(tmp_path, "demo", "extracted-slice")
+            write_final_verification(out_root / "evidence", "demo", "existing-slice", semantic_pass=True)
+            write_final_verification(out_root / "evidence", "demo", "extracted-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[existing_spec],
+                extraction_specs=[extract_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            auto_migrate_commands = [text for text in command_texts if "auto_migrate.py" in text]
+            self.assertEqual(len(auto_migrate_commands), 2)
+            self.assertTrue(any("existing-slice" in text for text in auto_migrate_commands))
+            self.assertTrue(any("extracted-slice" in text for text in auto_migrate_commands))
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 2)
+            self.assertEqual(summary["slices"]["semantic_pass"], 2)
+
+    def test_runner_requires_slice_spec_or_extract_spec(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            with self.assertRaises(SystemExit) as raised:
+                module.run_competition(
+                    slice_specs=[],
+                    extraction_specs=[],
+                    out_root=Path(tmp) / "competition-out",
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="run-test",
+                )
+
+        self.assertIn("--slice-spec, --extract-spec, --worker-summary, or direct extraction argument group", str(raised.exception))
+
+    def test_runner_archives_command_logs_with_exit_code_and_output(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            log_path = out_root / "logs" / "commands.jsonl"
+            self.assertTrue(log_path.exists())
+            entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+            steps = [entry["step"] for entry in entries]
+            self.assertEqual(
+                steps,
+                [
+                    "environment-check",
+                    "auto-migrate-store-add-one",
+                    "validate-evidence-store-add-one",
+                    "unsafe-budget",
+                    "validate-competition-summary",
+                ],
+            )
+            self.assertNotIn("openspec-validate", steps)
+            self.assertEqual(entries[0]["step"], "environment-check")
+            self.assertIn("config/competition-env/env.sh", " ".join(entries[0]["command"]))
+            self.assertEqual(entries[0]["returncode"], 0)
+            self.assertEqual(entries[0]["stdout"], "ok")
+            self.assertEqual(entries[0]["stderr"], "")
+            self.assertTrue(all(not Path(entry["log_path"]).is_absolute() for entry in entries))
+            self.assertTrue(all("\\" not in entry["log_path"] for entry in entries))
+            self.assertTrue(all(entry.get("run_id") == "run-test" for entry in entries))
+            self.assertTrue(all(entry.get("canonical") is True for entry in entries))
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["command_log"]["path"], "logs/commands.jsonl")
+            self.assertEqual(summary["command_log"]["sha256"], module.sha256(log_path))
+            validator = load_summary_validator_module()
+            self.assertEqual(
+                validator.validate_summary(
+                    out_root / "summary" / "competition-run-summary.json",
+                    repo_root=REPO_ROOT,
+                )["status"],
+                "passed",
+            )
+
+    def test_runner_archives_failed_slice_command_without_unexecuted_validator_log(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "bad-slice")
+            fake_runner = FakeCommandRunner(fail_auto_migrate_for={"bad-slice"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            auto_migrate_entries = [entry for entry in entries if entry["step"] == "auto-migrate-bad-slice"]
+            self.assertEqual(len(auto_migrate_entries), 1)
+            self.assertEqual(auto_migrate_entries[0]["returncode"], 1)
+            self.assertIn("failed bad-slice", auto_migrate_entries[0]["stderr"])
+            self.assertFalse(any(entry["step"] == "validate-evidence-bad-slice" for entry in entries))
+
+    def test_runner_continues_after_slice_failure_and_marks_summary_failed(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            bad_spec = write_slice_spec(tmp_path, "demo", "bad-slice")
+            good_spec = write_slice_spec(tmp_path, "demo", "good-slice")
+            write_final_verification(out_root / "evidence", "demo", "good-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_auto_migrate_for={"bad-slice"})
+
+            result = module.run_competition(
+                slice_specs=[bad_spec, good_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            auto_migrate_commands = [
+                command for command in fake_runner.commands if any("auto_migrate.py" in item for item in command)
+            ]
+            self.assertEqual(len(auto_migrate_commands), 2)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 2)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 1)
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_merges_worker_summaries_without_reprocessing_slices(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker_a = write_worker_summary(worker_root, "worker-a", attempted=1, semantic_pass=1)
+            write_worker_assignment_request(
+                out_root,
+                "worker-a",
+                target_id="demo",
+                slice_id="demo-first",
+                function="first_unit",
+                source_commit="commit-one",
+                require_source_commit="commit-one",
+            )
+            worker_b = write_worker_summary(
+                worker_root,
+                "worker-b",
+                attempted=2,
+                semantic_pass=1,
+                failed=1,
+                final_gate_status="failed",
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_a, worker_b],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("auto_migrate.py" in text for text in command_texts))
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 3)
+            self.assertEqual(summary["slices"]["semantic_pass"], 2)
+            self.assertEqual(summary["slices"]["failed"], 1)
+            self.assertEqual(summary["workers"]["count"], 2)
+            self.assertEqual(summary["workers"]["summaries"][0]["status"], "passed")
+            self.assertEqual(summary["workers"]["summaries"][0]["worker_id"], "worker-a")
+            self.assertEqual(summary["workers"]["summaries"][0]["function"], "first_unit")
+            self.assertEqual(summary["workers"]["summaries"][0]["source_file"], "src/fdb_utils.c")
+            self.assertEqual(summary["workers"]["summaries"][0]["source_commit"], "commit-one")
+            self.assertEqual(summary["workers"]["summaries"][0]["source_sha256"], "a" * 64)
+            self.assertEqual(summary["workers"]["summaries"][0]["require_source_commit"], "commit-one")
+            self.assertEqual(summary["workers"]["summaries"][0]["slice_specs"], ["validation/slice-specs/demo-first.json"])
+            self.assertEqual(summary["workers"]["summaries"][1]["status"], "failed")
+            self.assertEqual(summary["workers"]["summaries"][1]["worker_id"], "worker-b")
+            self.assertNotIn("source_commit", summary["workers"]["summaries"][1])
+            self.assertEqual(summary["final_gate"]["status"], "failed")
+
+    def test_runner_aggregates_worker_workflow_metrics_into_parent_artifact(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker_a = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=2,
+                compiled=2,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 2,
+                    "units_converged": 1,
+                    "units_baseline_only": 1,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 1.5,
+                    "auto_recovery_rate": 0.5,
+                    "human_interventions": 1,
+                    "always_compiles": True,
+                    "always_equivalent": False,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 9,
+                    "llm_calls": 3,
+                    "per_unit_statuses": [],
+                },
+            )
+            worker_b = write_worker_summary(
+                worker_root,
+                "worker-b",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-b",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 4,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [],
+                },
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_a, worker_b],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            summary = json.loads(parent_summary_path.read_text(encoding="utf-8"))
+            self.assertNotIn("workflow_metrics", summary["workers"]["summaries"][0])
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["units_total"], 3)
+            self.assertEqual(metrics["units_converged"], 2)
+            self.assertEqual(metrics["units_baseline_only"], 1)
+            self.assertEqual(metrics["avg_repair_rounds"], 1.0)
+            self.assertAlmostEqual(metrics["auto_recovery_rate"], 1.0 / 3.0)
+            self.assertEqual(metrics["human_interventions"], 1)
+            self.assertEqual(metrics["llm_calls"], 4)
+
+    def test_runner_expands_multi_unit_worker_per_unit_statuses_into_parent_workflow_metrics(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=2,
+                semantic_pass=1,
+                final_gate_status="blocked",
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 2,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.5,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": False,
+                    "always_equivalent": False,
+                    "fail_closed_count": 1,
+                    "root_cause_counts": {"rustc_compile_error": 1},
+                    "wall_clock_seconds": 6,
+                    "llm_calls": 2,
+                    "per_unit_statuses": [
+                        {
+                            "unit_id": "demo/unit-a",
+                            "source": "worker-summary",
+                            "status": "converged",
+                            "compiled": True,
+                            "semantic_pass": True,
+                            "refused": False,
+                            "blocked": False,
+                            "failed": False,
+                            "llm_calls": 1,
+                        },
+                        {
+                            "unit_id": "demo/unit-b",
+                            "source": "worker-summary",
+                            "status": "blocked",
+                            "compiled": False,
+                            "semantic_pass": False,
+                            "refused": False,
+                            "blocked": True,
+                            "failed": False,
+                            "root_cause_key": "rustc_compile_error",
+                            "llm_calls": 1,
+                        },
+                    ],
+                },
+            )
+            worker_summary = json.loads(worker.read_text(encoding="utf-8"))
+            worker_summary["slices"]["blocked"] = 1
+            worker.write_text(json.dumps(worker_summary, sort_keys=True), encoding="utf-8")
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"], "passed")
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual([unit["unit_id"] for unit in metrics["per_unit_statuses"]], ["demo/unit-a", "demo/unit-b"])
+            self.assertEqual(metrics["root_cause_counts"], {"rustc_compile_error": 1})
+            self.assertEqual(metrics["per_unit_statuses"][1]["root_cause_key"], "rustc_compile_error")
+            self.assertEqual(metrics["per_unit_statuses"][0]["worker_summary_path"], "workers/worker-a/summary/competition-run-summary.json")
+            self.assertEqual(metrics["llm_calls"], 2)
+
+    def test_runner_preserves_worker_root_cause_metrics_for_opencode_contract_failure(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=1,
+                semantic_pass=0,
+                final_gate_status="blocked",
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 0,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {"status": "not_measured"},
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": False,
+                    "always_equivalent": False,
+                    "fail_closed_count": 1,
+                    "root_cause_counts": {"opencode_contract_not_executed": 1},
+                    "wall_clock_seconds": 4,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [
+                        {
+                            "unit_id": "demo/demo-add-one",
+                            "source": "opencode-worker",
+                            "status": "blocked",
+                            "compiled": False,
+                            "semantic_pass": False,
+                            "refused": False,
+                            "blocked": True,
+                            "failed": False,
+                            "root_cause_key": "opencode_contract_not_executed",
+                            "opencode_contract_verification": {
+                                "status": "not-executed",
+                                "worker_command_seen": False,
+                                "executed_shell_command_count": 1,
+                            },
+                        }
+                    ],
+                },
+            )
+            worker_summary = json.loads(worker.read_text(encoding="utf-8"))
+            worker_summary["slices"]["blocked"] = 1
+            worker.write_text(json.dumps(worker_summary, sort_keys=True), encoding="utf-8")
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["fail_closed_count"], 1)
+            self.assertEqual(metrics["root_cause_counts"], {"opencode_contract_not_executed": 1})
+            self.assertEqual(metrics["per_unit_statuses"][0]["root_cause_key"], "opencode_contract_not_executed")
+            self.assertEqual(metrics["per_unit_statuses"][0]["opencode_contract_verification"]["status"], "not-executed")
+
+    def test_runner_aggregates_measured_worker_unsafe_reduction_into_parent_artifact(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            worker_a = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 8,
+                        "current_total_unsafe": 5,
+                        "reduced_by": 3,
+                        "ratio": 0.625,
+                    },
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 3,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [],
+                },
+            )
+            worker_b = write_worker_summary(
+                worker_root,
+                "worker-b",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-b",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 4,
+                        "current_total_unsafe": 2,
+                        "reduced_by": 2,
+                        "ratio": 0.5,
+                    },
+                    "avg_repair_rounds": 0.0,
+                    "auto_recovery_rate": 0.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 2,
+                    "llm_calls": 0,
+                    "per_unit_statuses": [],
+                },
+            )
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[],
+                worker_summaries=[worker_a, worker_b],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(metrics["unsafe_reduction"]["baseline_total_unsafe"], 12)
+            self.assertEqual(metrics["unsafe_reduction"]["current_total_unsafe"], 7)
+            self.assertEqual(metrics["unsafe_reduction"]["reduced_by"], 5)
+            self.assertAlmostEqual(metrics["unsafe_reduction"]["ratio"], 7 / 12)
+
+    def test_runner_preserves_worker_translation_before_after_evidence(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            worker_root = out_root / "workers"
+            before_after = write_worker_before_after_artifacts(worker_root, "worker-a")
+            worker = write_worker_summary(
+                worker_root,
+                "worker-a",
+                attempted=1,
+                semantic_pass=1,
+                workflow_metrics={
+                    "schema_version": 1,
+                    "run_id": "run-worker-a",
+                    "proof_class": "local-simulation",
+                    "units_total": 1,
+                    "units_converged": 1,
+                    "units_baseline_only": 0,
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 6,
+                        "current_total_unsafe": 2,
+                        "reduced_by": 4,
+                        "ratio": 2 / 6,
+                    },
+                    "translation_before_after": {
+                        "status": "bound",
+                        "unit_count": 1,
+                        "measured_unsafe_unit_count": 1,
+                        "accepted_patch_unit_count": 1,
+                        "units": [
+                            {
+                                "unit_id": "flashdb/real-fdb-calc-crc32",
+                                "status": "bound",
+                                "unsafe_reduction": before_after["unsafe_reduction"],
+                            }
+                        ],
+                    },
+                    "avg_repair_rounds": 1.0,
+                    "auto_recovery_rate": 1.0,
+                    "human_interventions": 0,
+                    "always_compiles": True,
+                    "always_equivalent": True,
+                    "fail_closed_count": 0,
+                    "wall_clock_seconds": 5,
+                    "llm_calls": 1,
+                    "per_unit_statuses": [
+                        {
+                            "unit_id": "flashdb/real-fdb-calc-crc32",
+                            "source": "opencode-worker",
+                            "status": "converged",
+                            "compiled": True,
+                            "semantic_pass": True,
+                            "refused": False,
+                            "blocked": False,
+                            "failed": False,

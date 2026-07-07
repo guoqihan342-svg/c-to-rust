@@ -1,0 +1,266 @@
+        lines.append("| none | none | missing | unknown |")
+        return lines
+    for path in sorted(external_refs):
+        ref = object_or_empty(external_refs.get(path))
+        lines.append(
+            f"| {text(ref.get('role'), 'unknown')} | {text(ref.get('path') or path, 'unknown')} | "
+            f"{short_sha_or_boundary(ref)} | {text(ref.get('status'), 'unknown')} |"
+        )
+    return lines
+
+
+def publishability_lines(publishability: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(publishability.get('status'), 'unknown')} |",
+        f"| Scope | {text(publishability.get('scope'), 'unknown')} |",
+        f"| Required agent tool | {text(publishability.get('required_agent_tool'), 'unknown')} |",
+        f"| Required agent | {text(publishability.get('required_agent'), 'unknown')} |",
+        f"| Required model | {text(publishability.get('required_model'), 'unknown')} |",
+        f"| OpenCode GLM preflight status | {text(publishability.get('opencode_glm51_preflight_status'), 'unknown')} |",
+        f"| OpenCode GLM publishable | {bool_text(publishability.get('opencode_glm51_publishable'))} |",
+        f"| All entrypoints run publishable | {bool_text(publishability.get('all_entrypoints_run_publishable'))} |",
+        f"| Competition-exact publishable | {bool_text(publishability.get('competition_exact_publishable'))} |",
+        f"| External milestone claim ready | {bool_text(publishability.get('external_milestone_claim_ready'))} |",
+        f"| External milestone | {bool_text(publishability.get('external_milestone'))} |",
+        f"| Target artifacts regenerable | {bool_text(publishability.get('target_artifacts_regenerable'))} |",
+        f"| Semantic gate | {bool_text(publishability.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(publishability.get('translation_coverage_numerator'))} |",
+    ]
+
+
+def release_tag_readiness_lines(readiness: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(readiness.get('status'), 'unknown')} |",
+        f"| Tag name | {text(readiness.get('tag_name'), 'none')} |",
+        f"| Tag target commit | {text(readiness.get('tag_target_commit'), 'none')} |",
+        f"| Repo commit | {text(readiness.get('repo_commit'), 'unknown')} |",
+        f"| Tag matches repo commit | {bool_text(readiness.get('tag_matches_repo_commit'))} |",
+        f"| Remote release notes | {text(readiness.get('remote_release_notes_status'), 'unknown')} |",
+        f"| External review record | {text(readiness.get('external_review_record_status'), 'unknown')} |",
+        f"| External milestone claim ready | {bool_text(readiness.get('external_milestone_claim_ready'))} |",
+        f"| Semantic gate | {bool_text(readiness.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(readiness.get('translation_coverage_numerator'))} |",
+    ]
+
+
+def competition_host_readiness_lines(readiness: dict[str, Any]) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Status | {text(readiness.get('status'), 'unknown')} |",
+        f"| Required agent tool | {text(readiness.get('required_agent_tool'), 'unknown')} |",
+        f"| Required agent | {text(readiness.get('required_agent'), 'unknown')} |",
+        f"| Required model | {text(readiness.get('required_model'), 'unknown')} |",
+        f"| Required variant | {text(readiness.get('required_variant'), 'unknown')} |",
+        f"| Required proof class | {text(readiness.get('required_proof_class'), 'unknown')} |",
+        f"| Actual highest proof class | {text(readiness.get('actual_highest_proof_class'), 'unknown')} |",
+        f"| All entrypoints run publishable | {bool_text(readiness.get('all_entrypoints_run_publishable'))} |",
+        f"| All entrypoints competition-exact | {bool_text(readiness.get('all_entrypoints_competition_exact'))} |",
+        f"| Competition exact host verified | {bool_text(readiness.get('competition_exact_host_verified'))} |",
+        f"| OpenCode GLM preflight status | {text(readiness.get('opencode_glm51_preflight_status'), 'unknown')} |",
+        f"| OpenCode GLM publishable | {bool_text(readiness.get('opencode_glm51_publishable'))} |",
+        f"| External milestone claim ready | {bool_text(readiness.get('external_milestone_claim_ready'))} |",
+        f"| Missing requirements | {string_list_text(readiness.get('missing_requirements'))} |",
+        f"| Semantic gate | {bool_text(readiness.get('semantic_gate'))} |",
+        f"| Translation coverage numerator | {int_text(readiness.get('translation_coverage_numerator'))} |",
+    ]
+
+
+def blocker_lines(blockers: Any) -> list[str]:
+    values = [blocker for blocker in blockers if isinstance(blocker, str)] if isinstance(blockers, list) else []
+    if not values:
+        return ["- none"]
+    return [f"- `{blocker}`" for blocker in values]
+
+
+def short_sha_or_boundary(ref: dict[str, Any]) -> str:
+    sha = ref.get("sha256")
+    if isinstance(sha, str) and len(sha) >= 12:
+        return sha[:12]
+    status = ref.get("status")
+    if isinstance(status, str) and status == "self":
+        return "self"
+    boundary = ref.get("hash_boundary")
+    if isinstance(boundary, str) and boundary:
+        return "boundary"
+    return "missing"
+
+
+def baseline_rows(baseline: dict[str, Any]) -> list[str]:
+    rows = []
+    for key in ["raw_c2rust", "c2rust_repair", "typed_ir_route", "opencode_llm_worker", "handwritten_reference"]:
+        row = object_or_empty(baseline.get(key))
+        label = BASELINE_LABELS.get(key, key)
+        accepted = "yes" if row.get("semantic_acceptance_claimed") is True else "no"
+        rows.append(
+            f"| {label} | {text(row.get('status'), 'unknown')} | {accepted} | {int_text(row.get('translation_coverage_numerator'))} | {baseline_manifest_evidence_text(row)} |"
+        )
+    return rows
+
+
+def baseline_manifest_evidence_text(row: dict[str, Any]) -> str:
+    rollup = object_or_empty(row.get("c2rust_baseline_rollup"))
+    if not rollup:
+        return "n/a"
+    return (
+        f"{int_text(rollup.get('unique_manifest_count'))} manifests / "
+        f"{int_text(rollup.get('source_report_count'))} sources / "
+        f"{int_text(rollup.get('compile_passed_count'))} compile-pass"
+    )
+
+
+def command_lines(commands: dict[str, Any]) -> list[str]:
+    lines = []
+    for key in ["run_judge_entrypoints", "build_bundle", "validate_judge_entrypoints"]:
+        value = commands.get(key)
+        if isinstance(value, str) and value:
+            lines.extend([f"- `{key}`:", "", f"```bash\n{value}\n```"])
+    entrypoints = commands.get("entrypoints")
+    if isinstance(entrypoints, list) and entrypoints:
+        lines.append("- Focused entrypoints:")
+        for entry in entrypoints:
+            if isinstance(entry, dict) and isinstance(entry.get("id"), str) and isinstance(entry.get("command"), str):
+                lines.append(f"  - `{entry['id']}`: `{entry['command']}`")
+    return lines or ["- No reproduction command was published in the bundle."]
+
+
+def bullet_lines(values: Any) -> list[str]:
+    if isinstance(values, list) and values:
+        return [f"- {text(value, 'unknown')}" for value in values]
+    return ["- None recorded."]
+
+
+def gap_lines(values: Any) -> list[str]:
+    if not isinstance(values, list) or not values:
+        return ["- None recorded."]
+    lines = []
+    for item in values:
+        if isinstance(item, dict):
+            lines.append(f"- `{text(item.get('gap_id'), 'unknown')}`: {text(item.get('status'), 'unknown')}")
+        else:
+            lines.append(f"- {text(item, 'unknown')}")
+    return lines
+
+
+def proof_class_text(bundle: dict[str, Any]) -> str:
+    proof_classes = object_or_empty(bundle.get("proof_classes"))
+    rollup = object_or_empty(proof_classes.get("rollup"))
+    trusted = string_list(rollup.get("trusted_proof_classes"))
+    if trusted:
+        return ", ".join(trusted)
+    present = string_list(rollup.get("present"))
+    return ", ".join(present) if present else "unknown"
+
+
+def commit_text(publication: dict[str, Any]) -> str:
+    repo_commit = object_or_empty(publication.get("repo_commit"))
+    return text(repo_commit.get("commit"), "unknown")
+
+
+def source_pin_text(publication: dict[str, Any]) -> str:
+    pin = object_or_empty(publication.get("target_source_pin"))
+    target = text(pin.get("target_id"), "unknown")
+    branch = text(pin.get("branch"), "unknown")
+    commit = text(pin.get("canonical_commit") or pin.get("commit"), "unknown")
+    return f"{target}:{branch}@{commit}"
+
+
+def unsafe_reduction_text(*candidates: Any) -> str:
+    for candidate in candidates:
+        unsafe = object_or_empty(candidate)
+        if unsafe.get("status") == "measured":
+            return (
+                f"{int_text(unsafe.get('baseline_total_unsafe'))} -> "
+                f"{int_text(unsafe.get('current_total_unsafe'))} "
+                f"(reduced by {int_text(unsafe.get('reduced_by'))})"
+            )
+    return "not measured"
+
+
+def nested_int(payload: dict[str, Any], section: str, key: str) -> str:
+    return int_text(object_or_empty(payload.get(section)).get(key))
+
+
+def false_text(value: Any) -> str:
+    return "false" if value is False else text(value, "unknown")
+
+
+def bool_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return text(value, "unknown")
+
+
+def command_text(value: Any) -> str:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return " ".join(value)
+    return text(value, "unknown")
+
+
+def string_list_text(value: Any) -> str:
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return ", ".join(value) if value else "none"
+    return "unknown"
+
+
+def int_text(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(int(value))
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    return "0"
+
+
+def count_map_text(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none"
+    parts = []
+    for key in sorted(value):
+        count = value.get(key)
+        if isinstance(count, bool):
+            count_text = str(int(count))
+        elif isinstance(count, (int, float)):
+            count_text = str(int(count))
+        else:
+            count_text = "0"
+        parts.append(f"`{key}`: {count_text}")
+    return ", ".join(parts)
+
+
+def retention_class_text(value: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none"
+    parts = []
+    for key in sorted(value):
+        retention_class = object_or_empty(value.get(key))
+        parts.append(
+            f"`{key}`: {int_text(retention_class.get('file_count'))} files / "
+            f"{int_text(retention_class.get('total_bytes'))} bytes"
+        )
+    return ", ".join(parts)
+
+
+def text(value: Any, default: str) -> str:
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, (int, float, bool)):
+        return str(value).lower() if isinstance(value, bool) else str(value)
+    return default
+
+
+def object_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def string_list(value: Any) -> list[str]:
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

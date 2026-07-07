@@ -1,0 +1,207 @@
+    return list(dict.fromkeys(fragments))
+
+
+def validate_harness_output_gate(
+    output_gate: Any,
+    harness_execution: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    if not isinstance(output_gate, dict):
+        raise SystemExit(f"oracle harness output gate missing from {oracle_path}")
+    if output_gate.get("semantic_pass") is not False:
+        raise SystemExit(f"oracle harness output gate cannot claim semantic_pass in {oracle_path}")
+    if output_gate.get("gate") != "c_oracle_harness_output":
+        raise SystemExit(f"oracle harness output gate identity drift in {oracle_path}")
+    require_string_list(
+        output_gate.get("compared_fields"),
+        f"oracle harness output gate compared fields drift in {oracle_path}",
+    )
+    if not isinstance(output_gate.get("fixture_expected_output_status"), str):
+        raise SystemExit(f"oracle harness output gate fixture status drift in {oracle_path}")
+    status = output_gate.get("status")
+    if status not in {
+        "matched_not_oracle",
+        "mismatch_not_oracle",
+        "unsupported_not_oracle",
+        "not_run_not_oracle",
+    }:
+        raise SystemExit(f"oracle harness output gate status drift in {oracle_path}")
+    expected = require_string_list(
+        output_gate.get("expected_stdout_fragments"),
+        f"oracle harness output gate expected stdout fragments drift in {oracle_path}",
+    )
+    matched = require_string_list(
+        output_gate.get("matched_stdout_fragments"),
+        f"oracle harness output gate matched stdout fragments drift in {oracle_path}",
+    )
+    missing = require_string_list(
+        output_gate.get("missing_stdout_fragments"),
+        f"oracle harness output gate missing stdout fragments drift in {oracle_path}",
+    )
+    diagnostics = require_string_list(
+        output_gate.get("diagnostics"),
+        f"oracle harness output gate diagnostics drift in {oracle_path}",
+    )
+    if not diagnostics:
+        raise SystemExit(f"oracle harness output gate diagnostics missing in {oracle_path}")
+    if status == "matched_not_oracle":
+        if harness_execution.get("status") != "exited_zero_not_oracle" or harness_execution.get("returncode") != 0:
+            raise SystemExit(f"oracle harness output gate matched status drift in {oracle_path}")
+        if not expected or matched != expected or missing:
+            raise SystemExit(f"oracle harness output gate matched fragments drift in {oracle_path}")
+    elif status == "mismatch_not_oracle":
+        if harness_execution.get("status") != "exited_zero_not_oracle" or harness_execution.get("returncode") != 0:
+            raise SystemExit(f"oracle harness output gate mismatch status drift in {oracle_path}")
+        if not expected or not missing:
+            raise SystemExit(f"oracle harness output gate mismatch fragments drift in {oracle_path}")
+        if sorted(matched + missing) != sorted(expected):
+            raise SystemExit(f"oracle harness output gate fragment partition drift in {oracle_path}")
+    elif status == "unsupported_not_oracle":
+        if expected or matched or missing:
+            raise SystemExit(f"oracle harness output gate unsupported fragments drift in {oracle_path}")
+    else:
+        if harness_execution.get("status") == "exited_zero_not_oracle" and harness_execution.get("returncode") == 0:
+            raise SystemExit(f"oracle harness output gate not_run status drift in {oracle_path}")
+        if matched:
+            raise SystemExit(f"oracle harness output gate not_run matched fragments drift in {oracle_path}")
+
+
+def require_string_list(value: Any, message: str) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise SystemExit(message)
+    return value
+
+
+def oracle_fixture_binding(spec: dict[str, Any]) -> dict[str, Any]:
+    fixture = spec.get("fixture_contract", {})
+    cases = fixture.get("cases") or []
+    case_bindings = oracle_fixture_case_bindings(spec)
+    if not cases:
+        binding_status = "missing_or_empty"
+    else:
+        binding_status = "declared_not_executed"
+    return {
+        "path": fixture_path_from_spec(spec),
+        "case_count": len(cases),
+        "binding_status": binding_status,
+        "behavior_fields": behavior_fields_from_spec(spec),
+        "observable_outputs": behavior_fields_from_spec(spec),
+        "case_bindings": case_bindings,
+        "expected_output_status": fixture_expected_output_status(case_bindings),
+    }
+
+
+def oracle_fixture_case_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    fixture = spec.get("fixture_contract", {})
+    fields = behavior_fields_from_spec(spec)
+    bindings: list[dict[str, Any]] = []
+    for index, raw_case in enumerate(fixture.get("cases") or []):
+        case = raw_case if isinstance(raw_case, dict) else {}
+        expected_outputs = case.get("expected_outputs")
+        if expected_outputs is None:
+            expected_outputs = case.get("expected", {})
+        if not isinstance(expected_outputs, dict):
+            expected_outputs = {}
+        if not expected_outputs:
+            expected_outputs = expected_outputs_from_fixture_refs(spec, case)
+        normalized_expected = {str(key): expected_outputs[key] for key in sorted(expected_outputs)}
+        missing_outputs = [field for field in fields if field not in normalized_expected]
+        if normalized_expected and not missing_outputs:
+            binding_status = "declared_not_executed"
+        elif normalized_expected:
+            binding_status = "partial_expected_outputs"
+        elif case.get("expected_ref"):
+            binding_status = "expected_ref_only"
+        else:
+            binding_status = "missing_expected_outputs"
+        bindings.append(
+            {
+                "id": str(case.get("id") or f"case-{index}"),
+                "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
+                "expected_ref": str(case.get("expected_ref") or "missing"),
+                "expected_outputs": normalized_expected,
+                "observable_outputs": fields,
+                "missing_observable_outputs": missing_outputs,
+                "binding_status": binding_status,
+            }
+        )
+    return bindings
+
+
+def expected_outputs_from_fixture_refs(spec: dict[str, Any], case: dict[str, Any]) -> dict[str, Any]:
+    fields = behavior_fields_from_spec(spec)
+    if not fields:
+        return {}
+    fixture = spec.get("fixture_contract", {})
+    input_ref = str(case.get("input_ref") or "")
+    candidate_refs = [case.get("expected_ref"), fixture.get("path") or fixture.get("input")]
+    for candidate_ref in candidate_refs:
+        payload = load_fixture_ref_payload(candidate_ref)
+        if payload is None:
+            continue
+        case_payload = fixture_case_payload(payload, input_ref)
+        if not isinstance(case_payload, dict):
+            continue
+        return {field: case_payload[field] for field in fields if field in case_payload}
+    return {}
+
+
+def load_fixture_ref_payload(ref: Any) -> Any | None:
+    if not ref:
+        return None
+    ref_text = str(ref)
+    if ref_text == "inline" or ref_text.startswith("cases["):
+        return None
+    path_text = ref_text.split("#", 1)[0]
+    path = Path(path_text)
+    if not path.is_absolute():
+        path = REPO_ROOT / path_text
+    if not path.exists() or not path.is_file():
+        return None
+    return load_json(path)
+
+
+def fixture_case_payload(payload: Any, case_ref: str) -> Any | None:
+    index = case_ref_index(case_ref)
+    if index is None:
+        return None
+    cases = payload.get("cases") if isinstance(payload, dict) else payload
+    if not isinstance(cases, list) or index < 0 or index >= len(cases):
+        return None
+    return cases[index]
+
+
+def case_ref_index(case_ref: str) -> int | None:
+    match = re.fullmatch(r"cases\[(\d+)\]", str(case_ref))
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def fixture_expected_output_status(case_bindings: list[dict[str, Any]]) -> str:
+    if not case_bindings:
+        return "missing_or_empty"
+    statuses = {str(item.get("binding_status")) for item in case_bindings}
+    if statuses == {"declared_not_executed"}:
+        return "declared_not_executed"
+    if "missing_expected_outputs" in statuses:
+        return "missing_expected_outputs"
+    if "partial_expected_outputs" in statuses:
+        return "partial_expected_outputs"
+    return "expected_ref_only"
+
+
+def oracle_fixture_comment_fragments(fixture_binding: dict[str, Any]) -> list[str]:
+    outputs = ", ".join(str(item) for item in fixture_binding.get("observable_outputs", [])) or "none"
+    fragments = [
+        f"fixture cases: {fixture_binding.get('case_count', 0)}",
+        f"observable outputs: {outputs}",
+    ]
+    for case in fixture_binding.get("case_bindings", []):
+        expected_outputs = json.dumps(case.get("expected_outputs", {}), sort_keys=True)
+        fragments.append(
+            "fixture case: "
+            f"{case.get('id')} input_ref={case.get('input_ref')} "
+            f"expected_ref={case.get('expected_ref')} expected_outputs={expected_outputs}"
+        )
+    return fragments

@@ -1,0 +1,403 @@
+                    "lvalue_kind": pointer_decision_lvalue_kind(decision),
+                    "decision": decision,
+                    "reason": "bounded translator pointer/lvalue decision",
+                    "translation_rule_id": pointer_decision_translation_rule(decision),
+                    "unsafe_expected": False,
+                    "source_span": source_span(),
+                }
+            )
+    return decisions
+
+
+def pointer_decision_source_statement(node: dict[str, Any]) -> str:
+    if node.get("write_effects"):
+        return str(node["write_effects"][0])
+    if node.get("read_effects"):
+        return str(node["read_effects"][0])
+    return ""
+
+
+def pointer_decision_lvalue_kind(decision: str) -> str:
+    if decision == "bounded_pointer_index":
+        return "bounded_pointer_index"
+    if decision == "bounded_input_buffer":
+        return "bounded_input_buffer"
+    if decision == "byte_cursor_post_increment_read":
+        return "bounded_input_buffer"
+    if decision == "bounded_pointer_arithmetic_input_read":
+        return "bounded_pointer_arithmetic_input_buffer"
+    if decision == "bounded_pointer_arithmetic_output_write":
+        return "bounded_pointer_arithmetic_output_buffer"
+    return "pointer_write"
+
+
+def pointer_decision_translation_rule(decision: str) -> str:
+    if decision == "bounded_pointer_index":
+        return "bounded-pointer-index-write"
+    if decision == "bounded_input_buffer":
+        return "bounded-input-buffer-read"
+    if decision == "byte_cursor_post_increment_read":
+        return "byte-cursor-post-increment-read"
+    if decision == "bounded_pointer_arithmetic_input_read":
+        return "bounded-pointer-arithmetic-input-read"
+    if decision == "bounded_pointer_arithmetic_output_write":
+        return "bounded-pointer-arithmetic-output-write"
+    return "pointer-field-write"
+
+
+def count_occurrences(values: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        text = str(value)
+        counts[text] = counts.get(text, 0) + 1
+    return counts
+
+
+def rust_draft_unsafe_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return len(re.findall(r"\bunsafe\b", path.read_text(encoding="utf-8")))
+
+
+def generated_artifact(path: Path, kind: str) -> dict[str, Any]:
+    return {
+        "path": rel(path),
+        "kind": kind,
+        "generator": {"name": "c2r-translator", "version": "0.1.0"},
+        "source_spans": [source_span()],
+        "generated_spans": [source_span(file=rel(path))],
+        "status": "candidate",
+    }
+
+
+def source_span(file: str = "slice-spec") -> dict[str, Any]:
+    return {"file": file, "line_start": 1, "line_end": 1}
+
+
+def global_dependency_requirements(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    requirements: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for dependency in spec.get("c_boundary", {}).get("direct_dependencies", []):
+        if dependency.get("kind") != "global":
+            continue
+        name = str(dependency.get("name") or "")
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        span = dependency.get("source_span") if isinstance(dependency.get("source_span"), dict) else source_span()
+        requirements.append(
+            {
+                "name": name,
+                "kind": "global",
+                "source": dependency.get("source", "slice_spec"),
+                "definition_status": dependency.get("definition_status", "declared"),
+                "source_span": span,
+                "sha256": dependency.get("sha256") or span.get("sha256") or "",
+                "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+                "semantic_status": "required_before_acceptance",
+            }
+        )
+    return requirements
+
+
+def source_commit(spec: dict[str, Any]) -> str:
+    return spec.get("source_commit") or spec.get("source", {}).get("source_commit") or "UNKNOWN0"
+
+
+def source_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    source = spec.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
+    identity: dict[str, Any] = {"source_commit": source_commit(spec)}
+    for key in ["repo_commit", "source_root", "source_repository", "source_branch"]:
+        value = source.get(key, spec.get(key))
+        if value:
+            identity[key] = value
+    source_file_hashes = source.get("source_file_hashes", spec.get("source_file_hashes"))
+    if isinstance(source_file_hashes, dict) and source_file_hashes:
+        identity["source_file_hashes"] = source_file_hashes
+    return identity
+
+
+def fixture_hash(spec: dict[str, Any]) -> str:
+    fixture = spec.get("fixture_contract", {})
+    return spec.get("fixture_hash") or fixture.get("hash") or "UNKNOWN_FIXTURE"
+
+
+def repo_commit() -> str:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, text=True).strip()
+    except Exception:
+        return "UNKNOWN0"
+
+
+def cache_keys(spec: dict[str, Any], slice_spec_path: Path) -> list[str]:
+    return [
+        f"source_commit={source_commit(spec)}",
+        f"slice_spec_sha256={sha256(slice_spec_path)}",
+        f"fixture_hash={fixture_hash(spec)}",
+        f"build_profile_hash={sha256_json(spec.get('build_profile', {}))}",
+        "translator_version=0.1.0",
+        "schema_version=1",
+    ]
+
+
+def cache_identity(
+    spec: dict[str, Any],
+    slice_spec_path: Path,
+    accept_existing_evidence: bool = False,
+    emit_clang_dry_run: bool = False,
+    emit_clang_lowering_report: bool = False,
+    competition_clang_lane: bool = False,
+    c2rust_baseline: dict[str, Any] | None = None,
+    route_decision: dict[str, Any] | None = None,
+    validation_profile: dict[str, Any] | None = None,
+    oracle: dict[str, Any] | None = None,
+    environment: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Build the cache key material for drift-sensitive evidence reuse.
+
+    The identity includes route decision, validation profile, C2Rust baseline,
+    global dependencies, clang-lowering options, and oracle-harness inputs so a
+    reused run cannot silently cross route/profile/cache boundaries after any
+    semantically relevant artifact changes.
+    """
+    effective_emit_clang_lowering_report = emit_clang_lowering_report or competition_clang_lane
+    command_arguments = ["auto_migrate.py", "--slice-spec", rel(slice_spec_path)]
+    if accept_existing_evidence:
+        command_arguments.append("--accept-existing-evidence")
+    if emit_clang_dry_run:
+        command_arguments.append("--emit-clang-dry-run")
+    if effective_emit_clang_lowering_report:
+        command_arguments.append("--emit-clang-lowering-report")
+    if competition_clang_lane:
+        command_arguments.append("--competition-clang-lane")
+    identity = {
+        "source_commit": source_commit(spec),
+        "source_file_hashes": source_file_hashes(spec),
+        "slice_spec_sha256": sha256(slice_spec_path),
+        "fixture_hash": fixture_hash(spec),
+        "build_profile_hash": sha256_json(spec.get("build_profile", {})),
+        "competition_environment_identity": competition_environment_identity(),
+        "cargo_lock_hash": sha256(TRANSLATOR_LOCK) if TRANSLATOR_LOCK.exists() else "missing",
+        "tool_versions": tool_versions(),
+        "schema_versions": {
+            "auto_cache_metadata": 1,
+            "auto_translation_plan": 1,
+            "cfg": 1,
+            "evidence_manifest": 1,
+            "pointer_graph": POINTER_GRAPH_SCHEMA_VERSION,
+            "type_map": 1,
+        },
+        "translator_version": "0.1.0",
+        "translator_manifest_sha256": sha256(TRANSLATOR_MANIFEST),
+        "command_arguments": command_arguments,
+        "alias_gate_identity": alias_gate_identity(spec),
+        "effect_graph_identity": effect_graph_identity(spec),
+        "scalar_ub_contract_identity": scalar_ub_contract_identity(spec),
+        "oracle_boundary_contract_identity": oracle_boundary_contract_identity(validation_profile),
+        "c2rust_baseline_identity": artifact_cache_identity(c2rust_baseline),
+        "route_decision_identity": artifact_cache_identity(route_decision),
+        "validation_profile_identity": artifact_cache_identity(validation_profile),
+        "global_dependency_identity": {
+            "sha256": sha256_json(global_dependency_requirements(spec)),
+            "count": len(global_dependency_requirements(spec)),
+            "names": [item["name"] for item in global_dependency_requirements(spec)],
+        },
+        "c_oracle_harness_identity": oracle_harness_identity(oracle),
+    }
+    if effective_emit_clang_lowering_report:
+        identity["translator_feature_set"] = translator_feature_set(
+            emit_clang_dry_run=emit_clang_dry_run,
+            emit_clang_lowering_report=effective_emit_clang_lowering_report,
+        )
+        identity["clang_lowering_identity"] = clang_lowering_identity(
+            environment=environment,
+            competition_clang_lane=competition_clang_lane,
+        )
+    return identity
+
+
+def competition_environment_identity() -> dict[str, str]:
+    profile = read_json(COMPETITION_ENVIRONMENT_PROFILE)
+    return {
+        "profile_id": str(profile.get("profile_id", "unknown")),
+        "path": rel(COMPETITION_ENVIRONMENT_PROFILE),
+        "sha256": sha256(COMPETITION_ENVIRONMENT_PROFILE),
+    }
+
+
+LOCAL_CLANG_CANDIDATES = (
+    "tools/llvm/bin/clang",
+    "tools/llvm/bin/clang-18",
+    "tools/clang/bin/clang",
+    "tools/llvm/bin/clang.exe",
+    "tools/llvm/bin/clang-18.exe",
+    "tools/clang/bin/clang.exe",
+)
+
+
+def resolve_competition_clang_path(
+    *, environment: dict[str, str] | None = None, repo_root: Path = REPO_ROOT
+) -> tuple[str, str] | None:
+    env = os.environ if environment is None else environment
+    clang_path = str(env.get("CLANG_PATH", "")).strip()
+    if clang_path:
+        return clang_path, "CLANG_PATH"
+    for candidate in LOCAL_CLANG_CANDIDATES:
+        path = repo_root / candidate
+        if path.exists():
+            return rel(path) if repo_root == REPO_ROOT else candidate, f"vendored:{candidate}"
+    return None
+
+
+def require_competition_clang_lane(*, environment: dict[str, str] | None = None) -> None:
+    if resolve_competition_clang_path(environment=environment) is not None:
+        return
+    raise SystemExit(
+        "competition clang lane requires CLANG_PATH or a project-local clang binary under "
+        "tools/llvm/bin/ or tools/clang/bin/; omit --competition-clang-lane to keep the "
+        "diagnostic/fail-closed non-clang lane."
+    )
+
+
+def clang_lowering_identity(
+    *, environment: dict[str, str] | None = None, competition_clang_lane: bool = False
+) -> dict[str, Any]:
+    env = os.environ if environment is None else environment
+    resolved_clang = resolve_competition_clang_path(environment=env)
+    clang_path = resolved_clang[0] if resolved_clang else ""
+    libclang_path = str(env.get("LIBCLANG_PATH", "")).strip()
+    clang_path_status = "configured" if clang_path else "not_configured"
+    libclang_path_status = "configured" if libclang_path else "not_configured"
+    if clang_path:
+        clang_version = command_version([clang_path, "--version"])
+    else:
+        clang_version = "not_configured"
+    identity = {
+        "enabled": True,
+        "frontend": "clang_ast_dump_json",
+        "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+        "features": ["clang-lowering-report"],
+        "requires_env": ["CLANG_PATH"],
+        "clang_path_status": clang_path_status,
+        "clang_path": clang_path,
+        "ignored_env_for_ast_dump": {
+            "LIBCLANG_PATH": {
+                "status": libclang_path_status,
+                "value": libclang_path,
+                "reason": "ignored_for_ast_dump",
+            }
+        },
+        "clang_version": clang_version,
+    }
+    if competition_clang_lane:
+        identity.update(
+            {
+                "lane": "competition-clang-lane",
+                "required": True,
+                "requires_env": ["CLANG_PATH"],
+                "ignored_env_for_ast_dump": identity["ignored_env_for_ast_dump"],
+            }
+        )
+    return identity
+
+
+def alias_gate_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    pointer_nodes = pointer_nodes_from_pointer_contract(pointer_contract)
+    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
+    return {
+        "decision": gate["summary"]["decision"],
+        "risk_count": gate["summary"].get("risk_count", 0),
+        "risk_level": gate["summary"]["risk_level"],
+        "aliasing_proven": bool(pointer_contract.get("aliasing_proven", False)),
+        "requires_noalias": bool(gate["summary"]["requires_noalias"]),
+        "precondition_count": len(gate["safe_boundary_preconditions"]),
+        "alias_set_count": len(gate["alias_sets"]),
+    }
+
+
+def effect_graph_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    pointer_nodes = pointer_nodes_from_pointer_contract(pointer_contract)
+    gate = alias_gate_evidence(spec, [node for node in pointer_nodes if node["id"]])
+    graph = effect_graph_from_pointer_nodes(pointer_nodes, gate)
+    summary = graph["summary"]
+    return {
+        "schema_version": POINTER_GRAPH_SCHEMA_VERSION,
+        "sha256": sha256_json(graph),
+        "read_effect_count": summary["read_count"],
+        "write_effect_count": summary["write_count"],
+        "read_nodes": summary["reads"],
+        "write_nodes": summary["writes"],
+        "alias_sensitive": summary["alias_sensitive"],
+        "alias_gate_decision": summary["alias_gate_decision"],
+    }
+
+
+def pointer_nodes_from_pointer_contract(pointer_contract: dict[str, Any]) -> list[dict[str, Any]]:
+    pointer_nodes = []
+    for item in pointer_contract.get("input_buffers", []):
+        pointer_nodes.append(
+            {
+                "id": str(item.get("name", "")),
+                "read_effects": item.get("read_effects", []),
+                "write_effects": item.get("write_effects", []),
+            }
+        )
+    for item in pointer_contract.get("output_pointers", []):
+        pointer_nodes.append(
+            {
+                "id": str(item.get("name", "")),
+                "read_effects": item.get("read_effects", []),
+                "write_effects": item.get("write_effects", []),
+            }
+        )
+    for item in pointer_contract.get("inout_pointers", []):
+        pointer_nodes.append(
+            {
+                "id": str(item.get("name", "")),
+                "read_effects": item.get("read_effects", []),
+                "write_effects": item.get("write_effects", []),
+            }
+        )
+    return pointer_nodes
+
+
+def cache_drift_report(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    fields = cache_drift_input_fields(previous, current)
+    drifted_keys = [
+        key for key in fields if previous.get(key) != current.get(key)
+    ]
+    if not drifted_keys:
+        return {
+            "schema_version": 1,
+            "status": "reusable",
+            "reuse_allowed": True,
+            "drifted_keys": [],
+            "invalidated_artifacts": [],
+        }
+    return {
+        "schema_version": 1,
+        "status": "drift_detected",
+        "reuse_allowed": False,
+        "drifted_keys": drifted_keys,
+        "invalidated_artifacts": CACHE_INVALIDATED_ARTIFACTS,
+        "required_action": "regenerate artifacts or attach explicit evidence review before reuse",
+    }
+
+
+def cache_drift_input_fields(previous: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    fields: list[str] = []
+    for source in (
+        CACHE_INPUT_FIELDS,
+        previous.get("cache_input_fields", []),
+        current.get("cache_input_fields", []),
+    ):
+        if not isinstance(source, list):
+            continue
+        for field in source:
+            if isinstance(field, str) and field not in fields:
+                fields.append(field)
+    return fields

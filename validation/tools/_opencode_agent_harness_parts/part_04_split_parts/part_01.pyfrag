@@ -1,0 +1,259 @@
+    repair_trace: dict[str, Any] | None = None,
+    command_runner: Any = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    plan_path = repo_path(plan_path, repo_root=repo_root)
+    plan = load_json(plan_path)
+    if plan.get("run_id") != run_id:
+        raise SystemExit(f"plan run_id {plan.get('run_id')} does not match requested run_id {run_id}")
+    units = plan.get("units")
+    if not isinstance(units, list) or not units:
+        raise SystemExit("run-plan requires a planner artifact with at least one unit")
+    if max_workers < 1:
+        raise SystemExit("run-plan max_workers must be a positive integer")
+    opencode_preflight_binding = None
+    if mode == "opencode":
+        opencode_preflight_binding = validate_opencode_preflight_report(
+            opencode_preflight_report,
+            expected_run_id=run_id,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            repo_root=repo_root,
+        )
+
+    started = time.monotonic()
+    planned_units = []
+    for index, unit in enumerate(units, start=1):
+        if not isinstance(unit, dict) or not isinstance(unit.get("worker_id"), str) or not unit["worker_id"]:
+            raise SystemExit(f"run-plan unit {index} missing worker_id")
+        planned_units.append(unit)
+
+    effective_workers = min(max_workers, len(planned_units))
+
+    def execute_unit(unit: dict[str, Any]) -> dict[str, Any]:
+        result = run_worker(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=unit["worker_id"],
+            mode=mode,
+            opencode_command=opencode_command,
+            opencode_model=opencode_model,
+            opencode_agent=opencode_agent,
+            opencode_variant=opencode_variant,
+            opencode_skip_permissions=opencode_skip_permissions,
+            opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+            opencode_preflight_report=opencode_preflight_report,
+            repair_trace=repair_trace,
+            timeout_seconds=timeout_seconds,
+            command_runner=command_runner,
+            repo_root=repo_root,
+        )
+        worker_result = {
+            "worker_id": unit["worker_id"],
+            "slice_id": unit.get("slice_id"),
+            "function": unit.get("function"),
+            "exit_code": int(result.get("exit_code", 1)),
+            "process_returncode": result.get("process_returncode"),
+            "summary_status": result.get("summary_status"),
+            "summary_path": result.get("summary_path"),
+            "report_path": result.get("report_path"),
+            "logs": result.get("logs"),
+            "recorded": bool(result.get("recorded")),
+        }
+        copy_opencode_worker_evidence(result, worker_result)
+        attempt_timeline = [run_plan_attempt_from_worker_result(result)]
+        retry_results = []
+        if auto_retry and worker_result["exit_code"] != 0:
+            hint_id = None
+            repair_hint = result.get("repair_hint")
+            if isinstance(repair_hint, dict) and isinstance(repair_hint.get("hint_id"), str):
+                hint_id = repair_hint["hint_id"]
+            suppression = run_plan_auto_retry_suppression(result, hint_id=hint_id)
+            if suppression is not None:
+                worker_result["auto_retry_suppressed"] = suppression
+            else:
+                outer_round_cap = REPAIR_ROUND_CAP + 2
+                for _outer_round in range(outer_round_cap):
+                    retry_result = retry_worker(
+                        db_path=db_path,
+                        run_id=run_id,
+                        worker_id=unit["worker_id"],
+                        hint_id=hint_id,
+                        mode=mode,
+                        opencode_command=opencode_command,
+                        opencode_model=opencode_model,
+                        opencode_agent=opencode_agent,
+                        opencode_variant=opencode_variant,
+                        opencode_skip_permissions=opencode_skip_permissions,
+                        opencode_allow_non_competition_model=opencode_allow_non_competition_model,
+                        opencode_preflight_report=opencode_preflight_report,
+                        repair_trace=repair_trace,
+                        timeout_seconds=timeout_seconds,
+                        command_runner=command_runner,
+                        repo_root=repo_root,
+                        keep_open_on_failure=True,
+                    )
+                    retry_entry = {
+                        "exit_code": int(retry_result.get("exit_code", 1)),
+                        "summary_status": retry_result.get("summary_status"),
+                        "hint_id": retry_result.get("hint_id", hint_id),
+                        "hint_status": retry_result.get("hint_status"),
+                        "summary_path": retry_result.get("summary_path"),
+                        "report_path": retry_result.get("report_path"),
+                        "logs": retry_result.get("logs"),
+                        "process_returncode": retry_result.get("process_returncode"),
+                    }
+                    copy_opencode_worker_evidence(retry_result, retry_entry)
+                    for field in ("repair_round_cap", "repair_rounds", "retry_limit", "rollback_evidence", "diagnostics"):
+                        if field in retry_result:
+                            retry_entry[field] = retry_result[field]
+                    retry_results.append(retry_entry)
+                    if retry_result.get("status") != "retry_limit_exceeded":
+                        attempt_timeline.append(run_plan_attempt_from_worker_result(retry_result))
+                    if retry_result.get("hint_id"):
+                        hint_id = str(retry_result["hint_id"])
+                    if int(retry_result.get("exit_code", 1)) == 0:
+                        worker_result.update(
+                            {
+                                "exit_code": 0,
+                                "summary_status": retry_result.get("summary_status"),
+                                "summary_path": retry_result.get("summary_path"),
+                                "report_path": retry_result.get("report_path"),
+                                "recorded": bool(retry_result.get("recorded")),
+                            }
+                        )
+                        copy_opencode_worker_evidence(retry_result, worker_result)
+                        break
+                    if retry_result.get("status") == "retry_limit_exceeded":
+                        break
+                else:
+                    if retry_results:
+                        retry_results[-1]["status"] = "outer_retry_limit_exceeded"
+                        retry_results[-1]["hint_status"] = "outer_retry_limit_exceeded"
+                        retry_results[-1]["outer_retry_limit"] = {
+                            "max_outer_rounds": outer_round_cap,
+                            "reason": "retry_worker did not return success or retry_limit_exceeded",
+                        }
+        if retry_results:
+            worker_result["auto_retry"] = {
+                "attempt_count": len(retry_results),
+                "attempts": retry_results,
+                "final_hint_status": retry_results[-1].get("hint_status"),
+                "outer_round_cap": REPAIR_ROUND_CAP + 2,
+            }
+            if retry_results[-1].get("status") == "outer_retry_limit_exceeded":
+                worker_result["auto_retry"]["outer_retry_limit_exceeded"] = True
+        worker_result["attempts"] = attempt_timeline
+        worker_result["final_decision"] = run_plan_worker_final_decision(worker_result)
+        return worker_result
+
+    if effective_workers == 1:
+        worker_results = [execute_unit(unit) for unit in planned_units]
+    else:
+        worker_results_by_index: dict[int, dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+            futures = {
+                executor.submit(execute_unit, unit): index
+                for index, unit in enumerate(planned_units)
+            }
+            for future in as_completed(futures):
+                worker_results_by_index[futures[future]] = future.result()
+        worker_results = [worker_results_by_index[index] for index in range(len(planned_units))]
+
+    failed_workers = sum(1 for worker in worker_results if int(worker["exit_code"]) != 0)
+    ordered_summary_paths = [
+        str(worker["summary_path"])
+        for worker in worker_results
+        if worker["recorded"] and worker["summary_path"]
+    ]
+
+    merge_plan = write_merge_plan(
+        db_path=db_path,
+        run_id=run_id,
+        out_root=out_root,
+        proof_class=proof_class,
+        worker_summary_paths=ordered_summary_paths,
+        repo_root=repo_root,
+    )
+    merge_execution = None
+    merge_failed = False
+    if execute_merge:
+        unrecorded_workers = [worker["worker_id"] for worker in worker_results if not worker["recorded"]]
+        if unrecorded_workers:
+            merge_execution = {
+                "status": "skipped",
+                "reason": "unrecorded-worker-summaries",
+                "exit_code": 1,
+                "unrecorded_workers": unrecorded_workers,
+            }
+        else:
+            merge_execution = execute_merge_plan(
+                db_path=db_path,
+                run_id=run_id,
+                out_root=out_root,
+                merge_plan=merge_plan,
+                timeout_seconds=timeout_seconds,
+                command_runner=command_runner,
+                repo_root=repo_root,
+            )
+        merge_failed = int(merge_execution["exit_code"]) != 0
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "completed" if failed_workers == 0 and not merge_failed else "failed",
+        "run_id": run_id,
+        "mode": mode,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "worker_count": len(worker_results),
+        "failed_workers": failed_workers,
+        "graph": build_run_plan_graph_contract(
+            mode=mode,
+            auto_retry=auto_retry,
+            max_workers=max_workers,
+            effective_workers=effective_workers,
+            opencode_variant=opencode_variant,
+            opencode_preflight_report=opencode_preflight_binding,
+        ),
+        "parallelism": {
+            "max_workers": max_workers,
+            "effective_workers": effective_workers,
+        },
+        "auto_retry": {
+            "enabled": auto_retry,
+            "retried_worker_count": sum(1 for worker in worker_results if isinstance(worker.get("auto_retry"), dict)),
+        },
+        "exit_code": 0 if failed_workers == 0 and not merge_failed else 1,
+        "elapsed_seconds": int(time.monotonic() - started),
+        "workers": worker_results,
+        "merge_plan": merge_plan,
+    }
+    if opencode_preflight_binding is not None:
+        report["opencode_preflight_report"] = opencode_preflight_binding
+    if merge_execution is not None:
+        report["merge_execution"] = merge_execution
+    report_path = out_root / "harness" / "run-plan-report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(report_path, report)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="planned-worker-batch-report",
+            path=report_path,
+            status=report["status"],
+            semantic_role="worker-batch-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="planned_workers_executed", payload=report)
+        connection.commit()
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    return result

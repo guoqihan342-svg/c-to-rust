@@ -1,0 +1,39 @@
+        expected_environment.write_text("{}\n", encoding="utf-8")
+        unexpected_scratch.write_text("diagnostic only\n", encoding="utf-8")
+
+        candidates = {path.relative_to(config_root).as_posix() for path in runner.candidate_config_files(config_root)}
+
+        self.assertIn("bundle-manifest.json", candidates)
+        self.assertIn("environment.json", candidates)
+        self.assertNotIn("scratch.tmp", candidates)
+
+    def test_materialized_competition_config_archive_requires_summary_output(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-archive-fixed-path-", dir=REPO_ROOT / "target"))
+        out_path = temp_dir / "judge-entrypoints-run-report.json"
+
+        with self.assertRaises(ValueError) as raised:
+            runner.materialize_competition_config_archive(
+                {"report_kind": "competition-config-archive"},
+                out_path=out_path,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertIn("summary/competition-config-archive/manifest.json", str(raised.exception))
+        self.assertFalse((temp_dir / "competition-config-archive").exists())
+
+    def test_core_validation_ci_runs_judge_entrypoint_runner_tests(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/core-translator-validation-ci.yml").read_text(encoding="utf-8")
+        self.assertIn("validation.tools.test_run_judge_entrypoints", workflow)
+        self.assertIn("validation.tools.run_judge_entrypoints --dry-run", workflow)
+        self.assertIn("git clone -c core.autocrlf=false --no-local", workflow)
+        self.assertIn("target/repro-clone-lf-ci", workflow)
+        self.assertIn(
+            "validation.tools.validate_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json",
+            workflow,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

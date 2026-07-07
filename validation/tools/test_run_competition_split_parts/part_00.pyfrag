@@ -1,0 +1,800 @@
+import contextlib
+import hashlib
+import io
+import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RUNNER = REPO_ROOT / "validation" / "tools" / "run_competition.py"
+SUMMARY_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
+LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".rs",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
+
+def lf_stable_sha256(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
+def load_runner_module():
+    spec = importlib.util.spec_from_file_location("run_competition_under_test", RUNNER)
+    if spec is None or spec.loader is None:
+        raise AssertionError("could not load run_competition module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_summary_validator_module():
+    spec = importlib.util.spec_from_file_location("validate_competition_run_summary_under_test", SUMMARY_VALIDATOR)
+    if spec is None or spec.loader is None:
+        raise AssertionError("could not load validate_competition_run_summary module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_slice_spec(root: Path, target_id: str, slice_id: str) -> Path:
+    path = root / f"{target_id}-{slice_id}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "function_name": slice_id.replace("-", "_"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_extract_spec(root: Path, target_id: str, slice_id: str) -> Path:
+    path = root / f"{target_id}-{slice_id}-extract.json"
+    path.write_text(
+        json.dumps(
+            {
+                "repo_root": str(root / "source-repo"),
+                "source_file": "src/demo.c",
+                "function": slice_id.replace("-", "_"),
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+                "source_branch": "competition",
+                "source_commit": "abc123",
+                "require_source_commit": "abc123",
+                "compiler_command_source": "compile_commands.json",
+                "include_paths": ["include"],
+                "defines": ["DEMO=1"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_final_verification(
+    evidence_root: Path,
+    target_id: str,
+    slice_id: str,
+    *,
+    semantic_pass: bool,
+    status: str | None = None,
+) -> None:
+    evidence_dir = evidence_root / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / f"l3-{slice_id}-final-verification.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": status or ("passed" if semantic_pass else "failed"),
+                "semantic_pass": semantic_pass,
+                "rust_check_status": "passed" if semantic_pass else "failed",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def write_patch_events(evidence_root: Path, target_id: str, slice_id: str, events: list[dict]) -> None:
+    evidence_dir = evidence_root / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / f"l3-{slice_id}-patch-events.jsonl").write_text(
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+
+def write_worker_summary(
+    root: Path,
+    worker_id: str,
+    *,
+    attempted: int,
+    semantic_pass: int,
+    compiled: int | None = None,
+    failed: int = 0,
+    final_gate_status: str = "passed",
+    workflow_metrics: dict | None = None,
+) -> Path:
+    path = root / worker_id / "summary" / "competition-run-summary.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "schema_version": 1,
+        "run_id": f"run-{worker_id}",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": 1,
+        "translator_version": "0.1.0",
+        "slices": {
+            "attempted": attempted,
+            "typed_ir_generated": semantic_pass if compiled is None else compiled,
+            "compiled": semantic_pass if compiled is None else compiled,
+            "semantic_pass": semantic_pass,
+            "refused": 0,
+            "blocked": 0,
+            "failed": failed,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "artifact_roots": [
+            f"target/competition-out/{worker_id}/evidence",
+            f"target/competition-out/{worker_id}/summary",
+            f"target/competition-out/{worker_id}/logs",
+        ],
+        "final_gate": {
+            "status": final_gate_status,
+            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+        },
+    }
+    if workflow_metrics is not None:
+        metrics_path = path.parent / "workflow-metrics.json"
+        metrics_path.write_text(json.dumps(workflow_metrics, sort_keys=True), encoding="utf-8")
+        summary["workflow_metrics"] = {
+            "path": "workflow-metrics.json",
+            "sha256": lf_stable_sha256(metrics_path),
+        }
+    path.write_text(json.dumps(summary), encoding="utf-8")
+    return path
+
+
+def write_worker_assignment_request(
+    out_root: Path,
+    worker_id: str,
+    *,
+    target_id: str = "demo",
+    slice_id: str = "demo-first",
+    function: str = "first_unit",
+    source_commit: str = "commit-one",
+    source_sha256: str = "a" * 64,
+    require_source_commit: str = "commit-one",
+) -> Path:
+    path = out_root / "harness" / "assignments" / f"{worker_id}-request.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "run_id": "run-test",
+                "target_id": target_id,
+                "slice_id": slice_id,
+                "function": function,
+                "source_repo_root": "sources/FlashDB",
+                "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+                "source_branch": "competition",
+                "source_file": "src/fdb_utils.c",
+                "source_commit": source_commit,
+                "source_sha256": source_sha256,
+                "require_source_commit": require_source_commit,
+                "slice_specs": [f"validation/slice-specs/{slice_id}.json"],
+                "out_root": f"target/competition-out/workers/{worker_id}",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_worker_before_after_artifacts(worker_root: Path, worker_id: str) -> dict:
+    evidence_dir = worker_root / worker_id / "evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = {
+        "baseline": evidence_dir / "baseline-unsafe.rs",
+        "final": evidence_dir / "final-safe.rs",
+        "oracle_evidence": evidence_dir / "oracle-diff.json",
+        "accepted_patch": evidence_dir / "accepted.patch",
+        "patch_log": evidence_dir / "safety-step-log.jsonl",
+        "baseline_verification": evidence_dir / "verified-baseline.json",
+    }
+    for name, path in artifacts.items():
+        if name == "baseline_verification":
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "semantic_pass": True,
+                        "semantic_claim_source": "verified_unsafe_baseline_gates",
+                        "generated_draft_semantic_pass": False,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(f"{name}\n", encoding="utf-8")
+    manifest = {
+        "schema_version": 1,
+        "status": "bound",
+        **{
+            name: {
+                "path": f"evidence/{path.name}",
+                "sha256": lf_stable_sha256(path),
+            }
+            for name, path in artifacts.items()
+        },
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": 6,
+            "current_total_unsafe": 2,
+            "reduced_by": 4,
+            "ratio": 2 / 6,
+        },
+    }
+    manifest["baseline_verification"].update(
+        {
+            "status": "passed",
+            "semantic_pass": True,
+            "semantic_claim_source": "verified_unsafe_baseline_gates",
+            "generated_draft_semantic_pass": False,
+        }
+    )
+    return manifest
+
+
+def write_direct_before_after_manifest(out_root: Path, target_id: str, slice_id: str) -> dict:
+    evidence_dir = out_root / "evidence" / target_id / "auto-translation" / slice_id
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    artifacts = {
+        "baseline": evidence_dir / "baseline-unsafe.rs",
+        "final": evidence_dir / "final-safe.rs",
+        "oracle_evidence": evidence_dir / "oracle-diff.json",
+        "accepted_patch": evidence_dir / "accepted.patch",
+        "patch_log": evidence_dir / "safety-step-log.jsonl",
+        "baseline_verification": evidence_dir / "verified-baseline.json",
+    }
+    for name, path in artifacts.items():
+        if name == "baseline_verification":
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "semantic_pass": True,
+                        "semantic_claim_source": "verified_unsafe_baseline_gates",
+                        "generated_draft_semantic_pass": False,
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        else:
+            path.write_text(f"{name}\n", encoding="utf-8")
+    manifest = {
+        "schema_version": 1,
+        "status": "bound",
+        **{
+            name: {
+                "path": f"evidence/{target_id}/auto-translation/{slice_id}/{path.name}",
+                "sha256": lf_stable_sha256(path),
+            }
+            for name, path in artifacts.items()
+        },
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": 3,
+            "current_total_unsafe": 0,
+            "reduced_by": 3,
+            "ratio": 0.0,
+        },
+    }
+    manifest["baseline_verification"].update(
+        {
+            "status": "passed",
+            "semantic_pass": True,
+            "semantic_claim_source": "verified_unsafe_baseline_gates",
+            "generated_draft_semantic_pass": False,
+        }
+    )
+    (evidence_dir / f"l3-{slice_id}-translation-before-after.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return manifest
+
+
+class FakeCommandRunner:
+    def __init__(
+        self,
+        *,
+        fail_auto_migrate_for: set[str] | None = None,
+        fail_commands_containing: set[str] | None = None,
+        missing_commands_containing: set[str] | None = None,
+        stdout_by_command_marker: dict[str, str] | None = None,
+    ) -> None:
+        self.commands: list[list[str]] = []
+        self.fail_auto_migrate_for = fail_auto_migrate_for or set()
+        self.fail_commands_containing = fail_commands_containing or set()
+        self.missing_commands_containing = missing_commands_containing or set()
+        self.stdout_by_command_marker = stdout_by_command_marker or {}
+
+    def __call__(self, command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        self.commands.append(command)
+        command_text = " ".join(command)
+        for marker in self.missing_commands_containing:
+            if marker in command_text:
+                return subprocess.CompletedProcess(
+                    command, 127, "", f"bash: line 1: {marker.split()[0]}: command not found"
+                )
+        for marker in self.fail_commands_containing:
+            if marker in command_text:
+                return subprocess.CompletedProcess(command, 1, "", f"failed {marker}")
+        if "extract_source_slice.py" in command_text:
+            cwd = Path(kwargs.get("cwd", REPO_ROOT))
+            self.write_extracted_slice_spec(command, cwd)
+        for slice_id in self.fail_auto_migrate_for:
+            if "auto_migrate.py" in command_text and slice_id in command_text:
+                return subprocess.CompletedProcess(command, 1, "", f"failed {slice_id}")
+        for marker, stdout in self.stdout_by_command_marker.items():
+            if marker in command_text:
+                return subprocess.CompletedProcess(command, 0, stdout, "")
+        if "unsafe_budget.py" in command_text:
+            stdout = json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "passed",
+                    "first_party_non_test_unsafe_count": 0,
+                    "unsafe_ratio": 0.0,
+                }
+            )
+            return subprocess.CompletedProcess(command, 0, stdout, "")
+        return subprocess.CompletedProcess(command, 0, "ok", "")
+
+    def write_extracted_slice_spec(self, command: list[str], cwd: Path) -> None:
+        def arg_value(name: str) -> str:
+            return command[command.index(name) + 1]
+
+        out_path = Path(arg_value("--out"))
+        if not out_path.is_absolute():
+            out_path = cwd / out_path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        target_id = arg_value("--target-id")
+        slice_id = arg_value("--slice-id")
+        function_name = arg_value("--function")
+        out_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "target_id": target_id,
+                    "slice_id": slice_id,
+                    "function_name": function_name,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+
+class RunCompetitionTests(unittest.TestCase):
+    def test_core_ci_runs_competition_runner_tests(self) -> None:
+        workflow = (REPO_ROOT / ".github" / "workflows" / "core-translator-validation-ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("validation.tools.test_run_competition", workflow)
+
+    def test_runner_invokes_common_gates_and_writes_valid_summary(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertTrue(any("config/competition-env/env.sh" in text for text in command_texts))
+            self.assertTrue(any("toolchain-check.sh" in text for text in command_texts))
+            self.assertTrue(any("auto_migrate.py" in text and "--competition-clang-lane" in text for text in command_texts))
+            self.assertTrue(any("validate_auto_translation_evidence.py" in text for text in command_texts))
+            self.assertTrue(any("unsafe_budget.py" in text for text in command_texts))
+            self.assertFalse(any("openspec validate --all --strict" in text for text in command_texts))
+            self.assertTrue(any("validate_competition_run_summary.py" in text for text in command_texts))
+
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["proof_class"], "local-simulation")
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["final_gate"]["status"], "passed")
+
+    def test_default_runner_does_not_launch_openspec_governance_check(self) -> None:
+        # OpenSpec is repository governance history, not competition evidence.
+        # The judge path must not launch it unless explicitly requested.
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test-openspec-default-skipped",
+            )
+
+            self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
+            self.assertEqual(result.summary["final_gate"]["status"], "passed")
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("openspec validate --all --strict" in text for text in command_texts))
+
+    def test_optional_openspec_governance_check_failure_fails_final_gate(self) -> None:
+        # Developers may opt into the historical governance check; when they
+        # do, a present-but-failing OpenSpec validation remains a failure.
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(fail_commands_containing={"openspec validate"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test-openspec-failed",
+                run_optional_governance_checks=True,
+            )
+
+            self.assertEqual(result.exit_code, 1)
+            self.assertEqual(result.summary["final_gate"]["status"], "failed")
+
+    def test_optional_missing_openspec_cli_does_not_fail_final_gate(self) -> None:
+        # Even when the optional governance check is requested, a missing CLI
+        # remains a skip because the competition host is not required to
+        # provide OpenSpec.
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner(missing_commands_containing={"openspec validate"})
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test-openspec-missing",
+                run_optional_governance_checks=True,
+            )
+
+            self.assertEqual(result.exit_code, 0, json.dumps(result.summary, default=str))
+            self.assertEqual(result.summary["final_gate"]["status"], "passed")
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertTrue(any("openspec validate --all --strict" in text for text in command_texts))
+
+    def test_runner_writes_machine_readable_workflow_metrics_artifact(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(out_root / "evidence", "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["workflow_metrics"]["path"], "summary/workflow-metrics.json")
+            self.assertRegex(summary["workflow_metrics"]["sha256"], r"^[0-9a-f]{64}$")
+
+            metrics_path = out_root / "summary" / "workflow-metrics.json"
+            self.assertTrue(metrics_path.exists())
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            self.assertEqual(metrics["run_id"], "run-test")
+            self.assertEqual(metrics["units_total"], 1)
+            self.assertEqual(metrics["units_converged"], 1)
+            self.assertEqual(metrics["units_baseline_only"], 0)
+            self.assertEqual(metrics["fail_closed_count"], 0)
+            self.assertEqual(metrics["avg_repair_rounds"], 0.0)
+            self.assertEqual(metrics["auto_recovery_rate"], 0.0)
+            self.assertEqual(metrics["human_interventions"], 0)
+            self.assertTrue(metrics["always_compiles"])
+            self.assertTrue(metrics["always_equivalent"])
+            self.assertEqual(metrics["llm_calls"], 0)
+            self.assertEqual(metrics["wall_clock_seconds"], summary["elapsed_seconds"])
+            self.assertEqual(metrics["unsafe_reduction"]["status"], "not_measured")
+            self.assertEqual(
+                metrics["per_unit_statuses"],
+                [
+                    {
+                        "unit_id": "demo/store-add-one",
+                        "source": "slice-spec",
+                        "status": "converged",
+                        "compiled": True,
+                        "semantic_pass": True,
+                        "refused": False,
+                        "blocked": False,
+                        "failed": False,
+                    }
+                ],
+            )
+
+    def test_runner_counts_direct_slice_self_healing_repair_metrics(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "keyword-param")
+            write_final_verification(out_root / "evidence", "demo", "keyword-param", semantic_pass=True)
+            write_patch_events(
+                out_root / "evidence",
+                "demo",
+                "keyword-param",
+                [
+                    {"round": 1, "status": "applied"},
+                    {"round": 2, "status": "applied", "ai_usage": {"used": True, "candidate_id": "ai-repair-1"}},
+                    {"round": 3, "status": "applied"},
+                    {"round": 3, "status": "verified"},
+                ],
+            )
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["avg_repair_rounds"], 3.0)
+            self.assertEqual(metrics["auto_recovery_rate"], 1.0)
+            self.assertEqual(metrics["llm_calls"], 1)
+            self.assertEqual(metrics["per_unit_statuses"][0]["repair_rounds"], 3)
+            self.assertTrue(metrics["per_unit_statuses"][0]["auto_recovered"])
+            self.assertEqual(metrics["per_unit_statuses"][0]["llm_calls"], 1)
+            repair_history = metrics["per_unit_statuses"][0]["repair_history"]
+            self.assertEqual(
+                repair_history["patch_events_path"],
+                "evidence/demo/auto-translation/keyword-param/l3-keyword-param-patch-events.jsonl",
+            )
+            self.assertRegex(repair_history["patch_events_sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(repair_history["statuses"], ["applied", "applied", "applied", "verified"])
+            self.assertEqual(repair_history["rollback_ids"], [])
+            self.assertTrue(repair_history["verified"])
+
+    def test_runner_binds_direct_slice_translation_before_after_manifest(self) -> None:
+        module = load_runner_module()
+        validator = load_summary_validator_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            spec_path = write_slice_spec(tmp_path, "demo", "keyword-param")
+            write_final_verification(out_root / "evidence", "demo", "keyword-param", semantic_pass=True)
+            before_after = write_direct_before_after_manifest(out_root, "demo", "keyword-param")
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            parent_summary_path = out_root / "summary" / "competition-run-summary.json"
+            self.assertEqual(
+                validator.validate_summary(parent_summary_path, repo_root=REPO_ROOT)["status"],
+                "passed",
+            )
+            metrics = json.loads((out_root / "summary" / "workflow-metrics.json").read_text(encoding="utf-8"))
+            self.assertEqual(metrics["translation_before_after"]["status"], "bound")
+            self.assertEqual(metrics["translation_before_after"]["unit_count"], 1)
+            self.assertEqual(metrics["translation_before_after"]["measured_unsafe_unit_count"], 1)
+            self.assertEqual(metrics["translation_before_after"]["accepted_patch_unit_count"], 1)
+            self.assertEqual(
+                metrics["translation_before_after"]["units"][0]["baseline_verification"],
+                before_after["baseline_verification"],
+            )
+            self.assertEqual(metrics["unsafe_reduction"]["status"], "measured")
+            self.assertEqual(metrics["unsafe_reduction"]["baseline_total_unsafe"], 3)
+            self.assertEqual(metrics["unsafe_reduction"]["current_total_unsafe"], 0)
+            self.assertEqual(metrics["unsafe_reduction"]["reduced_by"], 3)
+            self.assertEqual(metrics["unsafe_reduction"]["ratio"], 0.0)
+            unit = metrics["per_unit_statuses"][0]
+            self.assertEqual(unit["translation_before_after"], before_after)
+
+    def test_runner_can_reuse_committed_accepted_evidence_without_regenerating_candidate(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            accepted_evidence_root = tmp_path / "accepted-evidence"
+            spec_path = write_slice_spec(tmp_path, "demo", "store-add-one")
+            write_final_verification(accepted_evidence_root, "demo", "store-add-one", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[spec_path],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+                reuse_accepted_evidence=True,
+                accepted_evidence_root=accepted_evidence_root,
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            self.assertFalse(any("auto_migrate.py" in text for text in command_texts))
+            validate_commands = [text for text in command_texts if "validate_auto_translation_evidence.py" in text]
+            self.assertEqual(len(validate_commands), 1)
+            self.assertIn("--evidence-root", validate_commands[0])
+            self.assertIn(accepted_evidence_root.as_posix(), validate_commands[0])
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["compiled"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+            self.assertEqual(summary["slices"]["failed"], 0)
+            self.assertEqual(summary["final_gate"]["status"], "passed")
+
+    def test_runner_extracts_slice_spec_before_auto_migrate(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            extract_spec = write_extract_spec(tmp_path, "demo", "extracted-slice")
+            write_final_verification(out_root / "evidence", "demo", "extracted-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[extract_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            extract_command = next(text for text in command_texts if "extract_source_slice.py" in text)
+            self.assertIn("--repo-root", extract_command)
+            self.assertIn("--source-file src/demo.c", extract_command)
+            self.assertIn("--function extracted_slice", extract_command)
+            self.assertIn("--source-repository https://gitcode.com/xwxf/FlashDB.git", extract_command)
+            self.assertIn("--source-branch competition", extract_command)
+            self.assertIn("--source-commit abc123", extract_command)
+            self.assertIn("--require-source-commit abc123", extract_command)
+            self.assertIn("--compiler-command-source compile_commands.json", extract_command)
+            self.assertIn("--include-path include", extract_command)
+            self.assertIn("--define DEMO=1", extract_command)
+            auto_migrate_command = next(text for text in command_texts if "auto_migrate.py" in text)
+            self.assertIn(
+                "slice-specs/demo-extracted-slice.json",
+                auto_migrate_command.replace("\\", "/"),
+            )
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+
+    def test_runner_extracts_inline_extraction_spec_before_auto_migrate(self) -> None:
+        module = load_runner_module()
+        with tempfile.TemporaryDirectory(prefix="run-competition-test-") as tmp:
+            tmp_path = Path(tmp)
+            out_root = tmp_path / "competition-out"
+            inline_spec = {
+                "repo_root": str(tmp_path / "source-repo"),
+                "source_file": "src/direct.c",
+                "function": "direct_slice",
+                "target_id": "demo",
+                "slice_id": "direct-slice",
+                "include_paths": ["include"],
+                "defines": ["DIRECT=1"],
+            }
+            write_final_verification(out_root / "evidence", "demo", "direct-slice", semantic_pass=True)
+            fake_runner = FakeCommandRunner()
+
+            result = module.run_competition(
+                slice_specs=[],
+                extraction_specs=[inline_spec],
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=fake_runner,
+                repo_root=REPO_ROOT,
+                run_id="run-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_texts = [" ".join(command) for command in fake_runner.commands]
+            extract_command = next(text for text in command_texts if "extract_source_slice.py" in text)
+            self.assertIn("--source-file src/direct.c", extract_command)
+            self.assertIn("--function direct_slice", extract_command)
+            self.assertIn("--include-path include", extract_command)
+            self.assertIn("--define DIRECT=1", extract_command)
+            summary = json.loads((out_root / "summary" / "competition-run-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["slices"]["attempted"], 1)
+            self.assertEqual(summary["slices"]["semantic_pass"], 1)
+
+    def test_main_accepts_direct_extraction_cli_args(self) -> None:
+        module = load_runner_module()
+        calls: dict[str, object] = {}

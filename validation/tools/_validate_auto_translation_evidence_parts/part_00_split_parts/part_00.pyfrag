@@ -1,0 +1,800 @@
+#!/usr/bin/env python3
+"""Validate bounded auto-translation evidence against committed schemas.
+
+Schema validity is only the first layer. These checks also enforce protocol
+boundaries between generated candidate evidence and accepted semantic-pass
+evidence, and they detect route/profile/cache drift across linked artifacts.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import hashlib
+import json
+import re
+from pathlib import Path
+import sys
+from typing import Any, Iterable
+
+import jsonschema
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools import validate_judge_entrypoints as judge_validator
+L4_REFUSED_FORBIDDEN_ARTIFACT_STATUSES = {
+    "accepted_after_gates",
+    "accepted_evidence_bound",
+    "candidate",
+    "candidate_generated",
+    "draft_generated",
+}
+ALLOWED_UNSAFE_SEMANTIC_CLAIM_SOURCES = {
+    "accepted_evidence_binding",
+    "verified_unsafe_baseline_gates",
+}
+FORBIDDEN_UNSAFE_SEMANTIC_CLAIM_SOURCES = {
+    "compile_only",
+    "c2rust_baseline",
+    "c2rust_compile_only",
+    "rustc_compile_only",
+}
+C2RUST_VERIFIED_BASELINE_SAME_OUTPUT_GATES = {
+    "c_oracle": "c-oracle-status",
+    "rust_replay": "c2rust-direct-replay",
+    "schema_diff": "diff",
+    "negative_diff": "negative-diff",
+    "unsafe_scan": "unsafe-scan",
+    "unsafe_ledger": "unsafe-ledger",
+    "final_verification": "final-verification",
+}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--target-id", required=True)
+    parser.add_argument("--slice-id", required=True)
+    parser.add_argument("--slice-spec", type=Path)
+    parser.add_argument("--evidence-root", default=REPO_ROOT / "validation" / "evidence", type=Path)
+    parser.add_argument(
+        "--require-semantic-pass",
+        action="store_true",
+        help="Require accepted C oracle/Rust replay/diff/negative/unsafe/final verification evidence, not just schema validity.",
+    )
+    args = parser.parse_args()
+
+    evidence_dir = args.evidence_root / args.target_id / "auto-translation" / args.slice_id
+    prefix = f"l3-{args.slice_id}"
+    slice_spec = args.slice_spec or resolve_slice_spec(args.target_id, args.slice_id)
+    checks = [
+        ("validation/slice-spec-template/slice-spec.schema.json", slice_spec),
+        ("validation/type-map-template/type-map.schema.json", evidence_dir / f"{prefix}-type-map.json"),
+        ("validation/cfg-template/cfg.schema.json", evidence_dir / f"{prefix}-cfg.json"),
+        ("validation/pointer-graph-template/pointer-graph.schema.json", evidence_dir / f"{prefix}-pointer-graph.json"),
+        ("validation/test-translation-template/test-translation.schema.json", evidence_dir / f"{prefix}-test-translation-generated.json"),
+        ("validation/l3-template/evidence-manifest.schema.json", evidence_dir / f"{prefix}-evidence-manifest.json"),
+        ("validation/auto-translation-template/auto-translation-plan.schema.json", evidence_dir / f"{prefix}-auto-translation-plan.json"),
+        ("validation/auto-translation-template/ai-candidate-manifest.schema.json", evidence_dir / f"{prefix}-ai-candidate-manifest.json"),
+        ("validation/auto-translation-template/blocked-repairs.schema.json", evidence_dir / f"{prefix}-self-healing-blocked-repairs.json"),
+        ("validation/auto-translation-template/c2rust-baseline-manifest.schema.json", evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"),
+        ("validation/auto-translation-template/route-decision.schema.json", evidence_dir / f"{prefix}-route-decision.json"),
+        ("validation/auto-translation-template/validation-profile.schema.json", evidence_dir / f"{prefix}-validation-profile.json"),
+    ]
+
+    validated = []
+    for schema_path, data_path in checks:
+        validate_json(REPO_ROOT / schema_path, data_path)
+        validated.append(rel(data_path))
+
+    verified_baseline_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+    if verified_baseline_path.exists():
+        validate_json(
+            REPO_ROOT / "validation/auto-translation-template/c2rust-verified-unsafe-baseline.schema.json",
+            verified_baseline_path,
+        )
+        validated.append(rel(verified_baseline_path))
+
+    validate_alias_gate(evidence_dir, prefix)
+    validate_route_baseline_profile_refs(evidence_dir, prefix, slice_spec)
+    validate_oracle_harness_contract(evidence_dir, prefix, slice_spec)
+    validate_global_dependency_requirements(evidence_dir, prefix, slice_spec)
+    validate_schema_diff_contract(evidence_dir, prefix, slice_spec)
+    validate_external_direct_callee_context_for_default_checks(evidence_dir, prefix, slice_spec)
+
+    patch_schema = load_json(REPO_ROOT / "validation/auto-translation-template/patch-event.schema.json")
+    patch_path = evidence_dir / f"{prefix}-patch-events.jsonl"
+    patch_count = 0
+    if patch_path.exists():
+        for line in patch_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                jsonschema.validate(json.loads(line), patch_schema)
+                patch_count += 1
+    validated.append(rel(patch_path))
+
+    event_schema = load_json(REPO_ROOT / "validation/auto-translation-template/auto-translation-event.schema.json")
+    event_path = evidence_dir / f"{prefix}-auto-translation-events.jsonl"
+    event_count = 0
+    for line in event_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            jsonschema.validate(json.loads(line), event_schema)
+            event_count += 1
+    validated.append(rel(event_path))
+
+    semantic = (
+        validate_semantic_pass(evidence_dir, prefix, slice_spec)
+        if args.require_semantic_pass
+        else {
+            "semantic_pass": False,
+            "semantic_claim_source": "not_evaluated",
+            "generated_draft_semantic_pass": False,
+            "status": "not_required",
+        }
+    )
+
+    print(
+        json.dumps(
+            {
+                "status": "passed",
+                "schema_status": "passed",
+                "semantic_pass": bool(semantic.get("semantic_pass")),
+                "semantic_claim_source": semantic.get("semantic_claim_source"),
+                "generated_draft_semantic_pass": bool(semantic.get("generated_draft_semantic_pass")),
+                "semantic": semantic,
+                "target_id": args.target_id,
+                "slice_id": args.slice_id,
+                "validated": validated,
+                "patch_event_count": patch_count,
+                "auto_translation_event_count": event_count,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def validate_json(schema_path: Path, data_path: Path) -> None:
+    jsonschema.validate(load_json(data_path), load_json(schema_path))
+
+
+def validate_alias_gate(evidence_dir: Path, prefix: str) -> None:
+    pointer_graph_path = evidence_dir / f"{prefix}-pointer-graph.json"
+    pointer_graph = load_json(pointer_graph_path)
+    # not_applicable: pointer analysis ran and found no pointer surface.
+    # not_evaluated: translation was blocked before pointer analysis ran, so
+    # there is no pointer conclusion for the alias gate to check.
+    if pointer_graph.get("status") in {"not_applicable", "not_evaluated"}:
+        return
+
+    nodes = pointer_graph.get("pointer_nodes", [])
+    read_nodes = [node for node in nodes if node.get("read_effects")]
+    write_nodes = [node for node in nodes if node.get("write_effects")]
+    alias_pairs = [
+        (str(read_node.get("id")), str(write_node.get("id")))
+        for read_node in read_nodes
+        for write_node in write_nodes
+        if read_node.get("id") != write_node.get("id")
+    ]
+    if not alias_pairs:
+        return
+
+    required = ["alias_sets", "alias_risks", "alias_contract", "safe_boundary_preconditions"]
+    missing = [key for key in required if key not in pointer_graph]
+    triggers = pointer_graph.get("applicability", {}).get("triggers", [])
+    if "alias_sensitive_state" not in triggers:
+        missing.append("applicability.triggers.alias_sensitive_state")
+    if missing:
+        raise SystemExit(f"alias gate evidence missing fields in {pointer_graph_path}: {', '.join(missing)}")
+
+    alias_contract = pointer_graph.get("alias_contract", {})
+    decision = alias_contract.get("decision")
+    if decision not in {"allow", "requires_noalias_contract", "candidate_only", "blocked"}:
+        raise SystemExit(f"alias gate evidence has unsupported decision {decision!r} in {pointer_graph_path}")
+    if decision == "allow" and not alias_contract.get("proven"):
+        raise SystemExit(f"alias gate allow decision requires alias_contract.proven=true in {pointer_graph_path}")
+
+    alias_sets = pointer_graph.get("alias_sets", [])
+    alias_risks = pointer_graph.get("alias_risks", [])
+    preconditions = pointer_graph.get("safe_boundary_preconditions", [])
+    if not alias_sets:
+        raise SystemExit(f"alias gate evidence requires non-empty alias_sets in {pointer_graph_path}")
+    if not alias_risks:
+        raise SystemExit(f"alias gate evidence requires non-empty alias_risks in {pointer_graph_path}")
+    if decision == "requires_noalias_contract" and not preconditions:
+        raise SystemExit(f"alias gate evidence requires noalias preconditions in {pointer_graph_path}")
+
+    required_risk_keys = {"pointer_nodes", "risk_level", "evidence_source", "gate_decision", "requires_noalias"}
+    precondition_sets = {
+        frozenset(item.get("applies_to", []))
+        for item in preconditions
+        if item.get("kind") == "noalias" and item.get("required")
+    }
+    for risk in alias_risks:
+        missing_risk_keys = sorted(required_risk_keys - set(risk))
+        if missing_risk_keys:
+            raise SystemExit(
+                f"alias gate evidence risk missing fields in {pointer_graph_path}: {', '.join(missing_risk_keys)}"
+            )
+        risk_nodes = frozenset(risk.get("pointer_nodes", []))
+        if len(risk_nodes) < 2:
+            raise SystemExit(f"alias gate evidence risk must name at least two pointer nodes in {pointer_graph_path}")
+        if risk.get("gate_decision") != decision:
+            raise SystemExit(f"alias gate evidence risk gate_decision drift in {pointer_graph_path}")
+        if decision == "requires_noalias_contract":
+            if risk.get("risk_level") != "unknown_alias":
+                raise SystemExit(f"alias gate evidence unknown alias risk level required in {pointer_graph_path}")
+            if not risk.get("requires_noalias"):
+                raise SystemExit(f"alias gate evidence risk requires_noalias=true required in {pointer_graph_path}")
+            if risk_nodes not in precondition_sets:
+                raise SystemExit(f"alias gate evidence missing matching noalias precondition in {pointer_graph_path}")
+
+    if int(pointer_graph.get("schema_version", 1)) >= 2:
+        validate_alias_sensitive_effect_graph(pointer_graph, alias_risks, pointer_graph_path, decision)
+
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    plan = load_json(plan_path)
+    if "alias_gate" not in plan.get("translation_summary", {}):
+        raise SystemExit(f"alias gate evidence missing translation_summary.alias_gate in {plan_path}")
+
+    manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+    if manifest_path.exists():
+        manifest = load_json(manifest_path)
+        if "alias_gate" not in manifest.get("claim_boundary", {}):
+            raise SystemExit(f"alias gate evidence missing claim_boundary.alias_gate in {manifest_path}")
+
+    l3_manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    l3_manifest = load_json(l3_manifest_path)
+    if "alias_gate" not in l3_manifest.get("claim_boundary", {}):
+        raise SystemExit(f"alias gate evidence missing claim_boundary.alias_gate in {l3_manifest_path}")
+
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    final = load_json(final_path)
+    if "alias_gate" not in final:
+        raise SystemExit(f"alias gate evidence missing final_verification.alias_gate in {final_path}")
+
+
+def validate_alias_sensitive_effect_graph(
+    pointer_graph: dict[str, Any],
+    alias_risks: list[dict[str, Any]],
+    pointer_graph_path: Path,
+    decision: str,
+) -> None:
+    effect_graph = pointer_graph.get("effect_graph")
+    if not isinstance(effect_graph, dict):
+        raise SystemExit(f"alias-sensitive pointer graph schema v2 requires effect_graph in {pointer_graph_path}")
+    effects = effect_graph.get("effects")
+    edges = effect_graph.get("edges")
+    if not isinstance(effects, list) or not isinstance(edges, list):
+        raise SystemExit(f"effect_graph effects/edges must be arrays in {pointer_graph_path}")
+
+    read_effect_ids_by_node: dict[str, set[str]] = {}
+    write_effect_ids_by_node: dict[str, set[str]] = {}
+    for effect in effects:
+        if not isinstance(effect, dict):
+            continue
+        effect_id = str(effect.get("id", ""))
+        node_id = str(effect.get("pointer_node", ""))
+        if not effect_id or not node_id:
+            continue
+        if effect.get("kind") == "read":
+            read_effect_ids_by_node.setdefault(node_id, set()).add(effect_id)
+        if effect.get("kind") == "write":
+            write_effect_ids_by_node.setdefault(node_id, set()).add(effect_id)
+    if not read_effect_ids_by_node or not write_effect_ids_by_node:
+        raise SystemExit(f"effect_graph requires read and write effects for alias-sensitive graph in {pointer_graph_path}")
+
+    summary = effect_graph.get("summary", {})
+    if not isinstance(summary, dict):
+        raise SystemExit(f"effect_graph summary missing in {pointer_graph_path}")
+    if summary.get("alias_sensitive") is not True:
+        raise SystemExit(f"effect_graph summary.alias_sensitive=true required in {pointer_graph_path}")
+    if summary.get("alias_gate_decision") != decision:
+        raise SystemExit(f"effect_graph alias gate decision drift in {pointer_graph_path}")
+
+    edge_keys = {
+        (
+            str(edge.get("from_effect", "")),
+            str(edge.get("to_effect", "")),
+            str(edge.get("relationship", "")),
+        )
+        for edge in edges
+        if isinstance(edge, dict)
+    }
+    for risk in alias_risks:
+        members = [str(item) for item in risk.get("pointer_nodes", []) if item]
+        relationship = "requires_noalias" if risk.get("requires_noalias") else "may_alias"
+        covered = False
+        for read_node in members:
+            for write_node in members:
+                if read_node == write_node:
+                    continue
+                for read_effect_id in read_effect_ids_by_node.get(read_node, set()):
+                    for write_effect_id in write_effect_ids_by_node.get(write_node, set()):
+                        if (read_effect_id, write_effect_id, relationship) in edge_keys:
+                            covered = True
+        if not covered:
+            raise SystemExit(f"effect_graph missing alias risk edge for {members} in {pointer_graph_path}")
+
+
+def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    """Validate the cross-file route, baseline, profile, and cache contract.
+
+    The C2Rust baseline must stay candidate_context_only; the route-selected
+    validation profile must match the emitted profile artifact; and cache
+    metadata must include the same dependent artifact identities. This catches
+    stale evidence reuse after route/profile/cache drift.
+    """
+    baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+    route_path = evidence_dir / f"{prefix}-route-decision.json"
+    profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+    baseline = load_json(baseline_path)
+    route = load_json(route_path)
+    profile = load_json(profile_path)
+    slice_spec = load_json(slice_spec_path)
+
+    if baseline.get("correctness_role") != "candidate_context_only":
+        raise SystemExit(f"C2Rust baseline must be candidate context only in {baseline_path}")
+    if route.get("verification_profile") != profile.get("profile"):
+        raise SystemExit(f"route/profile mismatch: {route.get('verification_profile')} != {profile.get('profile')}")
+    if route.get("level") != profile.get("route_level"):
+        raise SystemExit(f"route/profile level mismatch: {route.get('level')} != {profile.get('route_level')}")
+    if route.get("level") == "L4":
+        if route.get("status") != "refused":
+            raise SystemExit(f"L4 route requires refused status in {route_path}")
+        if route.get("translator", {}).get("candidate_generation_allowed"):
+            raise SystemExit(f"L4 route must not allow candidate generation in {route_path}")
+    if profile.get("status") == "passed" and profile.get("skipped_gates"):
+        raise SystemExit(f"passed validation profile cannot contain skipped required gates in {profile_path}")
+
+    auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+    auto_manifest = load_json(auto_manifest_path)
+    if l4_refuses_candidate_generation(route):
+        if auto_manifest.get("status") == "candidate_generated":
+            raise SystemExit(
+                f"L4/refused route cannot have generated candidate evidence in {auto_manifest_path}"
+            )
+        if not accepted_evidence_authoritative_manifest(route, auto_manifest, slice_spec):
+            if accepted_evidence_authoritative_artifacts_claimed(route, auto_manifest):
+                raise SystemExit(
+                    "L4/refused accepted_evidence_authoritative requires "
+                    "slice spec claim_boundary.accepted_evidence_authoritative=true"
+                )
+            validate_l4_refused_has_no_candidate_artifact_status(
+                evidence_dir,
+                prefix,
+                auto_manifest,
+                auto_manifest_path,
+            )
+            validate_l4_refused_repair_playbook(evidence_dir, prefix)
+    validate_route_source_artifact_refs(evidence_dir, prefix, route, baseline_path)
+    require_ref(auto_manifest.get("c2rust_baseline"), baseline_path, "auto_manifest.c2rust_baseline")
+    require_ref(auto_manifest.get("route_decision"), route_path, "auto_manifest.route_decision")
+    require_ref(auto_manifest.get("validation_profile"), profile_path, "auto_manifest.validation_profile")
+
+    l3_manifest_path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    l3_manifest = load_json(l3_manifest_path)
+    evidence = l3_manifest.get("evidence", {})
+    require_ref(evidence.get("c2rust_baseline"), baseline_path, "l3_manifest.evidence.c2rust_baseline")
+    require_ref(evidence.get("route_decision"), route_path, "l3_manifest.evidence.route_decision")
+    require_ref(evidence.get("validation_profile"), profile_path, "l3_manifest.evidence.validation_profile")
+
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    final = load_json(final_path)
+    require_ref(final.get("c2rust_baseline"), baseline_path, "final_verification.c2rust_baseline")
+    require_ref(final.get("route_decision"), route_path, "final_verification.route_decision")
+    require_ref(final.get("validation_profile"), profile_path, "final_verification.validation_profile")
+    verified_baseline_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+    if (
+        verified_baseline_path.exists()
+        or auto_manifest.get("verified_unsafe_baseline") is not None
+        or evidence.get("verified_unsafe_baseline") is not None
+        or final.get("verified_unsafe_baseline") is not None
+    ):
+        require_ref(
+            auto_manifest.get("verified_unsafe_baseline"),
+            verified_baseline_path,
+            "auto_manifest.verified_unsafe_baseline",
+        )
+        require_ref(
+            evidence.get("verified_unsafe_baseline"),
+            verified_baseline_path,
+            "l3_manifest.evidence.verified_unsafe_baseline",
+        )
+        require_ref(
+            final.get("verified_unsafe_baseline"),
+            verified_baseline_path,
+            "final_verification.verified_unsafe_baseline",
+        )
+        validate_verified_unsafe_baseline_artifact(
+            evidence_dir,
+            prefix,
+            verified_baseline_path,
+            baseline_path,
+        )
+    if "skipped_gates" not in final:
+        raise SystemExit(f"validation profile skipped gates missing from {final_path}")
+
+    validate_unsupported_control_flow_cfg_contract(
+        load_json(evidence_dir / f"{prefix}-cfg.json"),
+        rel(evidence_dir / f"{prefix}-cfg.json"),
+    )
+    validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+
+    cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+    cache = load_json(cache_path)
+    required_identities = {
+        "c2rust_baseline_identity": artifact_cache_identity(baseline),
+        "route_decision_identity": artifact_cache_identity(route),
+        "validation_profile_identity": artifact_cache_identity(profile),
+        "oracle_boundary_contract_identity": oracle_boundary_contract_identity(profile),
+    }
+    if "competition_environment" in profile:
+        required_identities["competition_environment_identity"] = profile["competition_environment"]
+    for key, expected_identity in required_identities.items():
+        if key not in cache:
+            raise SystemExit(f"cache metadata missing {key} in {cache_path}")
+        if key not in cache.get("cache_input_fields", []):
+            raise SystemExit(f"cache metadata cache_input_fields missing {key} in {cache_path}")
+        if cache.get(key) != expected_identity:
+            raise SystemExit(f"cache metadata {key} drift in {cache_path}")
+    dependent = cache.get("dependent_artifacts", {})
+    require_ref(dependent.get("c2rust_baseline"), baseline_path, "cache.dependent_artifacts.c2rust_baseline")
+    require_ref(dependent.get("route_decision"), route_path, "cache.dependent_artifacts.route_decision")
+    require_ref(dependent.get("validation_profile"), profile_path, "cache.dependent_artifacts.validation_profile")
+
+
+def validate_oracle_harness_contract(evidence_dir: Path, prefix: str, slice_spec_path: Path) -> None:
+    slice_spec = load_json(slice_spec_path)
+    oracle_path = evidence_dir / f"{prefix}-c-oracle-status.json"
+    oracle = load_json(oracle_path)
+    harness_path = resolve_ref_path(str(oracle.get("harness_draft", "")))
+    if not harness_path.exists():
+        raise SystemExit(f"oracle harness draft missing: {harness_path}")
+
+    expected_globals = global_dependency_requirements(slice_spec)
+    contract = oracle.get("harness_contract")
+    harness_ref = oracle.get("harness_draft_ref")
+    if not isinstance(contract, dict):
+        if expected_globals:
+            raise SystemExit(f"oracle harness contract missing from {oracle_path}")
+        if harness_ref is not None:
+            expected_identity = validate_harness_draft_ref(harness_ref, harness_path, oracle_path)
+            validate_cache_oracle_harness_identity(evidence_dir, prefix, expected_identity)
+        validate_draft_oracle_fail_closed(evidence_dir, prefix, oracle, oracle_path)
+        return
+
+    expected_harness_identity = validate_harness_draft_ref(harness_ref, harness_path, oracle_path)
+    validate_cache_oracle_harness_identity(evidence_dir, prefix, expected_harness_identity)
+
+    expected_prototype = c_function_prototype(slice_spec)
+    if contract.get("function_prototype") != expected_prototype:
+        raise SystemExit(f"oracle harness contract function prototype drift in {oracle_path}")
+
+    expected_fixture = oracle_fixture_binding(slice_spec)
+    fixture = contract.get("fixture")
+    if fixture != expected_fixture:
+        raise SystemExit(f"oracle harness contract fixture drift in {oracle_path}")
+    if oracle.get("fixture_binding") != expected_fixture:
+        raise SystemExit(f"oracle fixture binding drift in {oracle_path}")
+
+    expected_source_files = slice_spec.get("c_boundary", {}).get("files", [])
+    if contract.get("source_files") != expected_source_files:
+        raise SystemExit(f"oracle harness contract source_files drift in {oracle_path}")
+    if contract.get("oracle_source_mode") != c_oracle_source_mode(slice_spec):
+        raise SystemExit(f"oracle harness contract source mode drift in {oracle_path}")
+
+    contract_globals = contract.get("global_dependencies", [])
+    if contract_globals != expected_globals:
+        raise SystemExit(f"oracle harness contract global_dependencies drift in {oracle_path}")
+
+    compile_command = oracle.get("compile_command_draft")
+    validate_compile_command_draft(compile_command, slice_spec, harness_path, oracle_path)
+    validate_compile_execution(oracle.get("compile_execution"), compile_command, oracle, oracle_path)
+
+    harness_text = harness_path.read_text(encoding="utf-8")
+    if c_oracle_embeds_slice_source(slice_spec):
+        embedded_source = c_oracle_embedded_slice_source(slice_spec)
+        if embedded_source is None or embedded_source.strip() not in harness_text:
+            raise SystemExit(f"oracle harness embedded slice source missing from {harness_path}")
+    elif expected_prototype not in harness_text:
+        raise SystemExit(f"oracle harness function prototype missing from {harness_path}")
+    if f"fixture input: {fixture_path_from_spec(slice_spec)}" not in harness_text:
+        raise SystemExit(f"oracle harness fixture binding missing from {harness_path}")
+    for fixture_comment in oracle_fixture_comment_fragments(expected_fixture):
+        if fixture_comment not in harness_text:
+            raise SystemExit(f"oracle harness fixture binding missing from {harness_path}")
+    for item in expected_source_files:
+        if not isinstance(item, dict):
+            continue
+        source_comment = f"source file: {item.get('path', 'unknown')} (sha256: {item.get('sha256', 'unknown')})"
+        if source_comment not in harness_text:
+            raise SystemExit(f"oracle harness source file binding missing from {harness_path}")
+    validate_draft_oracle_fail_closed(evidence_dir, prefix, oracle, oracle_path)
+
+
+def validate_harness_draft_ref(ref: Any, harness_path: Path, oracle_path: Path) -> dict[str, Any]:
+    if not isinstance(ref, dict) or not ref.get("path"):
+        raise SystemExit(f"oracle harness draft ref missing from {oracle_path}")
+    resolved = resolve_ref_path(str(ref["path"]))
+    if resolved.resolve() != harness_path.resolve():
+        raise SystemExit(f"oracle harness draft ref path mismatch in {oracle_path}: {resolved} != {harness_path}")
+    expected_sha = sha256(harness_path)
+    if ref.get("sha256") != expected_sha:
+        raise SystemExit(f"oracle harness draft ref sha256 mismatch in {oracle_path}")
+    if ref.get("status") != "draft":
+        raise SystemExit(f"oracle harness draft ref status mismatch in {oracle_path}")
+    return {
+        "path": ref["path"],
+        "status": ref["status"],
+        "sha256": ref["sha256"],
+    }
+
+
+def validate_compile_command_draft(
+    compile_command: Any,
+    slice_spec: dict[str, Any],
+    harness_path: Path,
+    oracle_path: Path,
+) -> None:
+    if not isinstance(compile_command, dict):
+        raise SystemExit(f"oracle harness compile command draft missing from {oracle_path}")
+    source_root = compile_source_root(slice_spec)
+    expected_includes = [
+        resolve_source_root_path(source_root, path)
+        for path in slice_spec.get("build_profile", {}).get("include_paths", [])
+    ]
+    expected_defines = [str(item) for item in slice_spec.get("build_profile", {}).get("defines", [])]
+    expected_sources = [] if c_oracle_embeds_slice_source(slice_spec) else compile_link_source_files(slice_spec, source_root)
+    output_name = harness_path.with_suffix(".exe").name
+    expected_argv = [
+        "cc",
+        "-std=c99",
+        *[f"-D{item}" for item in expected_defines],
+        *[f"-I{path}" for path in expected_includes],
+        harness_path.name,
+        *[item["resolved_path"] for item in expected_sources],
+        "-o",
+        output_name,
+    ]
+    if compile_command.get("working_directory") != rel(oracle_path.parent):
+        raise SystemExit(f"oracle harness compile command working_directory drift in {oracle_path}")
+    if compile_command.get("source_root") != source_root:
+        raise SystemExit(f"oracle harness compile command source_root drift in {oracle_path}")
+    if compile_command.get("defines") != expected_defines:
+        raise SystemExit(f"oracle harness compile command defines drift in {oracle_path}")
+    if compile_command.get("resolved_include_paths") != expected_includes:
+        raise SystemExit(f"oracle harness compile command include path drift in {oracle_path}")
+    if compile_command.get("link_source_files") != expected_sources:
+        raise SystemExit(f"oracle harness compile command source linkage drift in {oracle_path}")
+    if compile_command.get("link_strategy") != c_oracle_link_strategy(slice_spec):
+        raise SystemExit(f"oracle harness compile command link strategy drift in {oracle_path}")
+    if compile_command.get("oracle_source_mode") != c_oracle_source_mode(slice_spec):
+        raise SystemExit(f"oracle harness compile command source mode drift in {oracle_path}")
+    if compile_command.get("argv") != expected_argv:
+        raise SystemExit(f"oracle harness compile command argv drift in {oracle_path}")
+    if compile_command.get("status") != "draft_not_executed":
+        raise SystemExit(f"oracle harness compile command status drift in {oracle_path}")
+
+
+def validate_compile_execution(
+    compile_execution: Any,
+    compile_command: dict[str, Any],
+    oracle: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    if not isinstance(compile_execution, dict):
+        raise SystemExit(f"oracle harness compile execution missing from {oracle_path}")
+    if compile_execution.get("argv") != compile_command.get("argv"):
+        raise SystemExit(f"oracle harness compile execution argv drift in {oracle_path}")
+    if compile_execution.get("working_directory") != compile_command.get("working_directory"):
+        raise SystemExit(f"oracle harness compile execution working_directory drift in {oracle_path}")
+    if compile_execution.get("semantic_pass") is not False:
+        raise SystemExit(f"oracle harness compile execution cannot claim semantic_pass in {oracle_path}")
+
+    status = compile_execution.get("status")
+    expected_toolchain_by_status = {
+        "skipped_by_flag": "DRAFT_NOT_EXECUTED",
+        "missing_argv": "COMPILE_NOT_EXECUTED",
+        "compiler_not_found": "COMPILE_NOT_EXECUTED",
+        "compile_failed": "COMPILE_FAILED",
+        "compile_timeout": "COMPILE_FAILED",
+        "compile_succeeded_not_oracle": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    }
+    if status not in expected_toolchain_by_status:
+        raise SystemExit(f"oracle harness compile execution status drift in {oracle_path}")
+    expected_toolchain_status = expected_toolchain_by_status[status]
+    if compile_execution.get("toolchain_status_after_attempt") != expected_toolchain_status:
+        raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
+    promoted_accepted = is_promoted_accepted_oracle_wrapper(oracle)
+    if compile_execution.get("toolchain_status_after_attempt") != oracle.get("toolchain_status") and not (
+        promoted_accepted and expected_toolchain_status in {"COMPILE_SUCCEEDED_NOT_ORACLE", "DRAFT_NOT_EXECUTED"}
+    ):
+        raise SystemExit(f"oracle harness compile execution toolchain status drift in {oracle_path}")
+
+    attempted = compile_execution.get("attempted")
+    if status == "skipped_by_flag":
+        if attempted is not False:
+            raise SystemExit(f"oracle harness compile execution skipped status drift in {oracle_path}")
+        if compile_execution.get("diagnostics") != ["C oracle compile execution skipped by --skip-c-oracle."]:
+            raise SystemExit(f"oracle harness compile execution diagnostics drift in {oracle_path}")
+        return
+
+    if status in {"missing_argv", "compiler_not_found"}:
+        if attempted is not False:
+            raise SystemExit(f"oracle harness compile execution non-attempted status drift in {oracle_path}")
+        if not compile_execution.get("diagnostics"):
+            raise SystemExit(f"oracle harness compile execution diagnostics missing in {oracle_path}")
+        return
+
+    if status in {"compile_failed", "compile_timeout", "compile_succeeded_not_oracle"}:
+        if attempted is not True:
+            raise SystemExit(f"oracle harness compile execution attempted status drift in {oracle_path}")
+        if "compiler_path" not in compile_execution:
+            raise SystemExit(f"oracle harness compile execution compiler path missing in {oracle_path}")
+        validate_compile_toolchain_provenance(compile_execution, oracle_path)
+        if not compile_execution.get("diagnostics"):
+            raise SystemExit(f"oracle harness compile execution diagnostics missing in {oracle_path}")
+        if status == "compile_succeeded_not_oracle" and oracle.get("semantic_pass") is True and not promoted_accepted:
+            raise SystemExit(f"compiled oracle draft cannot claim semantic_pass=true in {oracle_path}")
+        harness_execution = compile_execution.get("harness_execution")
+        if status == "compile_succeeded_not_oracle" and not isinstance(harness_execution, dict):
+            raise SystemExit(f"oracle harness execution missing in {oracle_path}")
+        if harness_execution is not None:
+            if status != "compile_succeeded_not_oracle":
+                raise SystemExit(f"oracle harness execution status drift in {oracle_path}")
+            validate_harness_execution(harness_execution, compile_execution, oracle_path)
+        return
+
+
+def is_promoted_accepted_oracle_wrapper(oracle: dict[str, Any]) -> bool:
+    accepted = oracle.get("accepted_oracle")
+    return (
+        oracle.get("status") == "C_ORACLE_GENERATED"
+        and oracle.get("semantic_pass") is True
+        and oracle.get("toolchain_status") == "C_ORACLE_GENERATED"
+        and isinstance(accepted, dict)
+        and accepted.get("status") == "passed"
+        and bool(accepted.get("path"))
+    )
+
+
+def validate_harness_execution(
+    harness_execution: Any,
+    compile_execution: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    if not isinstance(harness_execution, dict):
+        raise SystemExit(f"oracle harness execution missing from {oracle_path}")
+    if harness_execution.get("working_directory") != compile_execution.get("working_directory"):
+        raise SystemExit(f"oracle harness execution working_directory drift in {oracle_path}")
+    if harness_execution.get("semantic_pass") is not False:
+        raise SystemExit(f"oracle harness execution cannot claim semantic_pass in {oracle_path}")
+    if not isinstance(harness_execution.get("timeout_seconds"), int) or harness_execution["timeout_seconds"] <= 0:
+        raise SystemExit(f"oracle harness execution timeout drift in {oracle_path}")
+    if not isinstance(harness_execution.get("stdout"), str) or not isinstance(harness_execution.get("stderr"), str):
+        raise SystemExit(f"oracle harness execution stdio drift in {oracle_path}")
+    if not harness_execution.get("diagnostics"):
+        raise SystemExit(f"oracle harness execution diagnostics missing in {oracle_path}")
+    validate_harness_toolchain_provenance(harness_execution, compile_execution, oracle_path)
+
+    status = harness_execution.get("status")
+    if status not in {
+        "exited_zero_not_oracle",
+        "exited_nonzero_not_oracle",
+        "execution_timeout_not_oracle",
+        "executable_missing_not_oracle",
+        "execution_error_not_oracle",
+    }:
+        raise SystemExit(f"oracle harness execution status drift in {oracle_path}")
+
+    attempted = harness_execution.get("attempted")
+    if status == "exited_zero_not_oracle":
+        if attempted is not True or harness_execution.get("returncode") != 0:
+            raise SystemExit(f"oracle harness execution exit status drift in {oracle_path}")
+    elif status == "exited_nonzero_not_oracle":
+        returncode = harness_execution.get("returncode")
+        if attempted is not True or not isinstance(returncode, int) or returncode == 0:
+            raise SystemExit(f"oracle harness execution exit status drift in {oracle_path}")
+    elif status == "execution_timeout_not_oracle":
+        if attempted is not True or harness_execution.get("returncode") is not None:
+            raise SystemExit(f"oracle harness execution timeout status drift in {oracle_path}")
+    else:
+        if attempted is not False or harness_execution.get("returncode") is not None:
+            raise SystemExit(f"oracle harness execution non-attempted status drift in {oracle_path}")
+
+    executable_path = harness_execution.get("executable_path")
+    if not isinstance(executable_path, str) or not executable_path:
+        raise SystemExit(f"oracle harness execution executable path drift in {oracle_path}")
+    argv = harness_execution.get("argv")
+    if executable_path != "missing" and argv != [executable_path]:
+        raise SystemExit(f"oracle harness execution argv drift in {oracle_path}")
+    if executable_path == "missing" and argv != []:
+        raise SystemExit(f"oracle harness execution argv drift in {oracle_path}")
+    if "output_gate" not in harness_execution:
+        raise SystemExit(f"oracle harness output gate missing in {oracle_path}")
+    validate_harness_output_gate(harness_execution.get("output_gate"), harness_execution, oracle_path)
+
+
+def validate_compile_toolchain_provenance(compile_execution: dict[str, Any], oracle_path: Path) -> None:
+    adapter = compile_execution.get("toolchain_adapter")
+    execution_argv = compile_execution.get("execution_argv")
+    if adapter is None and execution_argv is None:
+        return
+    if adapter not in {"local", "wsl"}:
+        raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+    execution = require_string_list(
+        execution_argv,
+        f"oracle harness compile execution toolchain provenance drift in {oracle_path}",
+    )
+    if not execution:
+        raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+    compiler_path = compile_execution.get("compiler_path")
+    if not isinstance(compiler_path, str) or not compiler_path:
+        raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+    if adapter == "local":
+        if execution[0] != compiler_path:
+            raise SystemExit(f"oracle harness compile execution toolchain provenance drift in {oracle_path}")
+        return
+    validate_wsl_execution_argv(execution, compiler_path, oracle_path, "compile execution")
+
+
+def validate_harness_toolchain_provenance(
+    harness_execution: dict[str, Any],
+    compile_execution: dict[str, Any],
+    oracle_path: Path,
+) -> None:
+    compile_adapter = compile_execution.get("toolchain_adapter")
+    adapter = harness_execution.get("toolchain_adapter")
+    execution_argv = harness_execution.get("execution_argv")
+    if compile_adapter != "wsl" and adapter is None and execution_argv is None:
+        return
+    if compile_adapter == "wsl" and adapter != "wsl":
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    if adapter not in {"wsl"}:
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    execution = require_string_list(
+        execution_argv,
+        f"oracle harness execution toolchain provenance drift in {oracle_path}",
+    )
+    if not execution:
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    executable_path = harness_execution.get("executable_path")
+    if not isinstance(executable_path, str) or not executable_path:
+        raise SystemExit(f"oracle harness execution toolchain provenance drift in {oracle_path}")
+    validate_wsl_execution_argv(execution, executable_path, oracle_path, "harness execution")
+
+
+def validate_wsl_execution_argv(
+    execution: list[str],
+    required_fragment: str,
+    oracle_path: Path,
+    label: str,
+) -> None:
+    launcher = execution[0].replace("\\", "/").lower()
+    launcher_name = launcher.rsplit("/", 1)[-1]
+    if launcher_name not in {"wsl", "wsl.exe"} or "-e" not in execution:
+        raise SystemExit(f"oracle harness {label} toolchain provenance drift in {oracle_path}")
+    required_fragments = wsl_equivalent_fragments(required_fragment)
+    if not any(fragment in item for fragment in required_fragments for item in execution):
+        raise SystemExit(f"oracle harness {label} toolchain provenance drift in {oracle_path}")
+
+
+def wsl_equivalent_fragments(path_text: str) -> list[str]:
+    fragments = [path_text.replace("\\", "/")]
+    if path_text.startswith("/"):
+        return fragments
+    original_match = re.match(r"^([A-Za-z]):/(.*)$", fragments[0])
+    if original_match:
+        drive, rest = original_match.groups()
+        fragments.append(f"/mnt/{drive.lower()}/{rest}")
+    candidate = Path(path_text)
+    resolved = candidate if candidate.is_absolute() else REPO_ROOT / candidate
+    resolved_text = resolved.resolve().as_posix()
+    fragments.append(resolved_text)
+    match = re.match(r"^([A-Za-z]):/(.*)$", resolved_text)
+    if match:
+        drive, rest = match.groups()
+        fragments.append(f"/mnt/{drive.lower()}/{rest}")

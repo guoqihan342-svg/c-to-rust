@@ -1,0 +1,413 @@
+def run_generated_rust_replay(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    if rust_check.get("status") != "passed":
+        return replay
+    if rust_check_has_harness_only_external_bindings(rust_check):
+        replay["status"] = "not_applicable"
+        replay["skip_reason"] = "compile_only_external_bindings_not_executable"
+        replay["not_applicable_reason"] = "compile_only_external_bindings_not_executable"
+        replay["generated_draft_replay_pass"] = False
+        replay["generated_draft_semantic_pass"] = False
+        replay["known_gaps"] = [
+            "Rust-check harness-only external callee bindings are compile-only and must not be executed as replay proof."
+        ]
+        write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+        return replay
+    if not generated_rust_replay_supported(spec, evidence_dir):
+        return replay
+    result = run_generated_rust_replay_once(draft_path, replay_path)
+    write_text(evidence_dir / "generated-rust-replay-compile.stdout.log", result["compile_stdout"])
+    write_text(evidence_dir / "generated-rust-replay-compile.stderr.jsonl", result["compile_stderr"])
+    write_text(evidence_dir / "generated-rust-replay.stdout.log", result["run_stdout"])
+    write_text(evidence_dir / "generated-rust-replay.stderr.log", result["run_stderr"])
+    passed = result["status"] == "passed"
+    replay["status"] = "passed" if passed else "failed"
+    replay["generated_draft_replay_pass"] = passed
+    replay["generated_draft_semantic_pass"] = False
+    replay["replay_execution"] = {
+        "status": result["status"],
+        "phase": result["phase"],
+        "compile_command": result["compile_command"],
+        "compile_returncode": result["compile_returncode"],
+        "run_command": result["run_command"],
+        "run_returncode": result["run_returncode"],
+        "stdout_log": rel(evidence_dir / "generated-rust-replay.stdout.log"),
+        "stderr_log": rel(evidence_dir / "generated-rust-replay.stderr.log"),
+    }
+    replay["known_gaps"] = [
+        "Generated Rust replay passed committed fixture cases; C oracle, schema diff, negative diff, unsafe, and final verification gates are still required."
+    ]
+    for mapping in replay.get("translation_mappings", []):
+        if isinstance(mapping, dict):
+            mapping["status"] = "passed" if passed else "failed"
+    write_json(evidence_dir / f"l3-{slice_id}-test-translation-generated.json", replay)
+    return replay
+
+
+def rust_check_has_harness_only_external_bindings(rust_check: dict[str, Any]) -> bool:
+    report = rust_check.get("rust_check_harness_only_bindings")
+    if not isinstance(report, dict):
+        return False
+    return any(
+        isinstance(binding, dict) and binding.get("status") == "harness_only"
+        for binding in report.get("bindings", [])
+    )
+
+
+def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) -> bool:
+    if behavior_fields(spec) != ["return_code"] and not fdb_blob_make_replay_supported(spec):
+        return False
+    slice_id = required_str(spec, "slice_id")
+    plan_path = evidence_dir / f"l3-{slice_id}-auto-translation-plan.json"
+    draft_path = evidence_dir / f"l3-{slice_id}-rust-draft.rs"
+    replay_path = evidence_dir / f"l3-{slice_id}-rust-replay-test-draft.rs"
+    if not plan_path.exists() or not draft_path.exists() or not replay_path.exists():
+        return False
+    plan = read_json(plan_path)
+    rule_ids = plan.get("translation_summary", {}).get("translation_rule_ids", [])
+    return "clang-lowered-typed-ir" in rule_ids
+
+
+def run_generated_rust_replay_once(draft_path: Path, replay_path: Path) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c2r-generated-replay-") as build_dir_text:
+        build_dir = Path(build_dir_text)
+        combined_path = build_dir / "generated_replay.rs"
+        exe_path = build_dir / "generated_replay.exe"
+        combined_path.write_text(
+            draft_path.read_text(encoding="utf-8-sig")
+            + "\n"
+            + replay_path.read_text(encoding="utf-8-sig"),
+            encoding="utf-8",
+        )
+        compile_cmd = [
+            "rustc",
+            "--edition=2021",
+            "--test",
+            "--error-format=json",
+            str(combined_path),
+            "-o",
+            str(exe_path),
+        ]
+        compile_result = subprocess.run(compile_cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+        if compile_result.returncode != 0:
+            return {
+                "status": "failed",
+                "phase": "compile",
+                "compile_command": shlex.join(compile_cmd),
+                "compile_returncode": compile_result.returncode,
+                "compile_stdout": compile_result.stdout,
+                "compile_stderr": compile_result.stderr,
+                "run_command": None,
+                "run_returncode": None,
+                "run_stdout": "",
+                "run_stderr": "",
+            }
+        run_cmd = [str(exe_path), "--nocapture"]
+        run_result = subprocess.run(run_cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+        return {
+            "status": "passed" if run_result.returncode == 0 else "failed",
+            "phase": "run",
+            "compile_command": shlex.join(compile_cmd),
+            "compile_returncode": compile_result.returncode,
+            "compile_stdout": compile_result.stdout,
+            "compile_stderr": compile_result.stderr,
+            "run_command": shlex.join(run_cmd),
+            "run_returncode": run_result.returncode,
+            "run_stdout": run_result.stdout,
+            "run_stderr": run_result.stderr,
+        }
+
+
+def generated_rust_report_cases(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    fixture_binding = oracle_fixture_binding(spec)
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_payload = oracle_fixture_input_payload(spec, case_binding)
+        expected_outputs = case_binding.get("expected_outputs")
+        if not isinstance(case_payload, dict) or not isinstance(expected_outputs, dict):
+            continue
+        case = {
+            "id": case_binding.get("id"),
+            "crc": case_payload.get("crc"),
+            "buf": case_payload.get("buf"),
+            "size": case_payload.get("size"),
+            "return_code": expected_outputs.get("return_code"),
+        }
+        for optional_key in ["coverage_kind", "status"]:
+            if optional_key in case_payload:
+                case[optional_key] = case_payload[optional_key]
+        cases.append(case)
+    return cases
+
+
+def run_rust_check(evidence_dir: Path, skip: bool, spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    path = next(evidence_dir.glob("l3-*-rust-draft.rs"), None)
+    slice_id = required_str(spec, "slice_id")
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
+    if skip or path is None:
+        payload = {
+            "schema_version": 1,
+            "status": "skipped",
+            "errors": [],
+            "command": None,
+            "external_callee_context": rust_check_external_context(external_context),
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
+        }
+        patch = write_no_patch_required(spec, evidence_dir, path)
+    else:
+        if external_context["status"] == "recorded":
+            inject_external_callee_stubs(path, external_context)
+        first = rust_check_once(path)
+        write_log_text(evidence_dir / "rust-check-initial.stdout.log", first["stdout"])
+        write_log_text(evidence_dir / "rust-check-initial.stderr.jsonl", first["stderr"])
+        patch = write_no_patch_required(spec, evidence_dir, path)
+        final = first
+        if first["returncode"] != 0:
+            final, patch = run_safe_self_heal_loop(spec, evidence_dir, path, first)
+        if final["returncode"] != 0 and patch["status"] != "blocked":
+            patch = write_blocked_patch(
+                spec,
+                evidence_dir,
+                path,
+                final["errors"],
+                round_number=REPAIR_ROUND_LIMIT,
+                append_events=patch.get("self_heal_applied") is True,
+            )
+        write_log_text(evidence_dir / "rust-check.stdout.log", final["stdout"])
+        write_log_text(evidence_dir / "rust-check.stderr.jsonl", final["stderr"])
+        payload = {
+            "schema_version": 1,
+            "status": "passed" if final["returncode"] == 0 else "failed",
+            "command": final["command"],
+            "error_count": len(final["errors"]),
+            "errors": final["errors"],
+            "external_callee_context": rust_check_external_context(external_context),
+            "rust_check_harness_only_bindings": rust_check_external_binding_report(external_context),
+            "self_healing": {
+                "status": patch["status"],
+                "patch_events": patch["patch_events"],
+                "blocked_repairs": patch["blocked_repairs"],
+            },
+        }
+    write_json(evidence_dir / "rust-check.json", payload)
+    return payload, patch
+
+
+def rust_check_once(path: Path) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="c2r-rust-check-") as build_dir:
+        cmd = [
+            "rustc",
+            "--edition=2021",
+            "--crate-type=lib",
+            "--error-format=json",
+            "--out-dir",
+            build_dir,
+            str(path),
+        ]
+        result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    errors = [
+        json.loads(line)
+        for line in result.stderr.splitlines()
+        if line.startswith("{") and '"level":"error"' in line.replace(" ", "")
+    ]
+    return {
+        "command": " ".join(cmd),
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "errors": errors,
+    }
+
+
+RUST_KEYWORDS = {
+    "as",
+    "async",
+    "await",
+    "break",
+    "const",
+    "continue",
+    "crate",
+    "dyn",
+    "else",
+    "enum",
+    "extern",
+    "false",
+    "fn",
+    "for",
+    "if",
+    "impl",
+    "in",
+    "let",
+    "loop",
+    "match",
+    "mod",
+    "move",
+    "mut",
+    "pub",
+    "ref",
+    "return",
+    "self",
+    "Self",
+    "static",
+    "struct",
+    "super",
+    "trait",
+    "true",
+    "type",
+    "unsafe",
+    "use",
+    "where",
+    "while",
+}
+
+
+def try_safe_self_heal(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+    *,
+    round_number: int = 1,
+    append_events: bool = False,
+) -> dict[str, Any]:
+    text = draft_path.read_text(encoding="utf-8")
+    keyword_param = next(
+        (
+            match.group(1)
+            for match in re.finditer(
+                r"(?<![#A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)\s*:",
+                text,
+            )
+            if match.group(1) in RUST_KEYWORDS
+        ),
+        None,
+    )
+    if keyword_param is None:
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
+
+    patched = re.sub(
+        rf"(?<![#A-Za-z0-9_]){re.escape(keyword_param)}(?![A-Za-z0-9_])",
+        f"r#{keyword_param}",
+        text,
+    )
+    if patched == text:
+        return write_blocked_patch(
+            spec,
+            evidence_dir,
+            draft_path,
+            first["errors"],
+            round_number=round_number,
+            append_events=append_events,
+        )
+
+    draft_path.write_text(patched, encoding="utf-8")
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    base_event = {
+        "schema_version": 1,
+        "patch_id": f"patch-rust-keyword-identifiers-{round_number}",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "round": round_number,
+        "files": [{"path": rel(draft_path), "spans": [{"line_start": 1, "line_end": max(1, len(text.splitlines()))}]}],
+        "reason": "Rust keyword used as generated identifier; convert to raw identifier without changing C oracle or fixture semantics.",
+        "expected_error_delta": {
+            "before": [rustc_error_code(error) for error in first["errors"]],
+            "after_expected": [],
+        },
+        "forbidden_changes": [
+            "c_oracle_contract",
+            "fixture_expected_behavior",
+            "accepted_metadata_differences",
+            "public_api_outside_impact_set",
+            "source_slice_boundary",
+            "unsafe_budget_policy",
+        ],
+        "rollback_id": f"rollback-{slice_id}-keyword-identifiers-{round_number}",
+        "ai_usage": {"used": False},
+        "verification_commands": ["rustc --edition=2021 --crate-type=lib --error-format=json <draft>"],
+    }
+    write_patch_events(events_path, [{**base_event, "status": "applied"}], append=append_events)
+    return {
+        "patch_events": rel(events_path),
+        "blocked_repairs": rel(evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"),
+        "blocked_repairs_status": "recorded",
+        "blocked_repairs_items": [],
+        "status": "applied",
+        "self_heal_applied": True,
+        "_last_patch_event": base_event,
+    }
+
+
+def run_safe_self_heal_loop(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    draft_path: Path,
+    first: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    current = first
+    for round_number in range(1, REPAIR_ROUND_LIMIT + 1):
+        patch = try_safe_self_heal(
+            spec,
+            evidence_dir,
+            draft_path,
+            current,
+            round_number=round_number,
+            append_events=round_number > 1,
+        )
+        if not patch.get("self_heal_applied"):
+            return current, patch
+        current = rust_check_once(draft_path)
+        if current["returncode"] == 0:
+            return current, mark_self_heal_verified(spec, evidence_dir, patch)
+    return current, write_blocked_patch(
+        spec,
+        evidence_dir,
+        draft_path,
+        current["errors"],
+        round_number=REPAIR_ROUND_LIMIT,
+        append_events=True,
+    )
+
+
+def mark_self_heal_verified(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    patch: dict[str, Any],
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
+    blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
+    base_event = patch.get("_last_patch_event")
+    if isinstance(base_event, dict):
+        write_patch_events(events_path, [{**base_event, "status": "verified"}], append=True)
+    blocked = blocked_repairs_payload(spec, [])
+    write_json(blocked_path, blocked)
+    visible_patch = dict(patch)
+    visible_patch.pop("_last_patch_event", None)
+    visible_patch.update(
+        {
+            "blocked_repairs": rel(blocked_path),
+            "blocked_repairs_status": blocked["status"],
+            "blocked_repairs_items": blocked["blocked_repairs"],
+            "status": "recorded",
+            "self_heal_applied": True,
+        }
+    )
+    return visible_patch

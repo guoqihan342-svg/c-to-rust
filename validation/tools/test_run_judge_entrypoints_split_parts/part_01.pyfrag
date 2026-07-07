@@ -1,0 +1,800 @@
+        for external_ref in archive["external_refs"].values():
+            self.assertEqual(external_ref["status"], "present")
+            self.assertRegex(external_ref["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(report["summary"]["competition_config_archive"]["file_count"], archive["file_count"])
+        self.assertTrue(out_path.is_file())
+
+    def test_competition_exact_proof_class_override_requires_exact_host(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-proof-class-host-gate-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "allowed_proof_classes": ["local-simulation", "competition-exact"],
+                    "proof_class_default": "local-simulation",
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "proof_class": "local-simulation",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("competition-exact override without host attestation must not execute commands")
+
+        with patch.dict("os.environ", {"COMPETITION_EXACT_HOST": ""}, clear=False):
+            with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}) as validate_config:
+                report = runner.run_judge_entrypoints(
+                    config_path=config_path,
+                    entrypoint_ids=[],
+                    out_path=out_path,
+                    dry_run=True,
+                    proof_class_override="competition-exact",
+                    command_runner=fail_if_called,
+                    repo_root=REPO_ROOT,
+                )
+
+        validate_config.assert_not_called()
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["preflight_validation"]["root_cause_key"], "competition_exact_host_required")
+        self.assertEqual(report["validation"]["reason"], "proof_class_override_failed")
+        self.assertEqual(report["entrypoint_count"], 0)
+
+    def test_runner_proof_class_override_rewrites_effective_config_and_commands(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-proof-class-override-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        profile_path = temp_dir / "profile.json"
+        profile_rel = repo_relative(profile_path)
+        profile_path.write_text(
+            json.dumps({"profile_id": "demo-profile", "proof_class": "local-simulation"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        config_path.write_text(
+            json.dumps(
+                {
+                    "allowed_proof_classes": ["local-simulation", "competition-exact"],
+                    "proof_class_default": "local-simulation",
+                    "entrypoints": [
+                        {
+                            "id": "competition_environment_smoke",
+                            "purpose": "competition-environment-smoke",
+                            "proof_class": "local-simulation",
+                            "run_id": "smoke-run",
+                            "command": (
+                                "python3 -B validation/tools/run_competition_smoke.py "
+                                "--proof-class local-simulation --run-id smoke-run --out-root target/smoke"
+                            ),
+                        },
+                        {
+                            "id": "before_after_judge_demo",
+                            "purpose": "core-translation-before-after-exhibit",
+                            "proof_class": "local-simulation",
+                            "run_id": "demo-run",
+                            "profile": {"path": profile_rel, "profile_id": "demo-profile"},
+                            "command": (
+                                "python3 -B -m validation.tools.judge_demo "
+                                f"--profile {profile_rel} --run-id demo-run --out-root target/demo"
+                            ),
+                        },
+                        {
+                            "id": "multi_worker_evaluate_profile",
+                            "purpose": "harness-architecture-multi-worker-evaluate",
+                            "proof_class": "local-simulation",
+                            "run_id": "evaluate-run",
+                            "profile": {"path": profile_rel, "profile_id": "demo-profile"},
+                            "command": (
+                                "python3 -B -m validation.tools.opencode_agent_harness evaluate "
+                                f"--profile {profile_rel} --run-id evaluate-run --out-root target/evaluate"
+                            ),
+                        },
+                    ],
+                    "test_contract": {
+                        "required_entrypoint_ids": [
+                            "competition_environment_smoke",
+                            "before_after_judge_demo",
+                            "multi_worker_evaluate_profile",
+                        ]
+                    },
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        calls: list[list[str]] = []
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        def fake_write_readiness(result: dict, path: Path, *, repo_root: Path) -> dict:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {"schema_version": 1, "report_kind": "judge-entrypoints-readiness", "status": result["status"]}
+            path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            return payload
+
+        with patch.dict("os.environ", {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+            with patch.object(
+                runner.validator,
+                "validate_config",
+                side_effect=[passed_validation_result(), passed_validation_result()],
+            ) as validate_config:
+                with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
+                    with patch.object(runner, "attach_milestone_bundle"):
+                        report = runner.run_judge_entrypoints(
+                            config_path=config_path,
+                            entrypoint_ids=["before_after_judge_demo"],
+                            out_path=out_path,
+                            proof_class_override="competition-exact",
+                            command_runner=fake_runner,
+                            repo_root=REPO_ROOT,
+                        )
+
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["proof_class_override"]["effective_proof_class"], "competition-exact")
+        preflight_config = json.loads(Path(validate_config.call_args_list[0].args[0]).read_text(encoding="utf-8"))
+        self.assertEqual({entry["proof_class"] for entry in preflight_config["entrypoints"]}, {"competition-exact"})
+        smoke = next(entry for entry in preflight_config["entrypoints"] if entry["id"] == "competition_environment_smoke")
+        self.assertIn("--proof-class competition-exact", smoke["command"])
+        self.assertIn("--confirm-competition-exact", smoke["command"])
+        demo = next(entry for entry in preflight_config["entrypoints"] if entry["id"] == "before_after_judge_demo")
+        self.assertIn("--proof-class competition-exact", demo["command"])
+        evaluate = next(entry for entry in preflight_config["entrypoints"] if entry["id"] == "multi_worker_evaluate_profile")
+        self.assertIn("--proof-class competition-exact", evaluate["command"])
+        post_run_config = json.loads(Path(validate_config.call_args_list[1].args[0]).read_text(encoding="utf-8"))
+        self.assertEqual([entry["id"] for entry in post_run_config["entrypoints"]], ["before_after_judge_demo"])
+        self.assertEqual(post_run_config["entrypoints"][0]["proof_class"], "competition-exact")
+        self.assertEqual(calls[0][-2:], ["--proof-class", "competition-exact"])
+        self.assertEqual(report["entrypoints"][0]["proof_class"], "competition-exact")
+
+    def test_runner_proof_class_override_rewrites_equals_form_command_flag(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-proof-class-equals-override-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "allowed_proof_classes": ["local-simulation", "competition-exact"],
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "proof_class": "local-simulation",
+                            "command": (
+                                "python3 -B -m validation.tools.judge_demo "
+                                "--proof-class=local-simulation --run-id demo-run"
+                            ),
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        calls: list[list[str]] = []
+
+        def fake_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        with patch.dict("os.environ", {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+            with patch.object(
+                runner.validator,
+                "validate_config",
+                side_effect=[passed_validation_result(), passed_validation_result()],
+            ) as validate_config:
+                with patch.object(runner.validator, "write_readiness_report"):
+                    with patch.object(runner, "attach_milestone_bundle"):
+                        report = runner.run_judge_entrypoints(
+                            config_path=config_path,
+                            entrypoint_ids=[],
+                            out_path=out_path,
+                            proof_class_override="competition-exact",
+                            command_runner=fake_runner,
+                            repo_root=REPO_ROOT,
+                        )
+
+        self.assertEqual(report["status"], "passed")
+        preflight_config = json.loads(Path(validate_config.call_args_list[0].args[0]).read_text(encoding="utf-8"))
+        command = preflight_config["entrypoints"][0]["command"]
+        self.assertNotIn("--proof-class=local-simulation", command)
+        self.assertEqual(shlex.split(command).count("--proof-class"), 1)
+        self.assertIn("--proof-class competition-exact", command)
+        self.assertEqual(calls[0].count("--proof-class"), 1)
+        self.assertEqual(calls[0][-4:-2], ["--proof-class", "competition-exact"])
+
+    def test_runner_proof_class_override_rejects_duplicate_command_flag_without_throwing(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-proof-class-invalid-command-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "allowed_proof_classes": ["local-simulation", "competition-exact"],
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "proof_class": "local-simulation",
+                            "command": (
+                                "python3 -B -m validation.tools.judge_demo "
+                                "--proof-class local-simulation --proof-class local-simulation"
+                            ),
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("invalid proof-class override command must not execute")
+
+        with patch.dict("os.environ", {"COMPETITION_EXACT_HOST": "1"}, clear=False):
+            with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}) as validate_config:
+                report = runner.run_judge_entrypoints(
+                    config_path=config_path,
+                    entrypoint_ids=[],
+                    out_path=out_path,
+                    proof_class_override="competition-exact",
+                    command_runner=fail_if_called,
+                    repo_root=REPO_ROOT,
+                )
+
+        validate_config.assert_not_called()
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["preflight_validation"]["root_cause_key"], "proof_class_override_command_invalid")
+        self.assertEqual(report["validation"]["reason"], "proof_class_override_failed")
+
+    def test_dry_run_does_not_reference_stale_logs(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-dry-stale-logs-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        log_dir = out_path.parent / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        (log_dir / "before_after_judge_demo.stdout.log").write_text("old stdout\n", encoding="utf-8")
+        (log_dir / "before_after_judge_demo.stderr.log").write_text("old stderr\n", encoding="utf-8")
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("dry-run must not execute commands")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                dry_run=True,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "planned")
+        stdout_ref = report["entrypoints"][0]["logs"]["stdout"]
+        stderr_ref = report["entrypoints"][0]["logs"]["stderr"]
+        self.assertEqual(stdout_ref["status"], "missing")
+        self.assertEqual(stderr_ref["status"], "missing")
+        self.assertNotIn("sha256", stdout_ref)
+        self.assertNotIn("sha256", stderr_ref)
+
+    def test_dry_run_removes_stale_publishable_artifacts(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-dry-stale-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        stale_artifacts = [
+            "judge-entrypoints-readiness.json",
+            "judge-milestone-bundle.json",
+            "milestone-release-notes.md",
+            "public-release-packet.json",
+            "selected-entrypoints-validation-config.json",
+        ]
+        for artifact_name in stale_artifacts:
+            (out_path.parent / artifact_name).write_text('{"status":"stale"}\n', encoding="utf-8")
+        stale_archive_dir = out_path.parent / "competition-config-archive"
+        stale_archive_dir.mkdir()
+        (stale_archive_dir / "manifest.json").write_text('{"status":"stale"}\n', encoding="utf-8")
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("dry-run must not execute commands")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                dry_run=True,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "planned")
+        for artifact_name in stale_artifacts:
+            self.assertFalse((out_path.parent / artifact_name).exists(), artifact_name)
+        self.assertFalse(stale_archive_dir.exists())
+        self.assertNotIn("materialized_manifest", report["competition_config_archive"])
+
+    def test_dry_run_preflight_failure_is_not_planned(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-dry-bad-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "bad_entrypoint",
+                            "command": "python -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("preflight failure must not execute commands")
+
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            return_value={"status": "failed", "errors": ["entrypoint command must use portable python3 -B"]},
+        ):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                dry_run=True,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["entrypoint_count"], 0)
+        self.assertEqual(report["validation"]["reason"], "preflight_failed")
+        self.assertTrue(out_path.is_file())
+
+    def test_failed_command_skips_validator_and_readiness(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-fail-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def failing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 2, stdout="bad\n", stderr="failed\n")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}) as validate_config:
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=failing_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        validate_config.assert_called_once_with(config_path, require_local_artifacts=False, repo_root=REPO_ROOT)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"]["status"], "skipped")
+        self.assertEqual(report["validation"]["reason"], "failed_command")
+        self.assertIsNone(report["readiness_report"])
+        self.assertEqual(report["entrypoints"][0]["exit_code"], 2)
+        stdout_log = out_path.parent / "logs" / "before_after_judge_demo.stdout.log"
+        stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
+        self.assertTrue(stdout_log.is_file())
+        self.assertTrue(stderr_log.is_file())
+        self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["sha256"], runner.validator.sha256_file(stdout_log))
+        self.assertEqual(report["entrypoints"][0]["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
+
+    def test_entrypoint_command_receives_timeout_and_records_policy(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-timeout-policy-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        seen_kwargs: dict[str, object] = {}
+
+        def passing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            seen_kwargs.update(kwargs)
+            return subprocess.CompletedProcess(argv, 0, stdout="ok\n", stderr="")
+
+        def fake_write_readiness(result: dict, path: Path, *, repo_root: Path) -> dict:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-readiness",
+                "status": result["status"],
+            }
+            path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+            return payload
+
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[passed_validation_result(), passed_validation_result()],
+        ):
+            with patch.object(runner.validator, "write_readiness_report", side_effect=fake_write_readiness):
+                report = runner.run_judge_entrypoints(
+                    config_path=config_path,
+                    entrypoint_ids=[],
+                    out_path=out_path,
+                    command_runner=passing_runner,
+                    timeout_seconds=17,
+                    repo_root=REPO_ROOT,
+                )
+
+        entrypoint = report["entrypoints"][0]
+        self.assertEqual(seen_kwargs["cwd"], REPO_ROOT.resolve())
+        self.assertIs(seen_kwargs["text"], True)
+        self.assertIs(seen_kwargs["capture_output"], True)
+        self.assertEqual(seen_kwargs["timeout"], 17)
+        self.assertEqual(entrypoint["timeout_seconds"], 17)
+        self.assertEqual(entrypoint["timeout_policy"]["timeout_seconds"], 17)
+        self.assertEqual(entrypoint["timeout_policy"]["timeout_exit_code"], 124)
+        self.assertEqual(entrypoint["timeout_policy"]["scope"], "entrypoint_command")
+
+    def test_entrypoint_timeout_expired_records_124_and_process_timeout(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-timeout-expired-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        seen_kwargs: dict[str, object] = {}
+
+        def timeout_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            seen_kwargs.update(kwargs)
+            raise subprocess.TimeoutExpired(
+                cmd=argv,
+                timeout=kwargs.get("timeout"),
+                output="partial stdout\n",
+                stderr="partial stderr\n",
+            )
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=timeout_runner,
+                timeout_seconds=19,
+                repo_root=REPO_ROOT,
+            )
+
+        stdout_log = out_path.parent / "logs" / "before_after_judge_demo.stdout.log"
+        stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
+        entrypoint = report["entrypoints"][0]
+        self.assertEqual(seen_kwargs["timeout"], 19)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"], {"status": "skipped", "reason": "failed_command"})
+        self.assertEqual(entrypoint["exit_code"], 124)
+        self.assertEqual(entrypoint["status"], "failed")
+        self.assertEqual(entrypoint["root_cause_key"], "process_timeout")
+        self.assertEqual(entrypoint["error"]["type"], "TimeoutExpired")
+        self.assertEqual(entrypoint["timeout_seconds"], 19)
+        self.assertIn("partial stdout", stdout_log.read_text(encoding="utf-8"))
+        self.assertIn("partial stderr", stderr_log.read_text(encoding="utf-8"))
+        self.assertIn("TimeoutExpired", stderr_log.read_text(encoding="utf-8"))
+        self.assertEqual(entrypoint["logs"]["stdout"]["sha256"], runner.validator.sha256_file(stdout_log))
+        self.assertEqual(entrypoint["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
+
+    def test_write_run_report_is_atomic_when_replace_fails(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-atomic-report-", dir=REPO_ROOT / "target"))
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        old_report = '{"status":"old"}\n'
+        out_path.write_text(old_report, encoding="utf-8")
+
+        with patch.object(runner.os, "replace", side_effect=OSError("simulated replace failure")):
+            with self.assertRaisesRegex(OSError, "simulated replace failure"):
+                runner.write_run_report(
+                    out_path=out_path,
+                    status="failed",
+                    dry_run=True,
+                    config_ref={"path": "config.json", "status": "present"},
+                    configured_entrypoint_count=0,
+                    config_archive={"status": "present"},
+                    command_results=[],
+                    preflight_validation={"status": "passed"},
+                    validation={"status": "skipped", "reason": "dry_run"},
+                    readiness_ref=None,
+                )
+
+        self.assertEqual(out_path.read_text(encoding="utf-8"), old_report)
+        self.assertEqual(list(out_path.parent.glob(".judge-entrypoints-run-report.json.*.tmp")), [])
+
+    def test_command_launch_exception_writes_failed_report_and_hashed_logs(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-exception-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def raising_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise FileNotFoundError("python executable missing")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=raising_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        stderr_log = out_path.parent / "logs" / "before_after_judge_demo.stderr.log"
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["entrypoints"][0]["exit_code"], 127)
+        self.assertEqual(report["entrypoints"][0]["error"]["type"], "FileNotFoundError")
+        self.assertIn("python executable missing", stderr_log.read_text(encoding="utf-8"))
+        self.assertEqual(report["entrypoints"][0]["logs"]["stderr"]["sha256"], runner.validator.sha256_file(stderr_log))
+
+    def test_malformed_entrypoint_command_writes_failed_report(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-bad-command-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "bad_entrypoint",
+                            "command": 'python3 -B -m validation.tools.judge_demo "unterminated',
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("malformed command must not execute")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}) as validate_config:
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        validate_config.assert_called_once_with(config_path, require_local_artifacts=False, repo_root=REPO_ROOT)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"], {"status": "skipped", "reason": "failed_command"})
+        self.assertTrue(out_path.is_file())
+        self.assertEqual(report["entrypoints"][0]["id"], "bad_entrypoint")
+        self.assertEqual(report["entrypoints"][0]["status"], "failed")
+        self.assertEqual(report["entrypoints"][0]["exit_code"], 2)
+        self.assertEqual(report["entrypoints"][0]["root_cause_key"], "invalid_entrypoint_command")
+        self.assertEqual(report["entrypoints"][0]["error"]["type"], "ValueError")
+        self.assertIsNone(report["readiness_report"])
+        self.assertEqual(report["entrypoints"][0]["logs"]["stdout"]["status"], "missing")
+        self.assertEqual(report["entrypoints"][0]["logs"]["stderr"]["status"], "missing")
+
+    def test_skipped_validation_status_is_not_success(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-skip-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def passing_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+
+        with patch.object(
+            runner.validator,
+            "validate_config",
+            side_effect=[{"status": "passed"}, {"status": "skipped"}],
+        ):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=[],
+                out_path=out_path,
+                command_runner=passing_runner,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["validation"]["status"], "skipped")
+
+    def test_unknown_entrypoint_id_fails_closed(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        with self.assertRaisesRegex(SystemExit, "unknown judge entrypoint id"):
+            runner.select_entrypoints(
+                {"entrypoints": [{"id": "known", "command": "python3 -B -m known"}]},
+                ["missing"],
+            )
+
+    def test_run_unknown_entrypoint_id_fails_closed_before_command(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-unknown-", dir=REPO_ROOT / "target"))
+        config_path = temp_dir / "flashdb-harness.json"
+        out_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "entrypoints": [
+                        {
+                            "id": "known",
+                            "command": "python3 -B -m validation.tools.judge_demo",
+                        }
+                    ],
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        def fail_if_called(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+            raise AssertionError("unknown entrypoint must not execute commands")
+
+        with patch.object(runner.validator, "validate_config", return_value={"status": "passed"}):
+            report = runner.run_judge_entrypoints(
+                config_path=config_path,
+                entrypoint_ids=["missing"],
+                out_path=out_path,
+                command_runner=fail_if_called,
+                repo_root=REPO_ROOT,
+            )
+
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["entrypoint_count"], 0)
+        self.assertEqual(report["validation"]["reason"], "entrypoint_selection_failed")
+        self.assertTrue(out_path.is_file())
+
+    def test_artifact_ref_marks_missing_without_hashing(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        ref = runner.artifact_ref(REPO_ROOT / "target" / "missing-judge-entrypoint-artifact.json", repo_root=REPO_ROOT)
+        self.assertEqual(ref["status"], "missing")
+        self.assertNotIn("sha256", ref)
+
+    def test_candidate_config_files_excludes_unmanifested_siblings(self) -> None:
+        from validation.tools import run_judge_entrypoints as runner
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="run-judge-config-archive-allowlist-", dir=REPO_ROOT / "target"))
+        config_root = temp_dir / "config" / "competition-env"
+        config_root.mkdir(parents=True)
+        expected_manifest = config_root / "bundle-manifest.json"
+        expected_environment = config_root / "environment.json"
+        unexpected_scratch = config_root / "scratch.tmp"
+        expected_manifest.write_text("{}\n", encoding="utf-8")

@@ -1,0 +1,342 @@
+        )
+
+        self.assertIn("validation.tools.test_run_competition_smoke", workflow)
+        self.assertIn("validation.tools.test_verify_vendored_clang", workflow)
+        self.assertIn("python3 -B validation/tools/run_competition_smoke.py", workflow)
+
+    def test_clang_source_detects_windows_project_local_clang_exe(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            repo_root = Path(tmp)
+            clang = repo_root / "tools" / "llvm" / "bin" / "clang.exe"
+            clang.parent.mkdir(parents=True)
+            clang.write_text("", encoding="utf-8")
+
+            self.assertEqual(module.clang_source(repo_root), "vendored")
+
+    def test_slice_spec_outside_repo_is_rejected_before_command_log(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            outside_slice_spec = Path(tmp) / "outside-slice.json"
+            outside_slice_spec.write_text("{}", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "slice_spec must be repo-relative"):
+                module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-outside-slice-spec-test",
+                    slice_spec=outside_slice_spec,
+                )
+
+            self.assertFalse((out_root / "logs" / "commands.jsonl").exists())
+
+    def test_slice_spec_with_tilde_is_rejected_before_command_log(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            with self.assertRaisesRegex(ValueError, "slice_spec must be repo-relative POSIX"):
+                module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-tilde-slice-spec-test",
+                    slice_spec=Path("~/slice.json"),
+                )
+
+            self.assertFalse((out_root / "logs" / "commands.jsonl").exists())
+
+    def test_command_log_omits_local_absolute_paths_for_external_out_root(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-portability-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_log = out_root / "logs" / "commands.jsonl"
+            command_entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            assert_no_local_absolute_command_arguments(self, command_entries)
+            logged_arguments = [
+                argument
+                for entry in command_entries
+                for argument in entry["command"]
+                if isinstance(argument, str)
+            ]
+            self.assertNotIn(sys.executable, logged_arguments)
+            self.assertTrue(
+                any(argument == "out-root:summary/vendored-clang-verification.json" for argument in logged_arguments)
+            )
+            self.assertTrue(any(argument == "out-root:reports/evidence-governance.json" for argument in logged_arguments))
+            self.assertFalse(
+                any(
+                    argument in {"summary/vendored-clang-verification.json", "reports/evidence-governance.json"}
+                    for argument in logged_arguments
+                )
+            )
+
+    def test_external_out_root_command_paths_match_logged_workdir(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-replayability-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            output_flags = {"--out", "--output", "--coverage-report"}
+            for entry in command_entries:
+                command = entry["command"]
+                if entry.get("workdir") != ".":
+                    continue
+                for index, argument in enumerate(command[:-1]):
+                    if argument in output_flags:
+                        self.assertTrue(command[index + 1].startswith("out-root:"), command)
+
+    def test_command_log_sanitizes_python_executable_with_spaces(self) -> None:
+        module = load_smoke_module()
+        original_executable = module.sys.executable
+        module.sys.executable = r"C:\Program Files\Python314\python.exe"
+        try:
+            with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+                out_root = Path(tmp) / "competition-smoke"
+
+                result = module.run_competition_smoke(
+                    out_root=out_root,
+                    proof_class="local-simulation",
+                    command_runner=FakeCommandRunner(),
+                    repo_root=REPO_ROOT,
+                    run_id="smoke-command-log-python-spaces-test",
+                )
+
+                self.assertEqual(result.exit_code, 0)
+                command_entries = [
+                    json.loads(line)
+                    for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+                ]
+                assert_no_local_absolute_command_arguments(self, command_entries)
+                logged_arguments = [
+                    argument
+                    for entry in command_entries
+                    for argument in entry["command"]
+                    if isinstance(argument, str)
+                ]
+                self.assertNotIn(module.sys.executable, logged_arguments)
+                self.assertNotIn("python.exe", logged_arguments)
+                self.assertIn("python3", logged_arguments)
+                self.assertIn("-B", logged_arguments)
+        finally:
+            module.sys.executable = original_executable
+
+    def test_command_argument_for_log_sanitizes_shell_fragment_host_paths(self) -> None:
+        module = load_smoke_module()
+        cases = {
+            "echo ok; /mnt/c/Users/me/tool.exe": "echo ok; tool.exe",
+            "cc -I/mnt/c -L/workspace --sysroot=/opt": "cc -Ic -Lworkspace --sysroot=opt",
+            "-I/mnt/c": "-Ic",
+            "--sysroot=/opt": "--sysroot=opt",
+            r"echo ok && \\wsl$\Ubuntu\home\me\tool.exe": "echo ok && tool.exe",
+            "echo ok | //wsl.localhost/Ubuntu/home/me/python3": "echo ok | python3",
+            "echo ok | //wsl$/Ubuntu/home/me/python3": "echo ok | python3",
+            "echo ok | /workspace/project/tools/python3": "echo ok | python3",
+            "echo ok; /root/work/project/tools/python3": "echo ok; python3",
+            "echo ok | /usr/bin/clang": "echo ok | clang",
+            r"echo ok && \\server\share\tool.exe": "echo ok && tool.exe",
+            r"ld -L\\server\share": "ld -Lshare",
+            r"-L\\server\share": "-Lshare",
+            "echo ok && //server/share/tool": "echo ok && tool",
+            "ld -L//server/share": "ld -Lshare",
+            "-L//server/share": "-Lshare",
+            r'echo ok; "C:\Program Files\Python314\python.exe"': 'echo ok; "python.exe"',
+        }
+
+        for argument, expected in cases.items():
+            with self.subTest(argument=argument):
+                logged = module.command_argument_for_log(
+                    argument,
+                    repo_root=REPO_ROOT,
+                    out_root=REPO_ROOT / "target" / "competition-smoke",
+                )
+
+                self.assertEqual(logged, expected)
+                self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
+
+    def test_command_argument_for_log_sanitizes_home_and_users_host_paths(self) -> None:
+        # Drift matrix boundary: the shell-fragment sanitizer test never
+        # exercises a standalone /home or /Users (macOS) absolute path, nor a
+        # WSL/host path attached to include/source/output-style flags. These
+        # cells must scrub to a basename so a Windows/macOS/WSL producer never
+        # leaks host roots into commands.jsonl consumed on the judge host.
+        module = load_smoke_module()
+        cases = {
+            "echo ok; /home/runner/project/tool.py": "echo ok; tool.py",
+            "echo ok | /Users/me/project/tool": "echo ok | tool",
+            "cc -I/home/runner/FlashDB/include": "cc -Iinclude",
+            "-I/home/runner/FlashDB/include": "-Iinclude",
+            "cc -c /home/runner/project/src/fdb.c": "cc -c fdb.c",
+            "-o/mnt/c/Users/runner/target/out.json": "-oout.json",
+            r"-o\\wsl$\Ubuntu\home\runner\target\out.json": "-oout.json",
+        }
+        for argument, expected in cases.items():
+            with self.subTest(argument=argument):
+                logged = module.command_argument_for_log(
+                    argument,
+                    repo_root=REPO_ROOT,
+                    out_root=REPO_ROOT / "target" / "competition-smoke",
+                )
+
+                self.assertEqual(logged, expected)
+                self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
+
+    def test_command_log_sanitizes_stdout_and_stderr_host_paths(self) -> None:
+        module = load_smoke_module()
+
+        def noisy_runner(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                (
+                    "include path: /mnt/c/Users/me/FlashDB/inc\n"
+                    "cwd: //wsl.localhost/Ubuntu/home/me/project\n"
+                    "source: //wsl$/Ubuntu/home/me/project/src/fdb.c\n"
+                    "ci source: /workspace/project/src/fdb.c\n"
+                    "unc source: //server/share/project/src/fdb.c\n"
+                ),
+                r"output path: \\wsl$\Ubuntu\home\me\project\target\out.json and \\server\share\project\target\out.json",
+            )
+
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=noisy_runner,
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-output-sanitize-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            assert_no_local_absolute_command_arguments(self, command_entries)
+            assert_no_local_absolute_command_log_text(self, command_entries)
+            joined_output = "\n".join(
+                str(entry.get(field, ""))
+                for entry in command_entries
+                for field in ("stdout", "stderr")
+            )
+            self.assertIn("inc", joined_output)
+            self.assertIn("project", joined_output)
+            self.assertIn("fdb.c", joined_output)
+            self.assertNotIn("//wsl$", joined_output)
+            self.assertIn("out.json", joined_output)
+
+    def test_output_text_for_log_sanitizes_container_absolute_paths(self) -> None:
+        module = load_smoke_module()
+
+        logged = module.output_text_for_log(
+            "cwd: /root/work/project; source: /root/work/project/src/fdb.c; compiler: /usr/bin/clang"
+        )
+
+        self.assertIn("project", logged)
+        self.assertIn("fdb.c", logged)
+        self.assertIn("clang", logged)
+        self.assertNotIn("/root/", logged)
+        self.assertNotIn("/usr/", logged)
+        self.assertNotRegex(logged, LOCAL_ABSOLUTE_PATH)
+
+    def test_command_log_records_repo_relative_workdir(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=(fake_runner := FakeCommandRunner()),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-workdir-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertTrue(command_entries)
+            self.assertTrue(all(entry.get("workdir") == "." for entry in command_entries))
+            self.assertTrue(all("cwd" not in entry for entry in command_entries))
+            self.assertTrue(all(kwargs.get("cwd") == REPO_ROOT for kwargs in fake_runner.kwargs))
+            assert_no_local_absolute_command_log_text(self, command_entries)
+
+    def test_command_log_records_run_id_and_canonical_flag(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-run-binding-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [
+                json.loads(line)
+                for line in (out_root / "logs" / "commands.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertTrue(command_entries)
+            self.assertTrue(all(entry.get("run_id") == "smoke-command-log-run-binding-test" for entry in command_entries))
+            self.assertTrue(all(entry.get("canonical") is True for entry in command_entries))
+
+    def test_command_log_is_replaced_on_each_smoke_run(self) -> None:
+        module = load_smoke_module()
+        with tempfile.TemporaryDirectory(prefix="competition-smoke-test-") as tmp:
+            out_root = Path(tmp) / "competition-smoke"
+            command_log = out_root / "logs" / "commands.jsonl"
+            command_log.parent.mkdir(parents=True)
+            command_log.write_text(
+                json.dumps({"step": "stale", "command": ["C:\\Python314\\python.exe"], "returncode": 0}) + "\n",
+                encoding="utf-8",
+            )
+
+            result = module.run_competition_smoke(
+                out_root=out_root,
+                proof_class="local-simulation",
+                command_runner=FakeCommandRunner(),
+                repo_root=REPO_ROOT,
+                run_id="smoke-command-log-replace-test",
+            )
+
+            self.assertEqual(result.exit_code, 0)
+            command_entries = [json.loads(line) for line in command_log.read_text(encoding="utf-8").splitlines()]
+            self.assertNotIn("stale", [entry["step"] for entry in command_entries])
+            assert_no_local_absolute_command_arguments(self, command_entries)
+
+
+if __name__ == "__main__":
+    unittest.main()

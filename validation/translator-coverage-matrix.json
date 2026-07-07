@@ -1541,7 +1541,8 @@
         "local complete record zero initializer for address-taken direct-call candidates",
         "anonymous nested integer record field inventory for complete local record zero initializers",
         "recursive nested record zero initializer for address-taken direct-call candidates",
-        "embedded slice source C oracle harness diagnostic execution"
+        "embedded slice source C oracle harness diagnostic execution",
+        "record value field inc/dec for ForStmt step"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1583,6 +1584,11 @@
             {
               "name": "record_inventory_from_ast_keeps_anonymous_nested_integer_record_field",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "proof_class": "optional_real_clang_smoke"
             }
           ]
         },
@@ -1620,6 +1626,10 @@
             {
               "name": "typed_ir_emits_local_record_address_with_nested_record_zero_initializer",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_for_emits_record_field_inc_dec_step_assignment",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1645,6 +1655,10 @@
             {
               "name": "typed_ir_rejects_uninitialized_record_local_address_when_field_is_read",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
         },
@@ -1682,6 +1696,10 @@
             },
             {
               "name": "typed_ir_emits_local_record_address_with_nested_record_zero_initializer",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_for_emits_record_field_inc_dec_step_assignment",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1800,6 +1818,19 @@
         {
           "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "for_step_stmt_skeleton_from_ast_accepts_record_field_inc_dec_step_as_assignment",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "typed_ir_for_emits_record_field_inc_dec_step_assignment",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "proof_class": "optional_real_clang_smoke"
         }
       ],
       "negative_cases": [
@@ -1832,6 +1863,11 @@
           "name": "typed_ir_rejects_uninitialized_record_local_address_when_field_is_read",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "uninitialized local records are only zero-initialized when every use is a direct-call address argument; field reads still require an initializer"
+        },
+        {
+          "name": "for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "ForStmt step record pointer arrow-field inc/dec still lacks pointer sequencing and alias proof"
         }
       ]
     },

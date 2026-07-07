@@ -1,0 +1,271 @@
+    ]:
+        if not missing_boundary_value(target.get(key)) and not positive_int_like(target.get(key)):
+            raise SystemExit(f"semantic pass oracle boundary contract target.{key} invalid")
+    if (
+        not missing_boundary_value(target.get("plain_char_signed"))
+        and not isinstance(target.get("plain_char_signed"), bool)
+    ):
+        raise SystemExit("semantic pass oracle boundary contract target.plain_char_signed invalid")
+
+    sanitizer = require_dict(
+        profile_contract.get("sanitizer_diagnostics"),
+        "semantic pass oracle boundary contract sanitizer_diagnostics missing",
+    )
+    if missing_boundary_value(sanitizer.get("sanitizer_status"), allow_not_run=True):
+        raise SystemExit("semantic pass oracle boundary contract sanitizer_status missing")
+
+    ub = require_dict(
+        profile_contract.get("ub_and_implementation_defined"),
+        "semantic pass oracle boundary contract ub_and_implementation_defined missing",
+    )
+    if not isinstance(ub.get("known_ub"), list):
+        raise SystemExit("semantic pass oracle boundary contract known_ub missing")
+    if not isinstance(ub.get("implementation_defined_behavior"), list):
+        raise SystemExit("semantic pass oracle boundary contract implementation_defined_behavior missing")
+
+    platform = require_dict(
+        profile_contract.get("platform_model"),
+        "semantic pass oracle boundary contract platform_model missing",
+    )
+    for key in ["hardware_dependency_status", "rtos_dependency_status", "volatile_dependency_status"]:
+        if missing_boundary_value(platform.get(key)) or platform.get(key) == "unmodeled":
+            raise SystemExit(f"semantic pass oracle boundary contract platform_model.{key} missing")
+
+
+def require_dict(value: Any, message: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SystemExit(message)
+    return value
+
+
+def missing_boundary_value(value: Any, allow_not_run: bool = False) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        if allow_not_run and value == "not_run":
+            return False
+        return value.strip() in {"", "unknown", "not_recorded", "missing"}
+    return False
+
+
+def positive_int_like(value: Any) -> bool:
+    return isinstance(value, int) and value > 0
+
+
+def validate_accepted_c_oracle_file_binding(evidence_dir: Path, prefix: str, c_oracle: dict[str, Any]) -> None:
+    accepted = c_oracle.get("accepted_oracle")
+    if not isinstance(accepted, dict):
+        raise SystemExit("semantic pass accepted c_oracle reference missing")
+
+    accepted_path = accepted.get("path")
+    if not isinstance(accepted_path, str) or not accepted_path:
+        raise SystemExit("semantic pass accepted c_oracle accepted_oracle.path missing")
+    accepted_sha = accepted.get("sha256")
+    if not isinstance(accepted_sha, str) or not accepted_sha:
+        raise SystemExit("semantic pass accepted c_oracle accepted_oracle.sha256 missing")
+    if accepted.get("status") != "passed":
+        raise SystemExit("semantic pass accepted c_oracle accepted_oracle.status must be passed")
+
+    auto_manifest_path = evidence_dir / f"{prefix}-auto-translation-manifest.json"
+    auto_manifest = load_json(auto_manifest_path)
+    binding = auto_manifest.get("accepted_evidence_binding")
+    if not isinstance(binding, dict):
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding missing")
+    paths = binding.get("paths")
+    if not isinstance(paths, dict):
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.paths missing")
+    path_sha256 = binding.get("path_sha256")
+    if not isinstance(path_sha256, dict):
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.path_sha256 missing")
+
+    binding_path = paths.get("c_oracle")
+    if not isinstance(binding_path, str) or not binding_path:
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.paths.c_oracle missing")
+    binding_sha = path_sha256.get("c_oracle")
+    if not isinstance(binding_sha, str) or not binding_sha:
+        raise SystemExit("semantic pass accepted c_oracle accepted_evidence_binding.path_sha256.c_oracle missing")
+
+    accepted_resolved = resolve_ref_path(accepted_path)
+    binding_resolved = resolve_ref_path(binding_path)
+    if not accepted_resolved.exists():
+        raise SystemExit(f"semantic pass accepted c_oracle points to missing evidence: {accepted_resolved}")
+    if not binding_resolved.exists():
+        raise SystemExit(f"semantic pass accepted c_oracle binding points to missing evidence: {binding_resolved}")
+    if accepted_resolved.resolve() != binding_resolved.resolve():
+        raise SystemExit(
+            f"semantic pass accepted c_oracle path mismatch: {accepted_resolved} != {binding_resolved}"
+        )
+
+    actual_sha = sha256(accepted_resolved)
+    if accepted_sha != actual_sha:
+        raise SystemExit(f"semantic pass accepted c_oracle accepted_oracle.sha256 mismatch: {accepted_sha} != {actual_sha}")
+    if binding_sha != actual_sha:
+        raise SystemExit(
+            "semantic pass accepted c_oracle accepted_evidence_binding.path_sha256.c_oracle mismatch: "
+            f"{binding_sha} != {actual_sha}"
+        )
+
+
+def validate_external_direct_callee_context(
+    slice_spec: dict[str, Any],
+    evidence_dir: Path,
+    prefix: str,
+    manifest: dict[str, Any],
+    final_verification: dict[str, Any],
+) -> None:
+    """Validate compile-only boundaries for external direct callees.
+
+    Declared active callees must bind slice-spec signatures, real source files,
+    context-pack descriptors, and translation-plan call edges. These stubs are
+    allowed to support compilation context, but they must not claim verified
+    semantics or silently widen the final verification scope.
+    """
+    declared = slice_spec.get("c_boundary", {}).get("external_direct_callees", [])
+    if not declared:
+        return
+
+    declared_by_name = {str(item.get("name")): item for item in declared if item.get("name")}
+    signatures = {
+        str(item.get("id") or item.get("function")): item
+        for item in slice_spec.get("c_boundary", {}).get("signatures", [])
+        if item.get("id") or item.get("function")
+    }
+    plan_path = evidence_dir / f"{prefix}-auto-translation-plan.json"
+    context_path = evidence_dir / f"{prefix}-context-pack.json"
+    plan = load_json(plan_path)
+    context = load_json(context_path)
+    plan_callees = {
+        str(item.get("name")): item
+        for item in plan.get("translation_summary", {}).get("external_direct_callees", [])
+        if item.get("name")
+    }
+    context_callees = {
+        str(item.get("name")): item
+        for item in context.get("external_direct_callees", [])
+        if item.get("name")
+    }
+    plan_blocks = {
+        str(item.get("name")): item
+        for item in plan.get("translation_summary", {}).get("external_direct_callee_blocks", [])
+        if item.get("name")
+    }
+    context_blocks = {
+        str(item.get("name")): item
+        for item in context.get("external_direct_callee_blocks", [])
+        if item.get("name")
+    }
+    bindings: dict[str, list[dict[str, Any]]] = {}
+    for item in context.get("signature_bindings", []):
+        if item.get("callee"):
+            bindings.setdefault(str(item.get("callee")), []).append(item)
+    source_bindings: dict[str, list[dict[str, Any]]] = {}
+    for item in context.get("callee_sources", []):
+        if item.get("callee"):
+            source_bindings.setdefault(str(item.get("callee")), []).append(item)
+    call_bindings = [
+        item
+        for item in context.get("call_edge_to_callee_binding", [])
+        if item.get("callee") in declared_by_name
+    ]
+    plan_call_edges = [
+        item
+        for item in plan.get("translation_summary", {}).get("call_expressions", [])
+        if item.get("callee") in declared_by_name
+    ]
+    context_call_edges = [
+        item
+        for item in context.get("direct_call_edges", [])
+        if item.get("callee") in declared_by_name
+    ]
+    contracts: dict[str, dict[str, Any]] = {}
+    blocked_contracts: dict[str, dict[str, Any]] = {}
+    active_names = {
+        str(item.get("callee") or item.get("name"))
+        for item in (
+            plan_call_edges
+            + context_call_edges
+            + call_bindings
+            + list(plan_callees.values())
+            + list(context_callees.values())
+            + list(plan_blocks.values())
+            + list(context_blocks.values())
+        )
+        if item.get("callee") or item.get("name")
+    }
+
+    for name, declared_callee in declared_by_name.items():
+        if name not in active_names:
+            continue
+        signature_ref = str(declared_callee.get("signature_ref") or "")
+        if signature_ref not in signatures:
+            raise SystemExit(f"external callee {name} signature_ref missing from slice spec signatures")
+        if not declared_callee.get("source_files"):
+            raise SystemExit(f"external callee {name} requires real source_files in slice spec")
+        signature = signatures[signature_ref]
+        contract = external_callee_expected_contract(name, declared_callee, signature)
+        if name in plan_blocks or name in context_blocks:
+            validate_external_callee_block_binding(
+                name,
+                plan_blocks.get(name),
+                context_blocks.get(name),
+            )
+            blocked_contracts[name] = {
+                **contract,
+                "blocked_reason": str((plan_blocks.get(name) or context_blocks.get(name) or {}).get("reason") or ""),
+            }
+            if any(item.get("callee") == name for item in call_bindings):
+                raise SystemExit(f"external callee {name} blocked call-site cannot have compile_only binding")
+            continue
+        plan_callee = plan_callees.get(name)
+        if plan_callee is None:
+            raise SystemExit(f"external callee {name} missing from translation plan")
+        context_callee = context_callees.get(name)
+        if context_callee is None:
+            raise SystemExit(f"external callee {name} missing from context pack")
+        if plan_callee.get("signature_ref") != signature_ref:
+            raise SystemExit(f"external callee {name} signature_ref mismatch in translation plan")
+        if context_callee.get("signature_ref") != signature_ref:
+            raise SystemExit(f"external callee {name} signature_ref mismatch in context pack")
+        validate_external_callee_signature_descriptor(name, signature, plan_callee, "translation plan")
+        validate_external_callee_signature_descriptor(name, signature, context_callee, "context pack")
+        stub_kind = str(plan_callee.get("stub_kind") or "")
+        if stub_kind != str(context_callee.get("stub_kind") or ""):
+            raise SystemExit(f"external callee {name} stub_kind mismatch between translation plan and context pack")
+        contract["stub_kind"] = stub_kind
+        contracts[name] = contract
+        validate_external_callee_descriptor_binding(name, contract, plan_callee, "translation plan")
+        validate_external_callee_descriptor_binding(name, contract, context_callee, "context pack")
+        if stub_kind not in {"compile_only", "accepted_named_slice_evidence"}:
+            raise SystemExit(f"external callee {name} has unsupported stub_kind={stub_kind}")
+        if stub_kind == "accepted_named_slice_evidence":
+            validate_external_callee_accepted_named_slice_evidence(name, plan_callee, context_callee)
+        if plan_callee.get("semantics_verified") or context_callee.get("semantics_verified"):
+            raise SystemExit(f"external callee {name} context must not claim semantics_verified")
+        if len(bindings.get(name, [])) != 1:
+            raise SystemExit(f"external callee {name} missing signature binding in context pack")
+        validate_external_callee_signature_binding(name, signature_ref, bindings[name][0])
+        if not source_bindings.get(name):
+            raise SystemExit(f"external callee {name} missing callee source binding in context pack")
+        validate_external_callee_source_bindings(name, contract, source_bindings[name])
+
+    recorded_plan_call_edges = [edge for edge in plan_call_edges if edge.get("callee") in contracts]
+    recorded_context_call_edges = [edge for edge in context_call_edges if edge.get("callee") in contracts]
+    if recorded_plan_call_edges and not call_bindings:
+        raise SystemExit("external callee context requires call_edge_to_callee_binding entries")
+    if recorded_plan_call_edges or recorded_context_call_edges or call_bindings:
+        validate_external_callee_call_site_bindings(
+            contracts,
+            recorded_plan_call_edges,
+            recorded_context_call_edges,
+            call_bindings,
+        )
+    validate_external_callee_blocked_call_sites(blocked_contracts, plan_call_edges, context_call_edges)
+
+    claim_scope = manifest.get("claim_boundary", {}).get("external_callee_scope", {})
+    final_scope = final_verification.get("external_callee_scope", claim_scope)
+    expected_scope_stub_kind = external_callee_scope_stub_kind(contracts.values())
+    for label, scope in [("manifest", claim_scope), ("final_verification", final_scope)]:
+        if scope.get("stub_kind") != expected_scope_stub_kind:
+            raise SystemExit(f"external callee {label} scope must record stub_kind={expected_scope_stub_kind}")
+        if scope.get("semantics_verified"):
+            raise SystemExit(f"external callee {label} scope must keep semantics_verified=false")

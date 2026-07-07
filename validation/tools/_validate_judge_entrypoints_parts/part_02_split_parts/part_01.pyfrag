@@ -1,0 +1,217 @@
+    if len(prompt) != 1 or not prompt[0].strip():
+        raise ValueError(f"{label} prompt must be the final non-empty argv item")
+    required_flags = {
+        "--dir",
+        "--format",
+        "--variant",
+        "--model",
+    }
+    missing = sorted(required_flags - flags.keys())
+    if missing:
+        raise ValueError(f"{label} missing {' '.join(missing)}")
+    allowed_flags = set(required_flags)
+    if launch_policy.get("opencode_agent") is not None:
+        allowed_flags.add("--agent")
+    unexpected_flags = sorted(set(flags) - allowed_flags)
+    if unexpected_flags:
+        raise ValueError(f"{label} has unexpected flags: {' '.join(unexpected_flags)}")
+    if flags["--dir"] != ".":
+        raise ValueError(f"{label} --dir must be portable repo root .")
+    if flags["--format"] != "json":
+        raise ValueError(f"{label} --format must be json")
+    if flags["--variant"] != launch_policy["opencode_variant"]:
+        raise ValueError(f"{label} --variant must be {launch_policy['opencode_variant']}")
+    if flags["--model"] != launch_policy["opencode_model"]:
+        raise ValueError(f"{label} --model must be {launch_policy['opencode_model']}")
+    expected_agent = launch_policy.get("opencode_agent")
+    if expected_agent is None and "--agent" in flags:
+        raise ValueError(f"{label} --agent must be absent")
+    if expected_agent is not None and flags.get("--agent") != expected_agent:
+        raise ValueError(f"{label} --agent must be {expected_agent}")
+    skip_permissions_present = "--dangerously-skip-permissions" in bool_flags
+    if skip_permissions_present != bool(launch_policy.get("opencode_skip_permissions")):
+        raise ValueError(f"{label} --dangerously-skip-permissions must match launch_policy")
+    return argv
+
+
+def opencode_model_id_matches_required(model_id: str, required_model: str) -> bool:
+    candidate = model_id.strip().strip("`'\"*,")
+    if candidate == required_model:
+        return True
+    if "/" in candidate:
+        return candidate.rsplit("/", 1)[1] == required_model
+    return False
+
+
+def opencode_models_output_mentions_required_model(stdout: str, required_model: str) -> bool:
+    for line in stdout.splitlines():
+        for token in re.split(r"\s+", line.strip()):
+            if token and opencode_model_id_matches_required(token, required_model):
+                return True
+    return False
+
+
+def shell_command_line(argv: list[Any]) -> str:
+    return shlex.join([str(item) for item in argv])
+
+
+def normalize_command_for_contract(command: str) -> str:
+    return " ".join(command.strip().split())
+
+
+def shell_argv_for_contract(command: str) -> list[str]:
+    try:
+        return shlex.split(command, posix=True)
+    except ValueError:
+        return []
+
+
+def command_matches_for_contract(observed_command: str, expected_command: str) -> bool:
+    if normalize_command_for_contract(observed_command) == normalize_command_for_contract(expected_command):
+        return True
+    observed_argv = shell_argv_for_contract(observed_command)
+    expected_argv = shell_argv_for_contract(expected_command)
+    return bool(observed_argv) and observed_argv == expected_argv
+
+
+def opencode_session_events(session_evidence: dict[str, Any]) -> list[Any]:
+    events = session_evidence.get("session_events")
+    if isinstance(events, list):
+        return events
+    session = session_evidence.get("session")
+    if isinstance(session, list):
+        return session
+    if isinstance(session, dict):
+        if "part" in session or "type" in session:
+            return [session]
+        events = session.get("events")
+        if isinstance(events, list):
+            return events
+    return []
+
+
+def extract_opencode_tool_trace(session_evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    tools: list[dict[str, Any]] = []
+    for event in opencode_session_events(session_evidence):
+        if not isinstance(event, dict):
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict):
+            continue
+        tool = str(part.get("tool", "")).lower().strip()
+        if not tool:
+            continue
+        command = ""
+        workdir = ""
+        state = part.get("state")
+        if isinstance(state, dict):
+            tool_input = state.get("input")
+            if isinstance(tool_input, dict):
+                raw_command = tool_input.get("command") or tool_input.get("cmd")
+                if isinstance(raw_command, str):
+                    command = raw_command.strip()
+                raw_workdir = tool_input.get("workdir") or tool_input.get("cwd")
+                if isinstance(raw_workdir, str):
+                    workdir = raw_workdir.strip()
+        tools.append(
+            {
+                "tool": tool,
+                "command": command,
+                "workdir": workdir,
+                "is_shell_command": tool in {"bash", "shell", "cmd", "powershell"} and bool(command),
+            }
+        )
+    return tools
+
+
+def extract_opencode_shell_commands(session_evidence: dict[str, Any]) -> list[str]:
+    commands: list[str] = []
+    for item in extract_opencode_tool_trace(session_evidence):
+        if item.get("is_shell_command") and isinstance(item.get("command"), str):
+            commands.append(str(item["command"]))
+    return commands
+
+
+def opencode_workdir_matches_repo_root(workdir: str, *, repo_root: Path) -> bool:
+    if not workdir:
+        return False
+    try:
+        return Path(workdir).resolve() == repo_root.resolve()
+    except OSError:
+        return False
+
+
+def recompute_opencode_contract_execution(
+    *,
+    session_evidence: dict[str, Any],
+    worker_command: list[Any],
+    summary_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    expected_worker_command_line = shell_command_line(worker_command)
+    tool_trace = extract_opencode_tool_trace(session_evidence)
+    executed_shell_commands = extract_opencode_shell_commands(session_evidence)
+    exact_worker_command_seen = any(
+        command_matches_for_contract(command, expected_worker_command_line) for command in executed_shell_commands
+    )
+    first_shell_command = executed_shell_commands[0] if executed_shell_commands else ""
+    first_tool_name = str(tool_trace[0]["tool"]) if tool_trace else ""
+    first_shell_index = next((index for index, item in enumerate(tool_trace) if item.get("is_shell_command")), None)
+    first_shell_tool_name = str(tool_trace[first_shell_index]["tool"]) if first_shell_index is not None else ""
+    first_shell_workdir = str(tool_trace[first_shell_index].get("workdir", "")) if first_shell_index is not None else ""
+    tools_before_first_shell = (
+        [str(item["tool"]) for item in tool_trace[:first_shell_index]]
+        if first_shell_index is not None
+        else [str(item["tool"]) for item in tool_trace[:20]]
+    )
+    first_shell_command_matches_worker_command = (
+        bool(first_shell_command) and command_matches_for_contract(first_shell_command, expected_worker_command_line)
+    )
+    workdir_matches_repo_root = opencode_workdir_matches_repo_root(first_shell_workdir, repo_root=repo_root)
+    status = "not-observed"
+    if executed_shell_commands:
+        status = (
+            "executed"
+            if (
+                first_shell_command_matches_worker_command
+                and workdir_matches_repo_root
+                and not tools_before_first_shell
+                and len(executed_shell_commands) == 1
+            )
+            else "not-executed"
+        )
+    contract_failure_reason = ""
+    if status == "not-observed":
+        contract_failure_reason = "no_shell_command_observed"
+    elif status == "not-executed":
+        if tools_before_first_shell:
+            contract_failure_reason = "tool_before_first_shell_command"
+        elif not workdir_matches_repo_root:
+            contract_failure_reason = "opencode_workdir_mismatch"
+        elif len(executed_shell_commands) > 1 and first_shell_command_matches_worker_command:
+            contract_failure_reason = "extra_shell_command_after_contract"
+        else:
+            contract_failure_reason = (
+                "first_shell_command_mismatch_worker_command_seen_later"
+                if exact_worker_command_seen
+                else "first_shell_command_mismatch"
+            )
+    return {
+        "expected_worker_command_line": expected_worker_command_line,
+        "expected_summary_path": repo_relative(summary_path, repo_root),
+        "expected_worker_command_sha256": sha256_text(expected_worker_command_line),
+        "executed_shell_command_count": len(executed_shell_commands),
+        "executed_shell_commands": executed_shell_commands[:20],
+        "first_tool_name": first_tool_name,
+        "first_shell_command": first_shell_command,
+        "first_shell_tool_name": first_shell_tool_name,
+        "first_shell_workdir_status": "repo_root" if workdir_matches_repo_root else "non_repo_root",
+        "expected_workdir_status": "repo_root",
+        "first_shell_command_matches_worker_command": first_shell_command_matches_worker_command,
+        "first_shell_workdir_matches_repo_root": workdir_matches_repo_root,
+        "tools_before_first_shell": tools_before_first_shell[:20],
+        "contract_failure_reason": contract_failure_reason,
+        "worker_command_seen": exact_worker_command_seen,
+        "summary_exists": summary_path.exists(),
+        "status": status,
+    }

@@ -1,0 +1,231 @@
+        },
+        "repair_summary": repair_summary,
+        "claim_boundary": {
+            "semantic_claim_source": str(judge_demo_gate.get("claim_source", "competition-run-summary.final_gate")),
+            "before_after_exhibit_role": (
+                "judge-facing artifact binding and unsafe delta; not a translator-generated semantic pass claim"
+            ),
+            "must_not_claim": [
+                "C2Rust-generated baseline when the profile says baseline output is skipped",
+                "translator-generated semantic pass from accepted-evidence-authoritative runs",
+                "translation coverage numerator increase from before/after exhibits alone",
+            ],
+        },
+    }
+
+
+def summarize_judge_demo_gate(
+    *,
+    final_gate_status: str,
+    workflow_metrics: dict[str, Any],
+    before_after_exhibit: dict[str, Any],
+) -> dict[str, Any]:
+    translation_before_after = (
+        workflow_metrics.get("translation_before_after")
+        if isinstance(workflow_metrics.get("translation_before_after"), dict)
+        else {}
+    )
+    if final_gate_status == "passed":
+        return {
+            "status": "passed",
+            "source": "competition_run_summary.final_gate",
+            "claim_source": "competition-run-summary.final_gate",
+            "translation_before_after_status": str(translation_before_after.get("status", "not_provided")),
+        }
+    if before_after_exhibit.get("status") == "passed" and translation_before_after.get("status") == "bound":
+        return {
+            "status": "passed",
+            "source": "before_after_exhibit",
+            "claim_source": "accepted_evidence_binding",
+            "translation_before_after_status": "bound",
+            "boundary": (
+                "The judge demo may pass as an accepted-evidence before/after exhibit without claiming "
+                "translator-generated semantic acceptance."
+            ),
+        }
+    return {
+        "status": "failed",
+        "source": "missing_gate",
+        "claim_source": "competition-run-summary.final_gate",
+        "translation_before_after_status": str(translation_before_after.get("status", "not_provided")),
+    }
+
+
+def summarize_command_status(
+    commands: list[dict[str, Any]],
+    *,
+    judge_demo_gate: dict[str, Any],
+    milestone_status: str,
+) -> str:
+    if commands and all(command.get("exit_code") == 0 for command in commands):
+        return "passed"
+    nonzero_stages = [
+        str(command.get("stage", "unknown"))
+        for command in commands
+        if command.get("exit_code") != 0
+    ]
+    tolerated = {"run_batch_profile"}
+    if milestone_status == "internal_preview":
+        tolerated.add("milestone_release_report")
+    if set(nonzero_stages) <= tolerated and judge_demo_gate.get("source") == "before_after_exhibit":
+        return "passed_with_accepted_evidence_gate"
+    return "failed"
+
+
+def build_repair_summary(*, workflow_metrics: dict[str, Any], before_after_exhibit: dict[str, Any]) -> dict[str, Any]:
+    stage_contracts = before_after_exhibit.get("stage_contracts")
+    repairer = stage_contracts.get("repairer") if isinstance(stage_contracts, dict) else {}
+    if not isinstance(repairer, dict):
+        repairer = {}
+    histories = repairer.get("histories")
+    normalized_histories = (
+        [history for history in histories if isinstance(history, dict)]
+        if isinstance(histories, list)
+        else repair_histories_from_workflow_metrics(workflow_metrics)
+    )
+    verified = any(history.get("verified") for history in normalized_histories)
+    status = str(repairer.get("status") or ("verified" if verified else ("recorded" if normalized_histories else "not_exercised")))
+    repair_round_cap = repairer.get("repair_round_cap")
+    cap = nonnegative_int(repair_round_cap) if repair_round_cap is not None else int(getattr(harness, "REPAIR_ROUND_CAP", 5))
+    root_cause_counts = repairer.get("root_cause_counts")
+    if not isinstance(root_cause_counts, dict):
+        root_cause_counts = workflow_metrics.get("root_cause_counts") if isinstance(workflow_metrics.get("root_cause_counts"), dict) else {}
+    return {
+        "status": status,
+        "repair_round_cap": cap,
+        "observed_repair_unit_count": len(normalized_histories),
+        "auto_recovered_unit_count": sum(1 for history in normalized_histories if history.get("auto_recovered")),
+        "rollback_evidence_count": sum(repair_history_rollback_count(history) for history in normalized_histories),
+        "avg_repair_rounds": float(repairer.get("avg_repair_rounds", workflow_metrics.get("avg_repair_rounds", 0.0)) or 0.0),
+        "auto_recovery_rate": float(repairer.get("auto_recovery_rate", workflow_metrics.get("auto_recovery_rate", 0.0)) or 0.0),
+        "human_interventions": nonnegative_int(workflow_metrics.get("human_interventions")),
+        "root_cause_counts": root_cause_counts,
+        "histories": normalized_histories,
+        "evidence_boundary": str(
+            repairer.get(
+                "evidence_boundary",
+                "Repair history is shown only when workflow metrics bind measured repair or retry evidence.",
+            )
+        ),
+    }
+
+
+def repair_histories_from_workflow_metrics(workflow_metrics: dict[str, Any]) -> list[dict[str, Any]]:
+    histories = []
+    per_unit = workflow_metrics.get("per_unit_statuses")
+    if not isinstance(per_unit, list):
+        return histories
+    for unit in per_unit:
+        if not isinstance(unit, dict) or not isinstance(unit.get("repair_history"), dict):
+            continue
+        history = {
+            "unit_id": str(unit.get("unit_id", "unknown")),
+            "source": str(unit.get("source", "unknown")),
+            "status": str(unit.get("status", "unknown")),
+            "repair_rounds": nonnegative_int(unit.get("repair_rounds")),
+            "auto_recovered": bool(unit.get("auto_recovered", False)),
+            "verified": bool(unit["repair_history"].get("verified", False)),
+            "repair_history": unit["repair_history"],
+        }
+        if isinstance(unit.get("root_cause_key"), str):
+            history["root_cause_key"] = unit["root_cause_key"]
+        histories.append(history)
+    return histories
+
+
+def compact_before_after_units(exhibit: dict[str, Any]) -> list[dict[str, Any]]:
+    units = exhibit.get("units")
+    if not isinstance(units, list):
+        return []
+    compacted = []
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        detail = {}
+        for key in [
+            "unit_id",
+            "status",
+            "baseline",
+            "final",
+            "oracle_evidence",
+            "accepted_patch",
+            "patch_log",
+            "unsafe_reduction",
+            "repair_history",
+        ]:
+            if key in unit:
+                detail[key] = unit[key]
+        compacted.append(detail)
+    return compacted
+
+
+def repair_history_rollback_count(history: dict[str, Any]) -> int:
+    repair_history = history.get("repair_history")
+    if not isinstance(repair_history, dict):
+        return 0
+    rollback_ids = repair_history.get("rollback_ids")
+    if not isinstance(rollback_ids, list):
+        return 0
+    return sum(1 for rollback_id in rollback_ids if isinstance(rollback_id, str) and rollback_id)
+
+
+def resolve_workflow_metrics_path(
+    summary: dict[str, Any],
+    summary_path: Path,
+    *,
+    repo_root: Path,
+) -> Path | None:
+    workflow_ref = summary.get("workflow_metrics")
+    if not isinstance(workflow_ref, dict) or not workflow_ref.get("path"):
+        return None
+    return validate_competition_run_summary.resolve_summary_artifact(
+        str(workflow_ref["path"]),
+        summary_path=summary_path,
+        repo_root=repo_root,
+    )
+
+
+def resolve_report_path(binding: Any, *, fallback: Path, repo_root: Path) -> Path | None:
+    if isinstance(binding, dict) and binding.get("path"):
+        return harness.repo_path(Path(str(binding["path"])), repo_root=repo_root)
+    return fallback if fallback.exists() else None
+
+
+def artifact_ref(path: Path | None, *, repo_root: Path) -> dict[str, Any]:
+    if path is None:
+        return {"status": "missing"}
+    if not path.exists():
+        return {"path": harness.repo_relative(path, repo_root=repo_root), "status": "missing"}
+    return {
+        "path": harness.repo_relative(path, repo_root=repo_root),
+        "sha256": harness.sha256_file(path),
+        "status": "present",
+    }
+
+
+def load_json_if_exists(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise SystemExit(f"expected JSON object: {path}")
+    return payload
+
+
+def nonnegative_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, parsed)
+
+
+def summary_semantic_pass_count(summary: dict[str, Any]) -> int:
+    slices = summary.get("slices")
+    if isinstance(slices, dict):
+        return nonnegative_int(slices.get("semantic_pass"))
+    return nonnegative_int(summary.get("semantic_pass"))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -442,14 +442,14 @@ fn clang_ast_dump_rejects_record_field_inc_dec_return_value_when_enabled() {
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
-fn clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled() {
+fn clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-record-field-inc-dec-for-step");
     fs::create_dir_all(&out_dir).unwrap();
-    let source_file = out_dir.join("bad_record_field_inc_dec_for_step.c");
+    let source_file = out_dir.join("record_field_inc_dec_for_step.c");
     fs::write(
         &source_file,
-        "struct point { int x; int y; };\nint bad_record_field_inc_dec_for_step(struct point p, int limit) { for (int i = 0; i < limit; p.x++) { i++; } return p.x; }\n",
+        "struct point { int x; int y; };\nint record_field_inc_dec_for_step(struct point p, int limit) { for (int i = 0; i < limit; p.x++) { i++; } return p.x; }\n",
     )
     .unwrap();
     let environment = std::collections::BTreeMap::from([(
@@ -460,17 +460,23 @@ fn clang_ast_dump_rejects_record_field_inc_dec_for_step_when_enabled() {
     let report = lower_function_from_clang_ast_dump_report(
         &environment,
         &source_file,
-        "bad_record_field_inc_dec_for_step",
+        "record_field_inc_dec_for_step",
     );
 
-    assert_eq!(report.status, "unsupported", "{:?}", report.errors);
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit record field inc/dec for step from real clang AST");
+    let rust = &emitted.rust;
     assert!(
-        report.errors.iter().any(|error| error
-            .message
-            .contains("record field targets are unsupported outside standalone statements")),
-        "{:?}",
-        report.errors
+        rust.contains("pub fn record_field_inc_dec_for_step(mut p: Point, limit: i32) -> i32"),
+        "{rust}"
     );
+    assert!(
+        rust.contains("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-real-clang-record-field-inc-dec-for-step", rust);
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

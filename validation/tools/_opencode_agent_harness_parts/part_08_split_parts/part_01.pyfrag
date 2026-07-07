@@ -1,0 +1,206 @@
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": "blocked",
+            "validator": "opencode_agent_harness.py run-worker --mode opencode",
+        },
+    }
+    atomic_write_json(summary_path, summary)
+
+
+def write_opencode_handoff_contract(
+    *,
+    run_id: str,
+    worker_id: str,
+    attempt_number: int,
+    request_path: Path,
+    summary_path: Path,
+    contract_path: Path,
+    worker_command: list[str],
+    opencode_argv: list[str],
+    launch_policy: dict[str, Any],
+    repo_root: Path,
+    opencode_runtime_env: dict[str, Any] | None = None,
+    assignment_request_path: Path | None = None,
+) -> dict[str, str]:
+    if not opencode_argv:
+        raise SystemExit("opencode argv must not be empty")
+    contract = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "runner_kind": "opencode-run",
+        "request_path": repo_relative(request_path, repo_root=repo_root),
+        "expected_summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "worker_command": worker_command,
+        "worker_command_line": shell_command_line(worker_command),
+        "worker_command_sha256": sha256_text(shell_command_line(worker_command)),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": shell_command_line(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "prompt": str(opencode_argv[-1]),
+        "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires the expected summary and validators",
+    }
+    if opencode_runtime_env is not None:
+        contract["opencode_runtime_env"] = opencode_runtime_env
+    if assignment_request_path is not None:
+        contract["assignment_request_path"] = repo_relative(assignment_request_path, repo_root=repo_root)
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(contract_path, contract)
+    return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
+
+
+def write_opencode_preflight_contract(
+    *,
+    run_id: str,
+    contract_path: Path,
+    marker_path: Path,
+    marker_command: list[str],
+    opencode_argv: list[str],
+    launch_policy: dict[str, Any],
+    repo_root: Path,
+    opencode_runtime_env: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    if not opencode_argv:
+        raise SystemExit("opencode argv must not be empty")
+    contract = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "runner_kind": "opencode-preflight",
+        "expected_marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "worker_command": marker_command,
+        "worker_command_line": shell_command_line(marker_command),
+        "worker_command_sha256": sha256_text(shell_command_line(marker_command)),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": shell_command_line(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "prompt": str(opencode_argv[-1]),
+        "evidence_boundary": "preflight proves exact-command compliance only; semantic acceptance requires worker summary and validators",
+    }
+    if opencode_runtime_env is not None:
+        contract["opencode_runtime_env"] = opencode_runtime_env
+    contract_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(contract_path, contract)
+    return {"path": repo_relative(contract_path, repo_root=repo_root), "sha256": sha256_file(contract_path)}
+
+
+def write_opencode_session_evidence(
+    *,
+    completed: subprocess.CompletedProcess[str],
+    evidence_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    repo_root: Path,
+    opencode_runtime_env: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    stdout = completed.stdout or ""
+    evidence: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "process_returncode": int(completed.returncode),
+        "stdout_path": repo_relative(stdout_path, repo_root=repo_root),
+        "stderr_path": repo_relative(stderr_path, repo_root=repo_root),
+        "stdout_sha256": sha256_file(stdout_path),
+        "stderr_sha256": sha256_file(stderr_path),
+    }
+    if opencode_runtime_env is not None:
+        evidence["opencode_runtime_env"] = opencode_runtime_env
+    evidence.update(parse_opencode_stdout_session(stdout))
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(evidence_path, evidence)
+    return {"path": repo_relative(evidence_path, repo_root=repo_root), "sha256": sha256_file(evidence_path)}
+
+
+def write_merge_plan(
+    *,
+    db_path: Path,
+    run_id: str,
+    out_root: Path,
+    proof_class: str,
+    worker_summary_paths: list[str] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    if worker_summary_paths is None:
+        with closing(connect(db_path)) as connection:
+            ensure_schema(connection)
+            rows = connection.execute(
+                """
+                select repo_rel_path from artifacts
+                where run_id=? and kind='competition-run-summary'
+                order by repo_rel_path
+                """,
+                (run_id,),
+            ).fetchall()
+        summaries = [row[0] for row in rows]
+    else:
+        summaries = [
+            repo_relative(repo_path(Path(summary), repo_root=repo_root), repo_root=repo_root)
+            for summary in worker_summary_paths
+        ]
+    argv = portable_python_script_argv("validation/tools/run_competition.py")
+    for summary in summaries:
+        argv.extend(["--worker-summary", summary])
+    argv.extend(["--out-root", repo_relative(out_root, repo_root=repo_root), "--proof-class", proof_class, "--run-id", run_id])
+    merge_plan = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "path": repo_relative(out_root / "harness" / "merge-plan.json", repo_root=repo_root),
+        "worker_summaries": summaries,
+        "argv": argv,
+        "validator": "validation/tools/validate_competition_run_summary.py",
+    }
+    merge_path = out_root / "harness" / "merge-plan.json"
+    merge_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(merge_path, merge_plan)
+    return merge_plan
+
+
+def finalize_run(
+    *,
+    db_path: Path,
+    run_id: str,
+    status: str,
+    summary_path: Path,
+    final_gate_status: str | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    summary_path = repo_path(summary_path, repo_root=repo_root)
+    summary_rel = repo_relative(summary_path, repo_root=repo_root)
+    summary_hash = sha256_file(summary_path)
+    now = now_text()
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        cursor = connection.execute(
+            """
+            update runs
+            set status=?, ended_at=?, summary_path=?, summary_sha256=?,
+                final_gate_status=coalesce(?, final_gate_status)
+            where run_id=?
+            """,
+            (status, now, summary_rel, summary_hash, final_gate_status, run_id),
+        )
+        if cursor.rowcount == 0:
+            raise SystemExit(f"unknown run_id: {run_id}")
+        record_event(
+            connection,
+            run_id=run_id,
+            event_type="run_finalized",
+            payload={
+                "status": status,
+                "final_gate_status": final_gate_status,
+                "summary_path": summary_rel,
+                "summary_sha256": summary_hash,
+            },
+        )
+        connection.commit()
+    return {
+        "status": "finalized",
+        "run_id": run_id,
+        "summary_path": summary_rel,
+        "summary_sha256": summary_hash,
+    }

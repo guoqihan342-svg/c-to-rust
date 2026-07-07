@@ -1,0 +1,229 @@
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+            summary_payload = load_json(summary_path)
+        if mode == "opencode" and opencode_contract_verification is not None:
+            opencode_safety_transform_attempt = write_opencode_safety_transform_attempt(
+                run_id=run_id,
+                worker_id=worker_id,
+                attempt_number=attempt_number,
+                attempt_path=report_dir / "opencode-safety-transform-attempt.json",
+                summary_path=summary_path,
+                summary_payload=summary_payload,
+                handoff_contract=handoff_contract,
+                opencode_session_evidence=opencode_session_evidence,
+                opencode_contract_verification=opencode_contract_verification,
+                repo_root=repo_root,
+            )
+        recorded = record_worker_summary(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            summary_path=summary_path,
+            repo_root=repo_root,
+        )
+
+    effective_exit_code = int(completed.returncode)
+    if effective_exit_code == 0 and (recorded is None or summary_status != "passed"):
+        effective_exit_code = 1
+    status = "recorded" if recorded is not None else "failed"
+    report_path = report_dir / "run-worker-report.json"
+    repair_hint = None
+    if effective_exit_code != 0:
+        root_cause_key = (
+            synthetic_failure_root_cause
+            or worker_summary_root_cause(summary_payload, summary_path=summary_path, repo_root=repo_root)
+            or worker_failure_root_cause(
+            process_returncode=int(completed.returncode),
+            recorded=recorded is not None,
+            summary_status=summary_status,
+            opencode_contract_verification=opencode_contract_verification,
+            )
+        )
+        diagnostics = worker_repair_diagnostics(
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            process_returncode=int(completed.returncode),
+            root_cause_key=root_cause_key,
+        )
+        repair_hint = worker_repair_hint_payload(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            request=request,
+            root_cause_key=root_cause_key,
+            summary_status=summary_status,
+            process_returncode=int(completed.returncode),
+            summary_path=summary_path,
+            report_path=report_path,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            repo_root=repo_root,
+            exit_code=effective_exit_code,
+            attempt_number=attempt_number,
+            diagnostics=diagnostics,
+            retry_of=retry_of,
+            rollback_evidence=rollback_evidence,
+            rejected_summary_evidence=rejected_summary_evidence,
+            handoff_contract=handoff_contract,
+            opencode_session_evidence=opencode_session_evidence,
+            opencode_contract_verification=opencode_contract_verification,
+        )
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "run-worker-report",
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "attempt": attempt_number,
+        "mode": mode,
+        "runner_kind": runner_kind,
+        "request_path": repo_relative(attempt_request_path, repo_root=repo_root),
+        "assignment_request_path": repo_relative(request_path, repo_root=repo_root),
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "summary_status": summary_status,
+        "recorded": recorded is not None,
+        "exit_code": effective_exit_code,
+        "process_returncode": int(completed.returncode),
+        "argv": report_argv,
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+    }
+    if timed_out:
+        report["timed_out"] = True
+        report["timeout_seconds"] = timeout_seconds
+    if handoff_contract is not None:
+        report["handoff_contract"] = handoff_contract
+    if opencode_process_retries is not None:
+        report["opencode_process_retries"] = opencode_process_retries
+    if preflight_binding is not None:
+        report["opencode_preflight_report"] = preflight_binding
+    if opencode_runtime_env is not None:
+        report["opencode_runtime_env"] = opencode_runtime_env
+    if opencode_session_evidence is not None:
+        report["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        report["opencode_contract_verification"] = opencode_contract_verification
+    if opencode_safety_transform_attempt is not None:
+        report["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
+    if retry_of:
+        report["retry_of"] = retry_of
+    if rollback_evidence is not None:
+        report["rollback_evidence"] = rollback_evidence
+    if rejected_summary_evidence is not None:
+        report["rejected_summary_evidence"] = rejected_summary_evidence
+    if repair_hint is not None:
+        report["repair_hint"] = {
+            "hint_id": repair_hint["hint_id"],
+            "root_cause_key": repair_hint["root_cause_key"],
+            "status": "open",
+            "diagnostics": repair_hint["diagnostics"],
+        }
+    atomic_write_json(report_path, report)
+
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        task_status = summary_status if recorded is not None else "failed"
+        connection.execute(
+            "update leases set status=?, heartbeat_at=? where run_id=? and lease_owner=?",
+            (task_status, now_text(), run_id, worker_id),
+        )
+        event_payload = {
+            "worker_id": worker_id,
+            "attempt": attempt_number,
+            "mode": mode,
+            "runner_kind": runner_kind,
+            "exit_code": effective_exit_code,
+            "process_returncode": int(completed.returncode),
+            "summary_path": repo_relative(summary_path, repo_root=repo_root),
+            "summary_status": summary_status,
+            "recorded": recorded is not None,
+            "report_path": repo_relative(report_path, repo_root=repo_root),
+        }
+        worker_report_ref = record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id=worker_id,
+            kind="run-worker-report",
+            path=report_path,
+            status=task_status,
+            semantic_role="worker-execution-report",
+            payload=report,
+            repo_root=repo_root,
+        )
+        event_payload["worker_report"] = worker_report_ref
+        if retry_of:
+            event_payload["retry_of"] = retry_of
+        if rollback_evidence is not None:
+            event_payload["rollback_evidence"] = rollback_evidence
+        if rejected_summary_evidence is not None:
+            event_payload["rejected_summary_evidence"] = rejected_summary_evidence
+        if handoff_contract is not None:
+            event_payload["handoff_contract"] = handoff_contract
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-handoff-contract",
+                path=repo_path(Path(handoff_contract["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-command-contract",
+                payload=load_json(repo_path(Path(handoff_contract["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_process_retries is not None:
+            event_payload["opencode_process_retries"] = opencode_process_retries
+        if preflight_binding is not None:
+            event_payload["opencode_preflight_report"] = preflight_binding
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-preflight-report",
+                path=repo_path(Path(preflight_binding["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-preflight-evidence",
+                payload=load_json(repo_path(Path(preflight_binding["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_runtime_env is not None:
+            event_payload["opencode_runtime_env"] = opencode_runtime_env
+        if opencode_session_evidence is not None:
+            event_payload["opencode_session_evidence"] = opencode_session_evidence
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-session-evidence",
+                path=repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-session-evidence",
+                payload=load_json(repo_path(Path(opencode_session_evidence["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        if opencode_contract_verification is not None:
+            event_payload["opencode_contract_verification"] = opencode_contract_verification
+        if opencode_safety_transform_attempt is not None:
+            event_payload["opencode_safety_transform_attempt"] = opencode_safety_transform_attempt
+            record_artifact(
+                connection,
+                run_id=run_id,
+                worker_id=worker_id,
+                kind="opencode-safety-transform-attempt",
+                path=repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root),
+                status=summary_status,
+                semantic_role="agent-safety-transform-attempt",
+                payload=load_json(repo_path(Path(opencode_safety_transform_attempt["path"]), repo_root=repo_root)),
+                repo_root=repo_root,
+            )
+        record_event(connection, run_id=run_id, event_type="worker_executed", payload=event_payload)
+        if repair_hint is not None:
+            record_repair_hint(connection, hint=repair_hint)
+        connection.commit()
+
+    result = dict(report)
+    result["report_path"] = repo_relative(report_path, repo_root=repo_root)
+    if recorded is not None:
+        result["record_worker_summary"] = recorded
+    return result

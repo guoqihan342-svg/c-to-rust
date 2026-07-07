@@ -1,0 +1,209 @@
+        raise ValueError("resume_manifest.claim_boundary.generated_draft_semantic_pass must be false")
+    if boundary.get("translation_coverage_numerator") != 0:
+        raise ValueError("resume_manifest.claim_boundary.translation_coverage_numerator must be 0")
+
+    ledger = require_object(payload.get("ledger"), "resume_manifest.ledger")
+    if ledger.get("checkpoint_backend") != "sqlite":
+        raise ValueError("resume_manifest.ledger.checkpoint_backend must be sqlite")
+    ledger_path = require_string(ledger.get("path"), "resume_manifest.ledger.path")
+    assert_repo_relative_posix(ledger_path)
+
+    context_binding = validate_artifact_binding_shape(
+        payload.get("context_pack"),
+        "resume_manifest.context_pack",
+        repo_root=repo_root,
+    )
+    agent_binding = validate_artifact_binding_shape(
+        payload.get("agent_index"),
+        "resume_manifest.agent_index",
+        repo_root=repo_root,
+    )
+    expected_context = expected_artifacts.get("context_pack")
+    expected_agent = expected_artifacts.get("agent_index")
+    if isinstance(expected_context, str) and context_binding["path"] != expected_context:
+        raise ValueError("resume_manifest.context_pack.path must match expected_artifacts.context_pack")
+    if isinstance(expected_agent, str) and agent_binding["path"] != expected_agent:
+        raise ValueError("resume_manifest.agent_index.path must match expected_artifacts.agent_index")
+
+    if context_payload is not None:
+        entrypoints = require_object(context_payload.get("entrypoints"), "context_pack.entrypoints")
+        if entrypoints.get("resume_manifest") != path_text:
+            raise ValueError("context_pack.entrypoints.resume_manifest must match expected_artifacts.resume_manifest")
+    if agent_payload is not None:
+        reports = require_object(agent_payload.get("reports"), "agent_index.reports")
+        resume_report = require_object(reports.get("resume_manifest"), "agent_index.reports.resume_manifest")
+        if resume_report.get("path") != path_text:
+            raise ValueError("agent_index.reports.resume_manifest.path must match expected_artifacts.resume_manifest")
+
+    verified_candidates: list[tuple[str, Any]] = []
+    if isinstance(payload.get("verified_unsafe_baseline"), dict):
+        verified_candidates.append(("resume_manifest.verified_unsafe_baseline", payload["verified_unsafe_baseline"]))
+    payload_policy_ref = verified_unsafe_baseline_ref_from_container(payload.get("attempt_evidence_policy"))
+    if isinstance(payload_policy_ref, dict):
+        verified_candidates.append(("resume_manifest.attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline", payload_policy_ref))
+    if context_payload is not None:
+        context_ref = verified_unsafe_baseline_ref_from_container(context_payload)
+        if isinstance(context_ref, dict):
+            verified_candidates.append(("context_pack.attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline", context_ref))
+    if agent_payload is not None:
+        agent_ref = verified_unsafe_baseline_ref_from_container(agent_payload)
+        if isinstance(agent_ref, dict):
+            verified_candidates.append(("agent_index.attempt_evidence_policy.baseline_attempt.verified_unsafe_baseline", agent_ref))
+        reports = agent_payload.get("reports") if isinstance(agent_payload.get("reports"), dict) else {}
+        reports_ref = reports.get("verified_unsafe_baseline") if isinstance(reports, dict) else None
+        if isinstance(reports_ref, dict):
+            verified_candidates.append(("agent_index.reports.verified_unsafe_baseline", reports_ref))
+    if "verified_unsafe_baseline" in expected_artifacts and not verified_candidates:
+        raise ValueError("resume_manifest.verified_unsafe_baseline is required when expected_artifacts.verified_unsafe_baseline is declared")
+    verified_baseline_contract = None
+    if verified_candidates:
+        compare_verified_unsafe_baseline_refs(verified_candidates)
+        primary_label, primary_ref = verified_candidates[0]
+        verified_baseline_contract = validate_verified_unsafe_baseline_ref(
+            primary_ref,
+            primary_label,
+            repo_root=repo_root,
+        )
+        expected_verified = expected_artifacts.get("verified_unsafe_baseline")
+        if isinstance(expected_verified, str) and verified_baseline_contract["path"] != expected_verified:
+            raise ValueError("resume_manifest.verified_unsafe_baseline.path must match expected_artifacts.verified_unsafe_baseline")
+        entrypoint_map = payload.get("entrypoints")
+        if isinstance(entrypoint_map, dict) and entrypoint_map.get("verified_unsafe_baseline") != verified_baseline_contract["path"]:
+            raise ValueError("resume_manifest.entrypoints.verified_unsafe_baseline must match verified_unsafe_baseline.path")
+        if context_payload is not None:
+            context_entrypoints = context_payload.get("entrypoints") if isinstance(context_payload.get("entrypoints"), dict) else {}
+            if (
+                isinstance(context_entrypoints, dict)
+                and "verified_unsafe_baseline" in context_entrypoints
+                and context_entrypoints.get("verified_unsafe_baseline") != verified_baseline_contract["path"]
+            ):
+                raise ValueError("context_pack.entrypoints.verified_unsafe_baseline must match verified_unsafe_baseline.path")
+
+    entrypoints = payload.get("resume_entrypoints")
+    if not isinstance(entrypoints, list):
+        raise ValueError("resume_manifest.resume_entrypoints must be a list")
+    for required in ("evaluate --profile", "run-plan --plan", "run-worker --assignment"):
+        if required not in entrypoints:
+            raise ValueError(f"resume_manifest.resume_entrypoints missing {required}")
+
+    workers = payload.get("workers")
+    if not isinstance(workers, list):
+        raise ValueError("resume_manifest.workers must be a list")
+    if payload.get("worker_count") != len(workers):
+        raise ValueError("resume_manifest.worker_count must match workers length")
+    actual_worker_ids = [
+        require_string(
+            require_object(worker, f"resume_manifest.workers[{index}]").get("worker_id"),
+            f"resume_manifest.workers[{index}].worker_id",
+        )
+        for index, worker in enumerate(workers)
+    ]
+    declared_worker_ids = payload.get("worker_ids")
+    if declared_worker_ids is not None:
+        if not isinstance(declared_worker_ids, list) or not all(
+            isinstance(worker_id, str) and worker_id for worker_id in declared_worker_ids
+        ):
+            raise ValueError("resume_manifest.worker_ids must be a non-empty string list when declared")
+        if len(set(declared_worker_ids)) != len(declared_worker_ids):
+            raise ValueError("resume_manifest.worker_ids must be unique")
+        if declared_worker_ids != actual_worker_ids:
+            raise ValueError("resume_manifest.worker_ids must match workers")
+    if len(set(actual_worker_ids)) != len(actual_worker_ids):
+        raise ValueError("resume_manifest.workers worker_id values must be unique")
+    run_id = require_string(payload.get("run_id"), "resume_manifest.run_id")
+    open_hint_ids_by_worker_id = resume_manifest_open_repair_hint_ids_by_worker(
+        payload.get("repair_hints"),
+        run_id=run_id,
+    )
+    for index, worker in enumerate(workers):
+        worker_payload = require_object(worker, f"resume_manifest.workers[{index}]")
+        require_string(worker_payload.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
+        for field in ("assignment_path", "request_path", "summary_path", "report_path", "isolated_out_root"):
+            value = worker_payload.get(field)
+            if isinstance(value, str):
+                assert_repo_relative_posix(value)
+        validate_resume_manifest_worker_replay_commands(
+            worker_payload,
+            index=index,
+            run_id=run_id,
+            ledger_path=ledger_path,
+            open_hint_ids_by_worker_id=open_hint_ids_by_worker_id,
+            repo_root=repo_root,
+        )
+    worker_consistency = validate_resume_manifest_worker_consistency(
+        workers,
+        context_payload=context_payload,
+        agent_payload=agent_payload,
+    )
+    local_path_scan = validate_local_absolute_path_policy(payload, label=f"resume_manifest {path_text}")
+    return {
+        "path": path_text,
+        "status": "passed",
+        "checkpoint_backend": "sqlite",
+        "worker_count": len(workers),
+        "worker_ids": actual_worker_ids,
+        "worker_consistency": worker_consistency,
+        **({"verified_unsafe_baseline": verified_baseline_contract} if verified_baseline_contract is not None else {}),
+        "local_absolute_path_scan": local_path_scan,
+    }
+
+
+def validate_resume_manifest_worker_replay_commands(
+    worker: dict[str, Any],
+    *,
+    index: int,
+    run_id: str,
+    ledger_path: str,
+    open_hint_ids_by_worker_id: dict[str, set[str]],
+    repo_root: Path,
+) -> dict[str, Any]:
+    worker_id = require_string(worker.get("worker_id"), f"resume_manifest.workers[{index}].worker_id")
+    replay = require_object(worker.get("replay_commands"), f"resume_manifest.workers[{index}].replay_commands")
+    run_worker = validate_resume_manifest_replay_command(
+        replay.get("run_worker"),
+        label=f"resume_manifest.workers[{index}].replay_commands.run_worker",
+        expected_subcommand="run-worker",
+        worker=worker,
+        worker_id=worker_id,
+        run_id=run_id,
+        ledger_path=ledger_path,
+        require_hint=False,
+        repo_root=repo_root,
+    )
+    result: dict[str, Any] = {"run_worker": run_worker}
+    if "retry_worker" in replay:
+        retry_worker = validate_resume_manifest_replay_command(
+            replay.get("retry_worker"),
+            label=f"resume_manifest.workers[{index}].replay_commands.retry_worker",
+            expected_subcommand="retry-worker",
+            worker=worker,
+            worker_id=worker_id,
+            run_id=run_id,
+            ledger_path=ledger_path,
+            require_hint=True,
+            expected_hint_ids=open_hint_ids_by_worker_id.get(worker_id, set()),
+            repo_root=repo_root,
+        )
+        result["retry_worker"] = retry_worker
+    return result
+
+
+def resume_manifest_open_repair_hint_ids_by_worker(value: Any, *, run_id: str) -> dict[str, set[str]]:
+    if not isinstance(value, dict):
+        return {}
+    hints = value.get("hints")
+    if not isinstance(hints, list):
+        return {}
+    result: dict[str, set[str]] = {}
+    for hint in hints:
+        if not isinstance(hint, dict) or hint.get("status") != "open":
+            continue
+        hint_id = hint.get("hint_id")
+        if not isinstance(hint_id, str) or not hint_id:
+            continue
+        worker_id = hint.get("worker_id")
+        if not isinstance(worker_id, str) or not worker_id:
+            worker_id = resume_manifest_worker_id_from_repair_hint_id(hint_id, run_id=run_id)
+        if worker_id:
+            result.setdefault(worker_id, set()).add(hint_id)
+    return result

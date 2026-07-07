@@ -1,0 +1,785 @@
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_if_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                integral_cast_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If { condition, .. } = skeleton else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_if_condition_integral_promotion() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                integral_promotion_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If { condition, .. } = skeleton else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert_signed_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_rejects_if_condition_non_integer_implicit_cast() {
+        let stmt = serde_json::json!({
+            "kind": "IfStmt",
+            "inner": [
+                floating_to_integral_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = if_stmt_skeleton_from_ast(&stmt).expect("if skeleton");
+        let ClangStmtSkeleton::If { condition, .. } = &skeleton else {
+            panic!("expected if skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Unsupported { node, reason }
+                if node == "ImplicitCastExpr"
+                    && reason.contains("FloatingToIntegral")
+        ));
+        let error =
+            lower_stmt(&skeleton).expect_err("non-integer if condition cast must fail closed");
+        assert_eq!(error.kind, "unsupported_clang_expr");
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_while_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "WhileStmt",
+            "inner": [
+                integral_cast_condition_ast(),
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = while_stmt_skeleton_from_ast(&stmt).expect("while skeleton");
+        let ClangStmtSkeleton::While { condition, .. } = skeleton else {
+            panic!("expected while skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_do_while_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "DoStmt",
+            "inner": [
+                return_one_stmt_ast(),
+                integral_cast_condition_ast()
+            ]
+        });
+
+        let skeleton = do_stmt_skeleton_from_ast(&stmt).expect("do-while skeleton");
+        let ClangStmtSkeleton::DoWhile { condition, .. } = skeleton else {
+            panic!("expected do-while skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn stmt_skeleton_from_ast_preserves_for_condition_integral_cast() {
+        let stmt = serde_json::json!({
+            "kind": "ForStmt",
+            "inner": [
+                {
+                    "kind": "DeclStmt",
+                    "inner": [
+                        {
+                            "kind": "VarDecl",
+                            "name": "i",
+                            "type": { "qualType": "int" },
+                            "init": "c",
+                            "inner": [
+                                {
+                                    "kind": "IntegerLiteral",
+                                    "type": { "qualType": "int" },
+                                    "value": "0"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {},
+                integral_cast_condition_ast(),
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                },
+                return_one_stmt_ast()
+            ]
+        });
+
+        let skeleton = for_stmt_skeleton_from_ast(&stmt).expect("for skeleton");
+        let ClangStmtSkeleton::For {
+            condition: Some(condition),
+            ..
+        } = skeleton
+        else {
+            panic!("expected for skeleton, got {skeleton:?}");
+        };
+        assert_unsigned_integral_condition_cast(condition);
+    }
+
+    #[test]
+    fn while_stmt_skeleton_from_ast_maps_single_statement_body() {
+        let stmt = serde_json::json!({
+            "kind": "WhileStmt",
+            "inner": [
+                {
+                    "kind": "BinaryOperator",
+                    "opcode": ">",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "ImplicitCastExpr",
+                            "castKind": "LValueToRValue",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int" },
+                                    "referencedDecl": { "name": "value" }
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "IntegerLiteral",
+                            "type": { "qualType": "int" },
+                            "value": "0"
+                        }
+                    ]
+                },
+                {
+                    "kind": "BinaryOperator",
+                    "opcode": "=",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        },
+                        {
+                            "kind": "BinaryOperator",
+                            "opcode": "+",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "ImplicitCastExpr",
+                                    "castKind": "LValueToRValue",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "DeclRefExpr",
+                                            "type": { "qualType": "int" },
+                                            "referencedDecl": { "name": "value" }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "kind": "UnaryOperator",
+                                    "opcode": "~",
+                                    "type": { "qualType": "int" },
+                                    "inner": [
+                                        {
+                                            "kind": "IntegerLiteral",
+                                            "type": { "qualType": "int" },
+                                            "value": "0"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = while_stmt_skeleton_from_ast(&stmt).expect("while skeleton");
+        let ClangStmtSkeleton::While { condition, body } = skeleton else {
+            panic!("expected while skeleton, got {skeleton:?}");
+        };
+        assert!(matches!(
+            condition,
+            ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Gt,
+                ..
+            }
+        ));
+        assert!(matches!(
+            body.as_slice(),
+            [ClangStmtSkeleton::Assign { .. }]
+        ));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_accepts_prefix_increment_as_statement_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": false,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "i" }
+                }
+            ]
+        });
+
+        let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect("prefix increment step");
+
+        let ClangStmtSkeleton::Assign { target, value } = skeleton else {
+            panic!("expected assignment step, got {skeleton:?}");
+        };
+        assert!(matches!(target, ClangExprSkeleton::DeclRef { name, .. } if name == "i"));
+        assert!(matches!(
+            value,
+            ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Add,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_accepts_prefix_decrement_as_statement_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "--",
+            "isPostfix": false,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "i" }
+                }
+            ]
+        });
+
+        let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect("prefix decrement step");
+
+        let ClangStmtSkeleton::Assign { value, .. } = skeleton else {
+            panic!("expected assignment step, got {skeleton:?}");
+        };
+        assert!(matches!(
+            value,
+            ClangExprSkeleton::Binary {
+                op: ClangBinaryOperator::Sub,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_value_position_prefix_inc_dec() {
+        for (opcode, expected_op) in [
+            ("++", ClangIncDecOperator::Inc),
+            ("--", ClangIncDecOperator::Dec),
+        ] {
+            let expr = serde_json::json!({
+                "kind": "UnaryOperator",
+                "opcode": opcode,
+                "isPostfix": false,
+                "type": { "qualType": "int" },
+                "inner": [
+                    {
+                        "kind": "DeclRefExpr",
+                        "type": { "qualType": "int" },
+                        "referencedDecl": { "name": "i" }
+                    }
+                ]
+            });
+
+            let skeleton = expr_skeleton_from_ast(&expr).expect("prefix inc/dec skeleton");
+
+            let ClangExprSkeleton::IncDec {
+                target,
+                op,
+                prefix: true,
+                ty,
+            } = skeleton
+            else {
+                panic!("expected prefix inc/dec skeleton for {opcode}, got {skeleton:?}");
+            };
+            assert_eq!(op, expected_op);
+            assert_eq!(ty.spelled, "int");
+            assert!(
+                matches!(target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+                "unexpected target for {opcode}: {target:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_keeps_multiple_prefix_inc_dec_call_arguments_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int, int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int, int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                },
+                {
+                    "kind": "DeclRefExpr",
+                    "type": { "qualType": "int" },
+                    "referencedDecl": { "name": "j" }
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+            panic!(
+                "expected multiple prefix inc/dec call arguments to fail closed, got {skeleton:?}"
+            );
+        };
+        assert!(
+            reason.contains("call arguments cannot use increment/decrement value semantics"),
+            "unexpected reason: {reason}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_single_prefix_inc_dec_call_argument() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Call { args, .. } = skeleton else {
+            panic!("expected single prefix inc/dec call argument to lower, got {skeleton:?}");
+        };
+        let [ClangExprSkeleton::IncDec {
+            target,
+            prefix: true,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected one prefix inc/dec argument, got {args:?}");
+        };
+        assert!(
+            matches!(target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+            "unexpected target: {target:?}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_single_postfix_inc_dec_call_argument() {
+        let expr = serde_json::json!({
+            "kind": "CallExpr",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "FunctionToPointerDecay",
+                    "type": { "qualType": "int (*)(int)" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int (int)" },
+                            "referencedDecl": {
+                                "kind": "FunctionDecl",
+                                "name": "helper"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("call skeleton");
+
+        let ClangExprSkeleton::Call { args, .. } = skeleton else {
+            panic!("expected single postfix inc/dec call argument to lower, got {skeleton:?}");
+        };
+        let [ClangExprSkeleton::IncDec {
+            target,
+            prefix: false,
+            ..
+        }] = args.as_slice()
+        else {
+            panic!("expected one postfix inc/dec argument, got {args:?}");
+        };
+        assert!(
+            matches!(target.as_ref(), ClangExprSkeleton::DeclRef { name, .. } if name == "i"),
+            "unexpected target: {target:?}"
+        );
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_keeps_prefix_inc_dec_deref_operand_fail_closed() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "*",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("deref skeleton");
+
+        let ClangExprSkeleton::Unsupported { reason, .. } = skeleton else {
+            panic!("expected prefix inc/dec deref operand to fail closed, got {skeleton:?}");
+        };
+        assert!(
+            reason.contains("deref pointer cannot use prefix increment/decrement value semantics"),
+            "unexpected reason: {reason}"
+        );
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_prefix_inc_dec_non_scalar_targets() {
+        let cases = [
+            (
+                "prefix deref target",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "UnaryOperator",
+                            "opcode": "*",
+                            "type": { "qualType": "int" },
+                            "inner": [
+                                {
+                                    "kind": "DeclRefExpr",
+                                    "type": { "qualType": "int *" },
+                                    "referencedDecl": { "name": "p" }
+                                }
+                            ]
+                        }
+                    ]
+                }),
+                "simple variable",
+            ),
+            (
+                "prefix pointer target",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": false,
+                    "type": { "qualType": "int *" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }),
+                "unsupported",
+            ),
+        ];
+
+        for (label, stmt, expected_reason) in cases {
+            let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect(label);
+
+            let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+                panic!("expected unsupported {label}, got {skeleton:?}");
+            };
+            assert!(
+                reason.contains(expected_reason),
+                "unexpected reason for {label}: {reason}"
+            );
+        }
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_inc_dec_without_explicit_bool_postfix_flag() {
+        let cases = [
+            (
+                "missing postfix flag",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }),
+            ),
+            (
+                "string postfix flag",
+                serde_json::json!({
+                    "kind": "UnaryOperator",
+                    "opcode": "++",
+                    "isPostfix": "false",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "i" }
+                        }
+                    ]
+                }),
+            ),
+        ];
+
+        for (label, stmt) in cases {
+            let skeleton = for_step_stmt_skeleton_from_ast(&stmt).expect(label);
+
+            let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+                panic!("expected unsupported {label}, got {skeleton:?}");
+            };
+            assert!(
+                reason.contains("explicit isPostfix flag"),
+                "unexpected reason for {label}: {reason}"
+            );
+        }
+    }
+
+    #[test]
+    fn type_from_qual_type_maps_fixed_width_integer_scalars() {
+        let cases = [
+            ("int8_t", "int8_t", true, 8),
+            ("int16_t", "int16_t", true, 16),
+            ("uint16_t", "uint16_t", false, 16),
+            ("int32_t", "int32_t", true, 32),
+            ("int64_t", "int64_t", true, 64),
+            ("uint64_t", "uint64_t", false, 64),
+        ];
+
+        for (spelling, expected_canonical, expected_signed, expected_width) in cases {
+            let ty = type_from_qual_type(spelling).expect("fixed-width integer type");
+
+            assert_eq!(ty.spelled, spelling);
+            assert_eq!(ty.canonical, expected_canonical);
+            assert!(matches!(
+                &ty.kind,
+                ClangTypeKind::Integer { signed, width }
+                    if *signed == expected_signed && *width == expected_width
+            ));
+        }
+    }
+
+    #[test]
+    fn type_from_ast_type_object_keeps_supported_qual_type_before_fallbacks() {
+        let type_object = serde_json::json!({
+            "qualType": "uint32_t",
+            "desugaredQualType": "unsigned int",
+            "canonicalQualType": "unsigned int"
+        });
+
+        let ty = type_from_ast_type_object(&type_object, None).expect("type skeleton");
+
+        assert_eq!(ty.spelled, "uint32_t");
+        assert_eq!(ty.canonical, "uint32_t");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 32
+            }
+        ));
+    }
+
+    #[test]
+    fn type_from_ast_type_object_falls_back_to_desugared_qual_type() {
+        let type_object = serde_json::json!({
+            "qualType": "fdb_blob_t",
+            "desugaredQualType": "struct fdb_blob *",
+            "canonicalQualType": "struct fdb_blob *"
+        });
+
+        let ty = type_from_ast_type_object(&type_object, None).expect("type skeleton");
+
+        assert_eq!(ty.spelled, "struct fdb_blob *");
+        assert_eq!(ty.canonical, "struct fdb_blob *");
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+    }
+
+    #[test]
+    fn type_from_qual_type_rejects_multi_dimensional_array_before_dimension_reorder() {
+        let err =
+            type_from_qual_type("int[2][3]").expect_err("multi-dimensional array must fail closed");
+
+        assert_eq!(err.kind, "invalid_array_type");
+        assert!(err.message.contains("multi-dimensional array"));
+        assert!(err.message.contains("int[2][3]"));
+    }
+
+    #[test]
+    fn type_from_ast_type_object_rejects_fixed_width_typedef_desugared_width_mismatch() {
+        let abi = TargetAbiProfile {
+            triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+            endianness: Some("little".to_string()),
+            int_width: 32,
+            char_width: 8,
+            plain_char_signed: Some(true),
+            short_width: 16,
+            long_width: 64,
+            long_long_width: 64,
+            pointer_width: 64,
+            ..TargetAbiProfile::default()
+        };
+        let type_object = serde_json::json!({
+            "qualType": "uint32_t",
+            "desugaredQualType": "unsigned long",
+            "canonicalQualType": "unsigned long"
+        });
+
+        let err = type_from_ast_type_object(&type_object, Some(&abi))
+            .expect_err("mismatched fixed-width typedef desugaring must fail closed");
+
+        assert_eq!(err.kind, "fixed_width_typedef_desugaring_mismatch");
+        assert!(err.message.contains("uint32_t"));
+        assert!(err.message.contains("desugaredQualType"));
+        assert!(err.message.contains("unsigned long"));
+        assert!(err.message.contains("32"));
+        assert!(err.message.contains("64"));
+    }
+
+    #[test]
+    fn type_from_ast_type_object_defers_target_dependent_fixed_width_desugaring_without_abi() {
+        let type_object = serde_json::json!({
+            "qualType": "uint64_t",
+            "desugaredQualType": "unsigned long",
+            "canonicalQualType": "unsigned long"
+        });
+
+        let ty = type_from_ast_type_object(&type_object, None)
+            .expect("target-dependent fixed-width typedef desugaring should wait for ABI proof");
+
+        assert_eq!(ty.spelled, "uint64_t");
+        assert_eq!(ty.canonical, "uint64_t");
+        assert!(matches!(
+            ty.kind,
+            ClangTypeKind::Integer {
+                signed: false,
+                width: 64
+            }
+        ));
+    }
+
+    #[test]
+    fn function_return_type_from_type_object_falls_back_to_desugared_signature() {
+        let type_object = serde_json::json!({
+            "qualType": "fdb_blob_t (fdb_blob_t)",
+            "desugaredQualType": "struct fdb_blob *(struct fdb_blob *)",
+            "canonicalQualType": "struct fdb_blob *(struct fdb_blob *)"
+        });
+
+        let ty = function_return_type_from_type_object(&type_object).expect("return type");
+
+        assert_eq!(ty.spelled, "struct fdb_blob *");
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
+    }
+

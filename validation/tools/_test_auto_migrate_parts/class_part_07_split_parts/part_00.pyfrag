@@ -1,0 +1,800 @@
+class _AutoMigrateTestsPart07:
+    def test_real_fdb_calc_crc32_emit_clang_dry_run_opt_in_writes_temp_artifact(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            dry_run = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-clang-dry-run.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertEqual(dry_run["frontend"], "clang")
+            self.assertEqual(dry_run["artifact_kind"], "clang-dry-run")
+            self.assertEqual(dry_run["status"], "diagnostic_only")
+            self.assertEqual(dry_run["claim_boundary"]["role"], "diagnostic_only")
+            self.assertEqual(dry_run["active_frontend"]["kind"], "clang_ast_dump_json")
+            self.assertFalse(dry_run["active_frontend"]["uses_libclang"])
+            self.assertEqual(dry_run["dry_run"]["source_file"], "src/fdb_utils.c")
+            self.assertEqual(dry_run["dry_run"]["status"], "diagnostic_only")
+            self.assertEqual(dry_run["errors"], [])
+
+    def test_real_fdb_calc_crc32_emit_clang_lowering_report_opt_in_writes_temp_artifact(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            environment = dict(os.environ)
+            environment.pop("CLANG_PATH", None)
+            environment.pop("LIBCLANG_PATH", None)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                env=environment,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            report = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-clang-lowering-report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            cache = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-auto-cache-metadata.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertEqual(report["artifact_kind"], "clang-lowering-report")
+            self.assertEqual(report["frontend"], "clang")
+            self.assertEqual(report["status"], "unavailable")
+            self.assertEqual(report["claim_boundary"]["role"], "diagnostic_only")
+            self.assertFalse(report["claim_boundary"]["affects_manifest_status"])
+            self.assertFalse(report["claim_boundary"]["affects_semantic_pass"])
+            self.assertEqual(report["errors"][0]["kind"], "missing_clang_path")
+            self.assertIn("--emit-clang-lowering-report", cache["command_arguments"])
+            self.assertEqual(cache["translator_feature_set"], ["clang-lowering-report"])
+            self.assertEqual(cache["clang_lowering_identity"]["enabled"], True)
+            self.assertEqual(cache["clang_lowering_identity"]["clang_path_status"], "not_configured")
+            self.assertIn("translator_feature_set", cache["cache_input_fields"])
+            self.assertIn("clang_lowering_identity", cache["cache_input_fields"])
+
+    def test_competition_clang_lane_requires_clang_path_or_project_local_clang(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            environment = dict(os.environ)
+            environment.pop("CLANG_PATH", None)
+            environment.pop("LIBCLANG_PATH", None)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--skip-rust-check",
+                    "--competition-clang-lane",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                env=environment,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(
+                "competition clang lane requires CLANG_PATH or a project-local clang binary",
+                result.stdout + result.stderr,
+            )
+
+    def test_cache_drift_invalidates_on_clang_lowering_report_identity_change(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        previous = {
+            "source_commit": "source-a",
+            "source_file_hashes": {"src/file.c": "hash-a"},
+            "slice_spec_sha256": "slice-a",
+            "fixture_hash": "fixture-a",
+            "build_profile_hash": "profile-a",
+            "cargo_lock_hash": "lock-a",
+            "tool_versions": {"rustc": "rustc-a"},
+            "schema_versions": {"cfg": 1},
+            "translator_version": "0.1.0",
+            "translator_manifest_sha256": "manifest-a",
+            "command_arguments": ["auto_migrate.py", "--slice-spec", "slice.json"],
+            "cache_input_fields": auto_migrate.CACHE_INPUT_FIELDS,
+        }
+        current = dict(previous)
+        current["command_arguments"] = [
+            "auto_migrate.py",
+            "--slice-spec",
+            "slice.json",
+            "--emit-clang-lowering-report",
+        ]
+        current["cache_input_fields"] = auto_migrate.cache_input_fields(
+            emit_clang_lowering_report=True
+        )
+        current["translator_feature_set"] = ["clang-lowering-report"]
+        current["clang_lowering_identity"] = {
+            "enabled": True,
+            "frontend": "clang_ast_dump_json",
+            "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+            "features": ["clang-lowering-report"],
+            "requires_env": ["CLANG_PATH"],
+            "clang_path_status": "configured",
+            "clang_path": "C:/LLVM/bin/clang.exe",
+            "ignored_env_for_ast_dump": {
+                "LIBCLANG_PATH": {
+                    "status": "configured",
+                    "value": "C:/LLVM/bin/libclang.dll",
+                    "reason": "ignored_for_ast_dump",
+                },
+            },
+            "clang_version": "clang version unit-test",
+        }
+
+        drifted = auto_migrate.cache_drift_report(previous, current)
+
+        self.assertEqual(drifted["status"], "drift_detected")
+        self.assertIn("command_arguments", drifted["drifted_keys"])
+        self.assertIn("translator_feature_set", drifted["drifted_keys"])
+        self.assertIn("clang_lowering_identity", drifted["drifted_keys"])
+
+    def test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            out_root = Path(tmp) / "evidence"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                env=self._env_with_clang_path(),
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            test_translation = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-test-translation-generated.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            rust_report = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-rust-report.json").read_text(encoding="utf-8")
+            )
+            diff = json.loads((evidence_dir / "l3-real-fdb-calc-crc32-diff.json").read_text(encoding="utf-8"))
+            replay_draft = (evidence_dir / "l3-real-fdb-calc-crc32-rust-replay-test-draft.rs").read_text(
+                encoding="utf-8"
+            )
+
+            self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "real-fdb-calc-crc32",
+            )
+            self.assertFalse(manifest["semantic_pass"])
+            self.assertFalse(manifest["claim_boundary"]["generated_draft_semantic_pass"])
+            self.assertIn("let actual = fdb_calc_crc32(case.crc, case.buf, case.size);", replay_draft)
+            self.assertEqual(test_translation["status"], "recorded")
+            self.assertEqual(test_translation["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertNotIn("replay_execution", test_translation)
+            self.assertFalse(test_translation.get("generated_draft_replay_pass", False))
+            self.assertFalse(test_translation.get("generated_draft_semantic_pass", False))
+            self.assertEqual(rust_report["status"], "incomplete")
+            self.assertFalse(rust_report["semantic_pass"])
+            self.assertFalse(rust_report["generated_draft_replay_pass"])
+            self.assertEqual(diff["status"], "incomplete")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "incomplete")
+
+            validation = subprocess.run(
+                [
+                    sys.executable,
+                    str(VALIDATOR),
+                    "--target-id",
+                    "flashdb",
+                    "--slice-id",
+                    "real-fdb-calc-crc32",
+                    "--slice-spec",
+                    str(REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"),
+                    "--evidence-root",
+                    str(out_root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(
+                validation.returncode,
+                0,
+                f"stdout:\n{validation.stdout}\nstderr:\n{validation.stderr}",
+            )
+
+    def test_real_fdb_calc_crc32_generated_replay_failure_stays_non_semantic(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            fixture = json.loads(
+                (REPO_ROOT / "validation" / "l2_slices" / "fixtures" / "real-fdb-calc-crc32.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            fixture["cases"][1]["return_code"] = 1
+            fixture_path = tmp_path / "real-fdb-calc-crc32-wrong.json"
+            fixture_path.write_text(json.dumps(fixture), encoding="utf-8")
+            spec = json.loads(
+                (REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            spec["fixture_contract"]["path"] = fixture_path.as_posix()
+            for case in spec["fixture_contract"]["cases"]:
+                case["expected_ref"] = fixture_path.as_posix()
+            spec_path = tmp_path / "flashdb-real-fdb-calc-crc32-wrong.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            out_root = tmp_path / "evidence"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTO_MIGRATE),
+                    "--slice-spec",
+                    str(spec_path),
+                    "--out-root",
+                    str(out_root),
+                    "--skip-c-oracle",
+                    "--emit-clang-lowering-report",
+                ],
+                cwd=REPO_ROOT,
+                env=self._env_with_clang_path(),
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+            )
+            manifest = json.loads(result.stdout)
+            evidence_dir = out_root / "flashdb" / "auto-translation" / "real-fdb-calc-crc32"
+            test_translation = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-test-translation-generated.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            rust_report = json.loads(
+                (evidence_dir / "l3-real-fdb-calc-crc32-rust-report.json").read_text(encoding="utf-8")
+            )
+            diff = json.loads((evidence_dir / "l3-real-fdb-calc-crc32-diff.json").read_text(encoding="utf-8"))
+
+            self._assert_route_refused_candidate(
+                manifest,
+                evidence_dir,
+                "real-fdb-calc-crc32",
+            )
+            self.assertFalse(manifest["semantic_pass"])
+            self.assertEqual(test_translation["status"], "recorded")
+            self.assertEqual(test_translation["evidence_links"]["rust_draft"]["status"], "blocked")
+            self.assertNotIn("replay_execution", test_translation)
+            self.assertFalse(test_translation.get("generated_draft_replay_pass", False))
+            self.assertFalse(test_translation.get("generated_draft_semantic_pass", False))
+            self.assertEqual(rust_report["status"], "incomplete")
+            self.assertFalse(rust_report["semantic_pass"])
+            self.assertFalse(rust_report["generated_draft_replay_pass"])
+            self.assertEqual(diff["status"], "incomplete")
+            self.assertEqual(diff["required_inputs"]["rust_report_actual_status"], "incomplete")
+
+    def test_promote_accepted_oracle_preserves_global_linkage_audit_fields(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            spec = self._accepted_evidence_spec(tmp_path, include_toolchain_marker=True)
+            global_dependency = {
+                "kind": "global",
+                "name": "table",
+                "source": "unit-test",
+                "definition_status": "same_file_top_level_declared",
+                "source_span": {
+                    "file": "unit.c",
+                    "line_start": 1,
+                    "line_end": 1,
+                    "byte_start": 0,
+                    "byte_end": 12,
+                    "sha256": "table-sha",
+                },
+                "sha256": "table-sha",
+            }
+            spec["c_boundary"] = {
+                "files": [{"path": "unit.c", "role": "source", "sha256": "unit-sha"}],
+                "functions": ["demo_slice"],
+                "signatures": [
+                    {
+                        "function": "demo_slice",
+                        "return_type": "int",
+                        "parameters": [],
+                    }
+                ],
+                "direct_dependencies": [global_dependency],
+            }
+            expected_globals = auto_migrate.global_dependency_requirements(spec)
+            draft_oracle = {
+                "harness_draft": "validation/evidence/demo/auto-translation/demo-slice/l3-demo-slice-c-oracle-harness-draft.c",
+                "harness_draft_ref": {"path": "draft.c", "sha256": "draft-sha", "status": "draft"},
+                "fixture_binding": {"case_count": 1, "observable_outputs": ["value"]},
+                "harness_contract": {
+                    "function_prototype": "int demo_slice(void);",
+                    "fixture": {"case_count": 1, "observable_outputs": ["value"]},
+                    "source_files": spec["c_boundary"]["files"],
+                    "global_dependencies": expected_globals,
+                },
+                "global_linkage_requirements": expected_globals,
+                "compile_command_draft": {"status": "draft_not_executed"},
+                "compile_execution": {"status": "compile_not_executed", "semantic_pass": False},
+            }
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            accepted = auto_migrate.resolve_accepted_evidence(spec)
+
+            promoted = auto_migrate.promote_accepted_oracle(spec, evidence_dir, draft_oracle, accepted)
+
+            self.assertEqual(promoted["status"], "C_ORACLE_GENERATED")
+            self.assertEqual(promoted["global_linkage_requirements"], expected_globals)
+            self.assertEqual(promoted["harness_contract"]["global_dependencies"], expected_globals)
+            self.assertEqual(promoted["compile_command_draft"], draft_oracle["compile_command_draft"])
+            self.assertEqual(promoted["compile_execution"], draft_oracle["compile_execution"])
+            self.assertFalse(promoted["compile_execution"]["semantic_pass"])
+
+    def test_source_file_hashes_preserve_generated_real_source_hashes(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "source": {
+                "source_root": "C:/external/FlashDB",
+                "source_file_hashes": {
+                    "src/fdb_utils.c": "real-source-sha",
+                },
+            },
+            "c_boundary": {
+                "files": [
+                    {
+                        "path": "src/fdb_utils.c",
+                        "role": "source",
+                        "sha256": "real-source-sha",
+                    }
+                ]
+            },
+        }
+
+        hashes = auto_migrate.source_file_hashes(spec)
+
+        self.assertEqual(hashes["src/fdb_utils.c"], "real-source-sha")
+
+    def test_c2rust_baseline_manifest_records_tool_probe_without_generation_claim(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "c2rust-probe",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int x) { return x + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "unit-test"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+
+            with mock.patch.object(auto_migrate.shutil, "which", return_value=None):
+                manifest = auto_migrate.emit_c2rust_baseline_manifest(
+                    spec,
+                    slice_spec,
+                    evidence_dir,
+                )
+
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["status"], "skipped")
+            self.assertEqual(manifest["reason"], "blocked_by_missing_tools")
+            self.assertEqual(manifest["correctness_role"], "candidate_context_only")
+            self.assertIsNone(manifest["selected_command"])
+            self.assertIsNone(manifest["output"])
+            self.assertEqual(manifest["tool_probe"]["path_search"], ["c2rust-transpile", "c2rust"])
+            self.assertEqual(manifest["tool_probe"]["os_name"], os.name)
+            self.assertTrue(manifest["tool_probe"]["diagnostic_only"])
+            self.assertIn("environment_profile_hash", manifest["tool_probe"])
+            repair = manifest["toolchain_repair"]
+            self.assertEqual(repair["status"], "required")
+            self.assertEqual(repair["reason"], "blocked_by_missing_tools")
+            self.assertEqual(repair["required_commands"], ["c2rust-transpile", "c2rust"])
+            self.assertIn("clang", repair["required_dependencies"])
+            self.assertEqual(repair["rerun_env"], {"C2RUST_BASELINE_GENERATION": "1"})
+            self.assertEqual(
+                repair["rerun_command"][:5],
+                ["python3", "-B", "-m", "validation.tools.auto_migrate", "--slice-spec"],
+            )
+            self.assertIn("--out-root", repair["rerun_command"])
+            self.assertEqual(repair["correctness_role"], "candidate_context_only")
+            self.assertIn("compile-only C2Rust output proves semantic equivalence", repair["must_not_claim"])
+            self.assertEqual(manifest["reference_tree"]["path"], "tools/c2rust-reference")
+            self.assertTrue(manifest["reference_tree"]["diagnostic_only"])
+            self.assertIn("C2Rust output proves semantic equivalence", manifest["must_not_claim"])
+            self.assertIn("C2Rust baseline was generated", manifest["must_not_claim"])
+
+            schema = json.loads(
+                (
+                    REPO_ROOT
+                    / "validation"
+                    / "auto-translation-template"
+                    / "c2rust-baseline-manifest.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            jsonschema.validate(manifest, schema)
+
+    def test_c2rust_command_candidates_accepts_explicit_command_override(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+
+        def fake_which(name: str) -> str | None:
+            if name == "wsl":
+                return name
+            return None
+
+        def fake_run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+            self.assertEqual(argv, ["wsl", "c2rust-transpile", "--version"])
+            return subprocess.CompletedProcess(argv, 0, stdout="c2rust 0.18.0\n", stderr="")
+
+        with (
+            mock.patch.dict(os.environ, {"C2RUST_COMMAND": "wsl c2rust-transpile"}),
+            mock.patch.object(auto_migrate.shutil, "which", side_effect=fake_which),
+            mock.patch.object(auto_migrate.subprocess, "run", side_effect=fake_run),
+        ):
+            candidates = auto_migrate.c2rust_command_candidates()
+
+        explicit = candidates[0]
+        self.assertEqual(explicit["source"], "env:C2RUST_COMMAND")
+        self.assertEqual(explicit["name"], "c2rust-transpile")
+        self.assertEqual(explicit["path"], "wsl")
+        self.assertEqual(explicit["argv_prefix"], ["wsl", "c2rust-transpile"])
+        self.assertTrue(explicit["available"])
+        self.assertEqual(explicit["version_status"], "OK")
+        self.assertEqual(
+            auto_migrate.c2rust_generation_argv(
+                explicit,
+                Path("compile_commands.json"),
+                Path("out"),
+            ),
+            ["wsl", "c2rust-transpile", "--emit-build-files", "--output-dir", "out", "compile_commands.json"],
+        )
+
+    def test_c2rust_generation_evidence_argv_keeps_repo_artifact_paths_relative(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        output_dir = REPO_ROOT / "validation" / "evidence" / "demo" / "auto-translation" / "slice" / "generated"
+        compile_commands = output_dir / "compile_commands.json"
+
+        evidence_argv = auto_migrate.c2rust_generation_evidence_argv(
+            [
+                "/opt/c2rust-transpile",
+                "--emit-build-files",
+                "--output-dir",
+                str(output_dir),
+                str(compile_commands),
+            ]
+        )
+
+        self.assertEqual(evidence_argv[0], "/opt/c2rust-transpile")
+        self.assertEqual(
+            evidence_argv,
+            [
+                "/opt/c2rust-transpile",
+                "--emit-build-files",
+                "--output-dir",
+                "validation/evidence/demo/auto-translation/slice/generated",
+                "validation/evidence/demo/auto-translation/slice/generated/compile_commands.json",
+            ],
+        )
+
+    def test_c2rust_toolchain_repair_preserves_explicit_command_override(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with mock.patch.dict(os.environ, {"C2RUST_COMMAND": "wsl c2rust-transpile"}):
+            repair = auto_migrate.c2rust_toolchain_repair(
+                "c2rust_generation_failed",
+                slice_spec=REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json",
+            )
+
+        self.assertEqual(repair["rerun_env"]["C2RUST_BASELINE_GENERATION"], "1")
+        self.assertEqual(repair["rerun_env"]["C2RUST_COMMAND"], "wsl c2rust-transpile")
+
+    def test_prepare_c2rust_compile_commands_normalizes_makefile_relative_entry(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-c2rust-db-") as tmp:
+            tmp_path = Path(tmp)
+            compile_commands = tmp_path / "compile_commands.json"
+            compile_commands.write_text(
+                json.dumps(
+                    [
+                        {
+                            "directory": "sources/FlashDB/tests",
+                            "command": "cc -O0 -I. -I../inc -c ../src/fdb_utils.c -o ../src/fdb_utils.o",
+                            "file": "../src/fdb_utils.c",
+                            "output": "../src/fdb_utils.o",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+
+            prepared, metadata = auto_migrate.prepare_c2rust_compile_commands(
+                compile_commands,
+                evidence_dir,
+                "l3-real-fdb-calc-crc32",
+            )
+
+            self.assertEqual(prepared.parent, evidence_dir / "l3-real-fdb-calc-crc32-c2rust-compile-commands")
+            self.assertEqual(prepared.name, "compile_commands.json")
+            self.assertEqual(metadata["source"]["path"], compile_commands.as_posix())
+            self.assertTrue(metadata["normalized_for_c2rust"])
+            database = json.loads(prepared.read_text(encoding="utf-8"))
+            self.assertEqual(len(database), 1)
+            entry = database[0]
+            self.assertTrue(Path(entry["directory"]).is_absolute())
+            self.assertTrue(Path(entry["file"]).is_absolute())
+            self.assertTrue(entry["file"].endswith("sources/FlashDB/src/fdb_utils.c"))
+            self.assertIn("-c", entry["command"])
+            self.assertIn(entry["file"], entry["command"])
+
+    def test_flashdb_calc_crc32_slice_resolves_real_compile_commands(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        slice_spec = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-calc-crc32.json"
+        spec = json.loads(slice_spec.read_text(encoding="utf-8"))
+
+        compile_commands = auto_migrate.resolve_c2rust_compile_commands(spec, slice_spec)
+
+        self.assertIsNotNone(compile_commands)
+        assert compile_commands is not None
+        self.assertEqual(compile_commands.name, "compile_commands.json")
+        self.assertTrue(compile_commands.is_file())
+        database = json.loads(compile_commands.read_text(encoding="utf-8"))
+        self.assertEqual(len(database), 1)
+        command = database[0]
+        self.assertEqual(command["file"], "../src/fdb_utils.c")
+        self.assertIn("-I../inc", command["command"])
+        self.assertFalse(Path(command["directory"]).is_absolute())
+        provenance = spec["build_profile"]["compiler_command_provenance"]
+        self.assertEqual(provenance["derived_from"], "sources/FlashDB/tests/Makefile")
+        self.assertEqual(provenance["source_rule"], "%.o: %.c")
+
+    def test_c2rust_compile_commands_resolver_rejects_non_compilation_database_files(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {"build_profile": {"compiler_command_source": "CMakeLists.txt"}}
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+            (tmp_path / "CMakeLists.txt").write_text("add_library(demo demo.c)\n", encoding="utf-8")
+
+            self.assertIsNone(auto_migrate.resolve_c2rust_compile_commands(spec, slice_spec))
+
+    def test_c2rust_compile_commands_resolver_rejects_invalid_database_shape(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {"build_profile": {"compiler_command_source": "compile_commands.json"}}
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+            (tmp_path / "compile_commands.json").write_text(
+                json.dumps([{"directory": str(tmp_path), "file": "demo.c"}]),
+                encoding="utf-8",
+            )
+
+            self.assertIsNone(auto_migrate.resolve_c2rust_compile_commands(spec, slice_spec))
+
+    def test_c2rust_baseline_manifest_generates_output_when_explicitly_enabled(self) -> None:
+        auto_migrate = load_auto_migrate_module()
+        spec = {
+            "target_id": "demo",
+            "slice_id": "c2rust-generated",
+            "source_commit": "1234567",
+            "function_name": "add_one",
+            "c_source": "int add_one(int x) { return x + 1; }",
+            "fixture_hash": "fixture",
+            "build_profile": {"compiler_command_source": "compile_commands.json"},
+        }
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
+            tmp_path = Path(tmp)
+            evidence_dir = tmp_path / "evidence"
+            evidence_dir.mkdir()
+            slice_spec = tmp_path / "slice.json"
+            slice_spec.write_text(json.dumps(spec), encoding="utf-8")
+            compile_commands = tmp_path / "compile_commands.json"
+            compile_commands.write_text(
+                json.dumps([{"directory": str(tmp_path), "command": "cc -c demo.c", "file": "demo.c"}]),
+                encoding="utf-8",
+            )
+            fake_c2rust = tmp_path / "fake-c2rust.exe"
+            fake_c2rust.write_text("", encoding="utf-8")
+            fake_cargo = tmp_path / "fake-cargo.exe"
+            fake_cargo.write_text("", encoding="utf-8")
+            stale_output = evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated" / "stale.rs"
+            stale_output.parent.mkdir(parents=True, exist_ok=True)
+            stale_output.write_text("// stale output from a previous run\n", encoding="utf-8")
+
+            def fake_which(name: str) -> str | None:
+                if name == "c2rust":
+                    return str(fake_c2rust)
+                if name == "cargo":
+                    return str(fake_cargo)
+                return None
+
+            def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+                if argv == [str(fake_c2rust), "--version"]:
+                    return subprocess.CompletedProcess(argv, 0, stdout="c2rust 0.18.0\n", stderr="")
+                if argv and argv[0] == str(fake_cargo):
+                    self.assertEqual(argv, [str(fake_cargo), "build"])
+                    output_dir = evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated"
+                    self.assertEqual(Path(str(kwargs.get("cwd"))).resolve(), output_dir.resolve())
+                    env = kwargs.get("env")
+                    self.assertIsInstance(env, dict)
+                    assert isinstance(env, dict)
+                    self.assertEqual(env.get("RUSTUP_TOOLCHAIN"), "stable")
+                    self.assertEqual(env.get("RUSTC_BOOTSTRAP"), "1")
+                    artifact = output_dir / "target" / "debug" / "libl3_c2rust_generated_c2rust_baseline_generated.rlib"
+                    artifact.parent.mkdir(parents=True, exist_ok=True)
+                    artifact.write_text("fake rlib\n", encoding="utf-8")
+                    return subprocess.CompletedProcess(argv, 0, stdout="cargo build ok\n", stderr="")
+                self.assertEqual(argv[:2], [str(fake_c2rust), "transpile"])
+                self.assertEqual(Path(str(kwargs.get("cwd"))).resolve(), REPO_ROOT.resolve())
+                self.assertIn("--emit-build-files", argv)
+                self.assertIn("--output-dir", argv)
+                self.assertLess(argv.index("--output-dir"), len(argv) - 1)
+                prepared_compile_commands = Path(argv[-1])
+                self.assertEqual(
+                    prepared_compile_commands.parent.resolve(),
+                    (evidence_dir / "l3-c2rust-generated-c2rust-compile-commands").resolve(),
+                )
+                self.assertEqual(prepared_compile_commands.name, "compile_commands.json")
+                prepared_database = json.loads(prepared_compile_commands.read_text(encoding="utf-8"))
+                self.assertEqual(len(prepared_database), 1)
+                self.assertTrue(Path(prepared_database[0]["directory"]).is_absolute())
+                output_dir = Path(argv[argv.index("--output-dir") + 1])
+                output_dir.mkdir(parents=True, exist_ok=True)
+                (output_dir / "Cargo.toml").write_text(
+                    "\n".join(
+                        [
+                            "[package]",
+                            "name = \"l3_c2rust_generated_c2rust_baseline_generated\"",
+                            "version = \"0.0.0\"",
+                            "edition = \"2021\"",
+                            "",
+                            "[lib]",
+                            "path = \"lib.rs\"",
+                            "crate-type = [\"rlib\"]",
+                            "",
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                (output_dir / "lib.rs").write_text(
+                    "#![feature(label_break_value)]\npub mod fdb_utils;\n",
+                    encoding="utf-8",
+                )
+                generated = output_dir / "src" / "fdb_utils.rs"
+                generated.parent.mkdir(parents=True, exist_ok=True)
+                generated.write_text(
+                    "pub unsafe fn add_one(x: ::std::os::raw::c_int) -> ::std::os::raw::c_int { x + 1 }\n",
+                    encoding="utf-8",
+                )
+                return subprocess.CompletedProcess(argv, 0, stdout="generated lib.rs\n", stderr="")
+
+            with (
+                mock.patch.dict(os.environ, {"C2RUST_BASELINE_GENERATION": "1"}),
+                mock.patch.object(auto_migrate.shutil, "which", side_effect=fake_which),
+                mock.patch.object(auto_migrate.subprocess, "run", side_effect=fake_run),
+            ):
+                manifest = auto_migrate.emit_c2rust_baseline_manifest(
+                    spec,
+                    slice_spec,
+                    evidence_dir,
+                )
+
+            self.assertEqual(manifest["status"], "generated")
+            self.assertEqual(manifest["reason"], "generated_by_c2rust")
+            self.assertEqual(manifest["correctness_role"], "candidate_context_only")
+            self.assertEqual(manifest["selected_command"]["name"], "c2rust")
+            self.assertNotIn("C2Rust baseline was generated", manifest["must_not_claim"])
+            self.assertIn("C2Rust output proves semantic equivalence", manifest["must_not_claim"])
+            self.assertTrue(manifest["generation"]["enabled"])
+            self.assertEqual(
+                manifest["generation"]["source_compile_commands"]["path"],
+                compile_commands.resolve().as_posix(),
+            )
+            self.assertTrue(manifest["generation"]["compile_commands"]["normalized_for_c2rust"])
+            self.assertIn(
+                "l3-c2rust-generated-c2rust-compile-commands/compile_commands.json",
+                manifest["generation"]["compile_commands"]["path"],
+            )
+            self.assertEqual(manifest["generation"]["command"]["working_directory"], ".")
+            self.assertEqual(manifest["generation"]["command"]["exit_status"], "passed")
+            self.assertEqual(manifest["generation"]["command"]["returncode"], 0)
+            self.assertEqual(manifest["generation"]["command"]["timeout_seconds"], 120)
+            self.assertIn("l3-c2rust-generated-c2rust-baseline-output.rs", manifest["output"]["path"])
+            output_path = Path(manifest["output"]["path"])
+            self.assertTrue(output_path.exists())
+            self.assertEqual(manifest["output"]["status"], "generated")
+            self.assertEqual(manifest["output"]["sha256"], auto_migrate.sha256(output_path))
+            self.assertEqual(
+                manifest["output"]["crate_root"],
+                (evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated").as_posix(),
+            )
+            self.assertEqual(
+                manifest["output"]["cargo_toml"],
+                (evidence_dir / "l3-c2rust-generated-c2rust-baseline-generated" / "Cargo.toml").as_posix(),
+            )
+            self.assertNotIn("stale.rs", json.dumps(manifest["output"]["source_files"], sort_keys=True))
+            self.assertNotIn("stale output", output_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["compile"]["status"], "passed")
+            self.assertTrue(manifest["compile"]["attempted"])
+            self.assertFalse(manifest["compile"]["semantic_pass"])
+            self.assertEqual(manifest["compile"]["candidate_output"]["path"], manifest["output"]["path"])
+            self.assertEqual(manifest["compile"]["candidate_output"]["sha256"], manifest["output"]["sha256"])
+            self.assertEqual(manifest["compile"]["command"]["returncode"], 0)
+            self.assertEqual(manifest["compile"]["command"]["exit_status"], "passed")
+            self.assertEqual(manifest["compile"]["command"]["compile_strategy"], "cargo_generated_crate")
+            self.assertEqual(manifest["compile"]["command"]["working_directory"], manifest["output"]["crate_root"])
+            self.assertEqual(
+                manifest["compile"]["command"]["env_overrides"],
+                {"RUSTUP_TOOLCHAIN": "stable", "RUSTC_BOOTSTRAP": "1"},
+            )
+            self.assertEqual(
+                manifest["compile"]["artifact"]["path"],

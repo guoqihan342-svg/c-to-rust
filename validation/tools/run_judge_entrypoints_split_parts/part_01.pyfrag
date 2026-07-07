@@ -1,0 +1,406 @@
+    entrypoints = config.get("entrypoints")
+    return len([entry for entry in entrypoints if isinstance(entry, dict)]) if isinstance(entrypoints, list) else 0
+
+
+def build_judge_run_summary(
+    *,
+    status: str,
+    dry_run: bool,
+    configured_entrypoint_count: int,
+    config_archive: dict[str, Any],
+    command_results: list[dict[str, Any]],
+    validation: dict[str, Any],
+    readiness_ref: dict[str, Any] | None,
+    claim_boundary: dict[str, Any],
+) -> dict[str, Any]:
+    executed_count = len(command_results)
+    all_entrypoints_executed = (
+        not dry_run
+        and status == "passed"
+        and configured_entrypoint_count > 0
+        and executed_count == configured_entrypoint_count
+    )
+    validation_status = str(validation.get("status", "unknown")) if isinstance(validation, dict) else "unknown"
+    entrypoint_summaries = [
+        {
+            "id": result.get("id"),
+            "purpose": result.get("purpose"),
+            "status": result.get("status"),
+            "exit_code": result.get("exit_code"),
+            "proof_class": result.get("proof_class", "unknown"),
+            "run_id": result.get("run_id", "unknown"),
+            "judge_focus": result.get("judge_focus", []),
+            "key_artifacts": result.get("key_artifacts", {}),
+        }
+        for result in command_results
+    ]
+    config_archive_summary = {
+        "status": config_archive.get("status"),
+        "root": config_archive.get("root"),
+        "file_count": config_archive.get("file_count", 0),
+    }
+    materialized_manifest = config_archive.get("materialized_manifest")
+    if isinstance(materialized_manifest, dict):
+        config_archive_summary["materialized_manifest"] = materialized_manifest
+
+    return {
+        "report_kind": "judge-entrypoints-summary",
+        "headline": (
+            f"Judge entrypoints {status}: {executed_count}/{configured_entrypoint_count} "
+            f"{'executed' if not dry_run else 'planned'}; semantic_gate=false"
+        ),
+        "readiness": {
+            "status": status,
+            "dry_run": dry_run,
+            "all_entrypoints_executed": all_entrypoints_executed,
+            "executed_count": executed_count,
+            "configured_count": configured_entrypoint_count,
+            "validation_status": validation_status,
+            "readiness_report": readiness_ref,
+        },
+        "competition_config_archive": config_archive_summary,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "semantic_claim_source": claim_boundary.get("semantic_claim_source", "validator-owned-artifacts"),
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "entrypoints": entrypoint_summaries,
+    }
+
+
+def build_competition_config_archive(*, repo_root: Path) -> dict[str, Any]:
+    root = validator.repo_path(COMPETITION_CONFIG_ROOT.as_posix(), repo_root=repo_root)
+    files: dict[str, dict[str, Any]] = {}
+    external_refs: dict[str, dict[str, Any]] = {}
+    if not root.is_dir():
+        return {
+            "report_kind": "competition-config-archive",
+            "status": "missing",
+            "root": COMPETITION_CONFIG_ROOT.as_posix(),
+            "file_count": 0,
+            "files": files,
+            "external_ref_count": 0,
+            "external_refs": external_refs,
+            "claim_boundary": {
+                "semantic_gate": False,
+                "archive_is_semantic_gate": False,
+            },
+        }
+
+    for path in sorted(candidate_config_files(root)):
+        rel = validator.repo_relative(path, repo_root)
+        if rel == "config/competition-env/bundle-manifest.json":
+            role = "competition-env-bundle-manifest"
+        else:
+            role = validator.COMPETITION_ENV_BUNDLE_FILE_ROLES[rel]
+        files[rel] = {
+            "path": rel,
+            "role": role,
+            "status": "present",
+            "sha256": validator.sha256_file(path),
+            "bytes": path.stat().st_size,
+        }
+    for rel, role in sorted(validator.COMPETITION_ENV_EXTERNAL_REF_ROLES.items()):
+        path = validator.repo_path(rel, repo_root=repo_root)
+        if path.is_file():
+            external_refs[rel] = {
+                "path": rel,
+                "role": role,
+                "status": "present",
+                "sha256": validator.sha256_file(path),
+                "bytes": path.stat().st_size,
+            }
+        else:
+            external_refs[rel] = {
+                "path": rel,
+                "role": role,
+                "status": "missing",
+            }
+    return {
+        "report_kind": "competition-config-archive",
+        "status": "present",
+        "root": COMPETITION_CONFIG_ROOT.as_posix(),
+        "file_count": len(files),
+        "files": files,
+        "external_ref_count": len(external_refs),
+        "external_refs": external_refs,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "archive_is_semantic_gate": False,
+            "boundary": (
+                "This archive binds repo-local competition configuration files and hash-bound external "
+                "reproduction inputs for review only."
+            ),
+        },
+    }
+
+
+def materialize_competition_config_archive(
+    config_archive: dict[str, Any],
+    *,
+    out_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    manifest_path = competition_config_archive_manifest_path(out_path)
+    manifest_payload = json.loads(json.dumps(config_archive))
+    atomic_write_json(manifest_path, manifest_payload)
+    archive = json.loads(json.dumps(config_archive))
+    archive["materialized_manifest"] = artifact_ref(manifest_path, repo_root=repo_root)
+    return archive
+
+
+def competition_config_archive_manifest_path(out_path: Path) -> Path:
+    if out_path.parent.name != "summary":
+        raise ValueError(
+            "competition config archive materialized_manifest path must be "
+            "summary/competition-config-archive/manifest.json"
+        )
+    return out_path.parent / "competition-config-archive" / "manifest.json"
+
+
+def candidate_config_files(root: Path) -> list[Path]:
+    allowed_relative_paths = {
+        Path(path_text).relative_to(COMPETITION_CONFIG_ROOT).as_posix()
+        for path_text in validator.COMPETITION_ENV_BUNDLE_FILE_ROLES
+    }
+    allowed_relative_paths.add("bundle-manifest.json")
+    return [
+        path
+        for path in root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+        and path.relative_to(root).as_posix() in allowed_relative_paths
+    ]
+
+
+def run_entrypoint_command(
+    entry: dict[str, Any],
+    *,
+    dry_run: bool,
+    log_dir: Path,
+    repo_root: Path,
+    timeout_seconds: int,
+    command_runner: CommandRunner,
+) -> dict[str, Any]:
+    entry_id = str(entry.get("id", "unknown"))
+    command = str(entry.get("command", ""))
+    stdout_path = log_dir / f"{safe_file_component(entry_id)}.stdout.log"
+    stderr_path = log_dir / f"{safe_file_component(entry_id)}.stderr.log"
+    try:
+        if not command:
+            raise ValueError(f"judge entrypoint missing command: {entry_id}")
+        argv = shlex.split(command)
+    except ValueError as error:
+        return {
+            "id": entry_id,
+            "purpose": entry.get("purpose"),
+            "priority": entry.get("priority"),
+            "proof_class": entry.get("proof_class", "unknown"),
+            "run_id": entry.get("run_id", "unknown"),
+            "judge_focus": list(entry.get("judge_focus", [])) if isinstance(entry.get("judge_focus"), list) else [],
+            "key_artifacts": dict(entry.get("expected_artifacts", {}))
+            if isinstance(entry.get("expected_artifacts"), dict)
+            else {},
+            "command": command,
+            "argv": [],
+            "effective_argv": [],
+            "timeout_seconds": timeout_seconds,
+            "timeout_policy": {
+                "scope": "entrypoint_command",
+                "timeout_seconds": timeout_seconds,
+                "timeout_exit_code": ENTRYPOINT_TIMEOUT_EXIT_CODE,
+            },
+            "exit_code": ENTRYPOINT_COMMAND_PARSE_EXIT_CODE,
+            "logs": {
+                "stdout": missing_artifact_ref(stdout_path, repo_root=repo_root),
+                "stderr": missing_artifact_ref(stderr_path, repo_root=repo_root),
+            },
+            "status": "failed",
+            "root_cause_key": "invalid_entrypoint_command",
+            "error": {"type": type(error).__name__, "message": str(error)},
+        }
+    effective_argv = argv if dry_run else resolve_local_entrypoint_argv(argv)
+    result = {
+        "id": entry_id,
+        "purpose": entry.get("purpose"),
+        "priority": entry.get("priority"),
+        "proof_class": entry.get("proof_class", "unknown"),
+        "run_id": entry.get("run_id", "unknown"),
+        "judge_focus": list(entry.get("judge_focus", [])) if isinstance(entry.get("judge_focus"), list) else [],
+        "key_artifacts": dict(entry.get("expected_artifacts", {})) if isinstance(entry.get("expected_artifacts"), dict) else {},
+        "command": command,
+        "argv": argv,
+        "effective_argv": effective_argv,
+        "timeout_seconds": timeout_seconds,
+        "timeout_policy": {
+            "scope": "entrypoint_command",
+            "timeout_seconds": timeout_seconds,
+            "timeout_exit_code": ENTRYPOINT_TIMEOUT_EXIT_CODE,
+        },
+        "exit_code": None if dry_run else 1,
+        "logs": {
+            "stdout": missing_artifact_ref(stdout_path, repo_root=repo_root) if dry_run else artifact_ref(stdout_path, repo_root=repo_root),
+            "stderr": missing_artifact_ref(stderr_path, repo_root=repo_root) if dry_run else artifact_ref(stderr_path, repo_root=repo_root),
+        },
+    }
+    if dry_run:
+        result["status"] = "planned"
+        return result
+
+    try:
+        completed = command_runner(effective_argv, cwd=repo_root, text=True, capture_output=True, timeout=timeout_seconds)
+    except Exception as error:
+        stdout_text = stream_text(getattr(error, "stdout", ""))
+        stderr_text = stream_text(getattr(error, "stderr", ""))
+        stderr_text += f"{type(error).__name__}: {error}\n"
+        atomic_write_text(stdout_path, stdout_text)
+        atomic_write_text(stderr_path, stderr_text)
+        result["exit_code"] = command_exception_exit_code(error)
+        result["status"] = "failed"
+        result["error"] = {"type": type(error).__name__, "message": str(error)}
+        if isinstance(error, subprocess.TimeoutExpired):
+            result["root_cause_key"] = "process_timeout"
+        result["logs"] = {
+            "stdout": artifact_ref(stdout_path, repo_root=repo_root),
+            "stderr": artifact_ref(stderr_path, repo_root=repo_root),
+        }
+        return result
+
+    atomic_write_text(stdout_path, completed.stdout or "")
+    atomic_write_text(stderr_path, completed.stderr or "")
+    result["exit_code"] = int(completed.returncode)
+    result["status"] = "passed" if completed.returncode == 0 else "failed"
+    result["logs"] = {
+        "stdout": artifact_ref(stdout_path, repo_root=repo_root),
+        "stderr": artifact_ref(stderr_path, repo_root=repo_root),
+    }
+    return result
+
+
+def resolve_local_entrypoint_argv(argv: list[str]) -> list[str]:
+    if len(argv) >= 2 and argv[0] == PORTABLE_PYTHON_COMMAND and argv[1] == "-B":
+        return [*portable_python_command_argv(), *argv[1:]]
+    return list(argv)
+
+
+def portable_python_command_argv() -> list[str]:
+    global _RESOLVED_PYTHON_COMMAND
+    override = os.environ.get(PYTHON_COMMAND_OVERRIDE_ENV)
+    if override:
+        return shlex.split(override, posix=os.name != "nt")
+    if _RESOLVED_PYTHON_COMMAND is not None:
+        return list(_RESOLVED_PYTHON_COMMAND)
+    candidates: list[list[str]] = [[PORTABLE_PYTHON_COMMAND], ["python"]]
+    if os.name == "nt":
+        candidates.append(["py", "-3"])
+    for candidate in candidates:
+        if python_command_is_runnable(candidate):
+            _RESOLVED_PYTHON_COMMAND = candidate
+            return list(candidate)
+    _RESOLVED_PYTHON_COMMAND = [PORTABLE_PYTHON_COMMAND]
+    return list(_RESOLVED_PYTHON_COMMAND)
+
+
+def python_command_is_runnable(candidate: list[str]) -> bool:
+    try:
+        completed = subprocess.run(
+            [*candidate, "-B", "-c", "import sys"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return int(completed.returncode) == 0
+
+
+def resolve_input_path(path: Path, *, repo_root: Path) -> Path:
+    if path.is_absolute():
+        resolved = path.resolve()
+        resolved.relative_to(repo_root.resolve())
+        return resolved
+    path_text = path.as_posix()
+    validator.assert_repo_relative_posix(path_text)
+    return validator.repo_path(path_text, repo_root=repo_root)
+
+
+def resolve_output_path(path: Path, *, repo_root: Path) -> Path:
+    if path.is_absolute():
+        resolved = path.resolve()
+        resolved.relative_to(repo_root.resolve())
+        return resolved
+    path_text = path.as_posix()
+    validator.assert_repo_relative_posix(path_text)
+    return validator.repo_path(path_text, repo_root=repo_root)
+
+
+def artifact_ref(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    ref = {
+        "path": validator.repo_relative(path, repo_root),
+        "status": "present" if path.is_file() else "missing",
+    }
+    if path.is_file():
+        ref["sha256"] = validator.sha256_file(path)
+    return ref
+
+
+def missing_artifact_ref(path: Path, *, repo_root: Path) -> dict[str, Any]:
+    return {
+        "path": validator.repo_relative(path, repo_root),
+        "status": "missing",
+    }
+
+
+def invalid_config_ref(path: Path, error: BaseException) -> dict[str, Any]:
+    return {"path": path.name if path.is_absolute() else path.as_posix(), "status": "invalid", "error": str(error)}
+
+
+def stream_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    tmp_path: Path | None = None
+    try:
+        fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+        tmp_path = Path(tmp_name)
+        with os.fdopen(fd, "w", encoding=encoding, newline="") as handle:
+            fd = None
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
+
+
+def atomic_write_json(path: Path, payload: Any) -> None:
+    atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def command_exception_exit_code(error: Exception) -> int:
+    if isinstance(error, subprocess.TimeoutExpired):
+        return ENTRYPOINT_TIMEOUT_EXIT_CODE
+    if isinstance(error, OSError):
+        return 127
+    return 1
+
+
+def safe_file_component(value: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value.strip())
+    return safe or "entrypoint"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

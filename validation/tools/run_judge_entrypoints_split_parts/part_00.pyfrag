@@ -1,0 +1,800 @@
+#!/usr/bin/env python3
+"""Run judge-facing harness entrypoints and persist a readiness report."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import shlex
+import subprocess
+import sys
+import tempfile
+from typing import Any, Callable
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from validation.tools import validate_judge_entrypoints as validator
+from validation.tools import judge_milestone_bundle
+from validation.tools import milestone_release_notes
+from validation.tools import validate_public_release_packet
+
+CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
+
+DEFAULT_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
+COMPETITION_CONFIG_ROOT = Path("config/competition-env")
+COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+ENTRYPOINT_COMMAND_PARSE_EXIT_CODE = 2
+ENTRYPOINT_TIMEOUT_EXIT_CODE = 124
+DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS = 600 * 60
+PORTABLE_PYTHON_COMMAND = "python3"
+PYTHON_COMMAND_OVERRIDE_ENV = "C2RUST_HARNESS_PYTHON"
+ALLOWED_PROOF_CLASSES = frozenset({"competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"})
+_RESOLVED_PYTHON_COMMAND: list[str] | None = None
+DERIVED_ARTIFACT_FILENAMES = (
+    "judge-entrypoints-readiness.json",
+    "judge-milestone-bundle.json",
+    "milestone-release-notes.md",
+    "public-release-packet.json",
+    "selected-entrypoints-validation-config.json",
+    "proof-class-override-validation-config.json",
+)
+DERIVED_ARTIFACT_DIRNAMES = ("competition-config-archive",)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", type=Path, default=validator.DEFAULT_CONFIG)
+    parser.add_argument(
+        "--entrypoint-id",
+        action="append",
+        default=[],
+        help="Entrypoint id to run. Omit to run every entrypoint in config order.",
+    )
+    parser.add_argument("--out", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Write the plan without executing commands or requiring local artifacts.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS,
+        help="Maximum seconds allowed for each judge entrypoint command.",
+    )
+    parser.add_argument(
+        "--proof-class",
+        choices=sorted(ALLOWED_PROOF_CLASSES),
+        help=(
+            "Override every judge entrypoint proof_class for this run. "
+            "competition-exact requires COMPETITION_EXACT_HOST=1."
+        ),
+    )
+    args = parser.parse_args()
+
+    report = run_judge_entrypoints(
+        config_path=args.config,
+        entrypoint_ids=args.entrypoint_id,
+        out_path=args.out,
+        dry_run=args.dry_run,
+        timeout_seconds=args.timeout_seconds,
+        proof_class_override=args.proof_class,
+        repo_root=REPO_ROOT,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["status"] in {"passed", "planned"} else 1
+
+
+def run_judge_entrypoints(
+    *,
+    config_path: Path,
+    entrypoint_ids: list[str],
+    out_path: Path,
+    dry_run: bool = False,
+    timeout_seconds: int = DEFAULT_ENTRYPOINT_TIMEOUT_SECONDS,
+    proof_class_override: str | None = None,
+    repo_root: Path = REPO_ROOT,
+    command_runner: CommandRunner = subprocess.run,
+) -> dict[str, Any]:
+    repo_root = repo_root.resolve()
+    out_path = resolve_output_path(out_path, repo_root=repo_root)
+    remove_stale_derived_artifacts(out_path)
+    log_dir = out_path.parent / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    config_archive = build_competition_config_archive(repo_root=repo_root)
+    if not dry_run:
+        config_archive = materialize_competition_config_archive(
+            config_archive,
+            out_path=out_path,
+            repo_root=repo_root,
+        )
+
+    try:
+        config_path = resolve_input_path(config_path, repo_root=repo_root)
+        config = validator.load_json(config_path)
+        config_ref = artifact_ref(config_path, repo_root=repo_root)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        return write_run_report(
+            out_path=out_path,
+            status="failed",
+            dry_run=dry_run,
+            config_ref=invalid_config_ref(config_path, error),
+            configured_entrypoint_count=0,
+            config_archive=config_archive,
+            command_results=[],
+            preflight_validation={"status": "failed", "errors": [str(error)]},
+            validation={"status": "skipped", "reason": "preflight_failed"},
+            readiness_ref=None,
+            proof_class_override=None,
+        )
+
+    proof_class_resolution, proof_class_error = resolve_judge_proof_class_override(
+        config,
+        proof_class_override=proof_class_override,
+    )
+    if proof_class_error is not None:
+        return write_run_report(
+            out_path=out_path,
+            status="failed",
+            dry_run=dry_run,
+            config_ref=config_ref,
+            configured_entrypoint_count=configured_entrypoint_count(config),
+            config_archive=config_archive,
+            command_results=[],
+            preflight_validation=proof_class_error,
+            validation={"status": "skipped", "reason": "proof_class_override_failed"},
+            readiness_ref=None,
+            proof_class_override=proof_class_resolution,
+        )
+    if proof_class_override is not None:
+        try:
+            config = effective_config_with_proof_class_override(
+                config,
+                proof_class_override=proof_class_override,
+            )
+        except ValueError as error:
+            return write_run_report(
+                out_path=out_path,
+                status="failed",
+                dry_run=dry_run,
+                config_ref=config_ref,
+                configured_entrypoint_count=configured_entrypoint_count(config),
+                config_archive=config_archive,
+                command_results=[],
+                preflight_validation={
+                    "status": "failed",
+                    "root_cause_key": "proof_class_override_command_invalid",
+                    "errors": [str(error)],
+                },
+                validation={"status": "skipped", "reason": "proof_class_override_failed"},
+                readiness_ref=None,
+                proof_class_override=proof_class_resolution,
+            )
+        effective_config_path = out_path.parent / "proof-class-override-validation-config.json"
+        atomic_write_json(effective_config_path, config)
+        proof_class_resolution["effective_config"] = artifact_ref(effective_config_path, repo_root=repo_root)
+        proof_class_resolution["source_config"] = config_ref
+        config_path = effective_config_path
+        config_ref = proof_class_resolution["effective_config"]
+
+    preflight_validation = validator.validate_config(config_path, require_local_artifacts=False, repo_root=repo_root)
+    if preflight_validation.get("status") != "passed":
+        return write_run_report(
+            out_path=out_path,
+            status="failed",
+            dry_run=dry_run,
+            config_ref=config_ref,
+            configured_entrypoint_count=configured_entrypoint_count(config),
+            config_archive=config_archive,
+            command_results=[],
+            preflight_validation=preflight_validation,
+            validation={"status": "skipped", "reason": "preflight_failed"},
+            readiness_ref=None,
+            proof_class_override=proof_class_resolution,
+        )
+
+    try:
+        selected = select_entrypoints(config, entrypoint_ids)
+    except SystemExit as error:
+        return write_run_report(
+            out_path=out_path,
+            status="failed",
+            dry_run=dry_run,
+            config_ref=config_ref,
+            configured_entrypoint_count=configured_entrypoint_count(config),
+            config_archive=config_archive,
+            command_results=[],
+            preflight_validation=preflight_validation,
+            validation={"status": "skipped", "reason": "entrypoint_selection_failed", "errors": [str(error)]},
+            readiness_ref=None,
+            proof_class_override=proof_class_resolution,
+        )
+
+    command_results: list[dict[str, Any]] = []
+    for entry in selected:
+        command_results.append(
+            run_entrypoint_command(
+                entry,
+                dry_run=dry_run,
+                log_dir=log_dir,
+                repo_root=repo_root,
+                timeout_seconds=timeout_seconds,
+                command_runner=command_runner,
+            )
+        )
+
+    if dry_run:
+        validation = {"status": "skipped", "reason": "dry_run", "preflight_status": preflight_validation.get("status")}
+    elif all(result["exit_code"] == 0 for result in command_results):
+        validation_config_path = post_run_validation_config_path(
+            config_path,
+            config,
+            selected,
+            entrypoint_ids=entrypoint_ids,
+            out_path=out_path,
+        )
+        validation = validator.validate_config(validation_config_path, require_local_artifacts=True, repo_root=repo_root)
+    else:
+        validation = {"status": "skipped", "reason": "failed_command"}
+
+    readiness_path = out_path.parent / "judge-entrypoints-readiness.json"
+    readiness_ref: dict[str, Any] | None = None
+    if not dry_run and validation.get("status") == "passed":
+        validator.write_readiness_report(validation, readiness_path, repo_root=repo_root)
+        readiness_ref = artifact_ref(readiness_path, repo_root=repo_root)
+
+    status = (
+        "passed"
+        if command_results
+        and all(result["exit_code"] == 0 for result in command_results)
+        and validation.get("status") == "passed"
+        else "failed"
+    )
+    if dry_run:
+        status = "planned"
+
+    report = write_run_report(
+        out_path=out_path,
+        status=status,
+        dry_run=dry_run,
+        config_ref=config_ref,
+        configured_entrypoint_count=configured_entrypoint_count(config),
+        config_archive=config_archive,
+        command_results=command_results,
+        preflight_validation=preflight_validation,
+        validation=validation,
+        readiness_ref=readiness_ref,
+        proof_class_override=proof_class_resolution,
+    )
+    if not dry_run and status == "passed":
+        attach_milestone_bundle(report, out_path=out_path, repo_root=repo_root)
+    return report
+
+
+def remove_stale_derived_artifacts(out_path: Path) -> None:
+    for filename in DERIVED_ARTIFACT_FILENAMES:
+        artifact_path = out_path.parent / filename
+        if artifact_path.is_dir() and not artifact_path.is_symlink():
+            raise IsADirectoryError(f"derived artifact path is a directory: {artifact_path}")
+        if artifact_path.exists() or artifact_path.is_symlink():
+            artifact_path.unlink()
+    for dirname in DERIVED_ARTIFACT_DIRNAMES:
+        artifact_path = out_path.parent / dirname
+        if artifact_path.is_dir() and not artifact_path.is_symlink():
+            shutil.rmtree(artifact_path)
+        elif artifact_path.exists() or artifact_path.is_symlink():
+            artifact_path.unlink()
+
+
+def resolve_judge_proof_class_override(
+    config: dict[str, Any],
+    *,
+    proof_class_override: str | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if proof_class_override is None:
+        return None, None
+    allowed = config.get("allowed_proof_classes")
+    allowed_classes = [str(item) for item in allowed] if isinstance(allowed, list) else []
+    resolution: dict[str, Any] = {
+        "source": "cli-override",
+        "effective_proof_class": proof_class_override,
+        "override_proof_class": proof_class_override,
+        "override_requested": True,
+        "changed": True,
+        "host_attestation_env": COMPETITION_EXACT_HOST_ENV,
+    }
+    if proof_class_override not in ALLOWED_PROOF_CLASSES or proof_class_override not in allowed_classes:
+        return resolution, {
+            "status": "failed",
+            "root_cause_key": "unsupported_proof_class_override",
+            "errors": [f"proof_class override must be listed in allowed_proof_classes: {proof_class_override}"],
+        }
+    if proof_class_override == "competition-exact" and os.environ.get(COMPETITION_EXACT_HOST_ENV) != "1":
+        return resolution, {
+            "status": "failed",
+            "root_cause_key": "competition_exact_host_required",
+            "errors": [f"competition-exact proof_class override requires {COMPETITION_EXACT_HOST_ENV}=1"],
+        }
+    return resolution, None
+
+
+def effective_config_with_proof_class_override(
+    config: dict[str, Any],
+    *,
+    proof_class_override: str,
+) -> dict[str, Any]:
+    payload = json.loads(json.dumps(config))
+    for entry in payload.get("entrypoints", []) if isinstance(payload.get("entrypoints"), list) else []:
+        if not isinstance(entry, dict):
+            continue
+        entry["proof_class"] = proof_class_override
+        command = entry.get("command")
+        if isinstance(command, str):
+            entry["command"] = command_with_proof_class_override(
+                command,
+                proof_class_override=proof_class_override,
+                entry_id=str(entry.get("id", "unknown")),
+            )
+    payload["proof_class_override"] = {
+        "source": "cli-override",
+        "effective_proof_class": proof_class_override,
+        "override_requested": True,
+    }
+    return payload
+
+
+def command_with_proof_class_override(command: str, *, proof_class_override: str, entry_id: str) -> str:
+    argv = shlex.split(command, posix=True)
+    rewritten: list[str] = []
+    index = 0
+    replaced = False
+    while index < len(argv):
+        part = argv[index]
+        if part == "--proof-class":
+            if replaced:
+                raise ValueError(f"{entry_id} command must not repeat --proof-class")
+            if index + 1 >= len(argv):
+                raise ValueError(f"{entry_id} command --proof-class must include a value")
+            rewritten.extend(["--proof-class", proof_class_override])
+            replaced = True
+            index += 2
+            continue
+        if part.startswith("--proof-class="):
+            if replaced:
+                raise ValueError(f"{entry_id} command must not repeat --proof-class")
+            rewritten.extend(["--proof-class", proof_class_override])
+            replaced = True
+            index += 1
+            continue
+        rewritten.append(part)
+        index += 1
+    if not replaced:
+        rewritten.extend(["--proof-class", proof_class_override])
+    if (
+        entry_id == "competition_environment_smoke"
+        and proof_class_override == "competition-exact"
+        and "--confirm-competition-exact" not in rewritten
+    ):
+        rewritten.append("--confirm-competition-exact")
+    return shlex.join(rewritten)
+
+
+def post_run_validation_config_path(
+    config_path: Path,
+    config: dict[str, Any],
+    selected: list[dict[str, Any]],
+    *,
+    entrypoint_ids: list[str],
+    out_path: Path,
+) -> Path:
+    if not entrypoint_ids:
+        return config_path
+    payload = json.loads(json.dumps(config))
+    selected_ids = [str(entry.get("id")) for entry in selected]
+    selected_id_set = set(selected_ids)
+    payload["entrypoints"] = [
+        entry for entry in payload.get("entrypoints", []) if isinstance(entry, dict) and entry.get("id") in selected_id_set
+    ]
+    contract = payload.get("test_contract")
+    if isinstance(contract, dict) and isinstance(contract.get("required_entrypoint_ids"), list):
+        contract["required_entrypoint_ids"] = selected_ids
+    path = out_path.parent / "selected-entrypoints-validation-config.json"
+    atomic_write_json(path, payload)
+    return path
+
+
+def write_run_report(
+    *,
+    out_path: Path,
+    status: str,
+    dry_run: bool,
+    config_ref: dict[str, Any],
+    configured_entrypoint_count: int,
+    config_archive: dict[str, Any],
+    command_results: list[dict[str, Any]],
+    preflight_validation: dict[str, Any],
+    validation: dict[str, Any],
+    readiness_ref: dict[str, Any] | None,
+    proof_class_override: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    report = {
+        "schema_version": 1,
+        "report_kind": "judge-entrypoints-run-report",
+        "status": status,
+        "dry_run": dry_run,
+        "config": config_ref,
+        "competition_config_archive": config_archive,
+        "entrypoint_count": len(command_results),
+        "entrypoints": command_results,
+        "preflight_validation": preflight_validation,
+        "validation": validation,
+        "readiness_report": readiness_ref,
+        **({"proof_class_override": proof_class_override} if proof_class_override is not None else {}),
+        "claim_boundary": {
+            "semantic_gate": False,
+            "semantic_claim_source": "validator-owned-artifacts",
+            "boundary": (
+                "This runner executes judge entrypoint commands and then invokes the existing validator. "
+                "It is orchestration evidence only; semantic acceptance remains owned by summaries, "
+                "workflow metrics, oracle evidence, and validators."
+            ),
+        },
+    }
+    report["summary"] = build_judge_run_summary(
+        status=status,
+        dry_run=dry_run,
+        configured_entrypoint_count=configured_entrypoint_count,
+        config_archive=config_archive,
+        command_results=command_results,
+        validation=validation,
+        readiness_ref=readiness_ref,
+        claim_boundary=report["claim_boundary"],
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(out_path, report)
+    return report
+
+
+def attach_milestone_bundle(report: dict[str, Any], *, out_path: Path, repo_root: Path) -> None:
+    bundle_path = out_path.parent / "judge-milestone-bundle.json"
+    release_notes_path = out_path.parent / "milestone-release-notes.md"
+    public_packet_path = out_path.parent / "public-release-packet.json"
+    report["milestone_bundle"] = {
+        "path": validator.repo_relative(bundle_path, repo_root),
+        "status": "present",
+        "hash_boundary": "bundle_hashes_this_run_report",
+    }
+    report["milestone_release_notes"] = {
+        "path": validator.repo_relative(release_notes_path, repo_root),
+        "status": "derived_after_bundle",
+        "hash_boundary": "release_notes_hashes_the_bundle",
+    }
+    report["public_release_packet"] = {
+        "path": validator.repo_relative(public_packet_path, repo_root),
+        "status": "derived_after_release_notes",
+        "hash_boundary": "packet_hashes_run_report_bundle_and_release_notes",
+    }
+    atomic_write_json(out_path, report)
+    bundle = judge_milestone_bundle.build_judge_milestone_bundle(
+        run_report_path=out_path,
+        out_path=bundle_path,
+        repo_root=repo_root,
+    )
+    atomic_write_text(release_notes_path, milestone_release_notes.build_release_notes(bundle))
+    write_public_release_packet(
+        report=report,
+        bundle=bundle,
+        run_report_path=out_path,
+        bundle_path=bundle_path,
+        release_notes_path=release_notes_path,
+        public_packet_path=public_packet_path,
+        repo_root=repo_root,
+    )
+    packet_validation = validate_public_release_packet.validate_packet(public_packet_path, repo_root=repo_root)
+    if packet_validation.get("status") != "passed":
+        errors = packet_validation.get("errors", [])
+        raise SystemExit(f"public release packet validation failed: {errors}")
+
+
+def write_public_release_packet(
+    *,
+    report: dict[str, Any],
+    bundle: dict[str, Any],
+    run_report_path: Path,
+    bundle_path: Path,
+    release_notes_path: Path,
+    public_packet_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    publication = bundle.get("publication_manifest") if isinstance(bundle.get("publication_manifest"), dict) else {}
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    packet = {
+        "schema_version": 1,
+        "report_kind": "public-release-packet",
+        "status": bundle.get("status", report.get("status", "unknown")),
+        "summary": {
+            "entrypoint_count": report.get("entrypoint_count", 0),
+            "publication_scope": publication.get("publication_scope", "unknown"),
+            "readiness": summary.get("readiness", {}),
+            "blockers": bundle.get("blockers", []),
+            "published_artifact_ref_status": public_packet_published_artifact_ref_status(publication),
+            "proof_class_rollup": bundle.get("proof_class_rollup", bundle.get("proof_classes", {})),
+            "workflow_metrics": public_packet_workflow_metrics_summary(bundle),
+            "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "packet_is_semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "This packet indexes the public release artifacts. It hashes existing validator-owned "
+                "artifacts and does not create semantic acceptance or translator-generated coverage."
+            ),
+        },
+        "judge_entrypoints_run_report": artifact_ref(run_report_path, repo_root=repo_root),
+        "readiness_report": artifact_ref_from_report_ref(report.get("readiness_report"), repo_root=repo_root),
+        "judge_milestone_bundle": artifact_ref(bundle_path, repo_root=repo_root),
+        "milestone_release_notes": artifact_ref(release_notes_path, repo_root=repo_root),
+        "competition_config_archive": report.get("competition_config_archive", {}),
+        "publication_manifest": publication,
+        "publishability": bundle.get("publishability", {}),
+        "competition_host_readiness": bundle.get("competition_host_readiness", {}),
+        "harness_architecture_summary": bundle.get("harness_architecture_summary", {}),
+        "evidence_cost_retention": bundle.get("evidence_cost_retention", {}),
+        "before_after_repair_exhibit": bundle.get("before_after_repair_exhibit", {}),
+        "opencode_patch_boundary": public_packet_opencode_patch_boundary(bundle, repo_root=repo_root),
+        "quantitative_evaluation": bundle.get("quantitative_evaluation", {}),
+        "progress_delta_ledger": bundle.get("progress_delta_ledger", {}),
+        "known_gaps": bundle.get("known_gaps", []),
+        "must_not_claim": public_packet_must_not_claim(bundle.get("must_not_claim", [])),
+        "reproduction_commands": bundle.get("reproduction_commands", {}),
+    }
+    atomic_write_json(public_packet_path, packet)
+    return packet
+
+
+def public_packet_opencode_patch_boundary(bundle: dict[str, Any], *, repo_root: Path) -> dict[str, Any]:
+    before_after = bundle.get("before_after_repair_exhibit") if isinstance(bundle.get("before_after_repair_exhibit"), dict) else {}
+    patch_sources: set[str] = set()
+    opencode_session_bound_count = 0
+    for source in before_after.get("sources", []) if isinstance(before_after.get("sources"), list) else []:
+        if not isinstance(source, dict):
+            continue
+        for unit in source.get("before_after_units", []) if isinstance(source.get("before_after_units"), list) else []:
+            if not isinstance(unit, dict):
+                continue
+            patch_origin = unit.get("patch_origin") if isinstance(unit.get("patch_origin"), dict) else {}
+            if isinstance(patch_origin.get("source"), str):
+                patch_sources.add(patch_origin["source"])
+            if patch_origin.get("opencode_session_bound") is True:
+                opencode_session_bound_count += 1
+
+    publication = bundle.get("publication_manifest") if isinstance(bundle.get("publication_manifest"), dict) else {}
+    attempt_ref = next(
+        (
+            ref
+            for ref in publication.get("published_artifact_refs", [])
+            if isinstance(ref, dict) and ref.get("artifact_name") == "opencode_safety_transform_attempt"
+        ),
+        None,
+    )
+    attempt_summary = public_packet_opencode_attempt_summary(attempt_ref, repo_root=repo_root)
+    runtime = bundle.get("opencode_runtime") if isinstance(bundle.get("opencode_runtime"), dict) else {}
+    opencode_runtime_enabled = int(runtime.get("enabled_entrypoint_count", 0) or 0) > 0
+    return {
+        "report_kind": "opencode-patch-boundary",
+        "opencode_runtime_enabled": opencode_runtime_enabled,
+        "before_after_patch_sources": sorted(patch_sources),
+        "before_after_opencode_session_bound_count": opencode_session_bound_count,
+        "opencode_safety_transform_attempt": attempt_summary,
+        "opencode_preflight_proof_summary": public_packet_opencode_preflight_proof_summary(
+            runtime,
+            opencode_runtime_enabled=opencode_runtime_enabled,
+        ),
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "OpenCode runtime and safety-transform attempt artifacts audit command-contract execution and "
+            "candidate patch attempts. They do not make chat output semantic evidence; before/after patch "
+            "origin remains the bound on-disk patch_origin evidence."
+        ),
+    }
+
+
+def public_packet_opencode_preflight_proof_summary(
+    runtime: dict[str, Any],
+    *,
+    opencode_runtime_enabled: bool,
+) -> dict[str, Any]:
+    summary = runtime.get("preflight_proof_summary")
+    if isinstance(summary, dict):
+        return json.loads(json.dumps(summary))
+    return {
+        "status": "absent",
+        "required_when_opencode_runtime_enabled": opencode_runtime_enabled,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "opencode_agent": "c2rust-migrator",
+        "opencode_variant": "max",
+        "opencode_run_argv_bound": False,
+        "boundary": (
+            "OpenCode preflight proof is absent; runtime output is not semantic evidence "
+            "and does not increase translator coverage."
+        ),
+    }
+
+
+def public_packet_opencode_attempt_summary(value: object, *, repo_root: Path) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"status": "absent"}
+    result: dict[str, Any] = {
+        "status": value.get("status", "unknown"),
+    }
+    if isinstance(value.get("path"), str):
+        result["path"] = value.get("path")
+    if isinstance(value.get("sha256"), str):
+        result["sha256"] = value.get("sha256")
+    if value.get("status") not in {"present", "passed"} or not isinstance(value.get("path"), str):
+        result["artifact_read_status"] = "not_checked"
+        return result
+    result = {
+        "path": value.get("path"),
+        "sha256": value.get("sha256"),
+        "status": value.get("status", "unknown"),
+    }
+    try:
+        payload = validator.load_json(resolve_input_path(Path(value["path"]), repo_root=repo_root))
+    except (OSError, ValueError, json.JSONDecodeError):
+        result["artifact_read_status"] = "failed"
+        return result
+    result["artifact_read_status"] = "passed"
+    retry_hints = public_packet_opencode_retry_hints(payload)
+    retry_statuses = [
+        str(hint.get("status", "unknown")) for hint in retry_hints if isinstance(hint.get("status", "unknown"), str)
+    ]
+    if not retry_statuses:
+        retry_status = "unknown"
+    elif len(set(retry_statuses)) == 1:
+        retry_status = retry_statuses[0]
+    else:
+        retry_status = "mixed"
+    attempt_contract = payload.get("attempt_contract") if isinstance(payload.get("attempt_contract"), dict) else {}
+    units = payload.get("safety_transform_units") if isinstance(payload.get("safety_transform_units"), list) else []
+    result.update(
+        {
+            "attempt_status": payload.get("status", "unknown"),
+            "accepted_retry_hint_status": retry_status,
+            "accepted_retry_hint_statuses": retry_statuses,
+            "rollback_ref_count": public_packet_opencode_rollback_ref_count(payload, retry_hints),
+            "round_count": public_packet_opencode_round_count(payload, units),
+            "max_repair_rounds": int(attempt_contract.get("max_repair_rounds", 0) or 0),
+            "unit_count": len([unit for unit in units if isinstance(unit, dict)]),
+        }
+    )
+    return result
+
+
+def public_packet_opencode_retry_hints(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    hints: list[dict[str, Any]] = []
+    top_level = payload.get("accepted_retry_hint")
+    if isinstance(top_level, dict):
+        hints.append(top_level)
+    units = payload.get("safety_transform_units")
+    if isinstance(units, list):
+        for unit in units:
+            if not isinstance(unit, dict):
+                continue
+            retry_hint = unit.get("accepted_retry_hint")
+            if isinstance(retry_hint, dict):
+                hints.append(retry_hint)
+    return hints
+
+
+def public_packet_opencode_rollback_ref_count(payload: dict[str, Any], retry_hints: list[dict[str, Any]]) -> int:
+    if isinstance(payload.get("rollback_ref_count"), int):
+        return int(payload["rollback_ref_count"])
+    count = 0
+    for retry_hint in retry_hints:
+        rollback_evidence = retry_hint.get("rollback_evidence")
+        if isinstance(rollback_evidence, list):
+            count += len(rollback_evidence)
+    return count
+
+
+def public_packet_opencode_round_count(payload: dict[str, Any], units: list[object]) -> int:
+    if isinstance(payload.get("round_count"), int):
+        return int(payload["round_count"])
+    count = 0
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        rounds = unit.get("rounds")
+        if isinstance(rounds, list):
+            count += len(rounds)
+    return count
+
+
+def public_packet_workflow_metrics_summary(bundle: dict[str, Any]) -> dict[str, Any]:
+    workflow = bundle.get("workflow_metrics") if isinstance(bundle.get("workflow_metrics"), dict) else {}
+    rollup = workflow.get("rollup") if isinstance(workflow.get("rollup"), dict) else {}
+    repair_activity = rollup.get("repair_activity") if isinstance(rollup.get("repair_activity"), dict) else {}
+    return {
+        "repair_activity": repair_activity,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": (
+            "Public packet workflow metrics are copied from the bound judge milestone bundle for review only. "
+            "They are not a semantic gate and do not increase translation coverage."
+        ),
+    }
+
+
+def public_packet_published_artifact_ref_status(publication: dict[str, Any]) -> dict[str, Any]:
+    refs = publication.get("published_artifact_refs", [])
+    status_counts: dict[str, int] = {}
+    abnormal_refs: list[dict[str, str]] = []
+    total_count = 0
+    for ref in refs if isinstance(refs, list) else []:
+        if not isinstance(ref, dict):
+            continue
+        total_count += 1
+        status = str(ref.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+        if status != "present":
+            abnormal_refs.append(
+                {
+                    "artifact_name": str(ref.get("artifact_name", "unknown")),
+                    "path": str(ref.get("path", "unknown")),
+                    "status": status,
+                }
+            )
+    return {
+        "total_count": total_count,
+        "status_counts": dict(sorted(status_counts.items())),
+        "abnormal_ref_count": len(abnormal_refs),
+        "abnormal_refs": abnormal_refs,
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "Published artifact ref status is a review summary only, not semantic acceptance.",
+    }
+
+
+def public_packet_must_not_claim(value: object) -> list[str]:
+    claims = [str(item) for item in value] if isinstance(value, list) else []
+    if "public_release_packet_is_not_semantic_gate" not in claims:
+        claims.append("public_release_packet_is_not_semantic_gate")
+    return claims
+
+
+def artifact_ref_from_report_ref(value: object, *, repo_root: Path) -> dict[str, Any]:
+    if isinstance(value, dict) and isinstance(value.get("path"), str):
+        try:
+            return artifact_ref(resolve_input_path(Path(value["path"]), repo_root=repo_root), repo_root=repo_root)
+        except (OSError, ValueError):
+            return {"path": value["path"], "status": "invalid"}
+    return {"path": "unknown", "status": "absent"}
+
+
+def select_entrypoints(config: dict[str, Any], entrypoint_ids: list[str]) -> list[dict[str, Any]]:
+    raw_entrypoints = config.get("entrypoints")
+    if not isinstance(raw_entrypoints, list) or not raw_entrypoints:
+        raise SystemExit("judge config entrypoints must be a non-empty list")
+    entrypoints = [entry for entry in raw_entrypoints if isinstance(entry, dict)]
+    if not entrypoint_ids:
+        return entrypoints
+    by_id = {str(entry.get("id")): entry for entry in entrypoints}
+    missing = [entrypoint_id for entrypoint_id in entrypoint_ids if entrypoint_id not in by_id]
+    if missing:
+        raise SystemExit(f"unknown judge entrypoint id(s): {', '.join(missing)}")
+    return [by_id[entrypoint_id] for entrypoint_id in entrypoint_ids]
+
+
+def configured_entrypoint_count(config: dict[str, Any]) -> int:

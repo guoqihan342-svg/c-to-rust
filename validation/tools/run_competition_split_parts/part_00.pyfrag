@@ -1,0 +1,800 @@
+#!/usr/bin/env python3
+"""Linux-first OpenCode competition runner.
+
+This wrapper is intentionally thin: it orchestrates existing validators and
+writes the shared competition-run-summary contract. Translation correctness
+still comes from per-slice evidence and final validation gates.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import time
+from typing import Any, Callable
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+PROFILE_PATH = REPO_ROOT / "config" / "competition-env" / "environment.json"
+SUMMARY_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_competition_run_summary.py"
+AUTO_MIGRATE = REPO_ROOT / "validation" / "tools" / "auto_migrate.py"
+AUTO_EVIDENCE_VALIDATOR = REPO_ROOT / "validation" / "tools" / "validate_auto_translation_evidence.py"
+EXTRACT_SOURCE_SLICE = REPO_ROOT / "validation" / "tools" / "extract_source_slice.py"
+UNSAFE_BUDGET = REPO_ROOT / "validation" / "tools" / "unsafe_budget.py"
+COMPETITION_EXACT_HOST_ENV = "COMPETITION_EXACT_HOST"
+COMPETITION_OPENCODE_COMMAND = "opencode"
+COMPETITION_OPENCODE_AGENT = "c2rust-migrator"
+COMPETITION_OPENCODE_MODEL = "GLM-5.1"
+COMPETITION_OPENCODE_VARIANT = "max"
+LF_STABLE_TEXT_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".json",
+    ".jsonl",
+    ".md",
+    ".rs",
+    ".sh",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
+
+CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
+ExtractionSpecInput = Path | dict[str, Any]
+
+
+class CompetitionRunResult:
+    def __init__(self, *, exit_code: int, summary_path: Path, summary: dict[str, Any]) -> None:
+        self.exit_code = exit_code
+        self.summary_path = summary_path
+        self.summary = summary
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--slice-spec", action="append", dest="slice_specs", type=Path, default=[])
+    parser.add_argument("--extract-spec", action="append", dest="extraction_specs", type=Path, default=[])
+    parser.add_argument("--worker-summary", action="append", dest="worker_summaries", type=Path, default=[])
+    parser.add_argument("--source-repo-root", "--repo-root", dest="source_repo_root")
+    parser.add_argument("--source-file")
+    parser.add_argument("--function")
+    parser.add_argument("--target-id")
+    parser.add_argument("--slice-id")
+    parser.add_argument("--source-repository")
+    parser.add_argument("--source-branch")
+    parser.add_argument("--source-commit")
+    parser.add_argument("--require-source-commit")
+    parser.add_argument("--compiler-command-source")
+    parser.add_argument("--include-path", action="append", dest="include_paths", default=[])
+    parser.add_argument("--define", action="append", dest="defines", default=[])
+    parser.add_argument("--out-root", type=Path, default=REPO_ROOT / "target" / "competition-out")
+    parser.add_argument(
+        "--reuse-accepted-evidence",
+        action="store_true",
+        help="validate committed accepted evidence for each slice instead of regenerating candidates",
+    )
+    parser.add_argument(
+        "--accepted-evidence-root",
+        type=Path,
+        default=REPO_ROOT / "validation" / "evidence",
+        help="evidence root used with --reuse-accepted-evidence",
+    )
+    parser.add_argument(
+        "--run-optional-governance-checks",
+        action="store_true",
+        help="also run historical governance checks such as OpenSpec; not part of the default competition gate",
+    )
+    parser.add_argument(
+        "--proof-class",
+        default="local-simulation",
+        choices=["competition-exact", "ci-approximation", "wsl-local-simulation", "local-simulation"],
+    )
+    parser.add_argument("--run-id")
+    args = parser.parse_args()
+    extraction_specs: list[ExtractionSpecInput] = list(args.extraction_specs)
+    direct_extraction_spec = direct_extraction_spec_from_args(args, parser)
+    if direct_extraction_spec is not None:
+        extraction_specs.append(direct_extraction_spec)
+    if not args.slice_specs and not extraction_specs and not args.worker_summaries:
+        parser.error(
+            "at least one --slice-spec, --extract-spec, --worker-summary, "
+            "or direct extraction argument group is required"
+        )
+
+    result = run_competition(
+        slice_specs=args.slice_specs,
+        extraction_specs=extraction_specs,
+        worker_summaries=args.worker_summaries,
+        out_root=args.out_root,
+        proof_class=args.proof_class,
+        run_id=args.run_id,
+        repo_root=REPO_ROOT,
+        reuse_accepted_evidence=args.reuse_accepted_evidence,
+        accepted_evidence_root=args.accepted_evidence_root,
+        run_optional_governance_checks=args.run_optional_governance_checks,
+    )
+    print(json.dumps(result.summary, indent=2, sort_keys=True))
+    return result.exit_code
+
+
+def run_competition(
+    *,
+    slice_specs: list[Path],
+    extraction_specs: list[ExtractionSpecInput] | None = None,
+    worker_summaries: list[Path] | None = None,
+    out_root: Path,
+    proof_class: str,
+    command_runner: CommandRunner = subprocess.run,
+    repo_root: Path = REPO_ROOT,
+    run_id: str | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: Path | None = None,
+    run_optional_governance_checks: bool = False,
+) -> CompetitionRunResult:
+    extraction_specs = extraction_specs or []
+    worker_summaries = worker_summaries or []
+    if not slice_specs and not extraction_specs and not worker_summaries:
+        raise SystemExit(
+            "at least one --slice-spec, --extract-spec, --worker-summary, "
+            "or direct extraction argument group is required"
+        )
+
+    repo_root = repo_root.resolve()
+    out_root = out_root if out_root.is_absolute() else repo_root / out_root
+    require_competition_exact_host(proof_class)
+    out_root.mkdir(parents=True, exist_ok=True)
+    (out_root / "summary").mkdir(parents=True, exist_ok=True)
+    logs_dir = out_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    evidence_root = out_root / "evidence"
+    evidence_root.mkdir(parents=True, exist_ok=True)
+    accepted_evidence_root = accepted_evidence_root or repo_root / "validation" / "evidence"
+    if not accepted_evidence_root.is_absolute():
+        accepted_evidence_root = repo_root / accepted_evidence_root
+    generated_slice_specs_root = out_root / "slice-specs"
+    generated_slice_specs_root.mkdir(parents=True, exist_ok=True)
+    started = time.monotonic()
+    run_id = run_id or time.strftime("run-%Y%m%dT%H%M%SZ", time.gmtime())
+    exact_host_attestation = build_competition_exact_host_attestation(
+        proof_class=proof_class,
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+        run_id=run_id,
+    )
+
+    slice_failures = 0
+    gate_failures = 0
+    typed_ir_generated = 0
+    compiled = 0
+    semantic_pass = 0
+    refused = 0
+    blocked = 0
+    worker_statuses = load_worker_summary_statuses(
+        worker_summaries,
+        proof_class=proof_class,
+        repo_root=repo_root,
+        out_root=out_root,
+    )
+    unit_statuses = []
+    for worker in worker_statuses:
+        unit_statuses.extend(workflow_unit_statuses_from_worker(worker))
+    worker_workflow_metrics = [
+        worker["workflow_metrics"] for worker in worker_statuses if isinstance(worker.get("workflow_metrics"), dict)
+    ]
+    for worker in worker_statuses:
+        worker_slices = worker["slices"]
+        typed_ir_generated += worker_slices["typed_ir_generated"]
+        compiled += worker_slices["compiled"]
+        semantic_pass += worker_slices["semantic_pass"]
+        refused += worker_slices["refused"]
+        blocked += worker_slices["blocked"]
+        slice_failures += worker_slices["failed"]
+        if worker["status"] != "passed":
+            gate_failures += 1
+
+    environment_result = run_logged_step(
+        "environment-check",
+        ["bash", "-lc", "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"],
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+        run_id=run_id,
+    )
+    if environment_result.returncode != 0 and proof_class == "competition-exact":
+        gate_failures += 1
+
+    generated_slice_specs, extraction_failures, extraction_unit_statuses = extract_slice_specs(
+        extraction_specs,
+        generated_slice_specs_root=generated_slice_specs_root,
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+        run_id=run_id,
+    )
+    unit_statuses.extend(extraction_unit_statuses)
+    slice_failures += extraction_failures
+
+    all_slice_specs = list(slice_specs) + generated_slice_specs
+    generated_slice_spec_paths = {path.resolve() for path in generated_slice_specs}
+    specs = [load_slice_spec(path, repo_root=repo_root) for path in all_slice_specs]
+    for spec_path, spec in specs:
+        target_id = required_str(spec, "target_id")
+        slice_id = required_str(spec, "slice_id")
+        unit_source = "extract-spec" if spec_path.resolve() in generated_slice_spec_paths else "slice-spec"
+        slice_evidence_root = accepted_evidence_root if reuse_accepted_evidence else evidence_root
+        if not reuse_accepted_evidence:
+            auto_result = run_logged_step(
+                f"auto-migrate-{slice_id}",
+                [
+                    sys.executable,
+                    rel_script(AUTO_MIGRATE, repo_root),
+                    "--slice-spec",
+                    rel_path(spec_path, repo_root),
+                    "--out-root",
+                    rel_path(evidence_root, repo_root),
+                    "--competition-clang-lane",
+                ],
+                command_runner=command_runner,
+                repo_root=repo_root,
+                logs_dir=logs_dir,
+                out_root=out_root,
+                run_id=run_id,
+            )
+            if auto_result.returncode != 0:
+                slice_failures += 1
+                unit_statuses.append(
+                    workflow_unit_status(
+                        target_id=target_id,
+                        slice_id=slice_id,
+                        source=unit_source,
+                        status="failed",
+                        compiled=False,
+                        semantic_pass=False,
+                        refused=False,
+                        blocked=False,
+                        failed=True,
+                    )
+                )
+                continue
+
+        final = load_final_verification(slice_evidence_root, target_id, slice_id)
+        compiled_unit = final.get("rust_check_status") == "passed"
+        semantic_unit = final.get("semantic_pass") is True
+        final_status = str(final.get("status", "failed"))
+        if compiled_unit:
+            compiled += 1
+        if semantic_unit:
+            semantic_pass += 1
+        else:
+            if final_status == "refused":
+                refused += 1
+            elif final_status == "blocked":
+                blocked += 1
+            else:
+                slice_failures += 1
+        typed_ir_generated += 1
+        repair_metrics = self_healing_repair_metrics(
+            slice_evidence_root,
+            target_id,
+            slice_id,
+            semantic_unit,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
+        translation_before_after = load_translation_before_after(slice_evidence_root, target_id, slice_id)
+        unit_statuses.append(
+            workflow_unit_status(
+                target_id=target_id,
+                slice_id=slice_id,
+                source=unit_source,
+                status=workflow_status_from_final(final_status=final_status, semantic_pass=semantic_unit),
+                compiled=compiled_unit,
+                semantic_pass=semantic_unit,
+                refused=final_status == "refused",
+                blocked=final_status == "blocked",
+                failed=not semantic_unit and final_status not in {"refused", "blocked"},
+                repair_rounds=repair_metrics["repair_rounds"],
+                auto_recovered=repair_metrics["auto_recovered"],
+                repair_history=repair_metrics.get("repair_history"),
+                llm_calls=repair_metrics["llm_calls"],
+                translation_before_after=translation_before_after,
+            )
+        )
+
+        validation_result = run_logged_step(
+            f"validate-evidence-{slice_id}",
+            [
+                sys.executable,
+                rel_script(AUTO_EVIDENCE_VALIDATOR, repo_root),
+                "--target-id",
+                target_id,
+                "--slice-id",
+                slice_id,
+                "--slice-spec",
+                rel_path(spec_path, repo_root),
+                "--evidence-root",
+                rel_path(slice_evidence_root, repo_root),
+                "--require-semantic-pass",
+            ],
+            command_runner=command_runner,
+            repo_root=repo_root,
+            logs_dir=logs_dir,
+            out_root=out_root,
+            run_id=run_id,
+        )
+        if validation_result.returncode != 0:
+            gate_failures += 1
+
+    unsafe_result = run_logged_step(
+        "unsafe-budget",
+        [sys.executable, rel_script(UNSAFE_BUDGET, repo_root), "--max-ratio", "0.10"],
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+        run_id=run_id,
+    )
+    unsafe_summary = unsafe_budget_summary(unsafe_result)
+    openspec_gate_failed = False
+    if run_optional_governance_checks:
+        openspec_result = run_logged_step(
+            "openspec-validate",
+            ["bash", "-lc", "openspec validate --all --strict"],
+            command_runner=command_runner,
+            repo_root=repo_root,
+            logs_dir=logs_dir,
+            out_root=out_root,
+            run_id=run_id,
+        )
+        # bash exits 127 when the OpenSpec CLI is not installed. OpenSpec is
+        # repository governance tooling, not competition evidence: judge CI and
+        # the competition host are not required to provide it. A present-but-
+        # failing OpenSpec validation remains a failure only when this optional
+        # governance check is explicitly requested.
+        openspec_gate_failed = openspec_result.returncode not in (0, 127)
+    if unsafe_summary["status"] != "passed" or openspec_gate_failed:
+        gate_failures += 1
+
+    status = "passed" if slice_failures == 0 and gate_failures == 0 and semantic_pass > 0 else "failed"
+    summary = {
+        "schema_version": 1,
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "profile_id": profile_id(repo_root),
+        "profile_sha256": sha256(PROFILE_PATH if repo_root == REPO_ROOT else repo_root / "config/competition-env/environment.json"),
+        "clang_source": clang_source(repo_root),
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": int(time.monotonic() - started),
+        "translator_version": "0.1.0",
+        "slices": {
+            "attempted": len(slice_specs)
+            + len(extraction_specs)
+            + sum(worker["slices"]["attempted"] for worker in worker_statuses),
+            "typed_ir_generated": typed_ir_generated,
+            "compiled": compiled,
+            "semantic_pass": semantic_pass,
+            "refused": refused,
+            "blocked": blocked,
+            "failed": slice_failures,
+        },
+        "unsafe_budget": unsafe_summary,
+        "artifact_roots": [
+            "target/competition-out/evidence",
+            "target/competition-out/summary",
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": status,
+            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+        },
+    }
+    if exact_host_attestation is not None:
+        summary["competition_exact_host_attestation"] = exact_host_attestation
+    if worker_statuses:
+        summary["workers"] = {
+            "count": len(worker_statuses),
+            "summaries": [public_worker_summary_status(worker) for worker in worker_statuses],
+        }
+    summary_path = write_summary_with_workflow_metrics(
+        summary,
+        unit_statuses=unit_statuses,
+        worker_workflow_metrics=worker_workflow_metrics,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+
+    summary_validation = run_logged_step(
+        "validate-competition-summary",
+        [sys.executable, rel_script(SUMMARY_VALIDATOR, repo_root), "--summary", rel_path(summary_path, repo_root)],
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+        run_id=run_id,
+    )
+    if summary_validation.returncode != 0:
+        gate_failures += 1
+        summary["final_gate"]["status"] = "failed"
+    summary_path = write_summary_with_workflow_metrics(
+        summary,
+        unit_statuses=unit_statuses,
+        worker_workflow_metrics=worker_workflow_metrics,
+        out_root=out_root,
+        repo_root=repo_root,
+    )
+
+    return CompetitionRunResult(
+        exit_code=0 if summary["final_gate"]["status"] == "passed" and slice_failures == 0 and gate_failures == 0 else 1,
+        summary_path=summary_path,
+        summary=summary,
+    )
+
+
+def run_step(command: list[str], *, command_runner: CommandRunner, repo_root: Path) -> subprocess.CompletedProcess[str]:
+    return command_runner(
+        command,
+        cwd=repo_root,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
+
+
+def require_competition_exact_host(proof_class: str) -> None:
+    if proof_class != "competition-exact":
+        return
+    if os.environ.get(COMPETITION_EXACT_HOST_ENV) == "1":
+        return
+    raise SystemExit(
+        "proof_class=competition-exact requires COMPETITION_EXACT_HOST=1 before OpenCode preflight, "
+        "SQLite ledger initialization, worker fanout, or summary publication"
+    )
+
+
+def build_competition_exact_host_attestation(
+    *,
+    proof_class: str,
+    command_runner: CommandRunner,
+    repo_root: Path,
+    logs_dir: Path,
+    out_root: Path,
+    run_id: str,
+) -> dict[str, Any] | None:
+    if proof_class != "competition-exact":
+        return None
+    result = run_logged_step(
+        "opencode-glm-model-probe",
+        [COMPETITION_OPENCODE_COMMAND, "models"],
+        command_runner=command_runner,
+        repo_root=repo_root,
+        logs_dir=logs_dir,
+        out_root=out_root,
+        run_id=run_id,
+    )
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    stdout_path.write_text(result.stdout or "", encoding="utf-8")
+    stderr_path.write_text(result.stderr or "", encoding="utf-8")
+    model_listed = opencode_models_stdout_lists_required_model(result.stdout or "")
+    if result.returncode != 0:
+        raise SystemExit(
+            "proof_class=competition-exact requires successful 'opencode models' before launch; "
+            f"probe failed with returncode={result.returncode}"
+        )
+    if not model_listed:
+        raise SystemExit("proof_class=competition-exact requires opencode models to list GLM-5.1 before launch")
+    return {
+        "competition_exact_host_attested": True,
+        "required_agent_tool": COMPETITION_OPENCODE_COMMAND,
+        "required_agent": COMPETITION_OPENCODE_AGENT,
+        "required_model": COMPETITION_OPENCODE_MODEL,
+        "required_variant": COMPETITION_OPENCODE_VARIANT,
+        "opencode_model_availability": {
+            "status": "available",
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "model_listed": True,
+            "opencode_command": COMPETITION_OPENCODE_COMMAND,
+            "argv": [COMPETITION_OPENCODE_COMMAND, "models"],
+            "process_returncode": result.returncode,
+            "logs": {
+                "stdout": summary_reference_path(stdout_path, repo_root=repo_root, out_root=out_root),
+                "stderr": summary_reference_path(stderr_path, repo_root=repo_root, out_root=out_root),
+            },
+            "stdout_sha256": sha256(stdout_path),
+            "stderr_sha256": sha256(stderr_path),
+        },
+    }
+
+
+def opencode_models_stdout_lists_required_model(stdout: str) -> bool:
+    for token in re.split(r"[\s,;]+", stdout):
+        candidate = token.strip().strip("'\"`[](){}")
+        if candidate == COMPETITION_OPENCODE_MODEL:
+            return True
+        if "/" in candidate and candidate.rsplit("/", 1)[-1] == COMPETITION_OPENCODE_MODEL:
+            return True
+    return False
+
+
+def load_worker_summary_statuses(
+    worker_summaries: list[Path],
+    *,
+    proof_class: str,
+    repo_root: Path,
+    out_root: Path,
+) -> list[dict[str, Any]]:
+    statuses = []
+    seen: set[str] = set()
+    for path in worker_summaries:
+        resolved = resolve_worker_summary_path(path, repo_root=repo_root, out_root=out_root)
+        seen_key = os.path.normcase(str(resolved.resolve()))
+        if seen_key in seen:
+            raise SystemExit(f"duplicate worker summary path: {summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}")
+        seen.add(seen_key)
+        summary = json.loads(resolved.read_text(encoding="utf-8"))
+        worker_proof_class = str(summary.get("proof_class", "unknown"))
+        if worker_proof_class != proof_class:
+            raise SystemExit(
+                f"worker summary proof_class {worker_proof_class} does not match parent proof_class {proof_class}: "
+                f"{summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}"
+            )
+        workflow_metrics = load_bound_workflow_metrics(
+            summary,
+            summary_path=resolved,
+            repo_root=repo_root,
+            out_root=out_root,
+        )
+        slices = summary.get("slices", {})
+        final_gate = summary.get("final_gate", {})
+        status = final_gate.get("status") if isinstance(final_gate, dict) else "failed"
+        if status not in {"passed", "failed", "blocked"}:
+            status = "failed"
+        worker_slices = {
+            key: nonnegative_int(slices.get(key))
+            for key in [
+                "attempted",
+                "typed_ir_generated",
+                "compiled",
+                "semantic_pass",
+                "refused",
+                "blocked",
+                "failed",
+            ]
+        }
+        worker_id = resolved.relative_to((out_root / "workers").resolve()).parts[0]
+        assignment_metadata = load_worker_assignment_request_metadata(
+            worker_id=worker_id,
+            out_root=out_root,
+            repo_root=repo_root,
+        )
+        status_entry = {
+            "path": summary_reference_path(resolved, repo_root=repo_root, out_root=out_root),
+            "worker_id": worker_id,
+            "status": status,
+            "proof_class": worker_proof_class,
+            "attempted": worker_slices["attempted"],
+            "semantic_pass": worker_slices["semantic_pass"],
+            "failed": worker_slices["failed"],
+            "slices": worker_slices,
+            "workflow_metrics": workflow_metrics,
+        }
+        status_entry.update(assignment_metadata)
+        statuses.append(
+            status_entry
+        )
+    return statuses
+
+
+def load_worker_assignment_request_metadata(
+    *,
+    worker_id: str,
+    out_root: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    request_path = out_root / "harness" / "assignments" / f"{worker_id}-request.json"
+    if not request_path.exists():
+        return {}
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    metadata: dict[str, Any] = {
+        "assignment_request": summary_reference_path(request_path, repo_root=repo_root, out_root=out_root),
+    }
+    for field in [
+        "target_id",
+        "slice_id",
+        "function",
+        "source_repo_root",
+        "source_repository",
+        "source_branch",
+        "source_file",
+        "source_commit",
+        "source_sha256",
+        "require_source_commit",
+    ]:
+        value = request.get(field)
+        if isinstance(value, str) and value:
+            metadata[field] = value
+    slice_specs = request.get("slice_specs")
+    if isinstance(slice_specs, list) and all(isinstance(item, str) and item for item in slice_specs):
+        metadata["slice_specs"] = slice_specs
+    return metadata
+
+
+def resolve_worker_summary_path(path: Path, *, repo_root: Path, out_root: Path) -> Path:
+    candidates = [path] if path.is_absolute() else [repo_root / path, out_root / path]
+    resolved = next((candidate.resolve() for candidate in candidates if candidate.exists()), candidates[0].resolve())
+    worker_root = (out_root / "workers").resolve()
+    try:
+        relative_to_workers = resolved.relative_to(worker_root)
+    except ValueError as error:
+        raise SystemExit(
+            f"worker summary path must resolve under out_root/workers: "
+            f"{summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}"
+        ) from error
+    if (
+        len(relative_to_workers.parts) != 3
+        or relative_to_workers.parts[1] != "summary"
+        or relative_to_workers.parts[2] != "competition-run-summary.json"
+    ):
+        raise SystemExit(
+            "worker summary path must match workers/<worker-id>/summary/competition-run-summary.json: "
+            f"{summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}"
+        )
+    if not resolved.exists():
+        raise SystemExit(f"worker summary path does not exist: {summary_reference_path(resolved, repo_root=repo_root, out_root=out_root)}")
+    return resolved
+
+
+def load_bound_workflow_metrics(
+    summary: dict[str, Any],
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> dict[str, Any] | None:
+    binding = summary.get("workflow_metrics")
+    if not isinstance(binding, dict):
+        return None
+    metrics_ref = binding.get("path")
+    expected_sha = binding.get("sha256")
+    if not isinstance(metrics_ref, str) or not isinstance(expected_sha, str):
+        raise SystemExit("worker summary workflow_metrics.path and workflow_metrics.sha256 are required when bound")
+    metrics_path = resolve_bound_artifact(metrics_ref, summary_path=summary_path, repo_root=repo_root, out_root=out_root)
+    if metrics_path is None:
+        raise SystemExit(f"worker summary workflow_metrics.path does not exist: {metrics_ref}")
+    if sha256(metrics_path) != expected_sha:
+        raise SystemExit("worker summary workflow_metrics.sha256 does not match artifact")
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    if not isinstance(metrics, dict):
+        raise SystemExit(f"worker summary workflow_metrics artifact must be an object: {metrics_ref}")
+    return metrics
+
+
+def public_worker_summary_status(worker: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in worker.items() if key != "workflow_metrics"}
+
+
+def resolve_bound_artifact(
+    value: str,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+    out_root: Path,
+) -> Path | None:
+    if not is_safe_posix_relative(value):
+        return None
+    candidates = [
+        repo_root / value,
+        out_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def is_safe_posix_relative(value: str) -> bool:
+    if not value or "\\" in value or value.startswith("/") or value.startswith("~"):
+        return False
+    if len(value) >= 2 and value[1] == ":":
+        return False
+    return ".." not in Path(value).parts
+
+
+def workflow_unit_statuses_from_worker(worker: dict[str, Any]) -> list[dict[str, Any]]:
+    slices = worker["slices"]
+    attempted = int(slices["attempted"])
+    metrics = worker.get("workflow_metrics")
+    per_unit_statuses = metrics.get("per_unit_statuses") if isinstance(metrics, dict) else None
+    if isinstance(per_unit_statuses, list) and len(per_unit_statuses) == attempted:
+        return [worker_unit_status_copy(unit, worker) for unit in per_unit_statuses]
+    if attempted == 0:
+        return []
+    if attempted == 1:
+        return [worker_unit_status_copy(workflow_unit_status_from_worker(worker), worker)]
+    return synthetic_worker_unit_statuses(worker)
+
+
+def worker_unit_status_copy(unit: Any, worker: dict[str, Any]) -> Any:
+    if not isinstance(unit, dict):
+        return unit
+    copied = dict(unit)
+    copied.setdefault("worker_summary_path", worker["path"])
+    repair_history = copied.get("repair_history")
+    if isinstance(repair_history, dict):
+        normalized_repair_history = dict(repair_history)
+        patch_events_path = normalized_repair_history.get("patch_events_path")
+        if isinstance(patch_events_path, str) and is_safe_posix_relative(patch_events_path):
+            patch_parts = Path(patch_events_path).parts
+            if patch_parts and patch_parts[0] not in {"workers", "evidence", "target", "validation"}:
+                worker_summary_parent = Path(str(worker["path"])).parent
+                normalized_repair_history["patch_events_path"] = (
+                    worker_summary_parent / Path(patch_events_path)
+                ).as_posix()
+        copied["repair_history"] = normalized_repair_history
+    return copied
+
+
+def synthetic_worker_unit_statuses(worker: dict[str, Any]) -> list[dict[str, Any]]:
+    slices = worker["slices"]
+    attempted = int(slices["attempted"])
+    categories: list[tuple[str, int, dict[str, Any]]] = [
+        (
+            "converged",
+            int(slices["semantic_pass"]),
+            {
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            },
+        ),
+        (
+            "baseline-only",
+            max(0, int(slices["compiled"]) - int(slices["semantic_pass"])),
+            {
+                "status": "baseline-only",
+                "compiled": True,
+                "semantic_pass": False,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            },
+        ),
+        (
+            "refused",
+            int(slices["refused"]),
+            {
+                "status": "refused",
+                "compiled": False,
+                "semantic_pass": False,
+                "refused": True,
+                "blocked": False,
+                "failed": False,
+            },
+        ),
+        (

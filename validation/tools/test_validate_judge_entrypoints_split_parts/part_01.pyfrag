@@ -1,0 +1,800 @@
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "core-auto-evidence-validator",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "evidence-governance",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "translator-coverage-matrix",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "milestone-release-report",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+            {
+                "step": "lightweight-unittest",
+                "status": "passed",
+                "returncode": 0,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            },
+        ],
+    }
+
+
+def valid_vendored_clang_verification_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "artifact_kind": "vendored-clang-verification",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "status": "passed",
+        "clang": {
+            "source": "CLANG_PATH",
+            "path": "tools/llvm/bin/clang-18",
+            "version": "clang version 18.1.8",
+        },
+        "clang_required": False,
+        "clang_lane_verified": True,
+        "checks": {},
+        "command_logs": [],
+        "final_gate": {"status": "passed"},
+    }
+
+
+def valid_evidence_governance_report_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "evidence_root": "validation/evidence",
+        "failed_gates": [],
+        "policy_compliance": {
+            "policy_tier": "dev",
+            "status": "passed",
+            "failed_gates": [],
+            "gates": [],
+        },
+        "portability": {
+            "status": "passed",
+            "claim_anchor_issue_count": 0,
+            "profile_hash_issue_count": 0,
+        },
+        "inventory": {
+            "file_count": 0,
+            "total_bytes": 0,
+        },
+    }
+
+
+def valid_translator_coverage_matrix_report_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "matrix": {
+            "path": "validation/translator-coverage-matrix.json",
+            "capability_count": 0,
+        },
+        "capability_count": 0,
+        "dimensions": {},
+        "capabilities": [],
+        "capability_delta_ledger": {
+            "schema_version": 1,
+            "status": "recorded",
+            "ledger_count": 0,
+            "delta_count": 0,
+            "semantic_pass_count": 0,
+            "translator_generated_semantic_pass_count": 0,
+            "accepted_evidence_semantic_pass_count": 0,
+            "generated_candidate_status": {},
+            "route_levels": {},
+            "route_statuses": {},
+            "by_construct": {},
+            "ledgers": [],
+        },
+        "claim_boundary": "translator coverage report fixture; not semantic acceptance evidence",
+    }
+
+
+def valid_milestone_release_report_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "internal_preview",
+        "report_kind": "milestone-release-metrics",
+        "inputs": {},
+        "harness_architecture": {},
+        "core_translation_quality": {
+            "translation_coverage_numerator": 0,
+        },
+        "metrics": {
+            "translation_coverage_numerator": 0,
+        },
+        "readiness": {
+            "status": "internal_preview",
+            "blockers": ["fixture"],
+        },
+        "release_note_inputs": {},
+        "claim_boundary": "milestone release report fixture; not semantic acceptance evidence",
+    }
+
+
+def write_valid_competition_smoke_report_artifacts(
+    evidence_governance: Path,
+    coverage_matrix: Path,
+    milestone: Path,
+) -> None:
+    write_json(evidence_governance, valid_evidence_governance_report_payload())
+    write_json(coverage_matrix, valid_translator_coverage_matrix_report_payload())
+    write_json(milestone, valid_milestone_release_report_payload())
+
+
+def write_exact_competition_smoke_fixture(
+    root: Path,
+    *,
+    run_id: str,
+    availability_stdout: str = "provider/GLM-5.1\n",
+    command_log_stdout: str = "provider/GLM-5.1\n",
+) -> tuple[dict[str, str], dict[str, Any]]:
+    summary_path = root / "summary" / "competition-smoke-summary.json"
+    vendored_path = root / "summary" / "vendored-clang-verification.json"
+    evidence_governance = root / "reports" / "evidence-governance.json"
+    coverage_matrix = root / "reports" / "translator-coverage-matrix.json"
+    milestone = root / "reports" / "milestone-release-report.json"
+    command_log = root / "logs" / "commands.jsonl"
+    artifacts = {
+        "competition_smoke_summary": repo_relative(summary_path),
+        "vendored_clang_verification": repo_relative(vendored_path),
+        "evidence_governance_report": repo_relative(evidence_governance),
+        "translator_coverage_matrix": repo_relative(coverage_matrix),
+        "milestone_release_report": repo_relative(milestone),
+        "command_log": repo_relative(command_log),
+    }
+    payload = valid_competition_smoke_summary_payload()
+    payload["proof_class"] = "competition-exact"
+    payload["run_id"] = run_id
+    payload["execution_environment"].update(
+        {
+            "competition_exact_host_attested": True,
+            "detected_ci": False,
+            "detected_wsl": False,
+            "kind": "competition-host",
+            "system": "Linux",
+        }
+    )
+    payload["competition_profile_match"].update(
+        {
+            "cargo_mirror_config_present": True,
+            "clang_lane_verified": True,
+            "kernel_match": True,
+            "os_name_match": True,
+            "python_version_match": True,
+        }
+    )
+    payload["vendored_clang_verification"]["path"] = artifacts["vendored_clang_verification"]
+    payload["reports"]["evidence_governance"]["path"] = artifacts["evidence_governance_report"]
+    payload["reports"]["translator_coverage_matrix"]["path"] = artifacts["translator_coverage_matrix"]
+    payload["milestone_release_report"]["path"] = artifacts["milestone_release_report"]
+    payload["command_log"]["path"] = artifacts["command_log"]
+    for step in payload["steps"]:
+        step["status"] = "passed"
+        step["returncode"] = 0
+        step["log_path"] = artifacts["command_log"]
+        step.pop("proof_class_effect", None)
+    payload["steps"].append(
+        {
+            "step": "opencode-glm-model-probe",
+            "status": "passed",
+            "returncode": 0,
+            "log_path": artifacts["command_log"],
+        }
+    )
+    payload["opencode_model_availability"] = {
+        "status": "available",
+        "required_model": "GLM-5.1",
+        "model_listed": True,
+        "opencode_command": "opencode",
+        "argv": ["opencode", "models"],
+        "process_returncode": 0,
+        **write_opencode_model_probe_logs(root, stdout=availability_stdout),
+    }
+
+    write_json(summary_path, payload)
+    write_json(
+        vendored_path,
+        {
+            **valid_vendored_clang_verification_payload(),
+            "proof_class": "competition-exact",
+            "clang_required": True,
+        },
+    )
+    write_valid_competition_smoke_report_artifacts(evidence_governance, coverage_matrix, milestone)
+    command_log.parent.mkdir(parents=True, exist_ok=True)
+    command_log.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "step": step["step"],
+                    "command": (
+                        ["opencode", "models"]
+                        if step["step"] == "opencode-glm-model-probe"
+                        else valid_competition_smoke_step_command(step["step"])
+                    ),
+                    "returncode": 0,
+                    "stdout": command_log_stdout if step["step"] == "opencode-glm-model-probe" else "",
+                    "stderr": "",
+                    "workdir": ".",
+                    "run_id": run_id,
+                    "canonical": True,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+            for step in payload["steps"]
+        ),
+        encoding="utf-8",
+    )
+    payload["command_log"]["sha256"] = validator.sha256_file(command_log)
+    write_json(summary_path, payload)
+    return artifacts, payload
+
+
+def valid_competition_run_summary_payload(
+    *,
+    run_id: str,
+    proof_class: str = "local-simulation",
+    profile_id: str = "huawei-competition-ubuntu-24.04",
+    profile_sha256: str = DEFAULT_ENVIRONMENT_SHA256,
+) -> dict:
+    return {
+        "schema_version": 1,
+        "run_id": run_id,
+        "proof_class": proof_class,
+        "profile_id": profile_id,
+        "profile_sha256": profile_sha256,
+        "clang_source": "missing",
+        "cargo_mirror_activation": {
+            "method": "CARGO_HOME",
+            "path": "config/competition-env/cargo",
+            "config_file": "config/competition-env/cargo/config.toml",
+        },
+        "elapsed_seconds": 1,
+        "translator_version": "test-fixture",
+        "slices": {
+            "attempted": 1,
+            "typed_ir_generated": 1,
+            "compiled": 1,
+            "semantic_pass": 1,
+            "refused": 0,
+            "blocked": 0,
+            "failed": 0,
+        },
+        "unsafe_budget": {
+            "status": "passed",
+            "total_first_party_non_test_unsafe": 0,
+            "ratio": 0.0,
+        },
+        "artifact_roots": [
+            "target/competition-out/evidence",
+            "target/competition-out/summary",
+            "target/competition-out/logs",
+        ],
+        "final_gate": {
+            "status": "passed",
+            "validator": "validate_auto_translation_evidence.py --require-semantic-pass",
+        },
+    }
+
+
+def workflow_metrics_for_competition_summary(summary: dict) -> dict:
+    slices = summary["slices"]
+    return {
+        "schema_version": 1,
+        "run_id": summary["run_id"],
+        "proof_class": summary["proof_class"],
+        "units_total": slices["attempted"],
+        "units_converged": slices["semantic_pass"],
+        "units_baseline_only": max(0, int(slices["compiled"]) - int(slices["semantic_pass"])),
+        "unsafe_reduction": {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": summary["unsafe_budget"]["total_first_party_non_test_unsafe"],
+            "reduced_by": None,
+            "ratio": summary["unsafe_budget"]["ratio"],
+        },
+        "translation_before_after": {
+            "status": "not_provided",
+            "unit_count": 0,
+            "measured_unsafe_unit_count": 0,
+            "accepted_patch_unit_count": 0,
+            "units": [],
+        },
+        "avg_repair_rounds": 0.0,
+        "auto_recovery_rate": 0.0,
+        "human_interventions": 0,
+        "always_compiles": False,
+        "always_equivalent": False,
+        "fail_closed_count": int(slices["refused"]) + int(slices["blocked"]),
+        "root_cause_counts": {},
+        "wall_clock_seconds": summary["elapsed_seconds"],
+        "llm_calls": 0,
+        "per_unit_statuses": [
+            {
+                "unit_id": "demo/unit-1",
+                "source": "slice-spec",
+                "status": "converged",
+                "compiled": True,
+                "semantic_pass": True,
+                "refused": False,
+                "blocked": False,
+                "failed": False,
+            }
+        ],
+    }
+
+
+def write_competition_run_summary_with_workflow_metrics(summary_path: Path, summary: dict) -> Path:
+    metrics_path = summary_path.parent / "workflow-metrics.json"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(
+        json.dumps(workflow_metrics_for_competition_summary(summary), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    summary["workflow_metrics"] = {
+        "path": repo_relative(metrics_path),
+        "sha256": validator.sha256_file(metrics_path),
+    }
+    command_log_path = summary_path.parent / "commands.jsonl"
+    command_log_ref = repo_relative(command_log_path)
+    command_log_path.write_text(
+        json.dumps(
+            {
+                "canonical": True,
+                "command": ["python3", "-B", "-m", "validation.tools.validate_competition_run_summary"],
+                "log_path": command_log_ref,
+                "returncode": 0,
+                "run_id": summary["run_id"],
+                "stderr": "",
+                "stdout": "",
+                "step": "validate-competition-summary",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary["command_log"] = {
+        "path": command_log_ref,
+        "sha256": validator.sha256_file(command_log_path),
+    }
+    write_json(summary_path, summary)
+    return metrics_path
+
+
+def opencode_launch_policy() -> dict:
+    return {
+        "opencode_command": "opencode",
+        "opencode_model": "GLM-5.1",
+        "opencode_agent": "c2rust-migrator",
+        "opencode_variant": "max",
+        "opencode_skip_permissions": False,
+    }
+
+
+def opencode_launch_policy_sha256(policy: dict) -> str:
+    return hashlib.sha256(json.dumps(policy, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def opencode_preflight_argv(launch_policy: dict) -> list[str]:
+    argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        launch_policy["opencode_variant"],
+        "--model",
+        launch_policy["opencode_model"],
+    ]
+    if launch_policy.get("opencode_agent"):
+        argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy.get("opencode_skip_permissions"):
+        argv.append("--dangerously-skip-permissions")
+    argv.append("Execute test preflight marker.")
+    return argv
+
+
+def set_artifact_ref(ref: dict, path: Path, payload: dict | None = None) -> None:
+    if payload is None:
+        payload = {"report_kind": "test-artifact"}
+    write_json(path, payload)
+    ref["path"] = repo_relative(path)
+    ref["sha256"] = validator.sha256_file(path)
+
+
+def opencode_session_stdout_jsonl(events: list) -> str:
+    return "".join(json.dumps(event, sort_keys=True) + "\n" for event in events)
+
+
+def ensure_opencode_jsonl_session_events(session_payload: dict) -> None:
+    events = session_payload.get("session_events")
+    if not isinstance(events, list):
+        return
+    while len(events) < 2:
+        events.append(
+            {
+                "type": "text",
+                "part": {
+                    "text": "fixture-jsonl-keepalive",
+                },
+            }
+        )
+
+
+def bind_opencode_session_raw_logs(
+    session_path: Path,
+    session_payload: dict,
+    *,
+    stdout_path: Path | None = None,
+    stderr_path: Path | None = None,
+) -> None:
+    existing_session = json.loads(session_path.read_text(encoding="utf-8")) if session_path.is_file() else {}
+    if stdout_path is None:
+        stdout_path_text = session_payload.get("stdout_path") or existing_session.get("stdout_path")
+        stdout_path = REPO_ROOT / stdout_path_text if stdout_path_text else session_path.with_name("stdout.log")
+    if stderr_path is None:
+        stderr_path_text = session_payload.get("stderr_path") or existing_session.get("stderr_path")
+        stderr_path = REPO_ROOT / stderr_path_text if stderr_path_text else session_path.with_name("stderr.log")
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    if "session_events" in session_payload:
+        ensure_opencode_jsonl_session_events(session_payload)
+        stdout_path.write_text(
+            opencode_session_stdout_jsonl(session_payload["session_events"]),
+            encoding="utf-8",
+            newline="\n",
+        )
+    elif not stdout_path.exists():
+        stdout_path.write_text("", encoding="utf-8", newline="\n")
+    if not stderr_path.exists():
+        stderr_path.write_text("", encoding="utf-8", newline="\n")
+    session_payload["stdout_path"] = repo_relative(stdout_path)
+    session_payload["stderr_path"] = repo_relative(stderr_path)
+    session_payload["stdout_sha256"] = validator.sha256_file(stdout_path)
+    session_payload["stderr_sha256"] = validator.sha256_file(stderr_path)
+
+
+def set_all_opencode_preflight_refs(payload: dict, path: Path, *, run_id: str, launch_policy: dict) -> None:
+    base_root = path.parent.parent if path.parent.name == "harness" else path.parent
+    harness_dir = base_root / "harness"
+    logs_dir = base_root / "logs"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    marker_path = harness_dir / "opencode-preflight-marker.json"
+    contract_path = harness_dir / "opencode-preflight-contract.json"
+    session_path = logs_dir / "opencode-preflight-session-evidence.json"
+    stdout_path = logs_dir / "opencode-preflight.stdout.log"
+    stderr_path = logs_dir / "opencode-preflight.stderr.log"
+    runtime_env = opencode_runtime_env_contract(base_root, scope="preflight")
+    marker_command = [
+        "python3",
+        "-B",
+        "validation/tools/opencode_agent_harness.py",
+        "write-preflight-marker",
+        "--marker",
+        repo_relative(marker_path),
+        "--run-id",
+        run_id,
+    ]
+    marker_command_line = shlex.join(marker_command)
+    preflight_argv = opencode_preflight_argv(launch_policy)
+    preflight_command_line = shlex.join(preflight_argv)
+    write_json(
+        marker_path,
+        {
+            "schema_version": 1,
+            "report_kind": "opencode-preflight-marker",
+            "run_id": run_id,
+            "status": "written",
+        },
+    )
+    write_json(
+        contract_path,
+        {
+            "schema_version": 1,
+            "run_id": run_id,
+            "runner_kind": "opencode-preflight",
+            "expected_marker_path": repo_relative(marker_path),
+            "worker_command": marker_command,
+            "worker_command_line": marker_command_line,
+            "worker_command_sha256": validator.sha256_text(marker_command_line),
+            "opencode_argv": preflight_argv,
+            "opencode_command_line": preflight_command_line,
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+            "prompt": preflight_argv[-1],
+            "opencode_runtime_env": runtime_env,
+        },
+    )
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {
+                        "input": {
+                            "command": marker_command_line,
+                            "workdir": str(REPO_ROOT),
+                        }
+                    },
+                }
+            }
+        ],
+    }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
+    write_json(session_path, session_payload)
+    model_stdout = "GLM-5.1\n"
+    model_stderr = ""
+    model_stdout_path = logs_dir / "opencode-models.stdout.log"
+    model_stderr_path = logs_dir / "opencode-models.stderr.log"
+    model_stdout_path.write_text(model_stdout, encoding="utf-8")
+    model_stderr_path.write_text(model_stderr, encoding="utf-8")
+    preflight_payload = {
+        "report_kind": "opencode-preflight-report",
+        "status": "passed",
+        "process_returncode": 0,
+        "argv": preflight_argv,
+        "marker_exists": True,
+        "marker_path": repo_relative(marker_path),
+        "marker": {
+            "path": repo_relative(marker_path),
+            "sha256": validator.sha256_file(marker_path),
+        },
+        "opencode_run_launched": True,
+        "run_id": run_id,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "opencode_runtime_env": runtime_env,
+        "handoff_contract": {
+            "path": repo_relative(contract_path),
+            "sha256": validator.sha256_file(contract_path),
+        },
+        "opencode_session_evidence": {
+            "path": repo_relative(session_path),
+            "sha256": validator.sha256_file(session_path),
+        },
+        "opencode_model_availability": {
+            "status": "available",
+            "opencode_command": "opencode",
+            "required_model": "GLM-5.1",
+            "argv": ["opencode", "models"],
+            "model_listed": True,
+            "process_returncode": 0,
+            "stdout_sha256": validator.sha256_text(model_stdout),
+            "stderr_sha256": validator.sha256_text(model_stderr),
+            "logs": {
+                "stdout": repo_relative(model_stdout_path),
+                "stderr": repo_relative(model_stderr_path),
+            },
+        },
+        "contract_verification": {
+            "status": "executed",
+            "expected_worker_command_line": marker_command_line,
+            "expected_summary_path": repo_relative(marker_path),
+            "expected_worker_command_sha256": validator.sha256_text(marker_command_line),
+            "executed_shell_command_count": 1,
+            "executed_shell_commands": [marker_command_line],
+            "first_tool_name": "bash",
+            "first_shell_command": marker_command_line,
+            "first_shell_tool_name": "bash",
+            "first_shell_workdir_status": "repo_root",
+            "expected_workdir_status": "repo_root",
+            "first_shell_command_matches_worker_command": True,
+            "first_shell_workdir_matches_repo_root": True,
+            "worker_command_seen": True,
+            "summary_exists": True,
+            "tools_before_first_shell": [],
+            "contract_failure_reason": "",
+        },
+    }
+    write_json(path, preflight_payload)
+    binding = {
+        "path": repo_relative(path),
+        "sha256": validator.sha256_file(path),
+        "status": "passed",
+        "contract_status": "executed",
+        "run_id": run_id,
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+    }
+    payload["evidence_artifact_refs"]["opencode_preflight_report"] = json.loads(json.dumps(binding))
+    payload["opencode_agent_runtime"]["opencode_preflight_report"] = json.loads(json.dumps(binding))
+    for worker in payload["opencode_agent_runtime"]["workers"]:
+        worker["opencode_preflight_report"] = json.loads(json.dumps(binding))
+
+
+def refresh_all_opencode_preflight_ref_hashes(payload: dict, path: Path) -> None:
+    new_sha = validator.sha256_file(path)
+    for ref in (
+        payload["evidence_artifact_refs"]["opencode_preflight_report"],
+        payload["opencode_agent_runtime"]["opencode_preflight_report"],
+        payload["opencode_agent_runtime"]["workers"][0]["opencode_preflight_report"],
+    ):
+        ref["sha256"] = new_sha
+
+
+def rewrite_preflight_session_evidence(preflight_path: Path, session_payload: dict) -> dict:
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    session_ref = preflight_payload["opencode_session_evidence"]
+    session_path = REPO_ROOT / session_ref["path"]
+    existing_session = json.loads(session_path.read_text(encoding="utf-8"))
+    if "opencode_runtime_env" not in session_payload and "opencode_runtime_env" in existing_session:
+        session_payload["opencode_runtime_env"] = existing_session["opencode_runtime_env"]
+    bind_opencode_session_raw_logs(session_path, session_payload)
+    write_json(session_path, session_payload)
+    session_ref["sha256"] = validator.sha256_file(session_path)
+    write_json(preflight_path, preflight_payload)
+    return preflight_payload
+
+
+def preflight_marker_command_line(preflight_path: Path) -> str:
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    contract_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+    contract_payload = json.loads(contract_path.read_text(encoding="utf-8"))
+    return contract_payload["worker_command_line"]
+
+
+def preflight_marker_path(preflight_path: Path) -> Path:
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    return REPO_ROOT / preflight_payload["marker_path"]
+
+
+def worker_command(worker_root: Path) -> list[str]:
+    return [
+        "python3",
+        "-B",
+        "scripts/c2rust-migrator.py",
+        "--phase",
+        "migrate",
+        "--input",
+        repo_relative(worker_root / "harness" / "request.json"),
+    ]
+
+
+def write_worker_opencode_contract_artifacts(worker: dict, worker_root: Path, *, run_id: str, launch_policy: dict) -> None:
+    summary_path = worker_root / "summary" / "competition-run-summary.json"
+    worker_report_path = worker_root / "harness" / "run-worker-report.json"
+    handoff_path = worker_root / "harness" / "opencode-handoff-contract.json"
+    session_path = worker_root / "logs" / "opencode-session-evidence.json"
+    stdout_path = worker_root / "logs" / "stdout.log"
+    stderr_path = worker_root / "logs" / "stderr.log"
+    runtime_env = opencode_runtime_env_contract(worker_root, scope=worker["worker_id"])
+    command = worker_command(worker_root)
+    command_line = shlex.join(command)
+    opencode_prompt = f"Execute worker {worker['worker_id']} handoff contract."
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        launch_policy["opencode_variant"],
+        "--model",
+        launch_policy["opencode_model"],
+    ]
+    if launch_policy.get("opencode_agent"):
+        opencode_argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy.get("opencode_skip_permissions"):
+        opencode_argv.append("--dangerously-skip-permissions")
+    opencode_argv.append(opencode_prompt)
+    summary_payload = valid_competition_run_summary_payload(run_id=run_id)
+    write_competition_run_summary_with_workflow_metrics(summary_path, summary_payload)
+    worker["summary"]["path"] = repo_relative(summary_path)
+    worker["summary"]["sha256"] = validator.sha256_file(summary_path)
+    set_artifact_ref(
+        worker["worker_report"],
+        worker_report_path,
+        {
+            "schema_version": 1,
+            "report_kind": "run-worker-report",
+            "worker_id": worker["worker_id"],
+            "mode": "opencode",
+            "runner_kind": "opencode-run",
+            "summary_path": repo_relative(summary_path),
+            "summary_status": "passed",
+            "recorded": True,
+            "exit_code": 0,
+            "process_returncode": 0,
+            "opencode_runtime_env": runtime_env,
+        },
+    )
+    write_json(
+        handoff_path,
+        {
+            "schema_version": 1,
+            "runner_kind": "opencode-run",
+            "run_id": run_id,
+            "worker_id": worker["worker_id"],
+            "launch_policy": launch_policy,
+            "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+            "worker_command": command,
+            "worker_command_line": command_line,
+            "worker_command_sha256": validator.sha256_text(command_line),
+            "expected_summary_path": repo_relative(summary_path),
+            "opencode_argv": opencode_argv,
+            "opencode_command_line": shlex.join(opencode_argv),
+            "prompt": opencode_prompt,
+            "opencode_runtime_env": runtime_env,
+        },
+    )
+    worker["handoff_contract"]["path"] = repo_relative(handoff_path)
+    worker["handoff_contract"]["sha256"] = validator.sha256_file(handoff_path)
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {"input": {"command": command_line, "workdir": str(REPO_ROOT)}},
+                }
+            }
+        ],
+    }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
+    write_json(session_path, session_payload)
+    worker["opencode_session_evidence"]["path"] = repo_relative(session_path)
+    worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+    worker["logs"]["stdout"]["path"] = repo_relative(stdout_path)
+    worker["logs"]["stdout"]["sha256"] = validator.sha256_file(stdout_path)
+    worker["logs"]["stderr"]["path"] = repo_relative(stderr_path)
+    worker["logs"]["stderr"]["sha256"] = validator.sha256_file(stderr_path)
+    worker["opencode_contract_verification"] = {
+        "status": "executed",
+        "expected_worker_command_line": command_line,
+        "expected_summary_path": repo_relative(summary_path),
+        "expected_worker_command_sha256": validator.sha256_text(command_line),
+        "executed_shell_command_count": 1,
+        "executed_shell_commands": [command_line],
+        "first_tool_name": "bash",
+        "first_shell_command": command_line,
+        "first_shell_tool_name": "bash",
+        "first_shell_workdir_status": "repo_root",
+        "expected_workdir_status": "repo_root",
+        "first_shell_command_matches_worker_command": True,
+        "first_shell_workdir_matches_repo_root": True,
+        "worker_command_seen": True,

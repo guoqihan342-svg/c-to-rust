@@ -215,7 +215,7 @@ fn inc_dec_assignment_target_type<'a>(
             is_arrow: false,
             ..
         } => {
-            if context != "statement" {
+            if context != "statement" && context != "ForStmt step" {
                 return Err(format!(
                     "{context} inc/dec record field targets are unsupported outside standalone statements"
                 ));

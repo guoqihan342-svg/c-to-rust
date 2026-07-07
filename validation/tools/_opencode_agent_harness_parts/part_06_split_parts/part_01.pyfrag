@@ -1,0 +1,236 @@
+        failed_fields.append("report_kind")
+    if payload.get("run_id") != run_id:
+        failed_fields.append("run_id")
+    if payload.get("status") != "written":
+        failed_fields.append("status")
+    return {
+        "status": "passed" if not failed_fields else "failed",
+        "failed_fields": failed_fields,
+        "path": repo_relative(marker_path, repo_root=repo_root),
+    }
+
+
+def write_opencode_preflight_marker(
+    *,
+    marker_path: Path,
+    run_id: str,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    marker_path = repo_path(marker_path, repo_root=repo_root)
+    marker = {
+        "schema_version": SCHEMA_VERSION,
+        "report_kind": "opencode-preflight-marker",
+        "run_id": run_id,
+        "status": "written",
+        "created_at": now_text(),
+    }
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(marker_path, marker)
+    return {
+        "status": "written",
+        "marker_path": repo_relative(marker_path, repo_root=repo_root),
+        "sha256": sha256_file(marker_path),
+    }
+
+
+def worker_failure_root_cause(
+    *,
+    process_returncode: int,
+    recorded: bool,
+    summary_status: str,
+    opencode_contract_verification: dict[str, Any] | None = None,
+) -> str:
+    if process_returncode == PROCESS_TIMEOUT_EXIT_CODE:
+        return "process_timeout"
+    if process_returncode != 0:
+        return "worker_process_failed"
+    if (
+        opencode_contract_verification is not None
+        and opencode_contract_verification.get("status") == "not-executed"
+        and not recorded
+    ):
+        return "opencode_contract_not_executed"
+    if not recorded:
+        return "missing_summary"
+    if summary_status != "passed":
+        return "final_gate_failed"
+    return "worker_failed"
+
+
+def worker_summary_root_cause(
+    summary: dict[str, Any] | None,
+    *,
+    summary_path: Path,
+    repo_root: Path,
+) -> str | None:
+    if not isinstance(summary, dict):
+        return None
+    workflow_ref = summary.get("workflow_metrics")
+    if not isinstance(workflow_ref, dict) or not isinstance(workflow_ref.get("path"), str):
+        return None
+    metrics_path = resolve_summary_artifact(str(workflow_ref["path"]), summary_path=summary_path, repo_root=repo_root)
+    if metrics_path is None or not metrics_path.exists():
+        return None
+    try:
+        metrics = load_json(metrics_path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    root_cause_counts = metrics.get("root_cause_counts")
+    if isinstance(root_cause_counts, dict):
+        for key, count in root_cause_counts.items():
+            if isinstance(key, str) and key and isinstance(count, int) and count > 0:
+                return key
+    per_unit_statuses = metrics.get("per_unit_statuses")
+    if isinstance(per_unit_statuses, list):
+        for unit in per_unit_statuses:
+            if isinstance(unit, dict) and isinstance(unit.get("root_cause_key"), str) and unit["root_cause_key"]:
+                return str(unit["root_cause_key"])
+    return None
+
+
+def worker_repair_diagnostics(
+    *,
+    stdout_path: Path,
+    stderr_path: Path,
+    process_returncode: int,
+    root_cause_key: str,
+) -> dict[str, Any]:
+    stdout_tail = redact_local_absolute_paths(file_tail(stdout_path, REPAIR_LOG_TAIL_CHARS))
+    stderr_tail = redact_local_absolute_paths(file_tail(stderr_path, REPAIR_LOG_TAIL_CHARS))
+    combined = "\n".join(part for part in [stderr_tail, stdout_tail] if part)
+    diagnostics: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "root_cause_key": root_cause_key,
+        "process_returncode": process_returncode,
+        "stdout_tail": stdout_tail,
+        "stderr_tail": stderr_tail,
+        "primary_error": {
+            "kind": "process",
+            "message": root_cause_key,
+        },
+    }
+    rustc_match = re.search(r"\berror\[(E\d+)\]:\s*(.+)", combined)
+    if rustc_match:
+        diagnostics["primary_error"] = {
+            "kind": "rustc",
+            "code": rustc_match.group(1),
+            "message": rustc_match.group(2).strip(),
+        }
+    traceback_text = extract_python_traceback(combined)
+    if traceback_text:
+        diagnostics["python_traceback"] = traceback_text
+        if diagnostics["primary_error"]["kind"] == "process":
+            last_line = next((line.strip() for line in reversed(traceback_text.splitlines()) if line.strip()), "")
+            diagnostics["primary_error"] = {
+                "kind": "python",
+                "message": last_line or "python traceback",
+            }
+    return diagnostics
+
+
+def redact_local_absolute_paths(text: str) -> str:
+    return LOCAL_ABSOLUTE_PATH_TEXT.sub("<local-absolute-path>", text)
+
+
+def file_tail(path: Path, max_chars: int) -> str:
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return text[-max_chars:]
+
+
+def extract_python_traceback(text: str) -> str:
+    marker = "Traceback (most recent call last):"
+    index = text.find(marker)
+    if index < 0:
+        return ""
+    return text[index:][-REPAIR_LOG_TAIL_CHARS:]
+
+
+def worker_repair_hint_payload(
+    *,
+    db_path: Path,
+    run_id: str,
+    worker_id: str,
+    request: dict[str, Any],
+    root_cause_key: str,
+    summary_status: str,
+    process_returncode: int,
+    summary_path: Path,
+    report_path: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    repo_root: Path,
+    exit_code: int,
+    attempt_number: int,
+    diagnostics: dict[str, Any],
+    retry_of: str | None = None,
+    rollback_evidence: dict[str, Any] | None = None,
+    rejected_summary_evidence: dict[str, Any] | None = None,
+    handoff_contract: dict[str, Any] | None = None,
+    opencode_session_evidence: dict[str, Any] | None = None,
+    opencode_contract_verification: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    target_id = str(request.get("target_id", "unknown"))
+    slice_id = str(request.get("slice_id", "unknown"))
+    hint_id = f"repair:{run_id}:{worker_id}:{root_cause_key}"
+    retry_command = portable_python_script_argv(
+        "validation/tools/opencode_agent_harness.py",
+        "retry-worker",
+        "--db",
+        repo_relative(db_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+        "--hint-id",
+        hint_id,
+    )
+    hint = {
+        "schema_version": SCHEMA_VERSION,
+        "hint_id": hint_id,
+        "run_id": run_id,
+        "worker_id": worker_id,
+        "target_id": target_id,
+        "slice_id": slice_id,
+        "root_cause_key": root_cause_key,
+        "status": "open",
+        "summary_status": summary_status,
+        "process_returncode": process_returncode,
+        "summary_path": repo_relative(summary_path, repo_root=repo_root),
+        "worker_report_path": repo_relative(report_path, repo_root=repo_root),
+        "logs": {
+            "stdout": repo_relative(stdout_path, repo_root=repo_root),
+            "stderr": repo_relative(stderr_path, repo_root=repo_root),
+        },
+        "diagnostics": diagnostics,
+        "attempts": [
+            repair_attempt_payload(
+                attempt_number=attempt_number,
+                summary_status=summary_status,
+                process_returncode=process_returncode,
+                exit_code=exit_code,
+                summary_path=repo_relative(summary_path, repo_root=repo_root),
+                report_path=repo_relative(report_path, repo_root=repo_root),
+                logs={
+                    "stdout": repo_relative(stdout_path, repo_root=repo_root),
+                    "stderr": repo_relative(stderr_path, repo_root=repo_root),
+                },
+                root_cause_key=root_cause_key,
+                retry_of=retry_of,
+                rollback_evidence=rollback_evidence,
+                diagnostics=diagnostics,
+            )
+        ],
+        "retry_command": retry_command,
+        "revalidate_gate": "competition-run-summary.final_gate.status == passed",
+    }
+    if rejected_summary_evidence is not None:
+        hint["rejected_summary_evidence"] = rejected_summary_evidence
+    if handoff_contract is not None:
+        hint["handoff_contract"] = handoff_contract
+    if opencode_session_evidence is not None:
+        hint["opencode_session_evidence"] = opencode_session_evidence
+    if opencode_contract_verification is not None:
+        hint["opencode_contract_verification"] = opencode_contract_verification
+    return hint

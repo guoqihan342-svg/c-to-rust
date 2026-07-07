@@ -1,0 +1,226 @@
+            """
+            insert into slices(
+              target_id, slice_id, source_repo_root_rel, source_file_rel,
+              function_name, source_commit, slice_spec_path, slice_spec_sha256,
+              payload_json
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(target_id, slice_id) do update set
+              source_repo_root_rel=excluded.source_repo_root_rel,
+              source_file_rel=excluded.source_file_rel,
+              function_name=excluded.function_name,
+              source_commit=excluded.source_commit,
+              slice_spec_path=excluded.slice_spec_path,
+              slice_spec_sha256=excluded.slice_spec_sha256,
+              payload_json=excluded.payload_json
+            """,
+            (
+                target_id,
+                slice_id,
+                source_repo_root_rel,
+                source_file_rel,
+                function,
+                source_commit,
+                slice_spec_rel,
+                slice_spec_sha256,
+                json.dumps(assignment["slice"], sort_keys=True),
+            ),
+        )
+        connection.execute(
+            """
+            insert into agent_tasks(
+              task_id, run_id, agent_id, target_id, slice_id, phase,
+              status, attempt, allowed_paths_json, started_at
+            )
+            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            on conflict(task_id) do update set status=excluded.status
+            """,
+            (
+                task_id,
+                run_id,
+                worker_id,
+                target_id,
+                slice_id,
+                "migrate",
+                "assigned",
+                1,
+                json.dumps([out_root_rel], sort_keys=True),
+                now,
+            ),
+        )
+        connection.execute(
+            """
+            insert into leases(resource_key, run_id, lease_owner, status, expires_at, heartbeat_at, fencing_token)
+            values (?, ?, ?, ?, ?, ?, ?)
+            on conflict(resource_key) do update set
+              run_id=excluded.run_id,
+              lease_owner=excluded.lease_owner,
+              status=excluded.status,
+              expires_at=excluded.expires_at,
+              heartbeat_at=excluded.heartbeat_at,
+              fencing_token=leases.fencing_token + 1
+            """,
+            (resource_key, run_id, worker_id, "active", expires_at, now, 1),
+        )
+        assignment_path = assignment_file_path(db_path, worker_id)
+        assignment_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(assignment_path, assignment)
+        request_path = assignment_path.with_name(f"{worker_id}-request.json")
+        atomic_write_json(request_path, request)
+        record_event(connection, run_id=run_id, event_type="assignment_created", payload=assignment)
+        connection.commit()
+    return assignment
+
+
+def plan_source_file(
+    *,
+    db_path: Path,
+    run_id: str,
+    target_id: str,
+    source_repo_root: Path,
+    source_file: str,
+    source_commit: str,
+    source_repository: str | None = None,
+    source_branch: str | None = None,
+    require_source_commit: str | None = None,
+    compiler_command_source: str | None = None,
+    include_paths: list[str] | None = None,
+    defines: list[str] | None = None,
+    reuse_accepted_evidence: bool = False,
+    accepted_evidence_root: str | None = None,
+    functions: list[str] | None = None,
+    slice_specs: list[str] | None = None,
+    out_root: Path,
+    slice_id_prefix: str,
+    worker_prefix: str = "worker",
+    limit: int | None = None,
+    lease_ttl_seconds: int = 3600,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    db_path = repo_path(db_path, repo_root=repo_root)
+    out_root = repo_path(out_root, repo_root=repo_root)
+    source_repo_root_path = repo_path(source_repo_root, repo_root=repo_root)
+    source_repo_root_rel = repo_relative(source_repo_root_path, repo_root=repo_root)
+    source_file_rel = checked_relative_path(source_file).as_posix()
+    source_path = repo_path(source_repo_root_path / source_file_rel, repo_root=repo_root)
+    discovered_functions = discover_top_level_function_names(source_path.read_text(encoding="utf-8"))
+    slice_specs_by_function = load_slice_specs_by_function(
+        slice_specs or [],
+        target_id=target_id,
+        source_commit=source_commit,
+        repo_root=repo_root,
+    )
+    requested_functions = list(functions or [])
+    if requested_functions:
+        missing_functions = [function for function in requested_functions if function not in discovered_functions]
+        if missing_functions:
+            raise SystemExit(
+                f"requested functions not discovered in {source_file_rel}: {', '.join(missing_functions)}"
+            )
+        planned_functions = requested_functions
+    elif slice_specs_by_function:
+        planned_functions = [function for function in discovered_functions if function in slice_specs_by_function]
+    else:
+        planned_functions = discovered_functions
+    if limit is not None:
+        if limit < 1:
+            raise SystemExit("plan-source-file --limit must be positive")
+        planned_functions = planned_functions[:limit]
+    if not planned_functions:
+        raise SystemExit(f"no top-level function definitions discovered in {source_file_rel}")
+
+    source_sha256 = sha256_file(source_path)
+    units: list[dict[str, str]] = []
+    for index, function in enumerate(planned_functions, start=1):
+        function_slug = slug_id(function)
+        worker_id = f"{worker_prefix}-{index:03d}-{function_slug}"
+        slice_spec = slice_specs_by_function.get(function)
+        slice_id = str(slice_spec["slice_id"]) if slice_spec else f"{slice_id_prefix}-{function_slug}"
+        worker_out_root = out_root / "workers" / worker_id
+        assign_slice(
+            db_path=db_path,
+            run_id=run_id,
+            worker_id=worker_id,
+            target_id=target_id,
+            slice_id=slice_id,
+            source_repo_root=Path(source_repo_root_rel),
+            source_repository=source_repository,
+            source_branch=source_branch,
+            source_file=source_file_rel,
+            function=function,
+            source_commit=source_commit,
+            source_sha256=source_sha256,
+            require_source_commit=require_source_commit,
+            compiler_command_source=compiler_command_source,
+            include_paths=include_paths,
+            defines=defines,
+            reuse_accepted_evidence=reuse_accepted_evidence,
+            accepted_evidence_root=accepted_evidence_root,
+            slice_spec=str(slice_spec["path"]) if slice_spec else None,
+            out_root=worker_out_root,
+            lease_ttl_seconds=lease_ttl_seconds,
+            repo_root=repo_root,
+        )
+        request_path = assignment_file_path(db_path, worker_id).with_name(f"{worker_id}-request.json")
+        units.append(
+            {
+                "worker_id": worker_id,
+                "slice_id": slice_id,
+                "function": function,
+                "out_root": repo_relative(worker_out_root, repo_root=repo_root),
+                "assignment_path": repo_relative(assignment_file_path(db_path, worker_id), repo_root=repo_root),
+                "request_path": repo_relative(request_path, repo_root=repo_root),
+                "source_repo_root": source_repo_root_rel,
+                "source_file": source_file_rel,
+                "source_commit": source_commit,
+                "source_sha256": source_sha256,
+            }
+        )
+        if require_source_commit:
+            units[-1]["require_source_commit"] = require_source_commit
+        if source_repository:
+            units[-1]["source_repository"] = source_repository
+        if source_branch:
+            units[-1]["source_branch"] = source_branch
+        if slice_spec:
+            units[-1]["slice_spec"] = str(slice_spec["path"])
+
+    plan_path = out_root / "harness" / "plans" / f"{target_id}-{slug_id(Path(source_file_rel).stem)}-workers.json"
+    plan = {
+        "schema_version": SCHEMA_VERSION,
+        "status": "planned",
+        "run_id": run_id,
+        "target_id": target_id,
+        "source_repo_root": source_repo_root_rel,
+        "source_file": source_file_rel,
+        "source_sha256": source_sha256,
+        "source_commit": source_commit,
+        "slice_id_prefix": slice_id_prefix,
+        "worker_prefix": worker_prefix,
+        "plan_path": repo_relative(plan_path, repo_root=repo_root),
+        "units": units,
+    }
+    if require_source_commit:
+        plan["require_source_commit"] = require_source_commit
+    if source_repository:
+        plan["source_repository"] = source_repository
+    if source_branch:
+        plan["source_branch"] = source_branch
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(plan_path, plan)
+    with closing(connect(db_path)) as connection:
+        ensure_schema(connection)
+        record_artifact(
+            connection,
+            run_id=run_id,
+            worker_id="planner",
+            kind="source-file-worker-plan",
+            path=plan_path,
+            status="planned",
+            semantic_role="worker-plan",
+            payload=plan,
+            repo_root=repo_root,
+        )
+        record_event(connection, run_id=run_id, event_type="source_file_planned", payload=plan)
+        connection.commit()
+    return plan

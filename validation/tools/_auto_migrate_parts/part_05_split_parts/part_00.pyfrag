@@ -1,0 +1,800 @@
+def c2rust_baseline_ref(
+    spec: dict[str, Any], evidence_dir: Path, c2rust_baseline: dict[str, Any] | None
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-c2rust-baseline-manifest.json"
+    status = c2rust_baseline.get("status", "missing") if c2rust_baseline else "missing"
+    return evidence_ref(path, status)
+
+
+def route_decision_ref(
+    spec: dict[str, Any], evidence_dir: Path, route_decision: dict[str, Any] | None
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-route-decision.json"
+    status = route_decision.get("status", "missing") if route_decision else "missing"
+    ref = evidence_ref(path, status)
+    if route_decision:
+        ref["level"] = route_decision.get("level")
+    return ref
+
+
+def validation_profile_ref(
+    spec: dict[str, Any], evidence_dir: Path, validation_profile: dict[str, Any] | None
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-validation-profile.json"
+    status = validation_profile.get("status", "missing") if validation_profile else "missing"
+    ref = evidence_ref(path, status)
+    if validation_profile:
+        ref["profile"] = validation_profile.get("profile")
+    return ref
+
+
+def verified_unsafe_baseline_ref(spec: dict[str, Any], evidence_dir: Path) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    path = evidence_dir / f"l3-{slice_id}-c2rust-verified-unsafe-baseline.json"
+    status = "missing"
+    if path.exists():
+        status = str(read_json(path).get("status", "missing"))
+    return evidence_ref(path, status)
+
+
+def evidence_json_status(path: Path, fallback: str) -> str:
+    if not path.exists() or not path.is_file() or path.suffix.lower() != ".json":
+        return fallback
+    try:
+        status = read_json(path).get("status")
+    except (OSError, json.JSONDecodeError):
+        return fallback
+    return status if isinstance(status, str) and status else fallback
+
+
+def bind_same_c2rust_output(
+    ref: dict[str, Any],
+    output_ref: dict[str, Any],
+    compile_artifact_ref: dict[str, Any],
+) -> dict[str, Any]:
+    bound = dict(ref)
+    bound["binding"] = "same_c2rust_output"
+    bound["c2rust_output"] = dict(output_ref)
+    bound["compile_artifact"] = dict(compile_artifact_ref)
+    return bound
+
+
+def c2rust_same_output_gate_refs(
+    evidence_dir: Path,
+    prefix: str,
+    direct_replay_ref: dict[str, Any],
+    output_ref: dict[str, Any] | None,
+    compile_artifact_ref: dict[str, Any] | None,
+    semantic_pass: bool,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    if not semantic_pass:
+        return None, ["c2rust_bound_gate_refs_not_implemented"]
+    if output_ref is None:
+        return None, ["c2rust_output_missing"]
+    if compile_artifact_ref is None:
+        return None, ["c2rust_compile_artifact_missing"]
+
+    missing: list[str] = []
+    refs: dict[str, Any] = {}
+    gate_specs: list[tuple[str, Path | None, str]] = [
+        ("c_oracle", evidence_dir / f"{prefix}-c-oracle-status.json", "C_ORACLE_GENERATED"),
+        ("rust_replay", None, "passed"),
+        ("schema_diff", evidence_dir / f"{prefix}-diff.json", "passed"),
+        ("negative_diff", evidence_dir / f"{prefix}-negative-diff.json", "passed"),
+        ("unsafe_scan", evidence_dir / f"{prefix}-unsafe-scan.json", "passed"),
+        ("unsafe_ledger", evidence_dir / f"{prefix}-unsafe-ledger.json", "passed"),
+        ("final_verification", evidence_dir / f"{prefix}-final-verification.json", "passed"),
+    ]
+    for gate, path, fallback_status in gate_specs:
+        if gate == "rust_replay":
+            ref = dict(direct_replay_ref)
+            ref["replay_kind"] = "direct_c2rust_output_replay"
+            ref["correctness_role"] = "direct_replay_evidence"
+        else:
+            assert path is not None
+            if gate == "final_verification":
+                ref = {
+                    "path": rel(path),
+                    "status": evidence_json_status(path, fallback_status),
+                    "hash_binding": "omitted_to_avoid_final_verification_verified_baseline_hash_cycle",
+                }
+            else:
+                ref = evidence_ref(path, evidence_json_status(path, fallback_status))
+        if gate == "final_verification":
+            if not path or not path.exists() or not path.is_file():
+                missing.append(f"{gate}_gate_ref_missing")
+        elif not ref.get("sha256"):
+            missing.append(f"{gate}_gate_ref_missing")
+        refs[gate] = bind_same_c2rust_output(ref, output_ref, compile_artifact_ref)
+
+    if missing:
+        return None, ["c2rust_bound_gate_refs_not_implemented", *missing]
+    return refs, []
+
+
+def emit_c2rust_verified_unsafe_baseline(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+    accepted: dict[str, Any] | None,
+    semantic_pass: bool,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    baseline_status = str(c2rust_baseline.get("status", "missing"))
+    output_ref = c2rust_baseline_output_ref(c2rust_baseline, baseline_status)
+    compile_artifact_ref = c2rust_baseline_compile_artifact_ref(c2rust_baseline)
+    blocked_reasons: list[str] = []
+    if baseline_status != "generated":
+        blocked_reasons.append("c2rust_baseline_not_generated")
+    if output_ref is None:
+        blocked_reasons.append("c2rust_output_missing")
+    compile_status = c2rust_baseline.get("compile", {})
+    if not isinstance(compile_status, dict) or compile_status.get("status") != "passed":
+        blocked_reasons.append("c2rust_compile_not_passed")
+    if compile_artifact_ref is None:
+        blocked_reasons.append("c2rust_compile_artifact_missing")
+    direct_replay: dict[str, Any] = {
+        "status": "blocked",
+        "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    }
+    if (
+        baseline_status == "generated"
+        and output_ref is not None
+        and isinstance(compile_status, dict)
+        and compile_status.get("status") == "passed"
+        and compile_artifact_ref is not None
+    ):
+        direct_replay = emit_c2rust_direct_replay_artifact(
+            spec,
+            evidence_dir,
+            c2rust_baseline,
+            output_ref,
+            compile_artifact_ref,
+        )
+    direct_replay_ref = evidence_ref(evidence_dir / f"{prefix}-c2rust-direct-replay.json", str(direct_replay.get("status")))
+    same_output_gate_refs: dict[str, Any] | None = None
+    if direct_replay.get("status") == "passed":
+        same_output_gate_refs, same_output_gate_ref_reasons = c2rust_same_output_gate_refs(
+            evidence_dir,
+            prefix,
+            direct_replay_ref,
+            output_ref,
+            compile_artifact_ref,
+            semantic_pass,
+        )
+        blocked_reasons.extend(same_output_gate_ref_reasons)
+    else:
+        blocked_reasons.append(str(direct_replay.get("reason") or "direct_c2rust_replay_not_implemented"))
+    status = "blocked" if blocked_reasons else "passed"
+    if status == "passed":
+        semantic_claim_source = "verified_unsafe_baseline_gates"
+    elif direct_replay.get("status") == "passed":
+        semantic_claim_source = "blocked_missing_c2rust_bound_gates"
+    else:
+        semantic_claim_source = "blocked_missing_direct_c2rust_replay"
+    payload = {
+        "schema_version": 1,
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": status,
+        "semantic_pass": status == "passed",
+        "semantic_claim_source": semantic_claim_source,
+        "generated_draft_semantic_pass": False,
+        "source_commit": source_commit(spec),
+        "entry_function": spec.get("function_name"),
+        "fixture": {"path": fixture_path(spec), "hash": fixture_hash(spec)},
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_artifact_ref,
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+        "gate_refs": {
+            "c_oracle": evidence_ref(evidence_dir / f"{prefix}-c-oracle-status.json", "C_ORACLE_GENERATED" if semantic_pass else "draft"),
+            "rust_replay": evidence_ref(evidence_dir / f"{prefix}-rust-report.json", "passed" if semantic_pass else "incomplete"),
+            "schema_diff": evidence_ref(evidence_dir / f"{prefix}-diff.json", "passed" if semantic_pass else "incomplete"),
+            "negative_diff": evidence_ref(evidence_dir / f"{prefix}-negative-diff.json", "passed" if semantic_pass else "incomplete"),
+            "unsafe_scan": evidence_ref(evidence_dir / f"{prefix}-unsafe-scan.json", "passed" if semantic_pass else "incomplete"),
+            "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "passed" if semantic_pass else "incomplete"),
+            "final_verification": {"path": rel(evidence_dir / f"{prefix}-final-verification.json"), "status": "passed" if semantic_pass else "incomplete"},
+        },
+        "same_output_gate_refs": same_output_gate_refs,
+        "blocked_reasons": blocked_reasons,
+        "direct_c2rust_replay": {
+            "status": direct_replay.get("status"),
+            "semantic_pass": direct_replay.get("semantic_pass", False),
+            "observable_replay_pass": direct_replay.get("observable_replay_pass", False),
+            "artifact": direct_replay_ref if (evidence_dir / f"{prefix}-c2rust-direct-replay.json").exists() else None,
+            "reason": direct_replay.get("reason"),
+            "c2rust_output": direct_replay.get("c2rust_output", output_ref),
+            "compile_artifact": direct_replay.get("compile_artifact", compile_artifact_ref),
+        },
+        "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
+        "claim_boundary": {
+            "semantic_pass": status == "passed",
+            "generated_draft_semantic_pass": False,
+            "accepted_evidence_reused": False,
+            "compile_only_is_semantic_pass": False,
+            "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+        },
+    }
+    write_json(evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json", payload)
+    return payload
+
+
+def bind_verified_unsafe_baseline_to_final_verification(spec: dict[str, Any], evidence_dir: Path) -> None:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    final_path = evidence_dir / f"{prefix}-final-verification.json"
+    if not final_path.exists():
+        return
+    final = read_json(final_path)
+    final["verified_unsafe_baseline"] = verified_unsafe_baseline_ref(spec, evidence_dir)
+    write_json(final_path, final)
+
+
+def semantic_pass_for_run(
+    accepted: dict[str, Any] | None,
+    rust_check: dict[str, Any],
+    validation_profile: dict[str, Any],
+) -> bool:
+    if accepted is None:
+        return False
+    if rust_check.get("status") != "passed":
+        return False
+    if validation_profile.get("status") != "passed":
+        return False
+    if validation_profile.get("route_level") == "L4" and not (
+        validation_profile.get("accepted_evidence_authoritative") is True
+        and validation_profile.get("generated_draft_semantic_pass") is False
+    ):
+        return False
+    if not oracle_boundary_contract_sufficient(validation_profile.get("oracle_boundary_contract")):
+        return False
+    return not validation_profile.get("skipped_gates")
+
+
+def emit_manifest(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    slice_spec_path: Path,
+    translator_summary: dict[str, Any],
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    patch: dict[str, Any],
+    cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    slice_id = required_str(spec, "slice_id")
+    l3_manifest = emit_l3_evidence_manifest(
+        spec,
+        evidence_dir,
+        slice_spec_path,
+        oracle,
+        replay,
+        rust_check,
+        cache,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+    )
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
+    payload = {
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": auto_manifest_status(semantic_pass, route_decision),
+        "semantic_pass": semantic_pass,
+        "source_commit": spec.get("source_commit"),
+        "fixture": {
+            "hash": fixture_hash(spec),
+            "path": fixture_path(spec),
+        },
+        "translator": translator_summary,
+        "oracle": oracle,
+        "replay": replay,
+        "rust_check": rust_check,
+        "patch": patch,
+        "cache": cache,
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "verified_unsafe_baseline": verified_unsafe_baseline_ref(spec, evidence_dir),
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+        "l3_evidence_manifest": {
+            "path": rel(l3_manifest),
+            "status": "passed" if semantic_pass else "incomplete",
+            "semantic_pass": semantic_pass,
+        },
+        "accepted_evidence_binding": accepted_binding_summary(accepted) if accepted else None,
+        "claim_boundary": {
+            "scope": auto_manifest_claim_scope(semantic_pass, route_decision),
+            "semantic_pass": semantic_pass,
+            "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
+            "generated_draft_semantic_pass": False,
+            "must_still_pass": []
+            if semantic_pass
+            else [
+                "C_ORACLE_GENERATED",
+                "Rust replay",
+                "schema-aware diff",
+                "negative diff",
+                "unsafe scan",
+                "version/config binding",
+            ],
+            "non_goals": spec.get("non_goals", []),
+            "alias_gate": alias_gate,
+            "external_callee_scope": external_callee_claim_scope(external_context),
+        },
+    }
+    write_json(evidence_dir / f"l3-{slice_id}-auto-translation-manifest.json", payload)
+    return payload
+
+
+def route_refuses_candidate_generation(route_decision: dict[str, Any]) -> bool:
+    translator = route_decision.get("translator", {})
+    return (
+        route_decision.get("level") == "L4"
+        or translator.get("kind") == "refuse"
+        or translator.get("candidate_generation_allowed") is False
+    )
+
+
+def generated_rust_draft_status(route_decision: dict[str, Any] | None) -> str:
+    if route_decision and route_refuses_candidate_generation(route_decision):
+        return "blocked"
+    return "candidate"
+
+
+def auto_manifest_status(semantic_pass: bool, route_decision: dict[str, Any]) -> str:
+    if semantic_pass:
+        return "accepted_evidence_bound"
+    if route_refuses_candidate_generation(route_decision):
+        return "candidate_refused"
+    return "candidate_generated"
+
+
+def auto_manifest_claim_scope(semantic_pass: bool, route_decision: dict[str, Any]) -> str:
+    if semantic_pass:
+        return "auto-translation run bound to accepted_evidence_binding; final_verification.semantic_pass=true is sourced from accepted/named-slice evidence; generated_draft_semantic_pass remains false; generated Rust draft remains candidate/provenance"
+    if route_refuses_candidate_generation(route_decision):
+        return "refused translation route; no generated candidate can claim semantics"
+    return "generated Rust candidate only; semantic acceptance requires independent L3 gates"
+
+
+def accepted_evidence_authoritative_requested(spec: dict[str, Any], accepted: dict[str, Any] | None) -> bool:
+    if accepted is None or accepted.get("status") != "accepted":
+        return False
+    return spec.get("claim_boundary", {}).get("accepted_evidence_authoritative") is True
+
+
+def accepted_evidence_authoritative_route(route_decision: dict[str, Any]) -> bool:
+    policy = route_decision.get("policy", {})
+    return (
+        route_decision.get("level") == "L4"
+        and route_decision.get("status") == "refused"
+        and policy.get("accepted_evidence_authoritative") is True
+        and policy.get("generated_draft_semantic_pass") is False
+    )
+
+
+def mark_accepted_evidence_authoritative_route(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    route_decision: dict[str, Any],
+    accepted: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not accepted_evidence_authoritative_requested(spec, accepted):
+        return route_decision
+    route_decision["level"] = "L4"
+    route_decision["status"] = "refused"
+    route_decision["translator"] = {"kind": "refuse", "candidate_generation_allowed": False}
+    policy = route_decision.setdefault("policy", {})
+    policy["accepted_evidence_authoritative"] = True
+    policy["generated_draft_semantic_pass"] = False
+    route_decision["verification_profile"] = "L4-accepted-evidence"
+    candidate_generation = route_decision.get("candidate_generation")
+    if isinstance(candidate_generation, dict):
+        candidate_generation["governance_summary"] = route_governance_summary(
+            candidate_generation,
+            level=route_decision["level"],
+            route_status=route_decision["status"],
+            translator=route_decision["translator"],
+        )
+    rationale = route_decision.setdefault("rationale", [])
+    if not any(item.get("feature") == "accepted_evidence_authoritative" for item in rationale):
+        rationale.append({"feature": "accepted_evidence_authoritative", "weight": "override"})
+    write_json(evidence_dir / f"l3-{required_str(spec, 'slice_id')}-route-decision.json", route_decision)
+    return route_decision
+
+
+def emit_l3_evidence_manifest(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    slice_spec_path: Path,
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
+) -> Path:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
+    write_l3_candidate_supporting_evidence(
+        spec,
+        evidence_dir,
+        slice_spec_path,
+        oracle,
+        replay,
+        rust_check,
+        cache,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+    )
+    bind_route_decision_to_generated_artifacts(spec, evidence_dir, c2rust_baseline, route_decision, validation_profile)
+    emit_c2rust_verified_unsafe_baseline(
+        spec,
+        evidence_dir,
+        c2rust_baseline,
+        route_decision,
+        validation_profile,
+        accepted,
+        semantic_pass,
+    )
+    bind_verified_unsafe_baseline_to_final_verification(spec, evidence_dir)
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    external_context = external_direct_callee_context(spec, load_plan_call_expressions(evidence_dir, slice_id))
+    pointer_ref = evidence_ref(evidence_dir / f"{prefix}-pointer-graph.json", pointer_status_for_manifest(spec, evidence_dir))
+    if pointer_ref["status"] == "not_applicable":
+        pointer_ref["not_applicable_reason"] = "slice has no pointer surface"
+    test_ref = evidence_ref(evidence_dir / f"{prefix}-test-translation-generated.json", "recorded")
+    negative = read_json(evidence_dir / f"{prefix}-negative-diff.json")
+    manifest = {
+        "schema_version": 1,
+        "level": "L3",
+        "target_id": spec.get("target_id"),
+        "slice_id": slice_id,
+        "status": "passed" if semantic_pass else "incomplete",
+        "source_commit": source_commit(spec),
+        "repo_commit": repo_commit(),
+        "fixture": {
+            "path": fixture_path(spec),
+            "hash": fixture_hash(spec),
+            "operation_count": len(spec.get("fixture_contract", {}).get("cases", [])),
+        },
+        "evidence": {
+            "slice_contract": evidence_ref(evidence_dir / f"{prefix}-slice-contract.json", "recorded"),
+            "context_pack": evidence_ref(evidence_dir / f"{prefix}-context-pack.json", "recorded"),
+            "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+            "verified_unsafe_baseline": verified_unsafe_baseline_ref(spec, evidence_dir),
+            "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+            "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+            "cache_metadata": evidence_ref(evidence_dir / f"{prefix}-auto-cache-metadata.json", "recorded"),
+            "config_profile": {
+                **evidence_ref(evidence_dir / f"{prefix}-config-profile.json", "recorded" if semantic_pass else "incomplete"),
+                "profile_id": build_profile_id(spec),
+            },
+            "pointer_dependency_graph": pointer_ref,
+            "test_translation": test_ref,
+            "c_oracle": evidence_ref(evidence_dir / f"{prefix}-c-oracle-status.json", oracle.get("status", "draft")),
+            "rust_report": evidence_ref(evidence_dir / f"{prefix}-rust-report.json", "passed" if semantic_pass else "incomplete"),
+            "schema_diff": evidence_ref(evidence_dir / f"{prefix}-diff.json", "passed" if semantic_pass else "incomplete"),
+            "negative_diff": {
+                **evidence_ref(evidence_dir / f"{prefix}-negative-diff.json", negative.get("status", "incomplete")),
+                "expected_failure": True,
+                "mutation_detected": bool(negative.get("mutation_detected") or negative.get("detected")),
+            },
+            "rust_check": evidence_ref(evidence_dir / "rust-check.json", rust_check.get("status", "unknown")),
+            "unsafe_scan": evidence_ref(evidence_dir / f"{prefix}-unsafe-scan.json", "passed" if semantic_pass else "incomplete"),
+            "unsafe_ledger": evidence_ref(evidence_dir / f"{prefix}-unsafe-ledger.json", "passed" if semantic_pass else "incomplete"),
+            "performance_smoke": {
+                **evidence_ref(evidence_dir / f"{prefix}-performance-smoke.json", "recorded"),
+                "secondary_only": True,
+            },
+            "final_verification": evidence_ref(evidence_dir / f"{prefix}-final-verification.json", "passed" if semantic_pass else "incomplete"),
+            "summary": evidence_ref(evidence_dir / f"{prefix}-summary.json", "passed" if semantic_pass else "incomplete"),
+            "version_or_config_binding": evidence_ref(evidence_dir / f"{prefix}-version-manifest.json", "recorded"),
+        },
+        "claim_boundary": {
+            "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, and version/cache gates pass."
+            if not semantic_pass
+            else "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft.",
+            "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
+            "generated_draft_semantic_pass": False,
+            "behavior_fields_checked": behavior_fields(spec),
+            "accepted_metadata_differences": accepted_metadata_differences(spec),
+            "known_gaps": non_goals(spec)
+            + (
+                [
+                    "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence.",
+                ]
+                if semantic_pass
+                else [
+                    "C oracle has not produced an accepted semantic pass for this auto-translation candidate.",
+                    "Schema diff and negative diff are placeholders until accepted oracle/replay evidence exists.",
+                ]
+            ),
+            "must_not_claim": must_not_claim(spec)
+            + [
+                "semantic equivalence for this auto-generated Rust draft",
+                "full C99/C11 automatic translation",
+            ],
+            "alias_gate": alias_gate,
+            "external_callee_scope": external_callee_claim_scope(external_context),
+        },
+    }
+    clang_report = evidence_dir / f"{prefix}-clang-lowering-report.json"
+    if clang_report.exists():
+        manifest["evidence"]["clang_lowering_report"] = evidence_ref(clang_report, "recorded")
+    path = evidence_dir / f"{prefix}-evidence-manifest.json"
+    write_json(path, manifest)
+    return path
+
+
+def bind_route_decision_to_generated_artifacts(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+) -> None:
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    refs = {
+        "c2rust_baseline": c2rust_baseline_ref(spec, evidence_dir, c2rust_baseline),
+        "route_decision": route_decision_ref(spec, evidence_dir, route_decision),
+        "validation_profile": validation_profile_ref(spec, evidence_dir, validation_profile),
+    }
+    for file_name in [
+        f"{prefix}-auto-translation-plan.json",
+        f"{prefix}-ai-candidate-manifest.json",
+        "rust-check.json",
+        f"{prefix}-diff.json",
+        f"{prefix}-negative-diff.json",
+        f"{prefix}-unsafe-scan.json",
+        f"{prefix}-unsafe-ledger.json",
+    ]:
+        path = evidence_dir / file_name
+        if not path.exists():
+            continue
+        payload = read_json(path)
+        payload.update(refs)
+        write_json(path, payload)
+
+
+def c_oracle_output_gate_status(oracle: dict[str, Any]) -> str:
+    output_gate = c_oracle_output_gate_from_oracle(oracle)
+    return str(output_gate.get("status", "missing"))
+
+
+def c_oracle_output_gate_from_oracle(oracle: dict[str, Any]) -> dict[str, Any]:
+    compile_execution = oracle.get("compile_execution")
+    if not isinstance(compile_execution, dict):
+        return {}
+    harness_execution = compile_execution.get("harness_execution")
+    if not isinstance(harness_execution, dict):
+        return {}
+    output_gate = harness_execution.get("output_gate")
+    return output_gate if isinstance(output_gate, dict) else {}
+
+
+def generated_candidate_diff_from_diagnostics(
+    spec: dict[str, Any],
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_report_status: str,
+) -> dict[str, Any] | None:
+    compile_execution = oracle.get("compile_execution")
+    if not isinstance(compile_execution, dict):
+        return None
+    harness_execution = compile_execution.get("harness_execution")
+    if not isinstance(harness_execution, dict):
+        return None
+    output_gate = c_oracle_output_gate_from_oracle(oracle)
+    if not (
+        oracle.get("status") == "DRAFT_GENERATED"
+        and oracle.get("toolchain_status") == "COMPILE_SUCCEEDED_NOT_ORACLE"
+        and oracle.get("semantic_pass") is not True
+        and compile_execution.get("status") == "compile_succeeded_not_oracle"
+        and harness_execution.get("status") == "exited_zero_not_oracle"
+        and output_gate.get("status") == "matched_not_oracle"
+        and output_gate.get("semantic_pass") is not True
+        and replay.get("status") == "passed"
+        and replay.get("generated_draft_replay_pass") is True
+        and replay.get("generated_draft_semantic_pass") is not True
+        and rust_report_status == "passed"
+    ):
+        return None
+    return {
+        "schema_version": 1,
+        "status": "matched_not_oracle",
+        "semantic_pass": False,
+        "compared_fields": output_gate.get("compared_fields") or behavior_fields(spec),
+        "c_oracle_output_gate_status": output_gate.get("status"),
+        "rust_replay_status": replay.get("status"),
+        "matched_stdout_fragments": output_gate.get("matched_stdout_fragments", []),
+        "missing_stdout_fragments": output_gate.get("missing_stdout_fragments", []),
+        "boundary": "Generated candidate diff is diagnostic only until accepted oracle diff gates pass.",
+    }
+
+
+def write_l3_candidate_supporting_evidence(
+    spec: dict[str, Any],
+    evidence_dir: Path,
+    slice_spec_path: Path,
+    oracle: dict[str, Any],
+    replay: dict[str, Any],
+    rust_check: dict[str, Any],
+    cache: dict[str, Any],
+    c2rust_baseline: dict[str, Any],
+    route_decision: dict[str, Any],
+    validation_profile: dict[str, Any],
+    accepted: dict[str, Any] | None = None,
+) -> None:
+    """Write supporting evidence for a generated L3 candidate.
+
+    Without accepted evidence, this function deliberately emits diagnostic
+    draft reports: replay and candidate diff may show useful agreement, but
+    generated_draft_semantic_pass and semantic_pass remain false. If accepted
+    evidence is provided, control moves to the accepted writer below.
+    """
+    slice_id = required_str(spec, "slice_id")
+    prefix = f"l3-{slice_id}"
+    unsafe_count = rust_draft_unsafe_count(evidence_dir / f"{prefix}-rust-draft.rs")
+    semantic_pass = semantic_pass_for_run(accepted, rust_check, validation_profile)
+    generated_replay_pass = replay.get("status") == "passed" and replay.get("generated_draft_replay_pass") is True
+    generated_replay_failed = replay.get("status") == "failed"
+    rust_report_status = "passed" if generated_replay_pass else "failed" if generated_replay_failed else "incomplete"
+    rust_report_cases = generated_rust_report_cases(spec)
+    alias_gate = alias_gate_from_pointer_graph(evidence_dir, slice_id)
+    candidate_diff = generated_candidate_diff_from_diagnostics(spec, oracle, replay, rust_report_status)
+    candidate_diff_pass = candidate_diff is not None and candidate_diff.get("status") == "matched_not_oracle"
+    write_json(
+        evidence_dir / f"{prefix}-slice-contract.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "recorded",
+            "source_commit": source_commit(spec),
+            "fixture": {"path": fixture_path(spec), "hash": fixture_hash(spec)},
+            "c_boundary": spec.get("c_boundary", {}),
+            "rust_boundary": spec.get("rust_boundary", {}),
+            "claim_boundary": spec.get("claim_boundary", {}),
+        },
+    )
+    write_l3_config_profile(spec, evidence_dir, slice_spec_path)
+    if accepted is not None:
+        write_accepted_supporting_evidence(
+            spec,
+            evidence_dir,
+            oracle,
+            replay,
+            rust_check,
+            cache,
+            c2rust_baseline,
+            route_decision,
+            validation_profile,
+            accepted,
+        )
+        return
+    write_json(
+        evidence_dir / f"{prefix}-rust-report.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": rust_report_status,
+            "semantic_pass": False,
+            "reason": "Generated Rust replay passed fixture cases; semantic acceptance still requires C oracle, diff, negative diff, unsafe, and final verification gates."
+            if generated_replay_pass
+            else "Generated Rust replay failed fixture cases; semantic acceptance remains blocked."
+            if generated_replay_failed
+            else "Generated Rust replay test is a draft; accepted Rust report has not been produced.",
+            "case_count": len(rust_report_cases),
+            "cases": rust_report_cases,
+            "generated_draft": evidence_ref(evidence_dir / f"{prefix}-rust-draft.rs", generated_rust_draft_status(route_decision)),
+            "generated_draft_replay_pass": generated_replay_pass,
+            "generated_draft_semantic_pass": False,
+            "replay": replay,
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-diff.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "diff_gate": "schema_aware_c_rust_diff",
+            "status": "incomplete",
+            "semantic_pass": False,
+            "first_mismatch": None,
+            "compared_fields": behavior_fields(spec),
+            "accepted_diff_required": True,
+            "blocked_by": ["accepted_c_oracle"] if candidate_diff_pass else ["c_oracle", "rust_replay"],
+            "required_inputs": {
+                "c_oracle_required_status": "C_ORACLE_GENERATED",
+                "rust_report_required_status": "passed",
+                "c_oracle_actual_status": oracle.get("status", "unknown"),
+                "c_oracle_actual_toolchain_status": oracle.get("toolchain_status", "unknown"),
+                "c_oracle_output_gate_actual_status": c_oracle_output_gate_status(oracle),
+                "rust_replay_actual_status": replay.get("status", "unknown"),
+                "rust_report_actual_status": rust_report_status,
+            },
+            "generated_candidate_diff_pass": candidate_diff_pass,
+            **({"candidate_diff": candidate_diff} if candidate_diff_pass else {}),
+            "reason_code": "candidate_matched_accepted_oracle_required"
+            if candidate_diff_pass
+            else "missing_accepted_c_oracle"
+            if generated_replay_pass
+            else "missing_accepted_c_oracle_and_rust_replay",
+            "reason": "Generated candidate matched diagnostic C harness output and Rust replay fixtures; accepted C oracle diff remains required before semantic acceptance."
+            if candidate_diff_pass
+            else "Schema-aware diff requires accepted C oracle evidence before semantic acceptance."
+            if generated_replay_pass
+            else "Schema-aware diff requires accepted C oracle and Rust replay reports.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-negative-diff.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "negative_diff_gate": "schema_aware_negative_diff",
+            "status": "incomplete",
+            "expected_failure": True,
+            "mutation_detected": False,
+            "accepted_negative_diff_required": True,
+            "blocked_by": ["schema_diff"],
+            "root_blocked_by": ["c_oracle", "rust_replay"],
+            "required_inputs": {
+                "schema_diff_required_status": "passed",
+                "schema_diff_required_first_mismatch": None,
+                "schema_diff_actual_status": "incomplete",
+                "c_oracle_required_status": "C_ORACLE_GENERATED",
+                "rust_report_required_status": "passed",
+            },
+            "reason_code": "missing_passed_schema_diff",
+            "reason": "Negative diff is not run for draft-only auto-translation candidates.",
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-unsafe-scan.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed" if unsafe_count == 0 else "incomplete",
+            "first_party_non_test_unsafe_count": unsafe_count,
+            "first_party_non_test_unsafe_ratio": 0.0 if unsafe_count == 0 else None,
+            "semantic_pass": False,
+        },
+    )
+    write_json(
+        evidence_dir / f"{prefix}-unsafe-ledger.json",
+        {
+            "schema_version": 1,
+            "target_id": spec.get("target_id"),
+            "slice_id": slice_id,
+            "status": "passed" if unsafe_count == 0 else "incomplete",
+            "entries": [],
+            "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",

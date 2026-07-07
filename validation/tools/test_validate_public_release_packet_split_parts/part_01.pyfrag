@@ -1,0 +1,800 @@
+                    "unsafe_scan_evidence": refs["unsafe_scan"],
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 0,
+                        "reduced_by": 2,
+                        "ratio": 0.0,
+                    },
+                },
+                "rounds": [
+                    {
+                        "round": 1,
+                        "single_patch_per_round": True,
+                        "patch": refs["accepted_patch"],
+                        "patch_log": refs["patch_log"],
+                        "oracle_evidence": refs["oracle"],
+                        "schema_diff": refs["schema_diff"],
+                        "unsafe_scan_evidence": refs["unsafe_scan"],
+                        "unsafe_delta": {
+                            "status": "measured",
+                            "baseline_total_unsafe": 2,
+                            "current_total_unsafe": 0,
+                            "reduced_by": 2,
+                            "ratio": 0.0,
+                        },
+                    }
+                ],
+                "accepted_retry_hint": {"status": "not_exercised"},
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+            }
+        ],
+        "evidence_boundary": "OpenCode chat/session output is audit provenance only.",
+    }
+    write_json(attempt_path, payload)
+    return {
+        "artifact_name": "opencode_safety_transform_attempt",
+        "path": repo_relative(attempt_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(attempt_path),
+    }
+
+
+def attach_opencode_safety_attempt(packet: dict, attempt_ref: dict) -> None:
+    attempt_summary = {
+        "path": attempt_ref["path"],
+        "sha256": attempt_ref["sha256"],
+        "status": "present",
+        "artifact_read_status": "passed",
+        "attempt_status": "accepted",
+        "accepted_retry_hint_status": "not_exercised",
+        "accepted_retry_hint_statuses": ["not_exercised"],
+        "rollback_ref_count": 0,
+        "round_count": 1,
+        "max_repair_rounds": 5,
+        "unit_count": 1,
+    }
+    packet["opencode_patch_boundary"]["opencode_safety_transform_attempt"] = attempt_summary
+    append_published_artifact_ref(packet, attempt_ref)
+
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+    notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+    notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+    packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
+def attach_bound_opencode_judge_index(packet: dict, root: Path, attempt_ref: dict) -> None:
+    index_payload = judge_entrypoint_fixtures.valid_opencode_judge_index_payload()
+    judge_entrypoint_fixtures.materialize_opencode_judge_index_artifacts(
+        index_payload,
+        root / "judge-out",
+        profile_payload={
+            "schema_version": 1,
+            "profile_id": "opencode-profile",
+            "mode": "opencode",
+            **judge_entrypoint_fixtures.opencode_launch_policy(),
+            "auto_retry": True,
+        },
+    )
+    attempt_binding = json.loads(json.dumps(attempt_ref))
+    index_payload["evidence_artifact_refs"]["opencode_safety_transform_attempt"] = attempt_binding
+    worker = index_payload["opencode_agent_runtime"]["workers"][0]
+    worker["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+    worker_report_path = REPO_ROOT / worker["worker_report"]["path"]
+    worker_report = json.loads(worker_report_path.read_text(encoding="utf-8"))
+    worker_report["opencode_safety_transform_attempt"] = json.loads(json.dumps(attempt_ref))
+    write_json(worker_report_path, worker_report)
+    worker["worker_report"]["sha256"] = judge_validator.sha256_file(worker_report_path)
+
+    remove_published_artifact_ref(
+        packet,
+        artifact_name="judge_evidence_index",
+        entrypoint_id="opencode_multi_worker_evaluate_profile",
+    )
+    index_path = root / "judge-out" / "harness" / "judge-evidence-index.json"
+    write_json(index_path, index_payload)
+    append_published_artifact_ref(
+        packet,
+        {
+            "artifact_name": "judge_evidence_index",
+            "entrypoint_id": "opencode_multi_worker_evaluate_profile",
+            "path": repo_relative(index_path),
+            "status": "present",
+            "sha256": judge_validator.sha256_file(index_path),
+        },
+    )
+
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["publication_manifest"] = json.loads(json.dumps(packet["publication_manifest"]))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+    notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+    notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+    packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
+def remove_published_artifact_ref(packet: dict, *, artifact_name: str, entrypoint_id: str) -> None:
+    refs = packet["publication_manifest"].setdefault("published_artifact_refs", [])
+    packet["publication_manifest"]["published_artifact_refs"] = [
+        ref
+        for ref in refs
+        if not (
+            isinstance(ref, dict)
+            and ref.get("artifact_name") == artifact_name
+            and ref.get("entrypoint_id") == entrypoint_id
+        )
+    ]
+    packet["publication_manifest"]["published_artifact_count"] = len(
+        packet["publication_manifest"]["published_artifact_refs"]
+    )
+    packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+        packet["publication_manifest"]
+    )
+
+
+def append_published_artifact_ref(packet: dict, ref: dict) -> None:
+    refs = packet["publication_manifest"].setdefault("published_artifact_refs", [])
+    next_ref = json.loads(json.dumps(ref))
+    next_ref.setdefault("entrypoint_id", "opencode_multi_worker_evaluate_profile")
+    refs.append(next_ref)
+    packet["publication_manifest"]["published_artifact_count"] = len(refs)
+    packet["summary"]["published_artifact_ref_status"] = packet_validator.expected_published_artifact_ref_status(
+        packet["publication_manifest"]
+    )
+
+
+def packet_preflight_path(packet: dict) -> Path:
+    proof = packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]
+    return REPO_ROOT / proof["preflight_report"]["path"]
+
+
+def packet_preflight_marker_command_line(packet: dict) -> str:
+    preflight_payload = json.loads(packet_preflight_path(packet).read_text(encoding="utf-8"))
+    handoff_path = REPO_ROOT / preflight_payload["handoff_contract"]["path"]
+    handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+    return handoff_payload["worker_command_line"]
+
+
+def rewrite_packet_preflight_session(packet: dict, session_payload: dict) -> None:
+    preflight_path = packet_preflight_path(packet)
+    preflight_payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+    session_ref = preflight_payload["opencode_session_evidence"]
+    session_path = REPO_ROOT / session_ref["path"]
+    existing_session = json.loads(session_path.read_text(encoding="utf-8"))
+    if "opencode_runtime_env" not in session_payload and "opencode_runtime_env" in existing_session:
+        session_payload["opencode_runtime_env"] = existing_session["opencode_runtime_env"]
+    bind_opencode_session_raw_logs(session_path, session_payload)
+    write_json(session_path, session_payload)
+    session_ref["sha256"] = judge_validator.sha256_file(session_path)
+    write_json(preflight_path, preflight_payload)
+    packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"]["preflight_report"]["sha256"] = (
+        judge_validator.sha256_file(preflight_path)
+    )
+
+
+def sync_packet_bound_bundle(packet: dict, *, rebuild_release_notes: bool = True) -> None:
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["opencode_runtime"]["preflight_proof_summary"] = json.loads(
+        json.dumps(packet["opencode_patch_boundary"]["opencode_preflight_proof_summary"])
+    )
+    for field in ("publishability", "competition_host_readiness"):
+        if field in packet:
+            bundle_payload[field] = json.loads(json.dumps(packet[field]))
+    summary = packet.get("summary") if isinstance(packet.get("summary"), dict) else {}
+    if isinstance(summary.get("proof_class_rollup"), dict):
+        bundle_payload["proof_classes"] = json.loads(json.dumps(summary["proof_class_rollup"]))
+        bundle_payload["proof_class_rollup"] = json.loads(json.dumps(summary["proof_class_rollup"]))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+    if rebuild_release_notes:
+        notes_path = REPO_ROOT / packet["milestone_release_notes"]["path"]
+        notes_path.write_text(milestone_release_notes.build_release_notes(bundle_payload), encoding="utf-8")
+        packet["milestone_release_notes"]["sha256"] = judge_validator.sha256_file(notes_path)
+
+
+def rewrite_bound_run_report(packet: dict, mutate: Callable[[dict], None]) -> None:
+    run_report_path = REPO_ROOT / packet["judge_entrypoints_run_report"]["path"]
+    run_report_payload = json.loads(run_report_path.read_text(encoding="utf-8"))
+    mutate(run_report_payload)
+    write_json(run_report_path, run_report_payload)
+    run_report_ref = {
+        "path": repo_relative(run_report_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(run_report_path),
+    }
+    packet["judge_entrypoints_run_report"] = run_report_ref
+    packet["publication_manifest"]["judge_entrypoints_run_report"] = json.loads(json.dumps(run_report_ref))
+    for ref in packet["publication_manifest"].get("published_artifact_refs", []):
+        if isinstance(ref, dict) and ref.get("artifact_name") == "judge_entrypoints_run_report":
+            ref.update(json.loads(json.dumps(run_report_ref)))
+    bundle_path = REPO_ROOT / packet["judge_milestone_bundle"]["path"]
+    bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    bundle_payload["judge_entrypoints_run_report"] = json.loads(json.dumps(run_report_ref))
+    bundle_payload["publication_manifest"]["judge_entrypoints_run_report"] = json.loads(json.dumps(run_report_ref))
+    for ref in bundle_payload["publication_manifest"].get("published_artifact_refs", []):
+        if isinstance(ref, dict) and ref.get("artifact_name") == "judge_entrypoints_run_report":
+            ref.update(json.loads(json.dumps(run_report_ref)))
+    write_json(bundle_path, bundle_payload)
+    packet["judge_milestone_bundle"]["sha256"] = judge_validator.sha256_file(bundle_path)
+
+
+def harness_contract_matrix_fixture() -> list[dict]:
+    def row(stage: str, graph_node: str, role: str, artifact: str, validator: str) -> dict:
+        return {
+            "stage": stage,
+            "graph_nodes": [graph_node],
+            "roles": [role],
+            "artifacts": [artifact],
+            "validators": [validator],
+            "semantic_gate": False,
+            "chat_output_is_evidence": False,
+            "translation_coverage_numerator": 0,
+            "boundary": f"{stage} stage is harness contract evidence only.",
+        }
+
+    return [
+        row("plan", "load_plan", "planner", "worker_plan", "validate_worker_plan_contract"),
+        row("translate", "worker", "worker", "worker_report", "validate_opencode_agent_runtime_contract"),
+        row("verify", "merge", "verifier", "workflow_metrics", "validate_competition_summary_entrypoint_contract"),
+        row("repair", "repair_retry", "repairer", "repair_hints", "validate_repair_self_heal_contract"),
+        row("report", "report", "reporter", "judge_evidence_index", "validate_public_release_packet"),
+    ]
+
+
+def evidence_cost_retention_fixture() -> dict:
+    return {
+        "report_kind": "evidence-cost-retention-rollup",
+        "sources": [
+            {
+                "source": "fixture-evidence-governance",
+                "status": "passed",
+                "artifact_count": 3,
+                "total_bytes": 120,
+                "pipeline_count": 2,
+                "runtime_observation_count": 2,
+                "runtime_total_duration_ms": 45,
+                "runtime_max_duration_ms": 40,
+                "retention_classes": {
+                    "committed_release": {"file_count": 2, "total_bytes": 100},
+                    "diagnostic_only": {"file_count": 1, "total_bytes": 20},
+                },
+                "policy_compliance": {
+                    "policy_tier": "release",
+                    "status": "passed",
+                    "failed_gates": [],
+                },
+                "claim_anchor_issue_count": 0,
+                "profile_hash_issue_count": 0,
+                "diagnostic_host_metadata_count": 0,
+            }
+        ],
+        "rollup": {
+            "source_count": 1,
+            "artifact_count": 3,
+            "total_bytes": 120,
+            "pipeline_count": 2,
+            "runtime_ms": {
+                "observation_count": 2,
+                "total": 45,
+                "max": 40,
+            },
+            "retention_classes": {
+                "committed_release": {"file_count": 2, "total_bytes": 100},
+                "diagnostic_only": {"file_count": 1, "total_bytes": 20},
+            },
+            "all_sources_passed": True,
+            "policy_compliance": {
+                "all_sources_policy_passed": True,
+                "tier_counts": {"release": 1},
+                "failed_gate_counts": {},
+            },
+            "portability_issue_count": 0,
+            "diagnostic_host_metadata_count": 0,
+        },
+        "boundary": "Evidence cost and retention metrics are review-only and not semantic acceptance.",
+    }
+
+
+def c2rust_baseline_milestone_rollup_fixture() -> dict:
+    return {
+        "report_kind": "c2rust-baseline-milestone-rollup",
+        "status": "observed",
+        "source_report_count": 2,
+        "unique_evidence_root_count": 1,
+        "unique_manifest_count": 2,
+        "generated_output_count": 0,
+        "skipped_without_output_count": 2,
+        "compile_attempted_count": 0,
+        "compile_passed_count": 0,
+        "compile_semantic_pass_count": 0,
+        "status_counts": {"skipped": 2},
+        "output_status_counts": {"missing": 2},
+        "compile_status_counts": {"missing": 2},
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": "C2Rust baseline status is candidate context only.",
+    }
+
+
+def comparison_row_fixture(status: str, evidence_role: str, boundary: str, **extra: object) -> dict:
+    return {
+        "status": status,
+        "evidence_role": evidence_role,
+        "semantic_acceptance_claimed": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "boundary": boundary,
+        **extra,
+    }
+
+
+def valid_packet(root: Path) -> dict:
+    run_report_path = root / "summary" / "judge-entrypoints-run-report.json"
+    readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
+    bundle_path = root / "summary" / "judge-milestone-bundle.json"
+    opencode_preflight_proof = write_opencode_preflight_fixture(root)
+    config_bundle_manifest = REPO_ROOT / "config" / "competition-env" / "bundle-manifest.json"
+    config_bundle_payload = json.loads(config_bundle_manifest.read_text(encoding="utf-8"))
+    config_bundle_ref = {
+        "path": repo_relative(config_bundle_manifest),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(config_bundle_manifest),
+    }
+    archive_files = {
+        "config/competition-env/bundle-manifest.json": {
+            **config_bundle_ref,
+            "role": "competition-env-bundle-manifest",
+            "bytes": config_bundle_manifest.stat().st_size,
+        }
+    }
+    for manifest_file in config_bundle_payload["files"]:
+        path_text = manifest_file["path"]
+        path = REPO_ROOT / path_text
+        archive_files[path_text] = {
+            "path": path_text,
+            "role": manifest_file["role"],
+            "status": "present",
+            "sha256": judge_validator.sha256_file(path),
+            "bytes": path.stat().st_size,
+        }
+    competition_config_archive = {
+        "report_kind": "competition-config-archive",
+        "status": "present",
+        "root": "config/competition-env",
+        "file_count": len(archive_files),
+        "files": archive_files,
+        "external_ref_count": len(judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES),
+        "external_refs": {
+            path: {
+                "path": path,
+                "role": role,
+                "status": "present",
+                "sha256": judge_validator.sha256_file(REPO_ROOT / path),
+                "bytes": (REPO_ROOT / path).stat().st_size,
+            }
+            for path, role in judge_validator.COMPETITION_ENV_EXTERNAL_REF_ROLES.items()
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "archive_is_semantic_gate": False,
+        },
+    }
+    archive_manifest_path = root / "summary" / "competition-config-archive" / "manifest.json"
+    archive_manifest_payload = json.loads(json.dumps(competition_config_archive))
+    write_json(archive_manifest_path, archive_manifest_payload)
+    archive_manifest_ref = {
+        "path": repo_relative(archive_manifest_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(archive_manifest_path),
+    }
+    competition_config_archive["materialized_manifest"] = archive_manifest_ref
+    readiness_summary = {
+        "all_entrypoints_executed": True,
+        "executed_count": 4,
+        "configured_count": 4,
+        "validation_status": "passed",
+    }
+    run_report_payload = {
+        "status": "passed",
+        "entrypoint_count": 4,
+        "entrypoints": [
+            {
+                "id": "opencode_multi_worker_evaluate_profile",
+                "status": "passed",
+                "proof_class": "local-simulation",
+                "run_id": "fixture-run",
+                "competition_exact_host_attested": False,
+            }
+        ],
+        "validation": {
+            "status": "passed",
+            "proof_class_contract": {
+                "status": "passed",
+                "entrypoints": {
+                    "opencode_multi_worker_evaluate_profile": "local-simulation",
+                },
+            },
+        },
+        "summary": {"readiness": readiness_summary},
+        "competition_config_archive": competition_config_archive,
+    }
+    write_json(run_report_path, run_report_payload)
+    run_report = {
+        "path": repo_relative(run_report_path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(run_report_path),
+    }
+    bundle_self_ref = {
+        "path": repo_relative(bundle_path),
+        "status": "self",
+        "hash_boundary": "self-hash-bound-after-write",
+    }
+    repo_commit_ref = {
+        "status": "present",
+        "commit": "1" * 40,
+    }
+    publication_manifest = {
+        "report_kind": "publication-manifest",
+        "bundle_version": 1,
+        "publication_scope": "internal_preview_full",
+        "source_commit": repo_commit_ref,
+        "repo_commit": json.loads(json.dumps(repo_commit_ref)),
+        "target_source_pin": {
+            "status": "passed",
+            "target_id": "flashdb",
+            "repository": "https://gitcode.com/xwxf/FlashDB.git",
+            "branch": "competition",
+            "canonical_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        },
+        "release_tag_readiness": {
+            "report_kind": "release-tag-readiness",
+            "status": "not_tagged",
+            "tag_name": None,
+            "tag_target_commit": None,
+            "repo_commit": repo_commit_ref["commit"],
+            "tag_matches_repo_commit": False,
+            "remote_release_notes_status": "not_published",
+            "external_review_record_status": "not_recorded",
+            "external_milestone_claim_ready": False,
+            "publishability_status": "internal_preview",
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": (
+                "Tag, remote release notes, and external review records are publication readiness evidence only. "
+                "They do not create semantic acceptance or translator-generated coverage."
+            ),
+        },
+        "judge_entrypoints_run_report": run_report,
+        "readiness_report": readiness,
+        "judge_milestone_bundle": bundle_self_ref,
+        "judge_config": {
+            "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
+            "status": "present",
+        },
+        "competition_config_archive": {
+            "report_kind": "competition-config-archive",
+            "status": "present",
+            "root": "config/competition-env",
+            "file_count": len(archive_files),
+            "bundle_manifest": config_bundle_ref,
+            "materialized_manifest": archive_manifest_ref,
+            "external_ref_count": len(competition_config_archive["external_refs"]),
+            "external_refs": {
+                path: {
+                    "path": ref["path"],
+                    "role": ref["role"],
+                    "status": ref["status"],
+                    "sha256": ref["sha256"],
+                }
+                for path, ref in competition_config_archive["external_refs"].items()
+            },
+        },
+        "supported_subset": {
+            "claims": ["public packet validator fixture"],
+        },
+        "known_non_goals": ["semantic acceptance", "semantic translation gate"],
+        "claim_boundary": {
+            "semantic_gate": False,
+            "publication_manifest_is_semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+    }
+    publication_manifest["published_entrypoints"] = [
+        {
+            "id": "opencode_multi_worker_evaluate_profile",
+            "status": "passed",
+            "proof_class": "local-simulation",
+            "run_id": "fixture-run",
+        }
+    ]
+    judge_evidence_index_ref = write_published_judge_evidence_index_fixture(root)
+    publication_manifest["published_artifact_refs"] = [
+        {
+            "artifact_name": "judge_entrypoints_run_report",
+            "entrypoint_id": "opencode_multi_worker_evaluate_profile",
+            **json.loads(json.dumps(run_report)),
+        },
+        judge_evidence_index_ref,
+    ]
+    publication_manifest["published_artifact_count"] = len(publication_manifest["published_artifact_refs"])
+    known_gaps = [{"gap_id": "competition-exact-not-run", "status": "open"}]
+    bundle_must_not_claim = [
+        "accepted_evidence_is_not_translator_generated_coverage",
+        "blocked_repairs_are_not_translation_success",
+        "before_after_exhibit_is_not_new_semantic_gate",
+        "bundle_status_passed_is_not_project_level_translation_success",
+        "local_simulation_is_not_competition_exact",
+        "bundle_status_is_not_project_level_translation_success",
+    ]
+    packet_must_not_claim = [*bundle_must_not_claim, "public_release_packet_is_not_semantic_gate"]
+    reproduction_commands = {
+        "run_judge_entrypoints": "python3 -B -m validation.tools.run_judge_entrypoints --config config/competition-env/judge-entrypoints/flashdb-harness.json --out target/competition-out/summary/judge-entrypoints-run-report.json",
+        "build_bundle": "python3 -B -m validation.tools.judge_milestone_bundle",
+        "entrypoints": [
+            {
+                "id": "opencode_multi_worker_evaluate_profile",
+                "command": "python3 -B -m validation.tools.opencode_agent_harness evaluate --profile config/competition-env/profiles/flashdb-opencode-local-simulation.json",
+            }
+        ],
+    }
+    publication_manifest["reproduction_commands"] = reproduction_commands
+    publication_manifest["known_gaps"] = known_gaps
+    publication_manifest["must_not_claim"] = bundle_must_not_claim
+    before_after_repair_exhibit = {
+        "report_kind": "before-after-repair-exhibit-rollup",
+        "sources": [
+            {
+                "entrypoint_id": "before_after_judge_demo",
+                "before_after_units": [
+                    {
+                        "unit_id": "flashdb/real-fdb-calc-crc32",
+                        "status": "converged",
+                        "baseline_verification": {
+                            "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-verified-unsafe-baseline.json",
+                            "status": "passed",
+                            "sha256": "1" * 64,
+                            "semantic_pass": True,
+                            "semantic_claim_source": "verified_unsafe_baseline_gates",
+                            "generated_draft_semantic_pass": False,
+                        },
+                        "accepted_patch": {
+                            "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/accepted-safe.patch",
+                            "status": "accepted",
+                            "sha256": "2" * 64,
+                        },
+                        "unsafe_reduction": {
+                            "status": "measured",
+                            "baseline_total_unsafe": 2,
+                            "current_total_unsafe": 0,
+                            "reduced_by": 2,
+                        },
+                        "patch_origin": {
+                            "source": "accepted_safe_evidence",
+                            "accepted_patch_bound": True,
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "semantic_claim_source": "accepted_evidence_binding",
+                            "generated_draft_semantic_pass": False,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                        "safety_loop_provenance": {
+                            "status": "accepted_evidence_bound",
+                            "patch_source": "accepted_safe_evidence",
+                            "unsafe_delta": {
+                                "status": "measured",
+                                "baseline_total_unsafe": 2,
+                                "current_total_unsafe": 0,
+                                "reduced_by": 2,
+                            },
+                            "opencode_session_bound": False,
+                            "repair_history_bound": True,
+                            "repair_rounds": 1,
+                            "auto_recovered": True,
+                            "semantic_gate": False,
+                            "translation_coverage_numerator": 0,
+                        },
+                    }
+                ],
+            }
+        ],
+        "rollup": {
+            "source_count": 1,
+            "bound_unit_count": 1,
+            "measured_unsafe_unit_count": 1,
+            "accepted_patch_unit_count": 1,
+            "verified_repair_source_count": 1,
+            "observed_repair_unit_count": 1,
+            "auto_recovered_unit_count": 1,
+            "verified_baseline_unit_count": 1,
+            "missing_verified_baseline_unit_count": 0,
+            "all_units_verified_baseline_bound": True,
+            "rollback_evidence_count": 1,
+            "repair_round_cap": 5,
+            "unsafe_reduced_by": 2,
+            "unsafe_reduction": {
+                "status": "measured",
+                "baseline_total_unsafe": 2,
+                "current_total_unsafe": 0,
+                "reduced_by": 2,
+            },
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": "Before/after repair exhibit is a review rollup, not a semantic gate.",
+    }
+    claim_scope = {
+        "external_review_index_ready": True,
+        "semantic_acceptance_ready": False,
+        "competition_exact_ready": False,
+        "translator_generated_coverage_ready": False,
+    }
+    unsafe_reduction = {
+        "status": "measured",
+        "baseline_total_unsafe": 2,
+        "current_total_unsafe": 0,
+        "reduced_by": 2,
+    }
+    c2rust_baseline_rollup = c2rust_baseline_milestone_rollup_fixture()
+    blocked_repairs_rollup = {
+        "report_kind": "blocked-repairs-rollup",
+        "sources": [],
+        "rollup": {
+            "source_count": 0,
+            "slice_count": 0,
+            "recorded_source_count": 0,
+            "blocked_repair_count": 0,
+            "human_action_required_count": 0,
+            "status_counts": {},
+            "human_intervention_points": [],
+            "blocked_callees": [],
+            "ir_feature_gap_kinds": {},
+            "forbidden_change_counts": {},
+            "blocked_reason_counts": {},
+            "source_span_kind_counts": {},
+            "smallest_next_tests": [],
+            "next_actions": [],
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "No blocked repair is counted as translation success in this fixture.",
+        },
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "accepted_evidence_counts_as_translator_coverage": False,
+        "boundary": "Blocked repairs are review context only.",
+    }
+    repair_activity = {
+        "source_count": 1,
+        "observed_source_count": 1,
+        "repair_history_unit_count": 1,
+        "auto_recovered_unit_count": 1,
+        "avg_repair_rounds": 1.0,
+        "auto_recovery_rate": 1.0,
+        "human_interventions": 0,
+        "boundary": "Workflow metrics are review-only and not semantic acceptance.",
+    }
+    bundle_payload = {
+        "schema_version": 1,
+        "report_kind": "judge-milestone-bundle",
+        "status": "passed",
+        "blockers": [],
+        "summary": {
+            "report_kind": "judge-milestone-bundle-summary",
+            "external_milestone_claim_ready": False,
+            "claim_scope": claim_scope,
+            "blockers": [],
+            "readiness": {
+                "all_entrypoints_executed": True,
+                "executed_count": 4,
+                "configured_count": 4,
+                "validation_status": "passed",
+            },
+        },
+        "claim_boundary": {
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "bundle_is_semantic_gate": False,
+            "source_semantic_gate": False,
+        },
+        "claim_scope": claim_scope,
+        "publishability": {
+            "status": "internal_preview",
+            "scope": "full",
+            "publication_scope": "internal_preview_full",
+            "external_milestone_claim_ready": False,
+            "external_milestone": False,
+            "blocker_count": 0,
+            "blockers": [],
+            "all_entrypoints_run_publishable": True,
+            "focused_run": False,
+            "competition_exact_publishable": False,
+            "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
+            "required_model": "GLM-5.1",
+            "required_variant": "max",
+            "opencode_glm51_required": True,
+            "opencode_glm51_preflight_status": "passed",
+            "opencode_glm51_publishable": True,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "target_artifacts_regenerable": True,
+        },
+        "competition_host_readiness": {
+            "report_kind": "competition-host-readiness",
+            "status": "blocked",
+            "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
+            "required_model": "GLM-5.1",
+            "required_variant": "max",
+            "required_proof_class": "competition-exact",
+            "actual_highest_proof_class": "local-simulation",
+            "all_entrypoints_run_publishable": True,
+            "all_entrypoints_competition_exact": False,
+            "competition_exact_host_verified": False,
+            "opencode_glm51_preflight_status": "passed",
+            "opencode_glm51_publishable": True,
+            "external_milestone_claim_ready": False,
+            "missing_requirements": [
+                "all_entrypoints_competition_exact",
+                "competition_exact_host_verified",
+                "external_milestone_claim_ready",
+            ],
+            "blocker_count": 3,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+            "boundary": "Competition host readiness is an H9 launch contract, not semantic acceptance.",
+        },
+        "proof_classes": packet_validator.expected_proof_class_rollup_from_run_report(run_report_payload),
+        "semantic_evidence_rollup": {
+            "accepted_evidence_semantic_pass_count": 1,
+            "translator_generated_semantic_pass_count": 0,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "source_generated_draft_semantic_pass": False,
+            "source_translation_coverage_numerator": 0,
+            "accepted_evidence_counts_as_translator_coverage": False,
+        },
+        "core_translation_quality": {
+            "report_kind": "core-translation-quality-rollup",
+            "sources": [],
+            "final_gate_statuses": ["passed"],
+            "semantic_pass_count": 1,
+            "translation_coverage_numerator": 0,
+            "generated_draft_semantic_pass": False,
+            "unsafe_reduction": unsafe_reduction,
+        },
+        "blocked_repairs_rollup": blocked_repairs_rollup,
+        "harness_architecture_summary": {
+            "report_kind": "harness-architecture-summary",
+            "sources": [],
+            "graph_runtime": "opencode-harness-langgraph-inspired",
+            "graph_nodes": ["load_plan", "worker", "merge", "repair_retry", "report"],
+            "worker_count": 1,
+            "repair_round_cap": 5,
+            "roles": ["planner", "worker", "verifier", "repairer", "reporter"],
+            "checkpoint_backend": "sqlite",
+            "contract_matrix": harness_contract_matrix_fixture(),
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+            "rollup": {
+                "source_count": 1,
+                "worker_count": 1,
+                "repair_round_cap": 5,

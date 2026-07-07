@@ -1,0 +1,248 @@
+    )
+    expected = repair_verified_baseline_key(verified_ref)
+    actual = repair_verified_baseline_key(baseline_verification)
+    if actual != expected:
+        raise ValueError("translation_before_after.baseline_verification must match baseline_repair_gate verified_unsafe_baseline")
+    unsafe_reduction = require_object(before_after_payload.get("unsafe_reduction"), "translation_before_after.unsafe_reduction")
+    if unsafe_reduction.get("status") != "measured":
+        raise ValueError("translation_before_after.unsafe_reduction.status must be measured")
+    reduced_by = unsafe_reduction.get("reduced_by")
+    if not isinstance(reduced_by, int) or reduced_by <= 0:
+        raise ValueError("translation_before_after.unsafe_reduction.reduced_by must be > 0")
+    baseline_total = unsafe_reduction.get("baseline_total_unsafe")
+    current_total = unsafe_reduction.get("current_total_unsafe")
+    if not isinstance(baseline_total, int) or baseline_total < 0:
+        raise ValueError("translation_before_after.unsafe_reduction.baseline_total_unsafe must be a non-negative integer")
+    if not isinstance(current_total, int) or current_total < 0:
+        raise ValueError("translation_before_after.unsafe_reduction.current_total_unsafe must be a non-negative integer")
+    if baseline_total - current_total != reduced_by:
+        raise ValueError("translation_before_after.unsafe_reduction.reduced_by must equal baseline-current unsafe count")
+    return {
+        "status": "passed",
+        "path": before_after_ref["path"],
+        "baseline_verification": actual,
+        "unsafe_reduction": {
+            "status": "measured",
+            "baseline_total_unsafe": baseline_total,
+            "current_total_unsafe": current_total,
+            "reduced_by": reduced_by,
+        },
+    }
+
+
+def repair_verified_baseline_key(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": value.get("path"),
+        "sha256": value.get("sha256"),
+        "status": value.get("status"),
+        "semantic_pass": value.get("semantic_pass"),
+        "semantic_claim_source": value.get("semantic_claim_source"),
+        "generated_draft_semantic_pass": value.get("generated_draft_semantic_pass"),
+    }
+
+
+def validate_expected_json_local_path_policy(
+    artifacts: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    scanned: list[str] = []
+    allowed_locations: list[str] = []
+    for name, value in sorted(artifacts.items()):
+        path_text = require_string(value, f"expected_artifacts.{name}")
+        if not path_text.endswith(".json"):
+            continue
+        path = repo_path(path_text, repo_root=repo_root)
+        if not path.is_file():
+            continue
+        scan = validate_local_absolute_path_policy(load_json(path), label=f"expected_artifacts.{name} {path_text}")
+        scanned.append(path_text)
+        for location in scan["host_trace_allowed_locations"]:
+            allowed_locations.append(f"{path_text}{location}")
+    return {
+        "status": "passed",
+        "scanned_count": len(scanned),
+        "scanned_artifacts": scanned,
+        "host_trace_allowed_count": len(allowed_locations),
+        "host_trace_allowed_locations": allowed_locations,
+    }
+
+
+def validate_harness_artifact_contracts(
+    artifacts: dict[str, Any],
+    *,
+    require_local_artifacts: bool,
+    repo_root: Path,
+    environment_profile: dict[str, Any] | None = None,
+    smoke_contract: dict[str, Any] | None = None,
+    entrypoint: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not require_local_artifacts:
+        return {"status": "skipped", "reason": "require_local_artifacts=false"}
+    result: dict[str, Any] = {"status": "passed"}
+    context_payload: dict[str, Any] | None = None
+    agent_payload: dict[str, Any] | None = None
+    result["expected_json_local_path_policy"] = validate_expected_json_local_path_policy(artifacts, repo_root=repo_root)
+    if "context_pack" in artifacts:
+        context_path = repo_path(str(artifacts["context_pack"]), repo_root=repo_root)
+        context_payload = load_json(context_path)
+        result["context_pack"] = validate_context_management_contract(
+            context_payload,
+            path_text=str(artifacts["context_pack"]),
+            expected_artifacts=artifacts,
+            repo_root=repo_root,
+        )
+    if "agent_index" in artifacts:
+        agent_path = repo_path(str(artifacts["agent_index"]), repo_root=repo_root)
+        agent_payload = load_json(agent_path)
+        result["agent_index"] = validate_agent_coordination_contract(
+            agent_payload,
+            path_text=str(artifacts["agent_index"]),
+        )
+    if context_payload is not None and agent_payload is not None:
+        result["context_agent_consistency"] = validate_context_agent_index_consistency(
+            context_payload,
+            agent_payload,
+        )
+        if "worker_plan" in artifacts:
+            worker_plan_path = repo_path(str(artifacts["worker_plan"]), repo_root=repo_root)
+            worker_plan_payload = load_json(worker_plan_path)
+            result["worker_plan"] = validate_worker_plan_contract(
+                worker_plan_payload,
+                context_payload,
+                agent_payload,
+                path_text=str(artifacts["worker_plan"]),
+            )
+            if entrypoint is not None:
+                profile_worker_plan_contract = validate_entrypoint_profile_worker_plan_contract(
+                    entrypoint,
+                    worker_plan_payload,
+                    repo_root=repo_root,
+                )
+                if profile_worker_plan_contract.get("status") != "skipped":
+                    result["entrypoint_profile_worker_plan"] = profile_worker_plan_contract
+        result["ledger_context_index"] = validate_context_ledger_contract(
+            context_payload,
+            agent_payload,
+            context_path_text=str(artifacts["context_pack"]),
+            agent_path_text=str(artifacts["agent_index"]),
+            repo_root=repo_root,
+        )
+    if "resume_manifest" in artifacts:
+        resume_manifest_path = repo_path(str(artifacts["resume_manifest"]), repo_root=repo_root)
+        result["resume_manifest"] = validate_resume_manifest_contract(
+            load_json(resume_manifest_path),
+            path_text=str(artifacts["resume_manifest"]),
+            expected_artifacts=artifacts,
+            context_payload=context_payload,
+            agent_payload=agent_payload,
+            repo_root=repo_root,
+        )
+    if context_payload is not None:
+        repair_contract = validate_repair_self_heal_contract(context_payload, repo_root=repo_root)
+        if repair_contract.get("status") != "skipped":
+            result["repair_self_heal"] = repair_contract
+    if "opencode_safety_transform_attempt" in artifacts:
+        attempt_path_text = require_string(
+            artifacts.get("opencode_safety_transform_attempt"),
+            "expected_artifacts.opencode_safety_transform_attempt",
+        )
+        attempt_path = repo_path(attempt_path_text, repo_root=repo_root)
+        result["opencode_safety_transform_attempt"] = validate_opencode_safety_transform_attempt_contract(
+            {"path": attempt_path_text, "sha256": sha256_file(attempt_path)},
+            repo_root=repo_root,
+        )
+    if "opencode_hostless_rehearsal_report" in artifacts:
+        rehearsal_path_text = require_string(
+            artifacts.get("opencode_hostless_rehearsal_report"),
+            "expected_artifacts.opencode_hostless_rehearsal_report",
+        )
+        rehearsal_path = repo_path(rehearsal_path_text, repo_root=repo_root)
+        result["opencode_hostless_rehearsal_report"] = validate_opencode_hostless_rehearsal_contract(
+            {"path": rehearsal_path_text, "sha256": sha256_file(rehearsal_path)},
+            repo_root=repo_root,
+        )
+    if "judge_evidence_index" in artifacts:
+        judge_index_path = repo_path(str(artifacts["judge_evidence_index"]), repo_root=repo_root)
+        result["judge_evidence_index"] = validate_judge_evidence_index_contract(
+            load_json(judge_index_path),
+            path_text=str(artifacts["judge_evidence_index"]),
+            repo_root=repo_root,
+            expected_artifacts=artifacts,
+            minimum_worker_count=2 if entrypoint is not None and entrypoint_requires_multi_worker(entrypoint) else 1,
+        )
+    if "competition_summary" in artifacts:
+        competition_summary_path = repo_path(str(artifacts["competition_summary"]), repo_root=repo_root)
+        entrypoint_proof_class = None
+        entrypoint_run_id = None
+        if entrypoint is not None:
+            if entrypoint.get("proof_class") is not None:
+                entrypoint_proof_class = str(entrypoint.get("proof_class"))
+            if entrypoint.get("run_id") is not None:
+                entrypoint_run_id = str(entrypoint.get("run_id"))
+        result["competition_summary"] = validate_competition_summary_entrypoint_contract(
+            load_json(competition_summary_path),
+            expected_artifacts=artifacts,
+            summary_path=competition_summary_path,
+            environment_profile=environment_profile,
+            entrypoint_proof_class=entrypoint_proof_class,
+            entrypoint_run_id=entrypoint_run_id,
+            repo_root=repo_root,
+        )
+    if "competition_smoke_summary" in artifacts:
+        if smoke_contract is None:
+            raise ValueError("competition_smoke_summary requires smoke_contract context")
+        smoke_summary_path = repo_path(str(artifacts["competition_smoke_summary"]), repo_root=repo_root)
+        smoke_summary_payload = load_json(smoke_summary_path)
+        result["competition_smoke_summary"] = validate_competition_smoke_summary_contract(
+            smoke_summary_payload,
+            expected_artifacts=artifacts,
+            environment_profile=environment_profile,
+            entrypoint_proof_class=str(smoke_contract.get("proof_class")),
+            entrypoint_run_id=str(smoke_contract.get("run_id")),
+            repo_root=repo_root,
+            verify_command_log_sha=True,
+        )
+        if "command_log" in artifacts:
+            command_log_path = repo_path(str(artifacts["command_log"]), repo_root=repo_root)
+            expected_log_steps = [
+                require_string(step.get("step"), "competition_smoke_summary.steps[].step")
+                for step in smoke_summary_payload.get("steps", [])
+                if isinstance(step, dict)
+            ]
+            expected_step_results = {
+                require_string(step.get("step"), "competition_smoke_summary.steps[].step"): step
+                for step in smoke_summary_payload.get("steps", [])
+                if isinstance(step, dict)
+            }
+            result["competition_smoke_command_log"] = validate_competition_smoke_command_log_contract(
+                command_log_path,
+                expected_steps=expected_log_steps,
+                expected_step_results=expected_step_results,
+                expected_run_id=require_string(smoke_summary_payload.get("run_id"), "competition_smoke_summary.run_id"),
+                require_canonical=True,
+                require_opencode_glm_model=smoke_summary_payload.get("proof_class") == "competition-exact",
+            )
+        if "vendored_clang_verification" in artifacts:
+            vendored_clang_path = repo_path(str(artifacts["vendored_clang_verification"]), repo_root=repo_root)
+            result["vendored_clang_verification"] = validate_vendored_clang_verification_contract(
+                load_json(vendored_clang_path),
+                smoke_summary=smoke_summary_payload,
+                environment_profile=environment_profile,
+            )
+        if "evidence_governance_report" in artifacts:
+            evidence_governance_path = repo_path(str(artifacts["evidence_governance_report"]), repo_root=repo_root)
+            result["evidence_governance_report"] = validate_evidence_governance_report_contract(
+                load_json(evidence_governance_path),
+            )
+        if "translator_coverage_matrix" in artifacts:
+            coverage_matrix_path = repo_path(str(artifacts["translator_coverage_matrix"]), repo_root=repo_root)
+            result["translator_coverage_matrix"] = validate_translator_coverage_matrix_report_contract(
+                load_json(coverage_matrix_path),
+            )
+        if "milestone_release_report" in artifacts:
+            milestone_report_path = repo_path(str(artifacts["milestone_release_report"]), repo_root=repo_root)
+            result["milestone_release_report"] = validate_milestone_release_report_contract(
+                load_json(milestone_report_path),
+            )
+    return result

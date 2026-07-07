@@ -1,0 +1,425 @@
+    key_name = f"{case_ident}_key"
+    value_name = f"{case_ident}_value"
+    actual_name = f"actual_{case_ident}_return_code"
+    expected_literal = c_integer_literal("fdb_err_t", int(expected_return))
+    value_expr = value_name if value is not None else "NULL"
+    value_declaration = (
+        f"  static const char {value_name}[] = {c_string_literal(value)};\n"
+        if value is not None
+        else ""
+    )
+    statements = (
+        f"  struct fdb_kvdb {db_name_ident} = {{0}};\n"
+        f"  {db_name_ident}.parent.name = {c_string_literal(db_name)};\n"
+        f"  static const char {key_name}[] = {c_string_literal(key)};\n"
+        f"{value_declaration}"
+        f"  fdb_err_t {actual_name} = {function_name}(&{db_name_ident}, {key_name}, {value_expr});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_code mismatch: expected ' + str(int(expected_return)) + ' got %d\n')}, "
+        f"(int){actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_code matched')});\n"
+    )
+    return {"declarations": "", "statements": statements}
+
+
+def c_oracle_fdb_blob_make_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    declarations: list[str] = [
+        "struct fdb_blob {\n"
+        "  void *buf;\n"
+        "  size_t size;\n"
+        "};\n"
+        "typedef struct fdb_blob *fdb_blob_t;\n\n"
+    ]
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_source = c_oracle_fdb_blob_make_case_execution_source(spec, case_binding)
+        if case_source is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            statements.append(
+                f"  /* TODO: fixture case {case_id} is not supported by this fdb_blob_make draft generator. */\n"
+            )
+            continue
+        declarations.append(case_source["declarations"])
+        statements.append(case_source["statements"])
+    return {"declarations": "".join(declarations), "statements": "".join(statements)}
+
+
+def c_oracle_fdb_blob_make_case_execution_source(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    return_same_blob = expected_outputs.get("return_same_blob")
+    expected_blob_buf = expected_outputs.get("blob.buf")
+    expected_blob_size = expected_outputs.get("blob.size")
+    buf_len = case_payload.get("buf_len")
+    initial_blob_size = case_payload.get("initial_blob_size", 0)
+    value_buf = case_payload.get("value_buf")
+    if return_same_blob is not True or expected_blob_buf != "value_buf":
+        return None
+    if not is_size_value(buf_len) or not is_size_value(initial_blob_size):
+        return None
+    if expected_blob_size != int(buf_len):
+        return None
+    if value_buf is None:
+        value_expr = "NULL"
+        declarations = ""
+    elif is_byte_list(value_buf) and len(value_buf) >= int(buf_len):
+        case_ident = c_safe_ident(str(case_binding.get("id") or "case"))
+        value_expr = f"{case_ident}_value_buf"
+        declarations = f"static const uint8_t {value_expr}[] = {{ {c_byte_array_initializer(value_buf)} }};\n\n"
+    else:
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    blob_name = f"{case_ident}_blob"
+    actual_name = f"actual_{case_ident}"
+    expected_value_expr = f"(void *){value_expr}"
+    statements = (
+        f"  struct fdb_blob {blob_name} = {{ NULL, {c_integer_literal('size_t', int(initial_blob_size))} }};\n"
+        f"  fdb_blob_t {actual_name} = {function_name}(&{blob_name}, {value_expr}, "
+        f"{c_integer_literal('size_t', int(buf_len))});\n"
+        f"  if ({actual_name} != &{blob_name}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_same_blob mismatch\n')});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_same_blob matched')});\n"
+        f"  if ({blob_name}.buf != {expected_value_expr}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' blob.buf mismatch\n')});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' blob.buf matched')});\n"
+        f"  if ({blob_name}.size != {c_integer_literal('size_t', int(buf_len))}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' blob.size mismatch\n')});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' blob.size matched')});\n"
+    )
+    return {"declarations": declarations, "statements": statements}
+
+
+def c_oracle_case_execution_source(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    expected_return = expected_outputs.get("return_code")
+    if not is_uint32_value(expected_return):
+        return None
+
+    crc = case_payload.get("crc")
+    buf = case_payload.get("buf")
+    size = case_payload.get("size")
+    if not is_uint32_value(crc) or not is_size_value(size) or not is_byte_list(buf):
+        return None
+    if int(size) != len(buf):
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    buffer_name = f"{case_ident}_buf"
+    actual_name = f"actual_{case_ident}_return_code"
+    buffer_values = c_byte_array_initializer(buf)
+    expected_literal = c_integer_literal("uint32_t", int(expected_return))
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    argument_expressions = [
+        c_integer_literal(str(parameters[0].get("c_type") or "uint32_t"), int(crc)),
+        buffer_name,
+        c_integer_literal(str(parameters[2].get("c_type") or "size_t"), int(size)),
+    ]
+    declarations = f"static const uint8_t {buffer_name}[] = {{ {buffer_values} }};\n\n"
+    statements = (
+        f"  uint32_t {actual_name} = {function_name}({', '.join(argument_expressions)});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_code mismatch: expected ' + str(int(expected_return)) + ' got %llu\n')}, "
+        f"(unsigned long long){actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_code matched')});\n"
+    )
+    return {"declarations": declarations, "statements": statements}
+
+
+def oracle_fixture_input_payload(spec: dict[str, Any], case_binding: dict[str, Any]) -> Any | None:
+    fixture = spec.get("fixture_contract", {})
+    input_ref = str(case_binding.get("input_ref") or "")
+    candidate_refs = [fixture.get("path") or fixture.get("input"), case_binding.get("expected_ref")]
+    for candidate_ref in candidate_refs:
+        payload = load_fixture_ref_payload(candidate_ref)
+        if payload is None:
+            continue
+        case_payload = fixture_case_payload(payload, input_ref)
+        if isinstance(case_payload, dict):
+            return case_payload
+    inline_case = fixture_case_payload({"cases": fixture.get("cases", [])}, input_ref)
+    if isinstance(inline_case, dict):
+        return inline_case
+    return None
+
+
+def c_function_signature(spec: dict[str, Any]) -> dict[str, Any]:
+    function_name = required_str(spec, "function_name")
+    signatures = spec.get("c_boundary", {}).get("signatures", [])
+    return next(
+        (item for item in signatures if isinstance(item, dict) and item.get("function") == function_name),
+        {},
+    )
+
+
+def c_function_prototype(spec: dict[str, Any]) -> str:
+    function_name = required_str(spec, "function_name")
+    signature = c_function_signature(spec)
+    return_type = signature.get("return_type") or "int"
+    parameters = signature.get("parameters") or []
+    if not parameters:
+        parameter_text = "void"
+    else:
+        parameter_text = ", ".join(c_parameter_declaration(item) for item in parameters if isinstance(item, dict))
+    return f"{return_type} {function_name}({parameter_text});"
+
+
+def c_oracle_harness_includes(spec: dict[str, Any]) -> list[str]:
+    headers = []
+    for item in spec.get("build_profile", {}).get("oracle_harness_includes", []):
+        header = str(item.get("header") if isinstance(item, dict) else item).strip()
+        if not header:
+            continue
+        if any(ch in header for ch in '\r\n<>"'):
+            raise SystemExit(f"invalid oracle harness include header: {header!r}")
+        headers.append(header)
+    return list(dict.fromkeys(headers))
+
+
+def c_parameter_declaration(parameter: dict[str, Any]) -> str:
+    name = str(parameter.get("name") or "arg")
+    c_type = str(parameter.get("c_type") or "int").strip()
+    if c_type.endswith("*"):
+        return f"{c_type[:-1].rstrip()} *{name}"
+    return f"{c_type} {name}"
+
+
+def normalize_c_type(c_type: str) -> str:
+    text = str(c_type).strip()
+    text = text.replace("*", " * ")
+    return " ".join(text.split())
+
+
+def c_safe_ident(text: str) -> str:
+    identifier = "".join(ch if (ch.isascii() and (ch.isalnum() or ch == "_")) else "_" for ch in str(text))
+    if not identifier:
+        return "case"
+    if identifier[0].isdigit():
+        return f"case_{identifier}"
+    return identifier
+
+
+def is_uint32_value(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= 0xFFFFFFFF
+
+
+def is_size_value(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def is_byte_list(value: Any) -> bool:
+    return isinstance(value, list) and all(type(item) is int and 0 <= item <= 0xFF for item in value)
+
+
+def c_byte_array_initializer(values: list[int]) -> str:
+    if not values:
+        return "0"
+    return ", ".join(f"{item}u" for item in values)
+
+
+def c_integer_literal(c_type: str, value: int) -> str:
+    normalized = normalize_c_type(c_type)
+    suffix = "u" if value >= 0 else ""
+    return f"({normalized}){value}{suffix}"
+
+
+def c_string_literal(value: str) -> str:
+    return json.dumps(str(value))
+
+
+def c_oracle_compile_command(spec: dict[str, Any], harness_path: Path, evidence_dir: Path) -> dict[str, Any]:
+    source_root = compile_source_root(spec)
+    resolved_include_paths = [
+        resolve_source_root_path(source_root, path)
+        for path in spec.get("build_profile", {}).get("include_paths", [])
+    ]
+    defines = [str(item) for item in spec.get("build_profile", {}).get("defines", [])]
+    link_source_files = [] if c_oracle_embeds_slice_source(spec) else compile_link_source_files(spec, source_root)
+    define_args = [f"-D{item}" for item in defines]
+    include_args = [f"-I{path}" for path in resolved_include_paths]
+    link_args = [item["resolved_path"] for item in link_source_files]
+    output_name = harness_path.with_suffix(".exe").name
+    return {
+        "working_directory": rel(evidence_dir),
+        "source_root": source_root,
+        "defines": defines,
+        "resolved_include_paths": resolved_include_paths,
+        "link_source_files": link_source_files,
+        "link_strategy": c_oracle_link_strategy(spec),
+        "oracle_source_mode": c_oracle_source_mode(spec),
+        "argv": [
+            "cc",
+            "-std=c99",
+            *define_args,
+            *include_args,
+            harness_path.name,
+            *link_args,
+            "-o",
+            output_name,
+        ],
+        "status": "draft_not_executed",
+    }
+
+
+def c_oracle_compile_execution(
+    compile_command: dict[str, Any],
+    evidence_dir: Path,
+    skip: bool,
+    spec: dict[str, Any] | None = None,
+    fixture_binding: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base = {
+        "argv": compile_command.get("argv", []),
+        "working_directory": rel(evidence_dir),
+        "semantic_pass": False,
+    }
+    if skip:
+        return {
+            **base,
+            "status": "skipped_by_flag",
+            "attempted": False,
+            "toolchain_adapter": "not_executed",
+            "toolchain_status_after_attempt": "DRAFT_NOT_EXECUTED",
+            "diagnostics": ["C oracle compile execution skipped by --skip-c-oracle."],
+        }
+
+    argv = [str(item) for item in compile_command.get("argv", [])]
+    if not argv:
+        return {
+            **base,
+            "status": "missing_argv",
+            "attempted": False,
+            "toolchain_status_after_attempt": "COMPILE_NOT_EXECUTED",
+            "diagnostics": ["C oracle compile command argv is missing."],
+        }
+
+    compiler_resolution = resolve_c_compiler(argv[0])
+    compiler_path = compiler_resolution["path"]
+    if compiler_path is None:
+        return {
+            **base,
+            "status": "compiler_not_found",
+            "attempted": False,
+            "toolchain_status_after_attempt": "COMPILE_NOT_EXECUTED",
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "diagnostics": [
+                f"C compiler not found on PATH: {argv[0]}",
+                f"Fallback C compilers checked: {', '.join(compiler_resolution['candidates'])}",
+            ],
+        }
+
+    resolved_argv: list[str] = []
+    try:
+        resolved_argv = c_oracle_compile_execution_argv(argv, evidence_dir, compiler_resolution)
+        result = subprocess.run(
+            resolved_argv,
+            cwd=None if compiler_resolution.get("adapter") == "wsl" else evidence_dir,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            **base,
+            "status": "compile_timeout",
+            "attempted": True,
+            "compiler_path": compiler_path,
+            "compiler_name": compiler_resolution["name"],
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "toolchain_adapter": compiler_resolution["adapter"],
+            "execution_argv": resolved_argv,
+            "toolchain_status_after_attempt": "COMPILE_FAILED",
+            "returncode": None,
+            "stdout": truncate_text(exc.stdout or ""),
+            "stderr": truncate_text(exc.stderr or "compile timed out after 30 seconds"),
+            "diagnostics": ["C oracle compile command timed out; no oracle evidence accepted."],
+        }
+    except (OSError, RuntimeError) as exc:
+        return {
+            **base,
+            "status": "compile_failed",
+            "attempted": True,
+            "compiler_path": compiler_path,
+            "compiler_name": compiler_resolution["name"],
+            "requested_compiler": argv[0],
+            "compiler_candidates": compiler_resolution["candidates"],
+            "toolchain_adapter": compiler_resolution["adapter"],
+            "execution_argv": resolved_argv,
+            "toolchain_status_after_attempt": "COMPILE_FAILED",
+            "returncode": None,
+            "stdout": "",
+            "stderr": truncate_text(str(exc)),
+            "diagnostics": ["C oracle compile command could not start; no oracle evidence accepted."],
+        }
+
+    succeeded = result.returncode == 0
+    payload = {
+        **base,
+        "status": "compile_succeeded_not_oracle" if succeeded else "compile_failed",
+        "attempted": True,
+        "compiler_path": compiler_path,
+        "compiler_name": compiler_resolution["name"],
+        "requested_compiler": argv[0],
+        "compiler_candidates": compiler_resolution["candidates"],
+        "toolchain_adapter": compiler_resolution["adapter"],
+        "execution_argv": resolved_argv,
+        "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE" if succeeded else "COMPILE_FAILED",
+        "returncode": result.returncode,
+        "stdout": truncate_text(result.stdout),
+        "stderr": truncate_text(result.stderr),
+        "diagnostics": [
+            "C oracle compile command succeeded, but execution/diff gates are still required."
+            if succeeded
+            else "C oracle compile command failed; no oracle evidence accepted."
+        ],
+    }
+    if succeeded:
+        payload["harness_execution"] = c_oracle_harness_execution(
+            argv, evidence_dir, spec, fixture_binding, compiler_resolution
+        )
+    return payload

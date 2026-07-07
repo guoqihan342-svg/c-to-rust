@@ -626,3 +626,96 @@ fn typed_ir_for_emits_scoped_loop_with_decl_init_and_step_assignment() {
     assert!(rust.contains("return total;"));
     assert_rust_snippet_compiles("typed-ir-for-scoped-loop", &rust);
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_for_emits_record_field_inc_dec_step_assignment() {
+    let i32_ty = ir_i32();
+    let point_ty = ir_record_with_fields(
+        "point",
+        vec![("x", i32_ty.clone()), ("y", i32_ty.clone())],
+    );
+    let point_x = || IrExpr::Member {
+        base: Box::new(ir_var("p", point_ty.clone())),
+        field: "x".to_string(),
+        ty: i32_ty.clone(),
+        is_arrow: false,
+        source_span: None,
+    };
+    let ir = IrFunction {
+        name: "bump_point_x_for_step".to_string(),
+        return_type: i32_ty.clone(),
+        params: vec![
+            IrParam {
+                name: "p".to_string(),
+                ty: point_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "limit".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::For {
+                init: vec![IrStmt::Decl {
+                    name: "i".to_string(),
+                    ty: i32_ty.clone(),
+                    init: Some(ir_lit(0, "0", i32_ty.clone())),
+                    source_span: None,
+                }],
+                condition: Some(ir_binary(
+                    IrBinOp::Lt,
+                    ir_var("i", i32_ty.clone()),
+                    ir_var("limit", i32_ty.clone()),
+                    i32_ty.clone(),
+                )),
+                step: Some(Box::new(IrStmt::Assign {
+                    target: point_x(),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        point_x(),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                })),
+                body: vec![IrStmt::Assign {
+                    target: ir_var("i", i32_ty.clone()),
+                    value: ir_binary(
+                        IrBinOp::Add,
+                        ir_var("i", i32_ty.clone()),
+                        ir_lit(1, "1", i32_ty.clone()),
+                        i32_ty.clone(),
+                    ),
+                    source_span: None,
+                }],
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: Some(point_x()),
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit record field inc/dec for step assignment");
+    let rust = &emitted.rust;
+
+    assert!(rust.contains("pub struct Point"), "{rust}");
+    assert!(
+        rust.contains("pub fn bump_point_x_for_step(mut p: Point, limit: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-for-record-field-step-assignment",
+        rust,
+        "let p = Point { x: 2i32 };\nassert_eq!(bump_point_x_for_step(p, 3i32), 5i32);",
+    );
+}

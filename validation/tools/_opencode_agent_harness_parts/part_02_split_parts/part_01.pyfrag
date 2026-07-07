@@ -1,0 +1,211 @@
+            mode=mode,
+            repo_root=repo_root,
+            hint_id=str(open_hint["hint_id"]),
+        )
+    return commands
+
+
+def resume_worker_replay_command(
+    subcommand: str,
+    *,
+    worker: dict[str, Any],
+    db_path: Path,
+    run_id: str,
+    mode: str,
+    repo_root: Path,
+    hint_id: str | None = None,
+) -> dict[str, Any]:
+    worker_id = str(worker["worker_id"])
+    argv = portable_python_module_argv(
+        HARNESS_MODULE,
+        subcommand,
+        "--db",
+        repo_relative(db_path, repo_root=repo_root),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+    )
+    if hint_id is not None:
+        argv.extend(["--hint-id", hint_id])
+    argv.extend(["--mode", mode])
+    if mode == "opencode":
+        append_opencode_replay_flags(argv, worker)
+    payload = {
+        "argv": argv,
+        "command": shell_command_line(argv),
+        "replay_safety": resume_worker_replay_safety(worker, mode=mode, repo_root=repo_root),
+        "assignment_path": worker.get("assignment_path"),
+        "request_path": worker.get("request_path"),
+        "summary_path": worker.get("summary_path"),
+        "report_path": worker.get("report_path"),
+        "out_root": worker.get("isolated_out_root") or worker.get("out_root"),
+    }
+    return {key: value for key, value in payload.items() if value is not None}
+
+
+def resume_worker_replay_safety(worker: dict[str, Any], *, mode: str, repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    if mode != "opencode":
+        return {
+            "status": "ready",
+            "reason": "deterministic_replay_command",
+        }
+    missing: list[str] = []
+    preflight = worker.get("opencode_preflight_report")
+    if not isinstance(preflight, dict):
+        missing.append("opencode_preflight_report")
+        preflight = {}
+    if preflight.get("status") != "passed":
+        missing.append("opencode_preflight_report.status")
+    preflight_path = preflight.get("path")
+    if not isinstance(preflight_path, str) or not preflight_path:
+        missing.append("opencode_preflight_report.path")
+    preflight_sha256 = preflight.get("sha256")
+    if not is_sha256_hex(preflight_sha256):
+        missing.append("opencode_preflight_report.sha256")
+    if isinstance(preflight_path, str) and preflight_path and is_sha256_hex(preflight_sha256):
+        try:
+            preflight_file = repo_path(Path(preflight_path), repo_root=repo_root)
+        except SystemExit:
+            missing.append("opencode_preflight_report.path")
+        else:
+            if not preflight_file.is_file():
+                missing.append("opencode_preflight_report.path_missing")
+            elif sha256_file(preflight_file) != preflight_sha256:
+                missing.append("opencode_preflight_report.sha256_mismatch")
+            else:
+                try:
+                    preflight_payload = load_json(preflight_file)
+                except (OSError, ValueError, json.JSONDecodeError):
+                    missing.append("opencode_preflight_report.file_readable")
+                else:
+                    if preflight_payload.get("status") != "passed":
+                        missing.append("opencode_preflight_report.file_status")
+                    file_contract = (
+                        preflight_payload.get("contract_verification")
+                        if isinstance(preflight_payload.get("contract_verification"), dict)
+                        else {}
+                    )
+                    if file_contract.get("status") != "executed":
+                        missing.append("opencode_preflight_report.file_contract_status")
+    if preflight.get("contract_status") != "executed":
+        missing.append("opencode_preflight_report.contract_status")
+    policy = preflight.get("launch_policy")
+    if not isinstance(policy, dict):
+        missing.append("opencode_preflight_report.launch_policy")
+        policy = {}
+    opencode_command = policy.get("opencode_command")
+    if opencode_command != COMPETITION_OPENCODE_COMMAND:
+        missing.append("opencode_preflight_report.launch_policy.opencode_command")
+    opencode_model = policy.get("opencode_model")
+    if opencode_model != COMPETITION_OPENCODE_MODEL:
+        missing.append("opencode_preflight_report.launch_policy.opencode_model")
+    opencode_agent = policy.get("opencode_agent")
+    if opencode_agent != COMPETITION_OPENCODE_AGENT:
+        missing.append("opencode_preflight_report.launch_policy.opencode_agent")
+    opencode_variant = policy.get("opencode_variant")
+    if opencode_variant != COMPETITION_OPENCODE_VARIANT:
+        missing.append("opencode_preflight_report.launch_policy.opencode_variant")
+    if not isinstance(policy.get("opencode_skip_permissions"), bool):
+        missing.append("opencode_preflight_report.launch_policy.opencode_skip_permissions")
+    runtime_env = preflight.get("opencode_runtime_env")
+    if not isinstance(runtime_env, dict):
+        missing.append("opencode_preflight_report.opencode_runtime_env")
+        runtime_env = {}
+    runtime_env_sha256 = runtime_env.get("env_sha256")
+    if not isinstance(runtime_env_sha256, str) or not runtime_env_sha256:
+        missing.append("opencode_preflight_report.opencode_runtime_env.env_sha256")
+    availability = preflight.get("opencode_model_availability")
+    if not isinstance(availability, dict):
+        missing.append("opencode_preflight_report.opencode_model_availability")
+        availability = {}
+    if availability.get("status") != "available":
+        missing.append("opencode_preflight_report.opencode_model_availability.status")
+    if availability.get("opencode_command") != opencode_command:
+        missing.append("opencode_preflight_report.opencode_model_availability.opencode_command")
+    if availability.get("required_model") != COMPETITION_OPENCODE_MODEL:
+        missing.append("opencode_preflight_report.opencode_model_availability.required_model")
+    if availability.get("model_listed") is not True:
+        missing.append("opencode_preflight_report.opencode_model_availability.model_listed")
+    try:
+        model_probe_returncode = int(availability.get("process_returncode", 1))
+    except (TypeError, ValueError):
+        model_probe_returncode = 1
+    if model_probe_returncode != 0:
+        missing.append("opencode_preflight_report.opencode_model_availability.process_returncode")
+    if missing:
+        return {
+            "status": "blocked",
+            "reason": "opencode_preflight_required_for_replay",
+            "missing_constraints": missing,
+            "boundary": (
+                "OpenCode replay commands require the preflight launch contract; "
+                "otherwise the command is only an index entry, not a safe replay recipe."
+            ),
+        }
+    return {
+        "status": "ready",
+        "reason": "opencode_preflight_contract_bound",
+        "preflight_report": preflight_path,
+        "preflight_report_sha256": preflight_sha256,
+        "preflight_status": "passed",
+        "contract_status": "executed",
+        "launch_policy_sha256": preflight.get("launch_policy_sha256")
+        or opencode_launch_policy_sha256(normalize_opencode_launch_policy(policy)),
+        "opencode_runtime_env_sha256": runtime_env_sha256,
+        "opencode_model_availability": {
+            "status": "available",
+            "opencode_command": COMPETITION_OPENCODE_COMMAND,
+            "required_model": COMPETITION_OPENCODE_MODEL,
+            "required_agent": COMPETITION_OPENCODE_AGENT,
+            "process_returncode": model_probe_returncode,
+            "model_listed": True,
+        },
+    }
+
+
+def is_sha256_hex(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def append_opencode_replay_flags(argv: list[str], worker: dict[str, Any]) -> None:
+    preflight = worker.get("opencode_preflight_report")
+    if not isinstance(preflight, dict):
+        return
+    policy = preflight.get("launch_policy") if isinstance(preflight.get("launch_policy"), dict) else {}
+    opencode_command = policy.get("opencode_command") if isinstance(policy.get("opencode_command"), str) else None
+    argv.extend(["--opencode-command", opencode_command or COMPETITION_OPENCODE_COMMAND])
+    opencode_model = policy.get("opencode_model")
+    if isinstance(opencode_model, str) and opencode_model:
+        argv.extend(["--opencode-model", opencode_model])
+        if opencode_model != COMPETITION_OPENCODE_MODEL:
+            argv.append("--opencode-allow-non-competition-model")
+    else:
+        argv.extend(["--opencode-model", COMPETITION_OPENCODE_MODEL])
+    opencode_agent = policy.get("opencode_agent")
+    if isinstance(opencode_agent, str) and opencode_agent:
+        argv.extend(["--opencode-agent", opencode_agent])
+    opencode_variant = policy.get("opencode_variant")
+    if isinstance(opencode_variant, str) and opencode_variant:
+        argv.extend(["--opencode-variant", opencode_variant])
+    if policy.get("opencode_skip_permissions") is True:
+        argv.append("--opencode-skip-permissions")
+    preflight_path = preflight.get("path")
+    if isinstance(preflight_path, str) and preflight_path:
+        argv.extend(["--opencode-preflight-report", preflight_path])
+
+
+def update_batch_profile_report_context_refs(
+    *,
+    batch_report_path: Path,
+    context_refs: dict[str, dict[str, str]],
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, str]:
+    report = load_json(batch_report_path)
+    report.update(context_refs)
+    architecture = report.get("judge_summary", {}).get("harness_architecture")
+    if isinstance(architecture, dict):
+        architecture["context_pack"] = context_refs["context_pack"]
+        architecture["agent_index"] = context_refs["agent_index"]
+    atomic_write_json(batch_report_path, report)
+    return artifact_ref(batch_report_path, repo_root=repo_root)

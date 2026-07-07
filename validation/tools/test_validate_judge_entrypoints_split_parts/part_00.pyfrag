@@ -1,0 +1,800 @@
+from contextlib import closing
+import hashlib
+import json
+import shlex
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+from pathlib import Path
+from typing import Any
+
+from validation.tools import validate_judge_entrypoints as validator
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_ENVIRONMENT_SHA256 = validator.sha256_file(REPO_ROOT / "config/competition-env/environment.json")
+OPENCODE_RUNTIME_ENV_KEYS = (
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+)
+
+
+def load_default_config() -> dict:
+    return json.loads(validator.DEFAULT_CONFIG.read_text(encoding="utf-8"))
+
+
+def entrypoint_by_id(config: dict, entrypoint_id: str) -> dict:
+    for entry in config["entrypoints"]:
+        if entry.get("id") == entrypoint_id:
+            return entry
+    raise AssertionError(f"missing entrypoint {entrypoint_id}")
+
+
+def write_temp_config(payload: dict) -> Path:
+    target_dir = REPO_ROOT / "target"
+    target_dir.mkdir(exist_ok=True)
+    temp_dir = Path(tempfile.mkdtemp(prefix="judge-entrypoints-test-", dir=target_dir))
+    path = temp_dir / "flashdb-harness.json"
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def repo_relative(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def opencode_runtime_env_contract(base_root: Path, *, scope: str) -> dict:
+    runtime_root = base_root / "opencode-runtime" / scope
+    runtime_paths = {
+        "XDG_CONFIG_HOME": runtime_root / "config",
+        "XDG_DATA_HOME": runtime_root / "data",
+        "XDG_CACHE_HOME": runtime_root / "cache",
+        "TMPDIR": runtime_root / "tmp",
+        "TEMP": runtime_root / "tmp",
+        "TMP": runtime_root / "tmp",
+    }
+    env = {key: repo_relative(runtime_paths[key]) for key in OPENCODE_RUNTIME_ENV_KEYS}
+    runtime_root_rel = repo_relative(runtime_root)
+    digest_payload = {
+        "scope": scope,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+    }
+    return {
+        "schema_version": 1,
+        "status": "isolated",
+        "scope": scope,
+        "runtime_root": runtime_root_rel,
+        "env": env,
+        "env_sha256": validator.sha256_text(json.dumps(digest_payload, sort_keys=True)),
+        "semantic_gate": False,
+        "evidence_boundary": "runtime env isolation is audit evidence only",
+    }
+
+
+def resume_replay_commands(
+    *,
+    ledger: Path,
+    run_id: str,
+    worker_id: str,
+    assignment: Path,
+    request: Path,
+    summary: Path,
+    report: Path,
+    worker_root: Path,
+    retry_hint_id: str | None = None,
+) -> dict:
+    argv = [
+        "python3",
+        "-B",
+        "-m",
+        "validation.tools.opencode_agent_harness",
+        "run-worker",
+        "--db",
+        repo_relative(ledger),
+        "--run-id",
+        run_id,
+        "--worker-id",
+        worker_id,
+        "--mode",
+        "deterministic",
+    ]
+    commands = {
+        "run_worker": {
+            "argv": argv,
+            "command": shlex.join(argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(worker_root),
+            "replay_safety": {
+                "status": "ready",
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+            },
+        }
+    }
+    if retry_hint_id is not None:
+        retry_argv = [
+            "python3",
+            "-B",
+            "-m",
+            "validation.tools.opencode_agent_harness",
+            "retry-worker",
+            "--db",
+            repo_relative(ledger),
+            "--run-id",
+            run_id,
+            "--worker-id",
+            worker_id,
+            "--hint-id",
+            retry_hint_id,
+            "--mode",
+            "deterministic",
+        ]
+        commands["retry_worker"] = {
+            "argv": retry_argv,
+            "command": shlex.join(retry_argv),
+            "assignment_path": repo_relative(assignment),
+            "request_path": repo_relative(request),
+            "summary_path": repo_relative(summary),
+            "report_path": repo_relative(report),
+            "out_root": repo_relative(worker_root),
+            "replay_safety": {
+                "status": "ready",
+                "semantic_gate": False,
+                "chat_output_is_evidence": False,
+            },
+        }
+    return commands
+
+
+def write_valid_command_log(
+    path: Path,
+    steps: list[dict] | None = None,
+    *,
+    run_id: str = "competition-flashdb-environment-smoke-20260701",
+) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    command_steps = steps or [
+        {
+            "step": step,
+            "returncode": 0,
+        }
+        for step in validator.REQUIRED_COMPETITION_SMOKE_STEPS
+    ]
+    path.write_text(
+        "".join(
+            json.dumps(
+                {
+                    "step": step["step"],
+                    "command": valid_competition_smoke_step_command(step["step"]),
+                    "returncode": step.get("returncode", 0),
+                    "stdout": "",
+                    "stderr": "",
+                    "workdir": ".",
+                    "run_id": run_id,
+                    "canonical": True,
+                    **({"timed_out": True} if step.get("timed_out") is True else {}),
+                    **({"timeout_seconds": step["timeout_seconds"]} if "timeout_seconds" in step else {}),
+                    **({"failure_class": step["failure_class"]} if "failure_class" in step else {}),
+                },
+                sort_keys=True,
+            )
+            + "\n"
+            for step in command_steps
+        ),
+        encoding="utf-8",
+    )
+    return validator.sha256_file(path)
+
+
+def write_opencode_model_probe_logs(
+    root: Path,
+    *,
+    stdout: str = "provider/GLM-5.1\n",
+    stderr: str = "",
+) -> dict[str, Any]:
+    logs_dir = root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_path = logs_dir / "opencode-models.stdout.log"
+    stderr_path = logs_dir / "opencode-models.stderr.log"
+    stdout_path.write_text(stdout, encoding="utf-8", newline="\n")
+    stderr_path.write_text(stderr, encoding="utf-8", newline="\n")
+    return {
+        "logs": {
+            "stdout": repo_relative(stdout_path),
+            "stderr": repo_relative(stderr_path),
+        },
+        "stdout_sha256": validator.sha256_file(stdout_path),
+        "stderr_sha256": validator.sha256_file(stderr_path),
+    }
+
+
+def valid_competition_smoke_step_command(step: str) -> list[str]:
+    script_by_step = {
+        "vendored-clang-verification": "validation/tools/verify_vendored_clang.py",
+        "core-auto-evidence-validator": "validation/tools/validate_auto_translation_evidence.py",
+        "evidence-governance": "validation/tools/evidence_governance.py",
+        "translator-coverage-matrix": "validation/tools/translator_coverage_matrix.py",
+        "milestone-release-report": "validation/tools/milestone_release_report.py",
+    }
+    if step == "environment-check":
+        return ["bash", "-lc", "source config/competition-env/env.sh; bash config/competition-env/toolchain-check.sh"]
+    if step == "lightweight-unittest":
+        return [
+            "python3",
+            "-B",
+            "-m",
+            "unittest",
+            "validation.tools.test_competition_environment_profile",
+            "validation.tools.test_validate_competition_run_summary",
+        ]
+    if step == "opencode-glm-model-probe":
+        return ["opencode", "models"]
+    if step in script_by_step:
+        return ["python3", "-B", script_by_step[step]]
+    return ["python3", "-B", "validation/tools/run_competition_smoke.py", "--step", step]
+
+
+def temp_json_ref(path: Path, payload: dict) -> dict:
+    write_json(path, payload)
+    return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
+def artifact_ref(path: str, sha_char: str) -> dict:
+    return {"path": path, "sha256": sha_char * 64}
+
+
+def verified_unsafe_baseline_payload(*, status: str = "passed") -> dict:
+    return {
+        "report_kind": "c2rust-verified-unsafe-baseline",
+        "status": status,
+        "semantic_pass": status == "passed",
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
+def write_verified_unsafe_baseline_ref(path: Path, *, status: str = "passed") -> dict:
+    if status == "passed":
+        return write_deep_verified_unsafe_baseline_ref(path)
+    payload = verified_unsafe_baseline_payload(status=status)
+    write_json(path, payload)
+    return {
+        "path": repo_relative(path),
+        "sha256": validator.sha256_file(path),
+        "status": status,
+        "semantic_pass": status == "passed",
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
+def write_deep_verified_unsafe_baseline_ref(path: Path) -> dict:
+    output_ref = {"path": "validation/evidence/demo/c2rust-output.rs", "sha256": "1" * 64, "status": "generated"}
+    compile_ref = {"path": "validation/evidence/demo/c2rust-output.rlib", "sha256": "2" * 64, "status": "compiled"}
+    direct_ref = {
+        "path": "validation/evidence/demo/l3-demo-c2rust-direct-replay.json",
+        "sha256": "3" * 64,
+        "status": "passed",
+        "binding": "same_c2rust_output",
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_ref,
+        "replay_kind": "direct_c2rust_output_replay",
+        "correctness_role": "direct_replay_evidence",
+    }
+    payload = {
+        **verified_unsafe_baseline_payload(status="passed"),
+        "c2rust_output": output_ref,
+        "compile_artifact": compile_ref,
+        "direct_c2rust_replay": {
+            "status": "passed",
+            "semantic_pass": False,
+            "observable_replay_pass": True,
+            "artifact": direct_ref,
+            "c2rust_output": output_ref,
+            "compile_artifact": compile_ref,
+        },
+        "same_output_gate_refs": {
+            "c_oracle": {
+                "path": "validation/evidence/demo/c-oracle-status.json",
+                "sha256": "4" * 64,
+                "status": "C_ORACLE_GENERATED",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "rust_replay": direct_ref,
+            "schema_diff": {
+                "path": "validation/evidence/demo/diff.json",
+                "sha256": "5" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "negative_diff": {
+                "path": "validation/evidence/demo/negative-diff.json",
+                "sha256": "6" * 64,
+                "status": "expected_failed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "unsafe_scan": {
+                "path": "validation/evidence/demo/unsafe-scan.json",
+                "sha256": "7" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "unsafe_ledger": {
+                "path": "validation/evidence/demo/unsafe-ledger.json",
+                "sha256": "8" * 64,
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+            "final_verification": {
+                "path": "validation/evidence/demo/final-verification.json",
+                "status": "passed",
+                "binding": "same_c2rust_output",
+                "c2rust_output": output_ref,
+                "compile_artifact": compile_ref,
+            },
+        },
+    }
+    write_json(path, payload)
+    return {
+        "path": repo_relative(path),
+        "sha256": validator.sha256_file(path),
+        "status": "passed",
+        "semantic_pass": True,
+        "semantic_claim_source": "verified_unsafe_baseline_gates",
+        "generated_draft_semantic_pass": False,
+    }
+
+
+def write_repair_before_after_ref(
+    path: Path,
+    verified_ref: dict,
+    *,
+    unsafe_status: str = "measured",
+    reduced_by: int | None = 2,
+    baseline_verification: dict | None = None,
+) -> dict:
+    unsafe_reduction = {
+        "status": unsafe_status,
+        "baseline_total_unsafe": 2,
+        "current_total_unsafe": 0 if reduced_by else 2,
+        "reduced_by": reduced_by,
+        "ratio": 0.0 if reduced_by else 1.0,
+    }
+    payload = {
+        "schema_version": 1,
+        "status": "bound",
+        "baseline_verification": baseline_verification or verified_ref,
+        "accepted_patch": {"path": "validation/evidence/demo/accepted.patch", "sha256": "a" * 64},
+        "patch_log": {"path": "validation/evidence/demo/patch-log.jsonl", "sha256": "b" * 64},
+        "unsafe_reduction": unsafe_reduction,
+        "claim_boundary": {
+            "semantic_claim_source": "accepted_evidence_binding",
+            "generated_draft_semantic_pass": False,
+        },
+    }
+    write_json(path, payload)
+    return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
+def write_opencode_safety_transform_attempt_ref(path: Path, *, max_repair_rounds: int = 5) -> dict:
+    artifact_dir = path.parent / "attempt-evidence"
+    refs = {}
+    for name in (
+        "baseline-unsafe.rs",
+        "final-safe.rs",
+        "accepted.patch",
+        "patch-log.jsonl",
+        "oracle.json",
+        "schema-diff.json",
+        "unsafe-scan.json",
+        "rollback.json",
+    ):
+        artifact = artifact_dir / name
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text(f"{name}\n", encoding="utf-8")
+        refs[name] = {"path": repo_relative(artifact), "sha256": validator.sha256_file(artifact)}
+    verified_baseline_ref = write_verified_unsafe_baseline_ref(artifact_dir / "verified-unsafe-baseline.json")
+    summary_path = artifact_dir / "competition-run-summary.json"
+    summary_payload = valid_competition_run_summary_payload(run_id="run-test")
+    workflow_metrics_path = write_competition_run_summary_with_workflow_metrics(summary_path, summary_payload)
+    refs["summary"] = {"path": repo_relative(summary_path), "sha256": validator.sha256_file(summary_path)}
+    refs["workflow-metrics"] = {
+        "path": repo_relative(workflow_metrics_path),
+        "sha256": validator.sha256_file(workflow_metrics_path),
+    }
+    launch_policy = opencode_launch_policy()
+    runtime_env = opencode_runtime_env_contract(artifact_dir, scope="worker-a")
+    worker_cmd = worker_command(artifact_dir)
+    worker_command_line = shlex.join(worker_cmd)
+    opencode_prompt = "Execute test safety transform worker."
+    opencode_argv = [
+        "opencode",
+        "run",
+        "--dir",
+        ".",
+        "--format",
+        "json",
+        "--variant",
+        launch_policy["opencode_variant"],
+        "--model",
+        launch_policy["opencode_model"],
+    ]
+    if launch_policy.get("opencode_agent"):
+        opencode_argv.extend(["--agent", launch_policy["opencode_agent"]])
+    if launch_policy.get("opencode_skip_permissions"):
+        opencode_argv.append("--dangerously-skip-permissions")
+    opencode_argv.append(opencode_prompt)
+    handoff_path = artifact_dir / "opencode-handoff-contract.json"
+    handoff_payload = {
+        "schema_version": 1,
+        "run_id": "run-test",
+        "worker_id": "worker-a",
+        "attempt": 2,
+        "runner_kind": "opencode-run",
+        "request_path": repo_relative(artifact_dir / "request.json"),
+        "expected_summary_path": repo_relative(summary_path),
+        "worker_command": worker_cmd,
+        "worker_command_line": worker_command_line,
+        "worker_command_sha256": validator.sha256_text(worker_command_line),
+        "opencode_argv": opencode_argv,
+        "opencode_command_line": shlex.join(opencode_argv),
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+        "prompt": opencode_prompt,
+        "opencode_runtime_env": runtime_env,
+        "evidence_boundary": "chat output is diagnostic only; semantic acceptance requires validators",
+    }
+    write_json(handoff_path, handoff_payload)
+    session_path = artifact_dir / "opencode-session-evidence.json"
+    stdout_path = artifact_dir / "opencode.stdout.log"
+    stderr_path = artifact_dir / "opencode.stderr.log"
+    session_payload = {
+        "schema_version": 1,
+        "process_returncode": 0,
+        "parsed": True,
+        "format": "jsonl",
+        "opencode_runtime_env": runtime_env,
+        "session_events": [
+            {
+                "part": {
+                    "tool": "bash",
+                    "state": {"input": {"command": worker_command_line, "workdir": str(REPO_ROOT)}},
+                }
+            }
+        ],
+    }
+    bind_opencode_session_raw_logs(
+        session_path,
+        session_payload,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+    )
+    write_json(session_path, session_payload)
+    contract_verification = validator.recompute_opencode_contract_execution(
+        session_evidence=session_payload,
+        worker_command=worker_cmd,
+        summary_path=summary_path,
+        repo_root=REPO_ROOT,
+    )
+    payload = {
+        "schema_version": 1,
+        "report_kind": "opencode-safety-transform-attempt",
+        "run_id": "run-test",
+        "worker_id": "worker-a",
+        "attempt": 2,
+        "status": "accepted",
+        "summary": {
+            **refs["summary"],
+            "final_gate_status": "passed",
+        },
+        "workflow_metrics": refs["workflow-metrics"],
+        "handoff_contract": {
+            "path": repo_relative(handoff_path),
+            "sha256": validator.sha256_file(handoff_path),
+        },
+        "opencode_session_evidence": {
+            "path": repo_relative(session_path),
+            "sha256": validator.sha256_file(session_path),
+        },
+        "contract_verification": contract_verification,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "attempt_contract": {
+            "single_patch_per_round": True,
+            "max_repair_rounds": max_repair_rounds,
+            "semantic_gate": False,
+            "translation_coverage_numerator": 0,
+        },
+        "safety_transform_unit_count": 1,
+        "safety_transform_units": [
+            {
+                "unit_id": "demo/store-add-one",
+                "status": "converged",
+                "attempt": 2,
+                "round_contract": {
+                    "single_patch_per_round": True,
+                    "max_repair_rounds": max_repair_rounds,
+                },
+                "patch_evidence": {
+                    "baseline": refs["baseline-unsafe.rs"],
+                    "final": refs["final-safe.rs"],
+                    "accepted_patch": refs["accepted.patch"],
+                    "patch_log": refs["patch-log.jsonl"],
+                },
+                "verification_delta": {
+                    "baseline_verification": verified_baseline_ref,
+                    "compiled": True,
+                    "oracle_evidence": refs["oracle.json"],
+                    "semantic_evidence": {"schema_diff": refs["schema-diff.json"]},
+                    "unsafe_scan_evidence": refs["unsafe-scan.json"],
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 3,
+                        "current_total_unsafe": 1,
+                        "reduced_by": 2,
+                        "ratio": 1 / 3,
+                    },
+                },
+                "rounds": [
+                    {
+                        "round": 2,
+                        "single_patch_per_round": True,
+                        "patch": refs["accepted.patch"],
+                        "patch_log": refs["patch-log.jsonl"],
+                        "oracle_evidence": refs["oracle.json"],
+                        "schema_diff": refs["schema-diff.json"],
+                        "unsafe_scan_evidence": refs["unsafe-scan.json"],
+                        "unsafe_delta": {
+                            "status": "measured",
+                            "baseline_total_unsafe": 3,
+                            "current_total_unsafe": 1,
+                            "reduced_by": 2,
+                            "ratio": 1 / 3,
+                        },
+                    }
+                ],
+                "accepted_retry_hint": {
+                    "status": "revalidated_passed",
+                    "repair_rounds": 1,
+                    "auto_recovered": True,
+                    "rollback_ids": [refs["rollback.json"]["path"]],
+                    "rollback_evidence": [refs["rollback.json"]],
+                },
+                "semantic_gate": False,
+                "translation_coverage_numerator": 0,
+            }
+        ],
+        "evidence_boundary": "OpenCode chat/session output is audit provenance only.",
+    }
+    write_json(path, payload)
+    workflow_metrics_path = REPO_ROOT / refs["workflow-metrics"]["path"]
+    workflow_metrics = json.loads(workflow_metrics_path.read_text(encoding="utf-8"))
+    workflow_metrics["unsafe_reduction"] = {
+        "status": "measured",
+        "baseline_total_unsafe": 3,
+        "current_total_unsafe": 1,
+        "reduced_by": 2,
+        "ratio": 1 / 3,
+    }
+    workflow_metrics["translation_before_after"] = {
+        "status": "bound",
+        "unit_count": 1,
+        "measured_unsafe_unit_count": 1,
+        "accepted_patch_unit_count": 1,
+        "units": [
+            {
+                "unit_id": "demo/store-add-one",
+                "status": "bound",
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 3,
+                    "current_total_unsafe": 1,
+                    "reduced_by": 2,
+                    "ratio": 1 / 3,
+                },
+            }
+        ],
+    }
+    workflow_metrics["per_unit_statuses"] = [
+        {
+            "unit_id": "demo/store-add-one",
+            "source": "slice-spec",
+            "status": "converged",
+            "compiled": True,
+            "semantic_pass": True,
+            "refused": False,
+            "blocked": False,
+            "failed": False,
+            "translation_before_after": {
+                "status": "bound",
+                "baseline_verification": verified_baseline_ref,
+                "baseline": refs["baseline-unsafe.rs"],
+                "final": refs["final-safe.rs"],
+                "accepted_patch": refs["accepted.patch"],
+                "patch_log": refs["patch-log.jsonl"],
+                "oracle_evidence": refs["oracle.json"],
+                "semantic_evidence": {"schema_diff": refs["schema-diff.json"]},
+                "unsafe_scan_evidence": refs["unsafe-scan.json"],
+                "unsafe_reduction": {
+                    "status": "measured",
+                    "baseline_total_unsafe": 3,
+                    "current_total_unsafe": 1,
+                    "reduced_by": 2,
+                    "ratio": 1 / 3,
+                },
+            },
+        }
+    ]
+    write_json(workflow_metrics_path, workflow_metrics)
+    summary_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary_payload["workflow_metrics"]["sha256"] = validator.sha256_file(workflow_metrics_path)
+    write_json(summary_path, summary_payload)
+    payload["summary"]["sha256"] = validator.sha256_file(summary_path)
+    payload["workflow_metrics"]["sha256"] = validator.sha256_file(workflow_metrics_path)
+    write_json(path, payload)
+    return {"path": repo_relative(path), "sha256": validator.sha256_file(path)}
+
+
+def valid_repair_self_heal_context_payload(*, verified_ref: dict, before_after_ref: dict) -> dict:
+    hint_id = "repair:test:worker-001:unsafe_baseline_requires_repair"
+    return {
+        "attempt_evidence_policy": {
+            "accepted_attempt": {
+                "min_attempt_number": 2,
+                "require_hint_id": True,
+            },
+            "baseline_attempt": {
+                "attempt_number": 1,
+                "expected_final_gate": "failed",
+                "root_cause_key": "unsafe_baseline_requires_repair",
+                "verified_unsafe_baseline": verified_ref,
+            },
+            "mode": "baseline_repair_gate",
+            "translation_before_after": before_after_ref,
+        },
+        "workers": [
+            {
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "exit_code": 1,
+                        "hint_id": hint_id,
+                        "hint_status": "opened",
+                        "root_cause_key": "unsafe_baseline_requires_repair",
+                        "summary_status": "failed",
+                    },
+                    {
+                        "attempt": 2,
+                        "exit_code": 0,
+                        "hint_id": hint_id,
+                        "hint_status": "revalidated_passed",
+                        "retry_of": hint_id,
+                        "rollback_evidence": {
+                            "path": "target/out/harness/rollback.json",
+                            "sha256": "e" * 64,
+                        },
+                        "summary_status": "passed",
+                    },
+                ],
+                "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+            }
+        ],
+    }
+
+
+def retry_attempt_from_repair_context(context_payload: dict) -> dict:
+    return context_payload["workers"][0]["attempts"][1]
+
+
+def competition_smoke_expected_artifacts() -> dict:
+    return {
+        "competition_smoke_summary": "target/competition-smoke-flashdb-judge-entrypoint/summary/competition-smoke-summary.json",
+        "vendored_clang_verification": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+        "evidence_governance_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+        "translator_coverage_matrix": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+        "milestone_release_report": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+        "command_log": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+    }
+
+
+def valid_competition_smoke_summary_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "report_kind": "competition-smoke-summary",
+        "proof_class": "local-simulation",
+        "profile_id": "huawei-competition-ubuntu-24.04",
+        "profile_sha256": "a" * 64,
+        "claim_boundary": {
+            "semantic_gate": False,
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+        },
+        "competition_profile_match": {
+            "cargo_mirror_config_present": True,
+            "clang_lane_verified": True,
+            "kernel_match": True,
+            "os_name_match": True,
+            "profile_id": "huawei-competition-ubuntu-24.04",
+            "profile_sha256_actual": "a" * 64,
+            "python_version_match": True,
+        },
+        "execution_environment": {
+            "detected_ci": False,
+            "detected_wsl": False,
+            "kernel": "5.10.0-182.0.0.95.r194_123.hce2.x86_64",
+            "kind": "local-linux",
+            "machine": "x86_64",
+            "python_version": "3.12.3",
+            "release": "5.10.0-182.0.0.95.r194_123.hce2.x86_64",
+            "runner_name": "local",
+            "system": "Ubuntu",
+            "version": "competition-host",
+        },
+        "environment_deviations": [],
+        "timeout_policy": {
+            "per_step_timeout_seconds": 600,
+            "timeout_exit_code": 124,
+            "timeout_is_final_gate_failure": True,
+        },
+        "smoke_entrypoint": {
+            "semantic_acceptance_boundary": "does_not_translate_new_slices",
+        },
+        "vendored_clang_verification": {
+            "path": "target/competition-smoke-flashdb-judge-entrypoint/summary/vendored-clang-verification.json",
+        },
+        "reports": {
+            "evidence_governance": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/evidence-governance.json",
+            },
+            "translator_coverage_matrix": {
+                "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/translator-coverage-matrix.json",
+            },
+        },
+        "milestone_release_report": {
+            "path": "target/competition-smoke-flashdb-judge-entrypoint/reports/milestone-release-report.json",
+            "semantic_acceptance_claim": False,
+        },
+        "command_log": {
+            "path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+            "sha256": "a" * 64,
+        },
+        "final_gate": {"status": "passed"},
+        "steps": [
+            {
+                "step": "environment-check",
+                "status": "degraded",
+                "returncode": 1,
+                "log_path": "target/competition-smoke-flashdb-judge-entrypoint/logs/commands.jsonl",
+                "proof_class_effect": "exactness_blocker",
+            },
+            {
+                "step": "vendored-clang-verification",
+                "status": "passed",

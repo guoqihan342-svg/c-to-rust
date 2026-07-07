@@ -1,0 +1,252 @@
+    passed_report_count = 0
+    input_reports = []
+    for item in exhibit_inputs:
+        exhibit = item["exhibit"]
+        translation_before_after = (
+            exhibit.get("translation_before_after")
+            if isinstance(exhibit.get("translation_before_after"), dict)
+            else {}
+        )
+        unit_count += nonnegative_int(translation_before_after.get("unit_count"))
+        measured_unsafe_unit_count += nonnegative_int(translation_before_after.get("measured_unsafe_unit_count"))
+        accepted_patch_unit_count += nonnegative_int(translation_before_after.get("accepted_patch_unit_count"))
+        status = str(exhibit.get("status", "unknown"))
+        if status == "passed":
+            passed_report_count += 1
+        stage_contracts = exhibit.get("stage_contracts") if isinstance(exhibit.get("stage_contracts"), dict) else {}
+        units = compact_before_after_units(exhibit)
+        input_reports.append(
+            {
+                "batch_profile_report_path": item["batch_profile_report_path"],
+                "before_after_exhibit_path": item["before_after_exhibit_path"],
+                "before_after_exhibit_sha256": item["before_after_exhibit_sha256"],
+                "status": status,
+                "unit_count": nonnegative_int(translation_before_after.get("unit_count")),
+                "measured_unsafe_unit_count": nonnegative_int(
+                    translation_before_after.get("measured_unsafe_unit_count")
+                ),
+                "accepted_patch_unit_count": nonnegative_int(
+                    translation_before_after.get("accepted_patch_unit_count")
+                ),
+                "stage_contract_statuses": {
+                    str(stage): str(contract.get("status", "unknown"))
+                    for stage, contract in stage_contracts.items()
+                    if isinstance(contract, dict)
+                },
+                "units": units,
+            }
+        )
+    return {
+        "status": "bound" if unit_count > 0 else "not_provided",
+        "report_count": len(exhibit_inputs),
+        "passed_report_count": passed_report_count,
+        "unit_count": unit_count,
+        "measured_unsafe_unit_count": measured_unsafe_unit_count,
+        "accepted_patch_unit_count": accepted_patch_unit_count,
+        "input_reports": input_reports,
+        "claim_boundary": (
+            "Before/after exhibits are judge-facing harness artifacts. They bind baseline/final/patch/oracle "
+            "references and unsafe deltas, but do not expand the translation coverage numerator."
+        ),
+    }
+
+
+def compact_before_after_units(exhibit: dict[str, Any]) -> list[dict[str, Any]]:
+    units = exhibit.get("units")
+    if not isinstance(units, list):
+        return []
+    compacted = []
+    for unit in units:
+        if not isinstance(unit, dict):
+            continue
+        detail = {}
+        for key in [
+            "unit_id",
+            "status",
+            "baseline",
+            "final",
+            "oracle_evidence",
+            "accepted_patch",
+            "patch_log",
+            "unsafe_reduction",
+            "patch_origin",
+            "safety_loop_provenance",
+            "repair_history",
+        ]:
+            if key in unit:
+                detail[key] = unit[key]
+        compacted.append(detail)
+    return compacted
+
+
+def summarize_translation_before_after(metrics: list[dict[str, Any]]) -> dict[str, Any]:
+    unit_count = 0
+    measured_unsafe_unit_count = 0
+    accepted_patch_unit_count = 0
+    input_run_count = 0
+    for metric in metrics:
+        before_after = metric.get("translation_before_after")
+        if not isinstance(before_after, dict):
+            continue
+        count = nonnegative_int(before_after.get("unit_count"))
+        unit_count += count
+        measured_unsafe_unit_count += nonnegative_int(before_after.get("measured_unsafe_unit_count"))
+        accepted_patch_unit_count += nonnegative_int(before_after.get("accepted_patch_unit_count"))
+        if count > 0:
+            input_run_count += 1
+    return {
+        "status": "bound" if unit_count > 0 else "not_provided",
+        "input_run_count": input_run_count,
+        "unit_count": unit_count,
+        "measured_unsafe_unit_count": measured_unsafe_unit_count,
+        "accepted_patch_unit_count": accepted_patch_unit_count,
+    }
+
+
+def summarize_unsafe_reduction(metrics: list[dict[str, Any]]) -> dict[str, Any]:
+    if not metrics:
+        return {
+            "status": "not_measured",
+            "baseline_total_unsafe": None,
+            "current_total_unsafe": None,
+            "reduced_by": None,
+            "ratio": None,
+        }
+    baseline_total = 0
+    current_total = 0
+    for metric in metrics:
+        unsafe_reduction = metric.get("unsafe_reduction")
+        if not isinstance(unsafe_reduction, dict) or unsafe_reduction.get("status") != "measured":
+            return {
+                "status": "not_measured",
+                "baseline_total_unsafe": None,
+                "current_total_unsafe": None,
+                "reduced_by": None,
+                "ratio": None,
+            }
+        baseline = nonnegative_count(unsafe_reduction.get("baseline_total_unsafe"))
+        current = nonnegative_count(unsafe_reduction.get("current_total_unsafe"))
+        reduced_by = nonnegative_count(unsafe_reduction.get("reduced_by"))
+        if baseline is None or current is None or reduced_by is None or baseline - current != reduced_by:
+            raise SystemExit("measured unsafe_reduction requires consistent baseline/current/reduced_by counts")
+        baseline_total += baseline
+        current_total += current
+    return {
+        "status": "measured",
+        "baseline_total_unsafe": baseline_total,
+        "current_total_unsafe": current_total,
+        "reduced_by": baseline_total - current_total,
+        "ratio": 0.0 if baseline_total == 0 else current_total / baseline_total,
+    }
+
+
+def resolve_bound_summary_artifact(value: str, *, summary_path: Path, repo_root: Path) -> Path | None:
+    checked_relative_artifact_path(value)
+    candidates = [
+        repo_root / value,
+        summary_path.parent / value,
+        summary_path.parent.parent / value,
+    ]
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        try:
+            resolved.relative_to(repo_root.resolve())
+        except ValueError:
+            continue
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def checked_relative_artifact_path(value: str) -> None:
+    candidate = Path(value)
+    require(not candidate.is_absolute(), f"artifact path must be relative: {value}")
+    require(candidate.drive == "", f"artifact path must not include a drive: {value}")
+    require("\\" not in value, f"artifact path must use POSIX separators: {value}")
+    require("~" not in candidate.parts, f"artifact path must not include ~: {value}")
+    require(".." not in candidate.parts, f"artifact path must not include ..: {value}")
+
+
+def weighted_metric(metrics: list[dict[str, Any]], key: str, units_total: int) -> float:
+    if units_total <= 0:
+        return 0.0
+    numerator = 0.0
+    for metric in metrics:
+        value = metric.get(key)
+        if isinstance(value, (int, float)) and value >= 0:
+            numerator += float(value) * nonnegative_int(metric.get("units_total"))
+    return numerator / units_total
+
+
+def require_count_mapping(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    for key, count in value.items():
+        if isinstance(key, str) and isinstance(count, int) and count >= 0:
+            result[key] = count
+    return result
+
+
+def list_or_empty(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def nonnegative_int(value: Any) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def nonnegative_count(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    return value if isinstance(value, int) and value >= 0 else None
+
+
+def sha256_file(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in LF_STABLE_TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(data).hexdigest()
+
+
+def rel(repo_root: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def require_int(payload: dict[str, Any], key: str) -> int:
+    value = payload.get(key)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def optional_int(payload: dict[str, Any], key: str, default: int) -> int:
+    value = payload.get(key, default)
+    require(isinstance(value, int), f"{key} must be an integer")
+    return value
+
+
+def require_dict(payload: dict[str, Any], key: str) -> dict[str, Any]:
+    value = payload.get(key)
+    require(isinstance(value, dict), f"{key} must be an object")
+    return value
+
+
+def require_nonnegative_int(value: Any, message: str) -> int:
+    require(isinstance(value, int) and value >= 0, f"{message} must be a non-negative integer")
+    return value
+
+
+def is_l4_refused(item: Any) -> bool:
+    return isinstance(item, dict) and item.get("route_level") == "L4" and item.get("route_status") == "refused"
+
+
+def require(condition: Any, message: str) -> None:
+    if not condition:
+        raise SystemExit(message)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

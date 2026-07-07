@@ -1,0 +1,621 @@
+        "summary_exists": True,
+        "tools_before_first_shell": [],
+        "contract_failure_reason": "",
+    }
+
+
+def rewrite_worker_session_evidence(worker: dict, session_payload: dict) -> None:
+    session_path = REPO_ROOT / worker["opencode_session_evidence"]["path"]
+    existing_session = json.loads(session_path.read_text(encoding="utf-8"))
+    if "opencode_runtime_env" not in session_payload and "opencode_runtime_env" in existing_session:
+        session_payload["opencode_runtime_env"] = existing_session["opencode_runtime_env"]
+    bind_opencode_session_raw_logs(session_path, session_payload)
+    write_json(session_path, session_payload)
+    worker["opencode_session_evidence"]["sha256"] = validator.sha256_file(session_path)
+    if "logs" in worker:
+        stdout_path = REPO_ROOT / session_payload["stdout_path"]
+        stderr_path = REPO_ROOT / session_payload["stderr_path"]
+        worker["logs"]["stdout"]["path"] = repo_relative(stdout_path)
+        worker["logs"]["stdout"]["sha256"] = validator.sha256_file(stdout_path)
+        worker["logs"]["stderr"]["path"] = repo_relative(stderr_path)
+        worker["logs"]["stderr"]["sha256"] = validator.sha256_file(stderr_path)
+
+
+def materialize_opencode_judge_index_artifacts(payload: dict, root: Path, *, profile_payload: dict) -> None:
+    profile_path = root / "profile.json"
+    set_artifact_ref(payload["evidence_artifact_refs"]["profile"], profile_path, profile_payload)
+    set_artifact_ref(
+        payload["evidence_artifact_refs"]["competition_run_summary"],
+        root / "summary" / "competition-run-summary.json",
+    )
+    set_artifact_ref(payload["evidence_artifact_refs"]["workflow_metrics"], root / "summary" / "workflow-metrics.json")
+    set_artifact_ref(payload["evidence_artifact_refs"]["worker_plan"], root / "harness" / "plans" / "workers.json")
+    launch_policy = payload["opencode_agent_runtime"]["opencode_preflight_report"]["launch_policy"]
+    set_all_opencode_preflight_refs(
+        payload,
+        root / "harness" / "opencode-preflight-report.json",
+        run_id=payload["run_id"],
+        launch_policy=launch_policy,
+    )
+    for worker in payload["opencode_agent_runtime"]["workers"]:
+        worker_id = worker["worker_id"]
+        worker_root = root / "workers" / worker_id
+        write_worker_opencode_contract_artifacts(worker, worker_root, run_id=payload["run_id"], launch_policy=launch_policy)
+
+
+def valid_opencode_judge_index_payload() -> dict:
+    launch_policy = opencode_launch_policy()
+    preflight = {
+        "path": "target/out/harness/opencode-preflight-report.json",
+        "sha256": "a" * 64,
+        "status": "passed",
+        "contract_status": "executed",
+        "run_id": "run-test",
+        "launch_policy": launch_policy,
+        "launch_policy_sha256": opencode_launch_policy_sha256(launch_policy),
+    }
+    preflight_for_worker = json.loads(json.dumps(preflight))
+    preflight_for_refs = json.loads(json.dumps(preflight))
+    preflight_for_runtime = json.loads(json.dumps(preflight))
+    worker = {
+        "worker_id": "worker-a",
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+        "summary": artifact_ref("target/out/workers/worker-a/summary/competition-run-summary.json", "b"),
+        "worker_report": artifact_ref("target/out/workers/worker-a/harness/run-worker-report.json", "c"),
+        "logs": {
+            "stdout": artifact_ref("target/out/workers/worker-a/logs/stdout.log", "d"),
+            "stderr": artifact_ref("target/out/workers/worker-a/logs/stderr.log", "e"),
+        },
+        "handoff_contract": artifact_ref("target/out/workers/worker-a/harness/opencode-handoff-contract.json", "f"),
+        "opencode_session_evidence": artifact_ref("target/out/workers/worker-a/logs/opencode-session-evidence.json", "1"),
+        "opencode_preflight_report": preflight_for_worker,
+        "contract_verification_status": "executed",
+        "opencode_contract_verification": {
+            "status": "executed",
+            "first_shell_command_matches_worker_command": True,
+            "worker_command_seen": True,
+            "summary_exists": True,
+            "tools_before_first_shell": [],
+            "executed_shell_command_count": 1,
+            "executed_shell_commands": [
+                "python -B scripts/c2rust-migrator.py --phase migrate --input target/out/workers/worker-a/harness/request.json"
+            ],
+        },
+    }
+    return {
+        "schema_version": 1,
+        "report_kind": "judge-evidence-index",
+        "status": "completed",
+        "run_id": "run-test",
+        "mode": "opencode",
+        "claim_boundary": {
+            "semantic_claim_source": "accepted_evidence_binding",
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "index_is_semantic_gate": False,
+        },
+        "judge_headline": {
+            "report_kind": "judge-headline",
+            "status": "completed",
+            "mode": "opencode",
+            "graph_runtime": "opencode-harness-langgraph-inspired",
+            "worker_count": 1,
+            "parallelism": {"max_workers": 1, "effective_workers": 1},
+            "repair_round_cap": 5,
+            "repair_checkpoint": "repair_hints",
+            "semantic_gate": False,
+            "semantic_claim_source": "accepted_evidence_binding",
+            "generated_draft_semantic_pass": False,
+            "translation_coverage_numerator": 0,
+            "opencode_runtime": {
+                "enabled": True,
+                "worker_count": 1,
+                "all_contracts_executed": True,
+                "chat_output_is_evidence": False,
+                "semantic_gate": False,
+            },
+        },
+        "harness_architecture": {
+            "graph_runtime": "opencode-harness-langgraph-inspired",
+            "graph_nodes": ["load_plan", "fanout_workers", "worker", "repair_retry", "merge", "report"],
+            "worker_count": 1,
+            "parallelism": {"max_workers": 1, "effective_workers": 1},
+            "retry_policy": {"checkpoint": "repair_hints", "enabled": False, "round_cap": 5},
+            "architecture_contracts": {
+                "context_management": {
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "resume_protocol": {"checkpoint_backend": "sqlite"},
+                },
+                "agent_coordination": {
+                    "chat_output_is_evidence": False,
+                    "semantic_gate": False,
+                    "checkpoint_backend": "sqlite",
+                    "roles": ["planner", "worker", "repairer", "verifier", "reporter"],
+                },
+            },
+        },
+        "evidence_artifact_refs": {
+            "competition_run_summary": artifact_ref("target/out/summary/competition-run-summary.json", "2"),
+            "workflow_metrics": artifact_ref("target/out/summary/workflow-metrics.json", "3"),
+            "worker_plan": artifact_ref("target/out/harness/plans/workers.json", "4"),
+            "profile": artifact_ref("config/competition-env/planned-batches/opencode.json", "5"),
+            "opencode_preflight_report": preflight_for_refs,
+        },
+        "opencode_agent_runtime": {
+            "runtime": "opencode",
+            "chat_output_is_evidence": False,
+            "semantic_gate": False,
+            "worker_count": 1,
+            "contract_status_counts": {"executed": 1},
+            "all_contracts_executed": True,
+            "failed_or_missing_contract_workers": [],
+            "opencode_preflight_report": preflight_for_runtime,
+            "workers": [worker],
+        },
+    }
+
+
+def valid_deterministic_judge_index_payload() -> dict:
+    payload = valid_opencode_judge_index_payload()
+    payload["mode"] = "deterministic"
+    payload.pop("opencode_agent_runtime", None)
+    payload["evidence_artifact_refs"].pop("opencode_preflight_report", None)
+    payload["judge_headline"]["mode"] = "deterministic"
+    payload["judge_headline"]["opencode_runtime"] = {
+        "enabled": False,
+        "worker_count": 0,
+        "all_contracts_executed": False,
+        "chat_output_is_evidence": False,
+        "semantic_gate": False,
+    }
+    return payload
+
+
+def write_opencode_hostless_rehearsal_fixture(root: Path) -> tuple[Path, dict]:
+    out_root = root / "out"
+    harness_dir = out_root / "harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    run_id = "hostless-rehearsal"
+    runtime_source = valid_opencode_judge_index_payload()
+    runtime_source["run_id"] = run_id
+    materialize_opencode_judge_index_artifacts(
+        runtime_source,
+        out_root,
+        profile_payload={"profile_id": "demo-hostless"},
+    )
+    runtime = runtime_source["opencode_agent_runtime"]
+    runtime_worker = runtime["workers"][0]
+    worker_id = runtime_worker["worker_id"]
+    worker_root = out_root / "workers" / worker_id
+    assignment = harness_dir / "assignments" / f"{worker_id}.json"
+    request = harness_dir / "assignments" / f"{worker_id}-request.json"
+    write_json(assignment, {"worker_id": worker_id, "report_kind": "assignment"})
+    write_json(request, {"worker_id": worker_id, "report_kind": "worker-request"})
+    worker_context = {
+        "assignment_path": repo_relative(assignment),
+        "function": "demo_unit",
+        "isolated_out_root": repo_relative(worker_root),
+        "out_root": repo_relative(worker_root),
+        "report_path": runtime_worker["worker_report"]["path"],
+        "request_path": repo_relative(request),
+        "slice_id": "demo-unit",
+        "source_commit": "abc123",
+        "source_sha256": "f" * 64,
+        "summary_path": runtime_worker["summary"]["path"],
+        "worker_id": worker_id,
+    }
+    batch_report_path = harness_dir / "batch-profile-report.json"
+    run_plan_report_path = harness_dir / "run-plan-report.json"
+    context_pack_path = harness_dir / "context-pack.json"
+    agent_index_path = harness_dir / "agent-index.json"
+    write_json(
+        batch_report_path,
+        {
+            "schema_version": 1,
+            "report_kind": "batch-profile-report",
+            "status": "completed",
+            "run_id": run_id,
+            "mode": "opencode",
+            "proof_class": "local-simulation",
+        },
+    )
+    write_json(
+        run_plan_report_path,
+        {
+            "schema_version": 1,
+            "report_kind": "run-plan-report",
+            "status": "completed",
+            "run_id": run_id,
+            "mode": "opencode",
+        },
+    )
+    context_payload = {
+        "report_kind": "context-pack",
+        "context_management_contract": {
+            "agent_index": repo_relative(agent_index_path),
+            "chat_output_is_evidence": False,
+            "context_pack": repo_relative(context_pack_path),
+            "contract_kind": "context-management",
+            "evidence_policy": "on-disk-artifacts-only",
+            "pipeline": [
+                {"stage": "plan", "role": "planner"},
+                {"stage": "translate", "role": "worker", "fanout": True},
+                {"stage": "verify", "role": "verifier"},
+                {"stage": "repair", "role": "repairer", "max_rounds": 5},
+            ],
+            "primary_report": repo_relative(batch_report_path),
+            "resume_protocol": {
+                "checkpoint_backend": "sqlite",
+                "ledger_path": repo_relative(out_root / "state" / "opencode-agent-harness.sqlite3"),
+                "worker_state_source": "agent-index.agents_by_worker_id",
+            },
+            "schema_version": 1,
+            "semantic_gate": False,
+        },
+        "entrypoints": {
+            "primary_report": repo_relative(batch_report_path),
+            "batch_profile_report": repo_relative(batch_report_path),
+            "run_plan_report": repo_relative(run_plan_report_path),
+        },
+        "workers": [worker_context],
+    }
+    agent_payload = {
+        "report_kind": "agent-index",
+        "agent_coordination_contract": {
+            "chat_output_is_evidence": False,
+            "checkpoint_backend": "sqlite",
+            "contract_kind": "agent-coordination",
+            "roles": {
+                "planner": {},
+                "worker": {"isolation": "per-worker out_root"},
+                "repairer": {"round_cap": 5},
+                "verifier": {},
+                "reporter": {},
+            },
+            "schema_version": 1,
+            "semantic_gate": False,
+            "worker_count": 1,
+        },
+        "agents": [worker_context],
+        "agents_by_worker_id": {worker_id: worker_context},
+        "reports": {
+            "batch_profile_report": {
+                "path": repo_relative(batch_report_path),
+                "report_kind": "batch-profile-report",
+                "status": "completed",
+            },
+            "run_plan_report": {
+                "path": repo_relative(run_plan_report_path),
+                "report_kind": "run-plan-report",
+                "status": "completed",
+            },
+        },
+    }
+    write_json(context_pack_path, context_payload)
+    write_json(agent_index_path, agent_payload)
+    rehearsal_path = harness_dir / "opencode-hostless-rehearsal-report.json"
+    payload = {
+        "schema_version": 1,
+        "report_kind": "opencode-hostless-rehearsal-report",
+        "status": "completed",
+        "exit_code": 0,
+        "run_id": run_id,
+        "profile_id": "demo-hostless",
+        "proof_class": "local-simulation",
+        "mode": "opencode",
+        "rehearsal_runner": "fake/fixture",
+        "closes_p0_h9": False,
+        "semantic_gate": False,
+        "chat_output_is_evidence": False,
+        "generated_draft_semantic_pass": False,
+        "translation_coverage_numerator": 0,
+        "h9_contract": {
+            "status": "blocked",
+            "reason": "hostless_rehearsal_is_not_real_opencode_glm51_max_host_evidence",
+            "required_agent_tool": "opencode",
+            "required_agent": "c2rust-migrator",
+            "required_model": "GLM-5.1",
+            "required_variant": "max",
+            "required_proof_class": "competition-exact",
+            "local_simulation_closes_p0_h9": False,
+        },
+        "batch_profile_report": {
+            "path": repo_relative(batch_report_path),
+            "sha256": validator.sha256_file(batch_report_path),
+        },
+        "run_plan_report": {
+            "path": repo_relative(run_plan_report_path),
+            "sha256": validator.sha256_file(run_plan_report_path),
+        },
+        "context_pack": {
+            "path": repo_relative(context_pack_path),
+            "sha256": validator.sha256_file(context_pack_path),
+        },
+        "agent_index": {
+            "path": repo_relative(agent_index_path),
+            "sha256": validator.sha256_file(agent_index_path),
+        },
+        "opencode_preflight_report": json.loads(json.dumps(runtime["opencode_preflight_report"])),
+        "opencode_runtime": runtime,
+        "workers": [
+            {
+                "worker_id": worker_id,
+                "summary_status": "passed",
+                "exit_code": 0,
+                "recorded": True,
+                "semantic_gate": False,
+                "summary": json.loads(json.dumps(runtime_worker["summary"])),
+                "report": json.loads(json.dumps(runtime_worker["worker_report"])),
+                "handoff_contract": json.loads(json.dumps(runtime_worker["handoff_contract"])),
+                "opencode_session_evidence": json.loads(json.dumps(runtime_worker["opencode_session_evidence"])),
+                "opencode_preflight_report": json.loads(json.dumps(runtime_worker["opencode_preflight_report"])),
+                "opencode_contract_verification": json.loads(json.dumps(runtime_worker["opencode_contract_verification"])),
+                "final_decision": {"status": "accepted", "reason": "worker_summary_passed"},
+            }
+        ],
+        "worker_count": 1,
+        "boundary": "hostless rehearsal only",
+    }
+    write_json(rehearsal_path, payload)
+    return rehearsal_path, payload
+
+
+def write_minimal_context_ledger(
+    path: Path,
+    *,
+    run_id: str,
+    context_pack_path: Path,
+    context_pack_payload: dict,
+    agent_index_path: Path,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.executescript(
+            """
+            create table context_packs(
+              context_pack_id text primary key,
+              run_id text not null,
+              target_id text,
+              slice_id text,
+              depth integer not null,
+              max_tokens integer not null,
+              artifact_path text not null,
+              artifact_sha256 text not null,
+              payload_json text not null
+            );
+            create table artifacts(
+              artifact_id integer primary key autoincrement,
+              run_id text not null,
+              agent_id text,
+              target_id text,
+              slice_id text,
+              kind text not null,
+              repo_rel_path text not null unique,
+              sha256 text not null,
+              status text not null,
+              semantic_role text not null,
+              schema_name text,
+              payload_status text,
+              payload_json text not null,
+              created_at text not null
+            );
+            """
+        )
+        connection.execute(
+            """
+            insert into context_packs(
+              context_pack_id, run_id, target_id, slice_id, depth, max_tokens,
+              artifact_path, artifact_sha256, payload_json
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"{run_id}-context-pack",
+                run_id,
+                "flashdb",
+                None,
+                1,
+                20000,
+                repo_relative(context_pack_path),
+                validator.sha256_file(context_pack_path),
+                json.dumps(context_pack_payload, sort_keys=True),
+            ),
+        )
+        agent_index_payload_json = json.dumps(
+            json.loads(agent_index_path.read_text(encoding="utf-8")),
+            sort_keys=True,
+        )
+        connection.execute(
+            """
+            insert into artifacts(
+              run_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                run_id,
+                "agent-index",
+                repo_relative(agent_index_path),
+                validator.sha256_file(agent_index_path),
+                "present",
+                "agent-index",
+                agent_index_payload_json,
+                "2026-07-01T00:00:00Z",
+            ),
+        )
+        for worker in context_pack_payload.get("workers", []):
+            if not isinstance(worker, dict) or not isinstance(worker.get("summary_path"), str):
+                continue
+            summary_path = REPO_ROOT / worker["summary_path"]
+            if not summary_path.is_file():
+                continue
+            connection.execute(
+                """
+                insert into artifacts(
+                  run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    worker.get("worker_id"),
+                    "competition-run-summary",
+                    worker["summary_path"],
+                    validator.sha256_file(summary_path),
+                    "passed",
+                    "run-summary",
+                    "{}",
+                    "2026-07-01T00:00:00Z",
+                ),
+            )
+            if isinstance(worker.get("report_path"), str):
+                report_path = REPO_ROOT / worker["report_path"]
+                if report_path.is_file():
+                    connection.execute(
+                        """
+                        insert into artifacts(
+                          run_id, agent_id, kind, repo_rel_path, sha256, status, semantic_role, payload_json, created_at
+                        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            run_id,
+                            worker.get("worker_id"),
+                            "run-worker-report",
+                            worker["report_path"],
+                            validator.sha256_file(report_path),
+                            "passed",
+                            "worker-execution-report",
+                            "{}",
+                            "2026-07-01T00:00:00Z",
+                        ),
+                    )
+        connection.commit()
+
+
+def write_context_ledger_case(
+    temp_dir: Path,
+    *,
+    run_id: str = "context-ledger-case",
+    ledger_run_id: str | None = None,
+    isolated_out_root: str | None = None,
+) -> dict:
+    out_root = temp_dir / "out"
+    context_pack = out_root / "harness" / "context-pack.json"
+    agent_index = out_root / "harness" / "agent-index.json"
+    ledger = out_root / "state" / "opencode-agent-harness.sqlite3"
+    worker_root = out_root / "workers" / "worker-001"
+    summary = worker_root / "summary" / "competition-run-summary.json"
+    report = worker_root / "harness" / "run-worker-report.json"
+    write_json(summary, {"final_gate": {"status": "passed"}})
+    write_json(report, {"report_kind": "run-worker-report", "worker_id": "worker-001"})
+    worker = {
+        "worker_id": "worker-001",
+        "summary_path": repo_relative(summary),
+        "report_path": repo_relative(report),
+    }
+    context_payload = {
+        "run_id": run_id,
+        "context_management_contract": {
+            "resume_protocol": {
+                "checkpoint_backend": "sqlite",
+                "ledger_path": repo_relative(ledger),
+            },
+        },
+        "workers": [worker],
+    }
+    agent_payload = {
+        "run_id": run_id,
+        "agents_by_worker_id": {
+            "worker-001": {
+                **worker,
+                "isolated_out_root": (
+                    isolated_out_root if isolated_out_root is not None else repo_relative(worker_root)
+                ),
+            }
+        },
+    }
+    write_json(context_pack, context_payload)
+    write_json(agent_index, agent_payload)
+    write_minimal_context_ledger(
+        ledger,
+        run_id=ledger_run_id if ledger_run_id is not None else run_id,
+        context_pack_path=context_pack,
+        context_pack_payload=context_payload,
+        agent_index_path=agent_index,
+    )
+    return {
+        "context_payload": context_payload,
+        "agent_payload": agent_payload,
+        "context_pack": context_pack,
+        "agent_index": agent_index,
+        "ledger": ledger,
+    }
+
+
+def validate_context_ledger_case(case: dict) -> dict:
+    return validator.validate_context_ledger_contract(
+        case["context_payload"],
+        case["agent_payload"],
+        context_path_text=repo_relative(case["context_pack"]),
+        agent_path_text=repo_relative(case["agent_index"]),
+        repo_root=REPO_ROOT,
+    )
+
+
+def bind_entrypoint_to_out_root(config: dict, temp_config: Path, *, entry_index: int, out_root: Path) -> Path:
+    entry = config["entrypoints"][entry_index]
+    flags = validator.parsed_command_flags(entry["command"])
+    old_out_root = flags["--out-root"]
+    new_out_root = repo_relative(out_root)
+    entry["command"] = entry["command"].replace(f"--out-root {old_out_root}", f"--out-root {new_out_root}")
+    manifest = json.loads((REPO_ROOT / entry["tracked_manifest"]["path"]).read_text(encoding="utf-8"))
+    command_key = validator.expected_manifest_reproduction_command_key(entry)
+    manifest["reproduction"][command_key] = entry["command"]
+    manifest_path = temp_config.parent / f"{entry['id']}-tracked-manifest.json"
+    entry["tracked_manifest"] = temp_json_ref(manifest_path, manifest)
+    return out_root
+
+from pathlib import Path as _C2RPartPath
+
+_C2R_PARTS_DIR = _C2RPartPath(__file__).with_name("_test_validate_judge_entrypoints_parts")
+for _C2R_PART_NAME in (
+    "class_part_00.py",
+    "class_part_01.py",
+    "class_part_02.py",
+    "class_part_03.py",
+    "class_part_04.py",
+    "class_part_05.py",
+    "class_part_06.py",
+    "class_part_07.py",
+    "class_part_08.py",
+    "class_part_09.py",
+):
+    _C2R_PART_PATH = _C2R_PARTS_DIR / _C2R_PART_NAME
+    exec(
+        compile(
+            _C2R_PART_PATH.read_text(encoding="utf-8"),
+            str(_C2R_PART_PATH),
+            "exec",
+        ),
+        globals(),
+    )
+
+class JudgeEntrypointsValidatorTests(
+    _JudgeEntrypointsValidatorTestsPart00,
+    _JudgeEntrypointsValidatorTestsPart01,
+    _JudgeEntrypointsValidatorTestsPart02,
+    _JudgeEntrypointsValidatorTestsPart03,
+    _JudgeEntrypointsValidatorTestsPart04,
+    _JudgeEntrypointsValidatorTestsPart05,
+    _JudgeEntrypointsValidatorTestsPart06,
+    _JudgeEntrypointsValidatorTestsPart07,
+    _JudgeEntrypointsValidatorTestsPart08,
+    _JudgeEntrypointsValidatorTestsPart09,
+    unittest.TestCase,
+):
+    pass
+
+del _C2RPartPath, _C2R_PARTS_DIR, _C2R_PART_NAME, _C2R_PART_PATH
+
+
+if __name__ == "__main__":
+    unittest.main()
