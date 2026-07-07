@@ -1534,7 +1534,7 @@
         "record field assignment",
         "readonly record pointer field read",
         "mutable record pointer field write",
-        "mutable record pointer opaque void pointer field write",
+        "mutable record pointer opaque void and integer pointer field writes",
         "opaque void pointer field assignment cast",
         "mutable record pointer identity return after field write",
         "typedef-backed mutable record pointer via desugared/canonical clang type fallback",
@@ -1608,6 +1608,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_mutable_record_pointer_nonvoid_pointer_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1675,6 +1679,10 @@
             },
             {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_write",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_mutable_record_pointer_nonvoid_pointer_field_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1809,6 +1817,10 @@
         },
         {
           "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_write",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_mutable_record_pointer_nonvoid_pointer_field_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

@@ -133,7 +133,7 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{target_name} = {compound_value};\n"));
             }
-            if let Some(emitted) = emit_opaque_record_pointer_field_assignment_value(
+            if let Some(emitted) = emit_record_pointer_field_assignment_value(
                 target,
                 value,
                 target_ty,

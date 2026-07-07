@@ -10,7 +10,7 @@ struct EmitContext {
     opaque_pointer_call_arg_params: HashSet<String>,
     raw_direct_call_pointer_params: HashSet<String>,
     mutable_record_pointer_write_params: HashSet<String>,
-    opaque_record_pointer_field_value_params: HashSet<String>,
+    record_pointer_field_value_params: HashSet<String>,
     mutable_record_pointer_read_fields: HashSet<MutableRecordPointerFieldKey>,
     zero_initialized_record_locals: HashSet<String>,
     readonly_globals: HashMap<String, IrGlobal>,
@@ -76,8 +76,8 @@ impl EmitContext {
             collect_raw_direct_call_pointer_params(&function.body, &function.params);
         let mutable_record_pointer_write_params =
             collect_mutable_record_pointer_write_params(&function.body, &function.params)?;
-        let opaque_record_pointer_field_value_params =
-            collect_opaque_record_pointer_field_value_params(
+        let record_pointer_field_value_params =
+            collect_record_pointer_field_value_params(
                 &function.body,
                 &function.params,
                 &mutable_record_pointer_write_params,
@@ -107,7 +107,7 @@ impl EmitContext {
             opaque_pointer_call_arg_params,
             raw_direct_call_pointer_params,
             mutable_record_pointer_write_params,
-            opaque_record_pointer_field_value_params,
+            record_pointer_field_value_params,
             mutable_record_pointer_read_fields: HashSet::new(),
             zero_initialized_record_locals,
             readonly_globals,
@@ -142,8 +142,8 @@ impl EmitContext {
         self.mutable_record_pointer_write_params.contains(name)
     }
 
-    fn is_opaque_record_pointer_field_value_param(&self, name: &str) -> bool {
-        self.opaque_record_pointer_field_value_params.contains(name)
+    fn is_record_pointer_field_value_param(&self, name: &str) -> bool {
+        self.record_pointer_field_value_params.contains(name)
     }
 
     fn is_opaque_pointer_call_arg_param(&self, name: &str) -> bool {

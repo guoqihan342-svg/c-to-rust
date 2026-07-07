@@ -11,9 +11,10 @@ fn emit_param(
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if context.is_byte_slice_param(&param.name) {
         "&[u8]".to_string()
-    } else if context.is_opaque_record_pointer_field_value_param(&param.name)
-        || context.is_opaque_pointer_call_arg_param(&param.name)
-    {
+    } else if context.is_record_pointer_field_value_param(&param.name) {
+        emit_record_pointer_field_value_param_type(&param.ty)
+            .map_err(|detail| format!("param {} has {}", param.name, detail))?
+    } else if context.is_opaque_pointer_call_arg_param(&param.name) {
         emit_opaque_void_pointer_param_type(&param.ty)
             .map_err(|detail| format!("param {} has {}", param.name, detail))?
     } else if should_emit_raw_direct_call_pointer_param(&param.name, &param.ty, context) {
@@ -151,7 +152,16 @@ fn emit_value_type(ty: &IrType) -> Result<String, String> {
 fn emit_opaque_void_pointer_param_type(ty: &IrType) -> Result<String, String> {
     emit_opaque_void_pointer_type(ty).ok_or_else(|| {
         format!(
-            "opaque record pointer field value param type {} is unsupported",
+            "opaque pointer param type {} is unsupported",
+            type_label(ty)
+        )
+    })
+}
+
+fn emit_record_pointer_field_value_param_type(ty: &IrType) -> Result<String, String> {
+    emit_record_pointer_field_type(ty).ok_or_else(|| {
+        format!(
+            "record pointer field value param type {} is unsupported",
             type_label(ty)
         )
     })
@@ -185,7 +195,7 @@ fn should_emit_raw_direct_call_pointer_param(
 }
 
 fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
-    if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
+    if let Some(pointer_ty) = emit_record_pointer_field_type(ty) {
         return Ok(pointer_ty);
     }
     if let IrTypeKind::Record {
@@ -198,7 +208,7 @@ fn emit_record_field_type(ty: &IrType) -> Result<String, String> {
 }
 
 fn emit_mutable_record_pointer_field_type(ty: &IrType) -> Result<String, String> {
-    if let Some(pointer_ty) = emit_opaque_void_pointer_type(ty) {
+    if let Some(pointer_ty) = emit_record_pointer_field_type(ty) {
         return Ok(pointer_ty);
     }
     emit_scalar_type(ty)
@@ -237,7 +247,7 @@ fn emit_record_zero_initializer(ty: &IrType) -> Result<String, String> {
 }
 
 fn emit_record_zero_field_value(ty: &IrType) -> Result<String, String> {
-    if let Some(value) = emit_opaque_void_pointer_zero_value(ty) {
+    if let Some(value) = emit_record_pointer_field_zero_value(ty) {
         return Ok(value.to_string());
     }
     if is_integer_type(ty) {
@@ -263,13 +273,27 @@ fn emit_opaque_void_pointer_type(ty: &IrType) -> Option<String> {
     Some(format!("*{mutability} core::ffi::c_void"))
 }
 
-fn emit_opaque_void_pointer_zero_value(ty: &IrType) -> Option<&'static str> {
+fn emit_record_pointer_field_type(ty: &IrType) -> Option<String> {
+    emit_opaque_void_pointer_type(ty).or_else(|| emit_integer_pointer_type(ty))
+}
+
+fn emit_integer_pointer_type(ty: &IrType) -> Option<String> {
     let IrTypeKind::Pointer { pointee } = &ty.kind else {
         return None;
     };
-    if !matches!(pointee.kind, IrTypeKind::Void) {
+    if !is_integer_type(pointee) {
         return None;
     }
+    let pointee_ty = emit_scalar_type(pointee).ok()?;
+    let mutability = if pointee.is_const { "const" } else { "mut" };
+    Some(format!("*{mutability} {pointee_ty}"))
+}
+
+fn emit_record_pointer_field_zero_value(ty: &IrType) -> Option<&'static str> {
+    let IrTypeKind::Pointer { pointee } = &ty.kind else {
+        return None;
+    };
+    emit_record_pointer_field_type(ty)?;
     if pointee.is_const {
         Some("core::ptr::null()")
     } else {

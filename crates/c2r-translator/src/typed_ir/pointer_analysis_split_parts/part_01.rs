@@ -412,11 +412,19 @@ fn collect_mutable_record_pointer_write_params(
     body: &[IrStmt],
     params: &[IrParam],
 ) -> Result<HashSet<String>, String> {
+    let mutable_record_pointer_param_names = params
+        .iter()
+        .filter(|param| mutable_record_pointer_pointee_type(&param.ty).is_some())
+        .map(|param| param.name.clone())
+        .collect::<HashSet<_>>();
+    let record_pointer_field_value_params =
+        collect_record_pointer_field_value_params(body, params, &mutable_record_pointer_param_names)?;
     let pointer_param_count = params
         .iter()
         .filter(|param| {
             matches!(param.ty.kind, IrTypeKind::Pointer { .. })
                 && emit_opaque_void_pointer_type(&param.ty).is_none()
+                && !record_pointer_field_value_params.contains(&param.name)
         })
         .count();
     let mutable_record_pointer_params = params
@@ -439,7 +447,7 @@ fn collect_mutable_record_pointer_write_params(
     Ok(write_params)
 }
 
-fn collect_opaque_record_pointer_field_value_params(
+fn collect_record_pointer_field_value_params(
     body: &[IrStmt],
     params: &[IrParam],
     mutable_record_pointer_write_params: &HashSet<String>,
@@ -449,7 +457,7 @@ fn collect_opaque_record_pointer_field_value_params(
         .map(|param| (param.name.as_str(), &param.ty))
         .collect();
     let mut value_params = HashSet::new();
-    collect_opaque_record_pointer_field_value_params_from_body(
+    collect_record_pointer_field_value_params_from_body(
         body,
         &param_types,
         mutable_record_pointer_write_params,

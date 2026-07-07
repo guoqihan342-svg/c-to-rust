@@ -241,7 +241,7 @@ fn emit_mutable_record_pointer_member_compound_assignment_value(
     )))
 }
 
-fn emit_opaque_record_pointer_field_assignment_value(
+fn emit_record_pointer_field_assignment_value(
     target: &IrExpr,
     value: &IrExpr,
     target_ty: &IrType,
@@ -249,23 +249,23 @@ fn emit_opaque_record_pointer_field_assignment_value(
     context: &EmitContext,
     path: &str,
 ) -> Result<Option<EmittedExpr>, String> {
-    let Some(target_pointer_ty) = emit_opaque_void_pointer_type(target_ty) else {
+    let Some(target_pointer_ty) = emit_record_pointer_field_type(target_ty) else {
         return Ok(None);
     };
     let Some((base_name, _, _, _)) =
-        direct_mutable_record_pointer_opaque_member_parts(target, context)?
+        direct_mutable_record_pointer_pointer_member_parts(target, context)?
     else {
         return Err(format!(
-            "{path} opaque pointer field target requires direct mutable record pointer ownership evidence"
+            "{path} pointer field target requires direct mutable record pointer ownership evidence"
         ));
     };
     if !context.is_mutable_record_pointer_write_param(base_name) {
         return Err(format!(
-            "{path} opaque pointer field target {base_name} requires mutable record pointer ownership evidence"
+            "{path} pointer field target {base_name} requires mutable record pointer ownership evidence"
         ));
     }
     let expr = match value {
-        IrExpr::Var { .. } => emit_opaque_record_pointer_field_value_var(
+        IrExpr::Var { .. } => emit_record_pointer_field_value_var(
             value,
             &target_pointer_ty,
             symbols,
@@ -296,7 +296,7 @@ fn emit_opaque_record_pointer_field_assignment_value(
                     type_label(source_ty)
                 )
             })?;
-            let expr = emit_opaque_record_pointer_field_value_var(
+            let expr = emit_record_pointer_field_value_var(
                 expr,
                 &source_pointer_ty,
                 symbols,
@@ -307,7 +307,7 @@ fn emit_opaque_record_pointer_field_assignment_value(
         }
         _ => {
             return Err(format!(
-                "{path} opaque pointer field write requires an opaque pointer param value or opaque pointer cast"
+                "{path} pointer field write requires a pointer param value or pointer cast"
             ))
         }
     };
@@ -317,7 +317,7 @@ fn emit_opaque_record_pointer_field_assignment_value(
     }))
 }
 
-fn emit_opaque_record_pointer_field_value_var(
+fn emit_record_pointer_field_value_var(
     expr: &IrExpr,
     expected_pointer_ty: &str,
     symbols: &HashSet<String>,
@@ -331,22 +331,22 @@ fn emit_opaque_record_pointer_field_value_var(
     if !symbols.contains(name) {
         return Err(format!("{path} {name} is not declared"));
     }
-    if !context.is_opaque_record_pointer_field_value_param(name) {
+    if !context.is_record_pointer_field_value_param(name) {
         return Err(format!(
-            "{path} {name} requires opaque record pointer field value evidence"
+            "{path} {name} requires record pointer field value evidence"
         ));
     }
-    let source_pointer_ty = emit_opaque_void_pointer_type(ty)
+    let source_pointer_ty = emit_record_pointer_field_type(ty)
         .ok_or_else(|| format!("{path} {} is unsupported", type_label(ty)))?;
     if source_pointer_ty != expected_pointer_ty {
         return Err(format!(
             "{path} type {source_pointer_ty} does not match expected type {expected_pointer_ty}"
         ));
     }
-    emit_identifier(name, "opaque pointer field value")
+    emit_identifier(name, "pointer field value")
 }
 
-fn direct_mutable_record_pointer_opaque_member_parts<'a>(
+fn direct_mutable_record_pointer_pointer_member_parts<'a>(
     expr: &'a IrExpr,
     context: &EmitContext,
 ) -> Result<Option<(&'a str, &'a IrType, &'a str, &'a IrType)>, String> {
@@ -355,9 +355,9 @@ fn direct_mutable_record_pointer_opaque_member_parts<'a>(
     else {
         return Ok(None);
     };
-    emit_opaque_void_pointer_type(ty).ok_or_else(|| {
+    emit_record_pointer_field_type(ty).ok_or_else(|| {
         format!(
-            "mutable record pointer opaque field {base}.{field} has unsupported type {}",
+            "mutable record pointer raw pointer field {base}.{field} has unsupported type {}",
             type_label(ty)
         )
     })?;

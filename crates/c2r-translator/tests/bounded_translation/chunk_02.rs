@@ -5,3 +5,4 @@ include!("./chunk_02_02.rs");
 include!("./chunk_02_03.rs");
 include!("./chunk_02_04.rs");
 include!("./chunk_02_05.rs");
+include!("./chunk_02_06.rs");

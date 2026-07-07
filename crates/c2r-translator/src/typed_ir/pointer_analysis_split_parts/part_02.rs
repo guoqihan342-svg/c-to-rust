@@ -1,4 +1,4 @@
-fn collect_opaque_record_pointer_field_value_params_from_body(
+fn collect_record_pointer_field_value_params_from_body(
     body: &[IrStmt],
     param_types: &HashMap<&str, &IrType>,
     mutable_record_pointer_write_params: &HashSet<String>,
@@ -7,7 +7,7 @@ fn collect_opaque_record_pointer_field_value_params_from_body(
     for stmt in body {
         match stmt {
             IrStmt::Assign { target, value, .. } => {
-                collect_opaque_record_pointer_field_value_param_from_assignment(
+                collect_record_pointer_field_value_param_from_assignment(
                     target,
                     value,
                     param_types,
@@ -20,13 +20,13 @@ fn collect_opaque_record_pointer_field_value_params_from_body(
                 else_body,
                 ..
             } => {
-                collect_opaque_record_pointer_field_value_params_from_body(
+                collect_record_pointer_field_value_params_from_body(
                     then_body,
                     param_types,
                     mutable_record_pointer_write_params,
                     value_params,
                 )?;
-                collect_opaque_record_pointer_field_value_params_from_body(
+                collect_record_pointer_field_value_params_from_body(
                     else_body,
                     param_types,
                     mutable_record_pointer_write_params,
@@ -34,7 +34,7 @@ fn collect_opaque_record_pointer_field_value_params_from_body(
                 )?;
             }
             IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
-                collect_opaque_record_pointer_field_value_params_from_body(
+                collect_record_pointer_field_value_params_from_body(
                     body,
                     param_types,
                     mutable_record_pointer_write_params,
@@ -44,21 +44,21 @@ fn collect_opaque_record_pointer_field_value_params_from_body(
             IrStmt::For {
                 init, step, body, ..
             } => {
-                collect_opaque_record_pointer_field_value_params_from_body(
+                collect_record_pointer_field_value_params_from_body(
                     init,
                     param_types,
                     mutable_record_pointer_write_params,
                     value_params,
                 )?;
                 if let Some(step) = step {
-                    collect_opaque_record_pointer_field_value_params_from_body(
+                    collect_record_pointer_field_value_params_from_body(
                         std::slice::from_ref(step.as_ref()),
                         param_types,
                         mutable_record_pointer_write_params,
                         value_params,
                     )?;
                 }
-                collect_opaque_record_pointer_field_value_params_from_body(
+                collect_record_pointer_field_value_params_from_body(
                     body,
                     param_types,
                     mutable_record_pointer_write_params,
@@ -76,7 +76,7 @@ fn collect_opaque_record_pointer_field_value_params_from_body(
     Ok(())
 }
 
-fn collect_opaque_record_pointer_field_value_param_from_assignment(
+fn collect_record_pointer_field_value_param_from_assignment(
     target: &IrExpr,
     value: &IrExpr,
     param_types: &HashMap<&str, &IrType>,
@@ -101,13 +101,13 @@ fn collect_opaque_record_pointer_field_value_param_from_assignment(
     if !mutable_record_pointer_write_params.contains(base_name) {
         return Ok(());
     }
-    if emit_opaque_void_pointer_type(ty).is_none() {
+    if emit_record_pointer_field_type(ty).is_none() {
         return Ok(());
     }
-    collect_opaque_record_pointer_value_param_from_expr(value, param_types, value_params)
+    collect_record_pointer_value_param_from_expr(value, param_types, value_params)
 }
 
-fn collect_opaque_record_pointer_value_param_from_expr(
+fn collect_record_pointer_value_param_from_expr(
     value: &IrExpr,
     param_types: &HashMap<&str, &IrType>,
     value_params: &mut HashSet<String>,
@@ -115,14 +115,14 @@ fn collect_opaque_record_pointer_value_param_from_expr(
     match value {
         IrExpr::Var { name, ty, .. } => {
             if param_types.get(name.as_str()).is_some_and(|param_ty| {
-                *param_ty == ty && emit_opaque_void_pointer_type(ty).is_some()
+                *param_ty == ty && emit_record_pointer_field_type(ty).is_some()
             }) {
                 value_params.insert(name.clone());
             }
             Ok(())
         }
         IrExpr::Cast { expr, .. } => {
-            collect_opaque_record_pointer_value_param_from_expr(expr, param_types, value_params)
+            collect_record_pointer_value_param_from_expr(expr, param_types, value_params)
         }
         _ => Ok(()),
     }
