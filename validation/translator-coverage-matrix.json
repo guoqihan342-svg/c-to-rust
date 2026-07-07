@@ -1985,6 +1985,7 @@
         "single scalar inc/dec argument inside one-level or single-chain multi-layer nested direct-call arguments",
         "one scalar inc/dec direct-call argument with independent ordinary scalar sibling arguments",
         "one scalar inc/dec single-chain nested direct-call argument with independent ordinary scalar sibling arguments",
+        "binary expression side-effect direct-call operand with an independent scalar sibling operand",
         "modeled C memset(void *, int, size_t) statement with discarded void* return and 0..=255 byte literal precondition",
         "modeled C memcpy(void *, const void *, size_t) statement with discarded void* return and restrict/noalias precondition",
         "reserved C macro/stdlib/extern callee fail-closed",
@@ -2230,6 +2231,10 @@
             {
               "name": "typed_ir_emits_single_chain_nested_direct_call_with_postfix_inc_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -2318,6 +2323,10 @@
             },
             {
               "name": "typed_ir_rejects_single_chain_side_effect_call_with_inner_ordinary_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_binary_same_var_read_with_side_effect_call_operand",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2439,6 +2448,10 @@
             },
             {
               "name": "typed_ir_emits_nested_prefix_inc_direct_call_argument_with_independent_plain_arg",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -2648,6 +2661,10 @@
         {
           "name": "typed_ir_emits_nested_prefix_inc_direct_call_argument_with_independent_plain_arg",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
         }
       ],
       "negative_cases": [
@@ -2770,6 +2787,11 @@
           "name": "expr_skeleton_from_ast_rejects_nested_side_effect_call_with_same_var_sibling_read",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "clang skeleton lowering rejects same-variable sibling reads next to a side-effect nested direct-call argument"
+        },
+        {
+          "name": "typed_ir_rejects_binary_same_var_read_with_side_effect_call_operand",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "a binary expression operand that reads the same scalar modified by a side-effect direct-call sibling remains fail-closed because C operand evaluation order would be under-modeled"
         }
       ]
     },

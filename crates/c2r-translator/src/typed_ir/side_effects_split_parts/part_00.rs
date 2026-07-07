@@ -31,6 +31,7 @@ fn emit_expr_with_prelude(
                     expr,
                 });
             }
+            validate_binary_side_effect_operand_order(lhs, rhs, path)?;
             let op_token = emit_binary_op(op).map_err(|detail| format!("{path} {detail}"))?;
             validate_binary_operand_types(op_token, lhs, rhs, ty)
                 .map_err(|detail| format!("{path} {detail}"))?;
@@ -241,6 +242,28 @@ fn emit_side_effect_call_expr(
         prelude,
         expr: format!("{callee}({})", emitted_args.join(", ")),
     }))
+}
+
+fn validate_binary_side_effect_operand_order(
+    lhs: &IrExpr,
+    rhs: &IrExpr,
+    path: &str,
+) -> Result<(), String> {
+    if let Some(assigned_var) = side_effect_expr_assigned_var_name(lhs)? {
+        if expr_mentions_var(rhs, assigned_var) {
+            return Err(format!(
+                "{path} binary rhs reads variable {assigned_var} modified by lhs side-effect expression"
+            ));
+        }
+    }
+    if let Some(assigned_var) = side_effect_expr_assigned_var_name(rhs)? {
+        if expr_mentions_var(lhs, assigned_var) {
+            return Err(format!(
+                "{path} binary lhs reads variable {assigned_var} modified by rhs side-effect expression"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn single_side_effect_call_arg(args: &[IrExpr]) -> Result<Option<(usize, &str)>, String> {
