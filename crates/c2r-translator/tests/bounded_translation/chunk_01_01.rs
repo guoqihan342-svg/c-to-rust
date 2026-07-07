@@ -229,6 +229,100 @@ fn typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument() {
 
 #[cfg(feature = "typed-ir")]
 #[test]
+fn typed_ir_emits_readonly_global_fixed_array_decay_as_direct_call_argument() {
+    let u32_ty = ir_u32();
+    let void_ty = ir_void();
+    let const_u32_ty = ir_const(u32_ty);
+    let global = ir_u32_global_array("global_table", 3, vec![1, 2, 3]);
+    let array_ty = global.ty.clone();
+    let pointer_ty = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        const_u32_ty,
+        true,
+    );
+    let ir = IrFunction {
+        name: "observe_global_table".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "observe".to_string(),
+                args: vec![IrExpr::ArrayToPointerDecay {
+                    target: pointer_ty,
+                    expr: Box::new(ir_var("global_table", array_ty)),
+                    source_span: None,
+                }],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+    let emitted = emit_rust_from_ir_with_globals(&ir, &[global])
+        .expect("emit readonly global fixed array decay as direct-call argument");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(
+        rust.contains("const GLOBAL_TABLE: [u32; 3] = [1u32, 2u32, 3u32];"),
+        "{rust}"
+    );
+    assert!(rust.contains("pub fn observe_global_table()"), "{rust}");
+    assert!(rust.contains("observe(&GLOBAL_TABLE);"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-global-fixed-array-decay-call-arg",
+        &format!("fn observe(_: &[u32]) {{}}\n{rust}"),
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_rejects_unbound_global_array_decay_direct_call_argument() {
+    let u32_ty = ir_u32();
+    let void_ty = ir_void();
+    let const_u32_ty = ir_const(u32_ty);
+    let array_ty = ir_u32_global_array("global_table", 3, vec![1, 2, 3]).ty;
+    let pointer_ty = ir_pointer(
+        "const uint32_t *",
+        "const unsigned int *",
+        const_u32_ty,
+        true,
+    );
+    let ir = IrFunction {
+        name: "observe_missing_global_table".to_string(),
+        return_type: void_ty.clone(),
+        params: vec![],
+        body: vec![IrStmt::Expr {
+            expr: IrExpr::Call {
+                callee: "observe".to_string(),
+                args: vec![IrExpr::ArrayToPointerDecay {
+                    target: pointer_ty,
+                    expr: Box::new(ir_var("global_table", array_ty)),
+                    source_span: None,
+                }],
+                ty: void_ty,
+                source_span: None,
+            },
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir)
+        .expect_err("unbound global array decay direct-call argument must fail closed");
+
+    assert!(
+        error
+            .reason
+            .contains("array-to-pointer decay call argument global_table is not a local fixed array binding"),
+        "unexpected error: {error:?}"
+    );
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
 fn typed_ir_rejects_mutable_array_decay_direct_call_argument_target() {
     let i32_ty = ir_i32();
     let void_ty = ir_void();

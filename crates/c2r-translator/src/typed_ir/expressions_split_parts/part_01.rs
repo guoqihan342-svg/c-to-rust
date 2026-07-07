@@ -55,7 +55,7 @@ fn emit_call_arg_expr(
 ) -> Result<String, String> {
     match arg {
         IrExpr::ArrayToPointerDecay { target, expr, .. } => {
-            emit_array_decay_call_arg_expr(target, expr, symbols)
+            emit_array_decay_call_arg_expr(target, expr, symbols, context)
         }
         IrExpr::FunctionToPointerDecay { target, expr, .. } => {
             emit_function_pointer_decay_call_arg(target, expr)
@@ -84,9 +84,17 @@ fn emit_array_decay_call_arg_expr(
     target: &IrType,
     expr: &IrExpr,
     symbols: &HashSet<String>,
+    context: &EmitContext,
 ) -> Result<String, String> {
     let name = validate_array_decay_direct_call_arg(target, expr)?;
     if !symbols.contains(name) {
+        if let IrExpr::Var { ty, .. } = expr {
+            if let Some(global) = context.readonly_global(name) {
+                validate_global_expr_type(global, ty)?;
+                let name = context.global_rust_name(name)?;
+                return Ok(format!("&{name}"));
+            }
+        }
         return Err(format!(
             "array-to-pointer decay call argument {name} is not a local fixed array binding"
         ));

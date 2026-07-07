@@ -1065,6 +1065,7 @@
         "ArrayToPointerDecay unary deref of direct fixed array DeclRef lowers to index zero",
         "ArrayToPointerDecay pointer-add deref of direct fixed array DeclRef lowers to indexed read",
         "ArrayToPointerDecay direct-call argument of a local fixed integer array lowers to a readonly slice borrow candidate",
+        "ArrayToPointerDecay direct-call argument of a readonly global fixed integer array lowers to a readonly slice borrow candidate",
         "ordinary ArrayToPointerDecay lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "nullable readonly pointer parameter truthiness condition lowers to Option::is_some before nonnull-branch reads",
         "nullable readonly pointer value position remains fail-closed outside condition/non-null branch use",
@@ -1147,6 +1148,10 @@
             {
               "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_global_fixed_array_decay_as_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1184,6 +1189,10 @@
             {
               "name": "typed_ir_rejects_mutable_array_decay_direct_call_argument_target",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_unbound_global_array_decay_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -1220,6 +1229,10 @@
             },
             {
               "name": "typed_ir_emits_local_fixed_array_decay_as_readonly_direct_call_argument",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_global_fixed_array_decay_as_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1281,6 +1294,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_readonly_global_fixed_array_decay_as_direct_call_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -1329,6 +1346,11 @@
           "name": "typed_ir_rejects_mutable_array_decay_direct_call_argument_target",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "array-to-pointer decay call arguments only lower for readonly integer pointer targets; mutable pointer targets remain fail-closed"
+        },
+        {
+          "name": "typed_ir_rejects_unbound_global_array_decay_direct_call_argument",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "readonly global array decay call arguments require a declared readonly global binding; unbound global-like names remain fail-closed"
         },
         {
           "name": "typed_ir_rejects_pointer_lvalue_to_rvalue_without_lowering_evidence",
