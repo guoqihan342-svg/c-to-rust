@@ -186,8 +186,9 @@
         ));
         assert!(matches!(
             operand.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
+            IrExpr::LValueToRValue { .. }
         ));
+        assert_ir_lvalue_to_rvalue_var(operand.as_ref(), "value", true, 32);
     }
 
     #[test]
@@ -258,8 +259,51 @@
         ));
         assert!(matches!(
             operand.as_ref(),
-            IrExpr::Var { name, .. } if name == "value"
+            IrExpr::LValueToRValue { .. }
         ));
+        assert_ir_lvalue_to_rvalue_var(operand.as_ref(), "value", true, 32);
+    }
+
+    #[test]
+    fn expr_skeleton_from_ast_lowers_bitwise_not_with_explicit_read() {
+        let expr = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "~",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr).expect("bitwise not skeleton");
+        let ir = lower_expr(&skeleton).expect("lower bitwise not skeleton");
+
+        let IrExpr::Unary {
+            op, operand, ty, ..
+        } = ir
+        else {
+            panic!("expected IR bitwise not, got {ir:?}");
+        };
+        assert_eq!(op, IrUnOp::BitNot);
+        assert!(matches!(
+            ty.kind,
+            IrTypeKind::Integer {
+                signed: true,
+                width: 32
+            }
+        ));
+        assert_ir_lvalue_to_rvalue_var(operand.as_ref(), "value", true, 32);
     }
 
     #[test]

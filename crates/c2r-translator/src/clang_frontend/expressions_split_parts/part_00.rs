@@ -366,10 +366,7 @@ fn expr_skeleton_from_ast_with_options(
             })?;
             Ok(ClangExprSkeleton::Unary {
                 op,
-                operand: Box::new(expr_skeleton_from_ast_with_options(
-                    operand,
-                    preserve_integral_casts,
-                )?),
+                operand: Box::new(expr_skeleton_from_ast_with_options(operand, true)?),
                 ty: expr_type(expr)?,
             })
         }

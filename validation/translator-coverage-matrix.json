@@ -406,6 +406,7 @@
         "CStyleCastExpr IntegralCast explicit typed IR cast in return/value contexts",
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer value-context LValueToRValue explicit typed IR node",
+        "integer unary scalar operand LValueToRValue explicit typed IR node",
         "target-dependent integer LValueToRValue preserved for later target ABI binding",
         "non-integer NoOp transparent skeleton boundary",
         "unmodeled implicit castKind fail-closed",
@@ -557,6 +558,18 @@
         },
         {
           "name": "value_expr_skeleton_preserves_target_dependent_integer_lvalue_to_rvalue_for_abi_binding",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_lowers_signed_unary_minus",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_lowers_logical_not",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
+          "name": "expr_skeleton_from_ast_lowers_bitwise_not_with_explicit_read",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
