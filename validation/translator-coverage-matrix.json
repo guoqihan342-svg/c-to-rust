@@ -26,7 +26,7 @@
       "dimension_status": {
         "clang_fixture_replay": {
           "status": "covered",
-          "scope_note": "No-clang fixture replay covers the generic direct-call path plus abs/strlen-specific stdlib models. The strnlen model is currently covered by handwritten typed IR, emitted-Rust runtime checks, and negative coverage; it does not yet claim strnlen-specific no-clang AST fixture replay.",
+          "scope_note": "No-clang fixture replay covers the generic direct-call path plus abs/strlen/strnlen-specific stdlib models. These are fixture replay and emitted-Rust compile checks, not named-slice C/Rust differential evidence.",
           "evidence": [
             {
               "name": "reduced add_one AST JSON fixture",
@@ -1999,6 +1999,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "strnlen no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/strnlen_call_ast.json"
+            },
+            {
+              "name": "strnlen no-clang fixture replay test",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "optional real clang strlen target ABI smoke test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2459,6 +2467,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_strlen_model_with_target_abi_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_strnlen_model_with_target_abi_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

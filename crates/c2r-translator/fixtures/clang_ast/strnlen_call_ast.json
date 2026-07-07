@@ -1,0 +1,103 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "bounded_name_len",
+      "type": {
+        "qualType": "size_t (const char *, size_t)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "name",
+          "type": {
+            "qualType": "const char *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "max",
+          "type": {
+            "qualType": "size_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "CallExpr",
+                  "type": {
+                    "qualType": "size_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "FunctionToPointerDecay",
+                      "type": {
+                        "qualType": "size_t (*)(const char *, size_t)"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "size_t (const char *, size_t)"
+                          },
+                          "referencedDecl": {
+                            "kind": "FunctionDecl",
+                            "name": "strnlen"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "const char *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "const char *"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "name"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "size_t"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "size_t"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "max"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
