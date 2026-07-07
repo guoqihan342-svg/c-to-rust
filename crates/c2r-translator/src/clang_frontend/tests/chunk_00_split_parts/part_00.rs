@@ -479,6 +479,39 @@
     }
 
     #[test]
+    fn implicit_integer_noop_cast_preserves_inner_lvalue_to_rvalue_without_value_context() {
+        let expr = serde_json::json!({
+            "kind": "ImplicitCastExpr",
+            "castKind": "NoOp",
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "ImplicitCastExpr",
+                    "castKind": "LValueToRValue",
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "int" },
+                            "referencedDecl": { "name": "value" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton = expr_skeleton_from_ast(&expr)
+            .expect("NoOp cast should preserve inner LValueToRValue");
+        let ir = lower_expr(&skeleton).expect("lower explicit integer NoOp cast");
+
+        let IrExpr::Cast { expr, implicit, .. } = ir else {
+            panic!("expected explicit integer NoOp cast, got {ir:?}");
+        };
+        assert!(implicit);
+        assert_ir_lvalue_to_rvalue_var(expr.as_ref(), "value", true, 32);
+    }
+
+    #[test]
     fn value_expr_skeleton_preserves_target_dependent_integer_lvalue_to_rvalue_for_abi_binding() {
         for (target_spelling, operand_spelling) in [
             ("unsigned long", "unsigned long"),

@@ -405,6 +405,7 @@
         "compound assignment integer promotion and final truncation preserve clang compute/result type evidence",
         "CStyleCastExpr IntegralCast explicit typed IR cast in return/value contexts",
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
+        "integer NoOp explicit typed IR cast operands preserve clang-proven LValueToRValue reads",
         "integer value-context LValueToRValue explicit typed IR node",
         "integer unary scalar operand LValueToRValue explicit typed IR node",
         "integer array subscript index LValueToRValue explicit typed IR node",
@@ -627,6 +628,10 @@
         },
         {
           "name": "implicit_integer_noop_cast_stays_explicit_without_value_context",
+          "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_00_split_parts/part_00.rs"
+        },
+        {
+          "name": "implicit_integer_noop_cast_preserves_inner_lvalue_to_rvalue_without_value_context",
           "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_00_split_parts/part_00.rs"
         }
       ],

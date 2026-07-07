@@ -72,7 +72,13 @@ fn expr_skeleton_from_ast_with_options(
                 kind: "invalid_clang_expr".to_string(),
                 message: "ImplicitCastExpr is missing operand".to_string(),
             })?;
-            let operand = expr_skeleton_from_ast_with_options(operand, preserve_integral_casts)?;
+            let preserve_integral_conversion =
+                (preserve_integral_casts || cast_kind.as_deref() == Some("NoOp"))
+                    && is_integral_conversion_cast_expr(expr);
+            let operand = expr_skeleton_from_ast_with_options(
+                operand,
+                preserve_integral_casts || preserve_integral_conversion,
+            )?;
             if cast_kind.as_deref() == Some("FunctionToPointerDecay") {
                 return Ok(ClangExprSkeleton::FunctionToPointerDecay {
                     target: expr_type(expr)?,
@@ -88,9 +94,7 @@ fn expr_skeleton_from_ast_with_options(
                     expr: Box::new(operand),
                 });
             }
-            if (preserve_integral_casts || cast_kind.as_deref() == Some("NoOp"))
-                && is_integral_conversion_cast_expr(expr)
-            {
+            if preserve_integral_conversion {
                 return Ok(ClangExprSkeleton::Cast {
                     target: expr_type(expr)?,
                     expr: Box::new(operand),
