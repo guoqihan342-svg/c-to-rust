@@ -75,6 +75,7 @@ fn real_clang_ast_tests_use_shared_visible_gate() {
         include_str!("chunk_10.rs"),
         include_str!("chunk_11.rs"),
         include_str!("chunk_12.rs"),
+        include_str!("chunk_13.rs"),
     );
     let run_env = concat!("C2R_RUN_", "CLANG_AST_TESTS");
     let old_gate_message = concat!("set C2R_RUN_", "CLANG_AST_TESTS=1 to run");

@@ -344,6 +344,12 @@ fn bounded_call_args_rejection_reason(args: &[ClangExprSkeleton]) -> Option<Stri
             "multiple nested call arguments are outside the bounded call subset".to_string(),
         );
     }
+    if args.iter().any(clang_nested_call_with_single_scalar_inc_dec_arg) && args.len() != 1 {
+        return Some(
+            "side-effect nested call arguments cannot be combined with other call arguments"
+                .to_string(),
+        );
+    }
     if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0]) {
         return None;
     }
@@ -364,6 +370,15 @@ fn clang_scalar_inc_dec_call_arg(expr: &ClangExprSkeleton) -> bool {
         return false;
     };
     target_ty == ty && matches!(target_ty.kind, ClangTypeKind::Integer { .. })
+}
+
+#[cfg(feature = "typed-ir")]
+fn clang_nested_call_with_single_scalar_inc_dec_arg(expr: &ClangExprSkeleton) -> bool {
+    matches!(
+        expr,
+        ClangExprSkeleton::Call { args, .. }
+            if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0])
+    )
 }
 
 #[cfg(feature = "typed-ir")]
@@ -416,6 +431,9 @@ fn bounded_call_arg_rejection_reason(
                     "nested call result type {} is outside the bounded call subset",
                     ty.spelled
                 ));
+            }
+            if args.len() == 1 && clang_scalar_inc_dec_call_arg(&args[0]) {
+                return None;
             }
             for (index, arg) in args.iter().enumerate() {
                 if let Some(reason) = bounded_call_arg_rejection_reason(arg, false) {

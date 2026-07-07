@@ -161,6 +161,11 @@ fn emit_call_expr_with_prelude(
     indent_level: usize,
     path: &str,
 ) -> Result<EmittedExpr, String> {
+    if let Some(emitted) =
+        emit_nested_single_inc_dec_call_expr(callee, args, ty, symbols, context, indent_level, path)?
+    {
+        return Ok(emitted);
+    }
     if args.len() != 1 || scalar_inc_dec_assigned_var_name(&args[0]).is_none() {
         return Ok(EmittedExpr {
             prelude: String::new(),
@@ -169,6 +174,17 @@ fn emit_call_expr_with_prelude(
         });
     }
 
+    let callee = emit_side_effect_call_callee(callee, ty, path)?;
+    let arg = emit_inc_dec_value_expr(&args[0], symbols, indent_level)
+        .map_err(|detail| format!("{path} call arg[0] {detail}"))?
+        .ok_or_else(|| format!("{path} call arg[0] inc/dec expression is unsupported"))?;
+    Ok(EmittedExpr {
+        prelude: arg.prelude,
+        expr: format!("{callee}({})", arg.expr),
+    })
+}
+
+fn emit_side_effect_call_callee(callee: &str, ty: &IrType, path: &str) -> Result<String, String> {
     let callee =
         emit_identifier(callee, "call callee").map_err(|detail| format!("{path} {detail}"))?;
     if matches!(
@@ -194,13 +210,45 @@ fn emit_call_expr_with_prelude(
         emit_scalar_type(ty).map_err(|detail| format!("{path} call result has {detail}"))?;
     }
 
-    let arg = emit_inc_dec_value_expr(&args[0], symbols, indent_level)
-        .map_err(|detail| format!("{path} call arg[0] {detail}"))?
-        .ok_or_else(|| format!("{path} call arg[0] inc/dec expression is unsupported"))?;
-    Ok(EmittedExpr {
-        prelude: arg.prelude,
-        expr: format!("{callee}({})", arg.expr),
-    })
+    Ok(callee)
+}
+
+fn emit_nested_single_inc_dec_call_expr(
+    callee: &str,
+    args: &[IrExpr],
+    ty: &IrType,
+    symbols: &mut HashSet<String>,
+    context: &EmitContext,
+    indent_level: usize,
+    path: &str,
+) -> Result<Option<EmittedExpr>, String> {
+    let [IrExpr::Call {
+        callee: inner_callee,
+        args: inner_args,
+        ty: inner_ty,
+        ..
+    }] = args
+    else {
+        return Ok(None);
+    };
+    if inner_args.len() != 1 || scalar_inc_dec_assigned_var_name(&inner_args[0]).is_none() {
+        return Ok(None);
+    }
+
+    let callee = emit_side_effect_call_callee(callee, ty, path)?;
+    let inner = emit_call_expr_with_prelude(
+        inner_callee,
+        inner_args,
+        inner_ty,
+        symbols,
+        context,
+        indent_level,
+        &format!("{path} call arg[0]"),
+    )?;
+    Ok(Some(EmittedExpr {
+        prelude: inner.prelude,
+        expr: format!("{callee}({})", inner.expr),
+    }))
 }
 
 fn emit_single_inc_dec_call_statement_expr(
