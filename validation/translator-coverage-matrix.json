@@ -402,6 +402,7 @@
         "IntegralPromotion explicit typed IR cast in direct-call argument contexts",
         "usual arithmetic conversion requires clang-proven IntegralCast/IntegralPromotion",
         "unary plus integer promotion preserves clang-proven IntegralPromotion",
+        "compound assignment integer promotion and final truncation preserve clang compute/result type evidence",
         "integer NoOp explicit typed IR cast in preserved value and ordinary expression contexts",
         "integer value-context LValueToRValue explicit typed IR node",
         "non-integer NoOp transparent skeleton boundary",
@@ -431,6 +432,10 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/lvalue_to_rvalue_integer_return_ast.json"
             },
             {
+              "name": "compound assignment promotion no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/compound_assignment_promotion_ast.json"
+            },
+            {
               "name": "clang_ast_fixture_replays_usual_arithmetic_integral_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -444,6 +449,10 @@
             },
             {
               "name": "clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -487,6 +496,10 @@
             {
               "name": "clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -522,6 +535,10 @@
         },
         {
           "name": "clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {

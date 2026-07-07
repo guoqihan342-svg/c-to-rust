@@ -336,6 +336,67 @@ fn clang_lowering_skeleton_maps_compound_assignment_integer_promotion() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_compound_assignment_integer_promotion_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/compound_assignment_promotion_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(
+        &ast,
+        "compound_assignment_integer_promotion",
+    )
+    .expect("compound assignment integer promotion fixture should lower");
+
+    let [IrStmt::Assign { target, value, .. }, IrStmt::Return { .. }] =
+        lowered.function_ir.body.as_slice()
+    else {
+        panic!(
+            "expected promoted compound assignment followed by return, got {:?}",
+            lowered.function_ir.body
+        );
+    };
+    assert!(matches!(target, IrExpr::Var { name, .. } if name == "value"));
+    let IrExpr::Cast {
+        target: cast_target,
+        expr,
+        implicit: true,
+        ..
+    } = value
+    else {
+        panic!("expected final truncation cast, got {value:?}");
+    };
+    assert!(matches!(
+        &cast_target.kind,
+        IrTypeKind::Integer {
+            signed: false,
+            width: 8
+        }
+    ));
+    assert!(matches!(
+        expr.as_ref(),
+        IrExpr::Binary {
+            op: IrBinOp::Add,
+            ty,
+            ..
+        } if matches!(&ty.kind, IrTypeKind::Integer { signed: true, width: 32 })
+    ));
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit promoted compound assignment from fixture typed IR");
+    let rust = &emitted.rust;
+    assert!(rust.contains(
+        "pub fn compound_assignment_integer_promotion(mut value: u8) -> u8"
+    ));
+    assert!(rust.contains(
+        "value = ((value as i32).checked_add(1i32).expect(\"signed addition overflow\") as u8);"
+    ));
+    assert!(rust.contains("return value;"));
+    assert_rust_snippet_compiles("typed-ir-clang-ast-compound-promotion", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_lowering_skeleton_maps_integer_conditional_return_value() {
     let int_ty = ClangTypeSkeleton {
         spelled: "int".to_string(),

@@ -1,0 +1,82 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "compound_assignment_integer_promotion",
+      "type": {
+        "qualType": "uint8_t (uint8_t)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "uint8_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "CompoundAssignOperator",
+              "opcode": "+=",
+              "type": {
+                "qualType": "uint8_t"
+              },
+              "computeLHSType": {
+                "qualType": "int"
+              },
+              "computeResultType": {
+                "qualType": "int"
+              },
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "uint8_t"
+                  },
+                  "referencedDecl": {
+                    "kind": "ParmVarDecl",
+                    "name": "value"
+                  }
+                },
+                {
+                  "kind": "IntegerLiteral",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "value": "1"
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "uint8_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "uint8_t"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "value"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
