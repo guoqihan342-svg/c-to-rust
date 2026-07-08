@@ -1,0 +1,11 @@
+{
+  "case_count": 6,
+  "level": "L3",
+  "operation": "safe Rust scalar_div_rem_contract replay over fixture corpus",
+  "schema_version": 1,
+  "secondary_only": true,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

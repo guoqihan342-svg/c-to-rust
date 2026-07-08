@@ -1,0 +1,99 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+        "role": "source",
+        "sha256": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+      }
+    ],
+    "functions": [
+      "scalar_div_rem_contract"
+    ],
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "runtime_precondition_nonzero_divisor",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "c_source": "int scalar_div_rem_contract(int value) { return (value / 3) + (value % 5); }",
+        "function": "scalar_div_rem_contract",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 2147483647,
+              "minimum": -2147483648
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 76,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program scalar UB coverage",
+      "runtime divisor nonzero proof for arbitrary inputs",
+      "signed division overflow equivalence outside the committed expression"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No runtime variable divisor input; divisors are fixed nonzero literals 3 and 5.",
+      "No division by zero execution.",
+      "No INT_MIN / -1 signed division overflow case.",
+      "No pointer, aliasing, struct, or external callee behavior."
+    ]
+  },
+  "fixture": {
+    "hash": "scalar-div-rem-contract-fixture",
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "scalar_div_rem_contract",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/scalar_div_rem_contract.rs",
+    "module_path": "validation/l2_slices/src/scalar_div_rem_contract.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "scalar_div_rem_contract",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/scalar_div_rem_contract.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

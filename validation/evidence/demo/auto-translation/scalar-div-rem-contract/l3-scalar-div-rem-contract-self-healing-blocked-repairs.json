@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-scalar-div-rem-contract-20260708",
+    "fixture_hash=scalar-div-rem-contract-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "status": "none",
+  "target_id": "demo"
+}

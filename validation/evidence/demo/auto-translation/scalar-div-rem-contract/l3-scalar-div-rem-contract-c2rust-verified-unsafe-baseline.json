@@ -1,0 +1,127 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+    "fixture_sha256": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+      "diff": "15f4c3175fa91f2d73f07c92aa1eda09737bbb07912bb20269919f716aae9107",
+      "final_verification": "3767f5bb125b15eae7fd1b7f1aa061cac62905cffbc23f6d8bcd2bf43917dbc6",
+      "negative_diff": "7c1e29c2b9d0b1d2dd69a0eac5a124c09d4b19e623f847b29ab48ea95a28c432",
+      "performance_smoke": "3625554988d9b8d289dae7a92e568a47abe535b2baa276bd12d24d75dc0edb08",
+      "rust_report": "4603009a5350d0434fe3afdb4e4532cc60e5fe0b093d68c46631722d090b0da7",
+      "unsafe_ledger": "94420fe0d53dff40b3f986d4dee3d5f226f907fc27a956b2a23e14b040629c62",
+      "unsafe_scan": "d850bc9e2dfb1d5139bfebb2eb0889717284d3f2eb48d8587845db44a44a4061",
+      "version_manifest": "f35609c48331e42b7a05de40a677dd477b424569732470a99a30d4529c591337"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+      "final_verification": "validation/evidence/demo/l3-scalar-div-rem-contract-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-scalar-div-rem-contract-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-scalar-div-rem-contract-version-manifest.json"
+    },
+    "slice_id": "scalar-div-rem-contract",
+    "source_commit": "demo-scalar-div-rem-contract-20260708",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "blocked_reasons": [
+    "c2rust_baseline_not_generated",
+    "c2rust_output_missing",
+    "c2rust_compile_not_passed",
+    "c2rust_compile_artifact_missing",
+    "No Rust replay harness currently calls this exact C2Rust output sha."
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-baseline-manifest.json",
+    "sha256": "109f8e12cc0b0037a8b66a7cd92e80857ee1efbe93f3cd8a6d3477be369335df",
+    "status": "skipped"
+  },
+  "c2rust_output": null,
+  "claim_boundary": {
+    "accepted_evidence_reused": false,
+    "compile_only_is_semantic_pass": false,
+    "generated_draft_semantic_pass": false,
+    "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+    "semantic_pass": false
+  },
+  "compile_artifact": null,
+  "direct_c2rust_replay": {
+    "artifact": null,
+    "c2rust_output": null,
+    "compile_artifact": null,
+    "observable_replay_pass": false,
+    "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    "semantic_pass": false,
+    "status": "blocked"
+  },
+  "entry_function": "scalar_div_rem_contract",
+  "fixture": {
+    "hash": "scalar-div-rem-contract-fixture",
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json"
+  },
+  "gate_refs": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c-oracle-status.json",
+      "sha256": "1e1439182fc4f638e27ebed6a668ef1a9bf476b0ecb10b77ec0dad1c96b31e82",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-negative-diff.json",
+      "sha256": "aa6334af3da84ba5262125a04a7079a936272f133bdba2d1c147c662e5095ca7",
+      "status": "passed"
+    },
+    "rust_replay": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-rust-report.json",
+      "sha256": "5d26f4485148cb8bc211eeb59f891ae2927cbb36f774ab264704dd4d99b2f0be",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-diff.json",
+      "sha256": "f1fd49d6e15f2253e5d4f36b8403e4aff29478e8abc979422389dabdf024a5c0",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-unsafe-ledger.json",
+      "sha256": "73ae4c3d55e94ef9f288c178195be26d3ad8763ac7237b2eac3cdd1ae0779a57",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-unsafe-scan.json",
+      "sha256": "769a4db41b5684d8709f3e0b12bf7d6c3b07fa2ca6b6accc79d46a088d67ab18",
+      "status": "passed"
+    }
+  },
+  "generated_draft_semantic_pass": false,
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-route-decision.json",
+    "sha256": "fc21bb0aaba7f95d3994b22adbe04a618521ecf293872f1df43d7f25551661e8",
+    "status": "recorded"
+  },
+  "same_output_gate_refs": null,
+  "schema_version": 1,
+  "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+  "semantic_pass": false,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "blocked",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "0786cbdba9451b0820017b63a0a3e515e419c69104de153540757e3191f5f7c6",
+    "status": "passed"
+  }
+}

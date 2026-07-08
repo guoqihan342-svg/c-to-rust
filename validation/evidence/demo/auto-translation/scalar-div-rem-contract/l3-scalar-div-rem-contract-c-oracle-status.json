@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+    "sha256": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 6,
+  "fixture": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+  "fixture_sha256": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+  "harness_draft": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c-oracle-harness-draft.c",
+    "sha256": "97a424523d700f2b7c6001863fd4e15cdd828b483f108913bfdf77abf39d8936",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "source_slice_id": "scalar-div-rem-contract",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

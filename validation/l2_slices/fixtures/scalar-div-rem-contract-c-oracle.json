@@ -1,0 +1,74 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "return_value": -715827885,
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -7,
+      "status": "ok",
+      "value": -17
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "minus-one",
+      "return_value": -1,
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 1,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max",
+      "return_value": 715827884,
+      "status": "ok",
+      "value": 2147483647
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No runtime variable divisor input; divisors are fixed nonzero literals 3 and 5.",
+    "No division by zero execution.",
+    "No INT_MIN / -1 signed division overflow case.",
+    "No pointer, aliasing, struct, or external callee behavior."
+  ],
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+      "validation/l2_slices/tools/generate_scalar_div_rem_contract_oracle.py"
+    ],
+    "functions": [
+      "scalar_div_rem_contract"
+    ],
+    "signature": "int scalar_div_rem_contract(int value)"
+  },
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

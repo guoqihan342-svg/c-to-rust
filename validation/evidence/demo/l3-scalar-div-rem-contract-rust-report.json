@@ -1,0 +1,60 @@
+{
+  "c_source_boundary": "int scalar_div_rem_contract(int value) { return (value / 3) + (value % 5); }",
+  "cargo_test_status": "passed",
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "return_value": -715827885,
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -7,
+      "status": "ok",
+      "value": -17
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "minus-one",
+      "return_value": -1,
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 1,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max",
+      "return_value": 715827884,
+      "status": "ok",
+      "value": 2147483647
+    }
+  ],
+  "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test scalar_div_rem_contract",
+  "fixture": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/scalar_div_rem_contract.rs",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

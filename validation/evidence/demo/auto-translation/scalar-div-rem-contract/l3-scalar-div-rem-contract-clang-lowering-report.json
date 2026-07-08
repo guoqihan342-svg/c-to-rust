@@ -1,0 +1,387 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json"
+  ],
+  "durable_evidence": {
+    "clang_path": "",
+    "clang_version": "not_configured",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "bd26c24d9065779596cbf437f9f342a67900280c8a7fd9c6650df4da325eefdd",
+    "typed_ir_sha256": "08d1b26b8f84727fa2490e9c03a29f3312f0b3de534ea20dd01775ebeddc9220"
+  },
+  "errors": [],
+  "fixture_hash": "scalar-div-rem-contract-fixture",
+  "frontend": "clang",
+  "function_name": "scalar_div_rem_contract",
+  "lowering_report": {
+    "arguments": [
+      "--ast-json-fixture",
+      "crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json",
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c"
+    ],
+    "clang_path": null,
+    "diagnostics": [
+      "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_ast_json_fixture",
+    "function_ir": {
+      "body": [
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "Binary": {
+                "lhs": {
+                  "Binary": {
+                    "lhs": {
+                      "LValueToRValue": {
+                        "expr": {
+                          "Var": {
+                            "name": "value",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "int",
+                              "is_const": false,
+                              "kind": {
+                                "Integer": {
+                                  "signed": true,
+                                  "width": 32
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "int",
+                              "width_bits": 32
+                            }
+                          }
+                        },
+                        "source_span": null,
+                        "target": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "op": "Div",
+                    "rhs": {
+                      "LitInt": {
+                        "source_span": null,
+                        "spelling": "3",
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        },
+                        "value": 3
+                      }
+                    },
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Add",
+                "rhs": {
+                  "Binary": {
+                    "lhs": {
+                      "LValueToRValue": {
+                        "expr": {
+                          "Var": {
+                            "name": "value",
+                            "source_span": null,
+                            "ty": {
+                              "canonical": "int",
+                              "is_const": false,
+                              "kind": {
+                                "Integer": {
+                                  "signed": true,
+                                  "width": 32
+                                }
+                              },
+                              "source_span": null,
+                              "spelled": "int",
+                              "width_bits": 32
+                            }
+                          }
+                        },
+                        "source_span": null,
+                        "target": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "op": "Mod",
+                    "rhs": {
+                      "LitInt": {
+                        "source_span": null,
+                        "spelling": "5",
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        },
+                        "value": 5
+                      }
+                    },
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "scalar_div_rem_contract",
+      "params": [
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "scalar_div_rem_contract",
+    "globals": [],
+    "source_file": "./validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json",
+    "compile_commands": null,
+    "function_source_span": {
+      "byte_end": 76,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+      "line_end": 1,
+      "line_start": 1,
+      "sha256": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+    },
+    "logical_source_file": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+    },
+    "source_root": "."
+  },
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "source_file": "./validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [
+      {
+        "code": "division_divisor_nonzero",
+        "detail": "C division requires a non-zero divisor",
+        "ir_node": "IrExpr::Binary.Div",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      },
+      {
+        "code": "signed_division_no_overflow",
+        "detail": "C signed division must not evaluate MIN / -1 unless the slice contract models that UB boundary",
+        "ir_node": "IrExpr::Binary.Div",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      },
+      {
+        "code": "modulo_divisor_nonzero",
+        "detail": "C modulo requires a non-zero divisor",
+        "ir_node": "IrExpr::Binary.Mod",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      },
+      {
+        "code": "signed_modulo_no_overflow",
+        "detail": "C signed modulo must not evaluate MIN % -1 unless the slice contract models that UB boundary",
+        "ir_node": "IrExpr::Binary.Mod",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      },
+      {
+        "code": "signed_add_no_overflow",
+        "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+        "ir_node": "IrExpr::Binary.Add",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      }
+    ],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "bd26c24d9065779596cbf437f9f342a67900280c8a7fd9c6650df4da325eefdd",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "08d1b26b8f84727fa2490e9c03a29f3312f0b3de534ea20dd01775ebeddc9220"
+  }
+}

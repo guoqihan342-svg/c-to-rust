@@ -1,0 +1,20 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "fixture.hash",
+    "rust_boundary.module",
+    "translator_version"
+  ],
+  "fixture": {
+    "hash": "scalar-div-rem-contract-fixture",
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json"
+  },
+  "level": "L3",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-scalar-div-rem-contract-performance-smoke.json",
+    "sha256": "3625554988d9b8d289dae7a92e568a47abe535b2baa276bd12d24d75dc0edb08",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "scalar-div-rem-contract",
+  "status": "recorded",
+  "target_id": "demo"
+}

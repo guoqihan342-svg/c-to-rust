@@ -1,0 +1,378 @@
+{
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-baseline-manifest.json",
+        "sha256": "109f8e12cc0b0037a8b66a7cd92e80857ee1efbe93f3cd8a6d3477be369335df",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-baseline-manifest.json",
+          "sha256": "109f8e12cc0b0037a8b66a7cd92e80857ee1efbe93f3cd8a6d3477be369335df",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L1",
+        "status": "not_refused"
+      },
+      "route_level": "L1",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "division_divisor_nonzero",
+          "detail": "C division requires a non-zero divisor",
+          "ir_node": "IrExpr::Binary.Div",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "signed_division_no_overflow",
+          "detail": "C signed division must not evaluate MIN / -1 unless the slice contract models that UB boundary",
+          "ir_node": "IrExpr::Binary.Div",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "modulo_divisor_nonzero",
+          "detail": "C modulo requires a non-zero divisor",
+          "ir_node": "IrExpr::Binary.Mod",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "signed_modulo_no_overflow",
+          "detail": "C signed modulo must not evaluate MIN % -1 unless the slice contract models that UB boundary",
+          "ir_node": "IrExpr::Binary.Mod",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "signed_add_no_overflow",
+          "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Add",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "bd26c24d9065779596cbf437f9f342a67900280c8a7fd9c6650df4da325eefdd",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [
+          {
+            "code": "division_divisor_nonzero",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.division_by_zero",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          },
+          {
+            "code": "modulo_divisor_nonzero",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.division_by_zero",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          },
+          {
+            "code": "signed_add_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          }
+        ],
+        "precondition_count": 5,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "code": "signed_division_no_overflow",
+            "missing": [
+              "c_boundary.scalar_arithmetic_contract.signed_division_overflow"
+            ],
+            "status": "unresolved"
+          },
+          {
+            "code": "signed_modulo_no_overflow",
+            "missing": [
+              "c_boundary.scalar_arithmetic_contract.signed_division_overflow"
+            ],
+            "status": "unresolved"
+          }
+        ]
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-clang-lowering-report.json",
+        "sha256": "b71d0e6fcc2c9db0f12886bb05f24268e9f3fd0354b4b94481b8a778f3077725",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "08d1b26b8f84727fa2490e9c03a29f3312f0b3de534ea20dd01775ebeddc9220"
+    }
+  },
+  "level": "L1",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "typed_ir_scalar_admission_unresolved",
+      "route": "GenericTypedIr",
+      "unresolved_count": 2,
+      "weight": "requires_contract_or_domain_evidence"
+    }
+  ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "runtime_precondition_nonzero_divisor",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program scalar UB coverage",
+        "runtime divisor nonzero proof for arbitrary inputs",
+        "signed division overflow equivalence outside the committed expression"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": true,
+      "parameters": [
+        {
+          "name": "value",
+          "range": [
+            -2147483648,
+            2147483647
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-baseline-manifest.json",
+      "sha256": "109f8e12cc0b0037a8b66a7cd92e80857ee1efbe93f3cd8a6d3477be369335df",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-cfg.json",
+      "sha256": "e3686ebedd7e00a0039f7fdc1c993abb74b07f6b450aa14be516e7f0515b1a52",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-clang-lowering-report.json",
+      "sha256": "b71d0e6fcc2c9db0f12886bb05f24268e9f3fd0354b4b94481b8a778f3077725",
+      "status": "lowered"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-pointer-graph.json",
+      "sha256": "b871ef155a4dc8c33b9dbb75cbc01899f17ae6b0f9b37572df6105894843c2fe",
+      "status": "not_applicable"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-type-map.json",
+      "sha256": "4a115e87a0ac4b2b9170e65dd90737d2e972647a19503ebdd102ff64d8279561",
+      "status": "recorded"
+    }
+  },
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-scalar-div-rem-contract-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L1-dev"
+}

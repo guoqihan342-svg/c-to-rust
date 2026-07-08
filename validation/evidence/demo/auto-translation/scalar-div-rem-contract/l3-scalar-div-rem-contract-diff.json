@@ -1,0 +1,46 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+    "sha256": "15f4c3175fa91f2d73f07c92aa1eda09737bbb07912bb20269919f716aae9107",
+    "status": "passed"
+  },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-baseline-manifest.json",
+    "sha256": "109f8e12cc0b0037a8b66a7cd92e80857ee1efbe93f3cd8a6d3477be369335df",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-route-decision.json",
+    "sha256": "fc21bb0aaba7f95d3994b22adbe04a618521ecf293872f1df43d7f25551661e8",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "scalar-div-rem-contract",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "0786cbdba9451b0820017b63a0a3e515e419c69104de153540757e3191f5f7c6",
+    "status": "passed"
+  }
+}

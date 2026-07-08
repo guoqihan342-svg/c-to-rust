@@ -1,0 +1,272 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+        "fixture_sha256": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+          "diff": "15f4c3175fa91f2d73f07c92aa1eda09737bbb07912bb20269919f716aae9107",
+          "final_verification": "3767f5bb125b15eae7fd1b7f1aa061cac62905cffbc23f6d8bcd2bf43917dbc6",
+          "negative_diff": "7c1e29c2b9d0b1d2dd69a0eac5a124c09d4b19e623f847b29ab48ea95a28c432",
+          "performance_smoke": "3625554988d9b8d289dae7a92e568a47abe535b2baa276bd12d24d75dc0edb08",
+          "rust_report": "4603009a5350d0434fe3afdb4e4532cc60e5fe0b093d68c46631722d090b0da7",
+          "unsafe_ledger": "94420fe0d53dff40b3f986d4dee3d5f226f907fc27a956b2a23e14b040629c62",
+          "unsafe_scan": "d850bc9e2dfb1d5139bfebb2eb0889717284d3f2eb48d8587845db44a44a4061",
+          "version_manifest": "f35609c48331e42b7a05de40a677dd477b424569732470a99a30d4529c591337"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+          "final_verification": "validation/evidence/demo/l3-scalar-div-rem-contract-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-scalar-div-rem-contract-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-scalar-div-rem-contract-version-manifest.json"
+        },
+        "slice_id": "scalar-div-rem-contract",
+        "source_commit": "demo-scalar-div-rem-contract-20260708",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+          "sha256": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json",
+          "sha256": "7c1e29c2b9d0b1d2dd69a0eac5a124c09d4b19e623f847b29ab48ea95a28c432",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+          "sha256": "4603009a5350d0434fe3afdb4e4532cc60e5fe0b093d68c46631722d090b0da7",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+          "sha256": "15f4c3175fa91f2d73f07c92aa1eda09737bbb07912bb20269919f716aae9107",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json",
+          "sha256": "94420fe0d53dff40b3f986d4dee3d5f226f907fc27a956b2a23e14b040629c62",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-scan.json",
+          "sha256": "d850bc9e2dfb1d5139bfebb2eb0889717284d3f2eb48d8587845db44a44a4061",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-c95wdlmt\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-c95wdlmt\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-c95wdlmt\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-rust-draft.rs",
+        "sha256": "bd26c24d9065779596cbf437f9f342a67900280c8a7fd9c6650df4da325eefdd",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "scalar-div-rem-contract",
+      "source_commit": "demo-scalar-div-rem-contract-20260708",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [
+      "No full project migration claim.",
+      "No runtime variable divisor input; divisors are fixed nonzero literals 3 and 5.",
+      "No division by zero execution.",
+      "No INT_MIN / -1 signed division overflow case.",
+      "No pointer, aliasing, struct, or external callee behavior.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program scalar UB coverage",
+      "runtime divisor nonzero proof for arbitrary inputs",
+      "signed division overflow equivalence outside the committed expression",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-baseline-manifest.json",
+      "sha256": "109f8e12cc0b0037a8b66a7cd92e80857ee1efbe93f3cd8a6d3477be369335df",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c-oracle-status.json",
+      "sha256": "1e1439182fc4f638e27ebed6a668ef1a9bf476b0ecb10b77ec0dad1c96b31e82",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-auto-cache-metadata.json",
+      "sha256": "8a699b135974b4335052d1ae39c63f478814f746ff266098f574df44e2f4e875",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-clang-lowering-report.json",
+      "sha256": "b71d0e6fcc2c9db0f12886bb05f24268e9f3fd0354b4b94481b8a778f3077725",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-config-profile.json",
+      "profile_id": "demo-scalar-div-rem-contract-wsl-gcc",
+      "sha256": "7a6d978e4aca8b29f4e3aad0917ed6a3470913e57fa639f3aaf307a0c0aba820",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-context-pack.json",
+      "sha256": "8206308d609b8ee3e7af43b4f2a76a8474e83260fdf63793b0110a430330e900",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-final-verification.json",
+      "sha256": "e016d6e9d73f8ddc49759551bc3bdb73441fcbc7e277cbfb4360ecc56b0da766",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-negative-diff.json",
+      "sha256": "aa6334af3da84ba5262125a04a7079a936272f133bdba2d1c147c662e5095ca7",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "b65d98c75e24b071bfbb7116dfc10ab29a1d6b2ec19c9a687e4556206a5bbf53",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-pointer-graph.json",
+      "sha256": "b871ef155a4dc8c33b9dbb75cbc01899f17ae6b0f9b37572df6105894843c2fe",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L1",
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-route-decision.json",
+      "sha256": "fc21bb0aaba7f95d3994b22adbe04a618521ecf293872f1df43d7f25551661e8",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/rust-check.json",
+      "sha256": "eaec80a60d38f923949ff6e9a3a9dff6b493f42835328ade0b76d44fae0850ad",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-rust-report.json",
+      "sha256": "5d26f4485148cb8bc211eeb59f891ae2927cbb36f774ab264704dd4d99b2f0be",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-diff.json",
+      "sha256": "f1fd49d6e15f2253e5d4f36b8403e4aff29478e8abc979422389dabdf024a5c0",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-slice-contract.json",
+      "sha256": "c147689f340b5e9cde1af42f764a8072b7c1d009b223d9c0f19fcde5bbdc0479",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-summary.json",
+      "sha256": "fe90e0c8b4d604562715475b8f6704771d10f18e44659d392f7235051b873712",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-test-translation-generated.json",
+      "sha256": "15e43a891697e92ac88c67328f302268e25e997ab23a22a1477fb957741663ec",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-unsafe-ledger.json",
+      "sha256": "73ae4c3d55e94ef9f288c178195be26d3ad8763ac7237b2eac3cdd1ae0779a57",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-unsafe-scan.json",
+      "sha256": "769a4db41b5684d8709f3e0b12bf7d6c3b07fa2ca6b6accc79d46a088d67ab18",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-validation-profile.json",
+      "profile": "L1-dev",
+      "sha256": "0786cbdba9451b0820017b63a0a3e515e419c69104de153540757e3191f5f7c6",
+      "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-c2rust-verified-unsafe-baseline.json",
+      "sha256": "95130d2b108d70aefa3e1a594fd83f5366b4eb4e326cccd15da667d957ec810b",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-version-manifest.json",
+      "sha256": "d416a36568cede7706b8670819dbbd930f5ed50500ec83d0164c8e4272ca9fd4",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "scalar-div-rem-contract-fixture",
+    "operation_count": 4,
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "8cd8b8efa5e71a49729df7df55a249785e44a063",
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

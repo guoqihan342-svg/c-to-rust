@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "scalar-div-rem-contract",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "scalar_div_rem_contract",
+  "c_source": "int scalar_div_rem_contract(int value) { return (value / 3) + (value % 5); }",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "fixture_hash": "scalar-div-rem-contract-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": ".",
+    "source_commit": "demo-scalar-div-rem-contract-20260708",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+        "role": "source",
+        "sha256": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+      }
+    ],
+    "functions": [
+      "scalar_div_rem_contract"
+    ],
+    "signatures": [
+      {
+        "function": "scalar_div_rem_contract",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          }
+        ],
+        "c_source": "int scalar_div_rem_contract(int value) { return (value / 3) + (value % 5); }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+          "line_start": 1,
+          "line_end": 1,
+          "byte_start": 0,
+          "byte_end": 76,
+          "sha256": "bfb36759eac541797689e0df33dd7bca1a147d9f31f46e445169a9dac7caa4e1"
+        }
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "division_by_zero": "runtime_precondition_nonzero_divisor",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared"
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-scalar-div-rem-contract-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/fixtures/scalar-div-rem-contract.c",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json",
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "scalar-div-rem-contract-fixture",
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+    "hash": "scalar-div-rem-contract-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int",
+          "range": [
+            -2147483648,
+            2147483647
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": true
+    },
+    "cases": [
+      {
+        "id": "int-min",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json"
+      },
+      {
+        "id": "negative",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json"
+      },
+      {
+        "id": "zero",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json"
+      },
+      {
+        "id": "int-max",
+        "input_ref": "cases[5]",
+        "expected_ref": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+    "diff": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-scalar-div-rem-contract-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-scalar-div-rem-contract-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-scalar-div-rem-contract-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/scalar_div_rem_contract.rs",
+    "public_api": [
+      {
+        "name": "scalar_div_rem_contract",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/scalar_div_rem_contract.rs",
+    "api_name": "scalar_div_rem_contract",
+    "test_file": "validation/l2_slices/tests/scalar_div_rem_contract.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No runtime variable divisor input; divisors are fixed nonzero literals 3 and 5.",
+      "No division by zero execution.",
+      "No INT_MIN / -1 signed division overflow case.",
+      "No pointer, aliasing, struct, or external callee behavior."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program scalar UB coverage",
+      "runtime divisor nonzero proof for arbitrary inputs",
+      "signed division overflow equivalence outside the committed expression"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No runtime variable divisor input; divisors are fixed nonzero literals 3 and 5.",
+    "No division by zero execution.",
+    "No INT_MIN / -1 signed division overflow case.",
+    "No pointer, aliasing, struct, or external callee behavior."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.scalar_arithmetic_contract",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

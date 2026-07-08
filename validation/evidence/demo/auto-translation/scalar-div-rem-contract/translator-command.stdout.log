@@ -1,0 +1,17 @@
+{
+  "target_id": "demo",
+  "slice_id": "scalar-div-rem-contract",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-auto-translation-plan.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-auto-translation-events.jsonl",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-type-map.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-cfg.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-pointer-graph.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-ai-candidate-manifest.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-blocked-repairs.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-rust-draft.rs",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-clang-dry-run.json",
+    "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-clang-lowering-report.json"
+  ]
+}

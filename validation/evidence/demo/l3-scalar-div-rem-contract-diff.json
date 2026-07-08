@@ -1,0 +1,14 @@
+{
+  "case_count": 6,
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,41 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-scalar-div-rem-contract-20260708",
+    "slice_spec_sha256=b224ef2aabd10119f34244a6d8536fd2e7d9b0d0533354a5ab2b704328496a75",
+    "fixture_hash=scalar-div-rem-contract-fixture",
+    "build_profile_hash=21523ebe2bdca9f173d32f9a2a8dce4bf2521a95ad89530b3d951184baa82241",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "context_pack_ref": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "slice has no pointer surface",
+  "repo_commit": "8cd8b8efa5e71a49729df7df55a249785e44a063",
+  "schema_version": 2,
+  "slice_id": "scalar-div-rem-contract",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c"
+    ],
+    "functions": [
+      "scalar_div_rem_contract"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "not_applicable",
+  "target_id": "demo"
+}

@@ -1,0 +1,57 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-scalar-div-rem-contract-20260708",
+    "slice_spec_sha256=b224ef2aabd10119f34244a6d8536fd2e7d9b0d0533354a5ab2b704328496a75",
+    "fixture_hash=scalar-div-rem-contract-fixture",
+    "build_profile_hash=21523ebe2bdca9f173d32f9a2a8dce4bf2521a95ad89530b3d951184baa82241",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "validation/l2_slices/fixtures/scalar-div-rem-contract.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/scalar_div_rem_contract.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "8cd8b8efa5e71a49729df7df55a249785e44a063",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "scalar-div-rem-contract",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-scalar-div-rem-contract.json",
+    "sha256": "b224ef2aabd10119f34244a6d8536fd2e7d9b0d0533354a5ab2b704328496a75"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c"
+    ],
+    "functions": [
+      "scalar_div_rem_contract"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "demo"
+}

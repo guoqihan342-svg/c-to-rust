@@ -1,0 +1,86 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "signed division by nonzero literal",
+      "signed modulo by nonzero literal",
+      "negative values",
+      "zero crossing",
+      "i32 low/high boundaries"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test scalar_div_rem_contract",
+      "file": "validation/l2_slices/tests/scalar_div_rem_contract.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "scalar_div_rem_contract_matches_c_oracle_with_safe_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "scalar-div-rem-contract-fixture",
+        "operation_count": 6,
+        "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the scalar div/rem C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/scalar_div_rem_contract.rs::scalar_div_rem_contract_matches_c_oracle_with_safe_boundary",
+      "source": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}

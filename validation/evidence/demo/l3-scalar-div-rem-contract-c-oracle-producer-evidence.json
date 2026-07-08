@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror scalar_div_rem_contract_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+  "helper_stdout_sha256": "ee3650ecb6dd57184e20bb1c493d4e919feea13b65a8616c8636c4c3d9b9c142",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./scalar_div_rem_contract_oracle",
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "source_hashes": {
+    "c_helper": "f85757cfe3bc92ebcf4db3c078793d8ca6202b2c0f81a258e412406545ebb626",
+    "generator": "20734c430e269e702b15906e7d1da23df6360d096df28dab5aa0b59b078db899"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

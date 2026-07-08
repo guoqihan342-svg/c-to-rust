@@ -1,0 +1,21 @@
+{
+  "c_oracle_status": "passed",
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json"
+  },
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "negative_diff_mutation_detected": true,
+  "rust_check_status": "passed",
+  "rust_report_status": "passed",
+  "schema_diff_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "unsafe_status": "passed",
+  "version_config_status": "recorded"
+}

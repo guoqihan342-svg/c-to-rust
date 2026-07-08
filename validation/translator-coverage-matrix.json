@@ -367,7 +367,7 @@
     },
     {
       "id": "scalar-arithmetic-ub-contract-subset",
-      "status": "partial",
+      "status": "covered",
       "ir_constructs": [
         "IrExpr::Binary.Add",
         "IrExpr::Binary.Sub",
@@ -408,6 +408,14 @@
             {
               "name": "clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "scalar div/rem contract AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/scalar_div_rem_contract_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_scalar_div_rem_contract_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
         },
@@ -435,12 +443,41 @@
             {
               "name": "unsigned wrapping runtime tests, signed checked runtime precondition tests, non-literal divisor/shift runtime precondition tests, and legal scalar emit compile checks",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "scalar-div-rem-contract generated Rust replay",
+              "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-rust-draft.rs"
             }
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "this row records emitter contract checks; it does not include named-slice C/Rust differential evidence"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "scalar-div-rem-contract C oracle",
+              "path": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json"
+            },
+            {
+              "name": "scalar-div-rem-contract Rust replay report",
+              "path": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json"
+            },
+            {
+              "name": "scalar-div-rem-contract schema-aware diff",
+              "path": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json"
+            },
+            {
+              "name": "scalar-div-rem-contract negative diff",
+              "path": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json"
+            },
+            {
+              "name": "scalar-div-rem-contract unsafe ledger",
+              "path": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json"
+            },
+            {
+              "name": "scalar-div-rem-contract final verification",
+              "path": "validation/evidence/demo/l3-scalar-div-rem-contract-final-verification.json"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
@@ -476,6 +513,14 @@
             {
               "name": "typed_ir scalar_admission drift and missing-field rejection",
               "path": "validation/tools/test_validate_auto_translation_evidence.py"
+            },
+            {
+              "name": "scalar-div-rem-contract route decision",
+              "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-route-decision.json"
+            },
+            {
+              "name": "scalar-div-rem-contract validation profile",
+              "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-validation-profile.json"
             }
           ]
         }
@@ -556,6 +601,18 @@
         {
           "name": "clang_ast_fixture_replays_scalar_fail_closed_refusal_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_scalar_div_rem_contract_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "scalar-div-rem-contract named-slice L3 evidence validator",
+          "path": "validation/tools/test_scalar_div_rem_contract_l3_evidence.py"
+        },
+        {
+          "name": "scalar-div-rem-contract L2 Rust replay",
+          "path": "validation/l2_slices/tests/scalar_div_rem_contract.rs"
         }
       ],
       "negative_cases": [

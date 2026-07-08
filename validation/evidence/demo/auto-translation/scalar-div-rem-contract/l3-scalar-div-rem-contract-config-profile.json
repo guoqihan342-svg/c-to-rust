@@ -1,0 +1,94 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json",
+    "fixture_sha256": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "61c96248d204132100004ee0b7b4549fdddc934f26e6d6c54461d194be733399",
+      "diff": "15f4c3175fa91f2d73f07c92aa1eda09737bbb07912bb20269919f716aae9107",
+      "final_verification": "3767f5bb125b15eae7fd1b7f1aa061cac62905cffbc23f6d8bcd2bf43917dbc6",
+      "negative_diff": "7c1e29c2b9d0b1d2dd69a0eac5a124c09d4b19e623f847b29ab48ea95a28c432",
+      "performance_smoke": "3625554988d9b8d289dae7a92e568a47abe535b2baa276bd12d24d75dc0edb08",
+      "rust_report": "4603009a5350d0434fe3afdb4e4532cc60e5fe0b093d68c46631722d090b0da7",
+      "unsafe_ledger": "94420fe0d53dff40b3f986d4dee3d5f226f907fc27a956b2a23e14b040629c62",
+      "unsafe_scan": "d850bc9e2dfb1d5139bfebb2eb0889717284d3f2eb48d8587845db44a44a4061",
+      "version_manifest": "f35609c48331e42b7a05de40a677dd477b424569732470a99a30d4529c591337"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-scalar-div-rem-contract-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-scalar-div-rem-contract-diff.json",
+      "final_verification": "validation/evidence/demo/l3-scalar-div-rem-contract-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-scalar-div-rem-contract-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-scalar-div-rem-contract-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-scalar-div-rem-contract-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-scalar-div-rem-contract-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-scalar-div-rem-contract-version-manifest.json"
+    },
+    "slice_id": "scalar-div-rem-contract",
+    "source_commit": "demo-scalar-div-rem-contract-20260708",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-scalar-div-rem-contract-20260708",
+    "slice_spec_sha256=b224ef2aabd10119f34244a6d8536fd2e7d9b0d0533354a5ab2b704328496a75",
+    "fixture_hash=scalar-div-rem-contract-fixture",
+    "build_profile_hash=21523ebe2bdca9f173d32f9a2a8dce4bf2521a95ad89530b3d951184baa82241",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/l2_slices/fixtures/scalar-div-rem-contract.c"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/demo/auto-translation/scalar-div-rem-contract/l3-scalar-div-rem-contract-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "baeb73f6d01f7d05d5b37bbace1742857ef6d7cdb18803664af50858be5257ed"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "scalar-div-rem-contract-fixture",
+    "operation_count": 4,
+    "path": "validation/l2_slices/fixtures/scalar-div-rem-contract-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No runtime variable divisor input; divisors are fixed nonzero literals 3 and 5.",
+    "No division by zero execution.",
+    "No INT_MIN / -1 signed division overflow case.",
+    "No pointer, aliasing, struct, or external callee behavior."
+  ],
+  "profile_id": "demo-scalar-div-rem-contract-wsl-gcc",
+  "repo_commit": "8cd8b8efa5e71a49729df7df55a249785e44a063",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "scalar-div-rem-contract",
+  "source_commit": "demo-scalar-div-rem-contract-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

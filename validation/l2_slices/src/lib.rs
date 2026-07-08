@@ -7,6 +7,7 @@ pub mod external_direct_callee;
 pub mod fdb_blob_make;
 pub mod fdb_calc_crc32;
 pub mod libuv_ip4_addr;
+pub mod scalar_div_rem_contract;
 pub mod signed_rshift_contract;
 pub mod sqlite_varint;
 pub mod store_add_one;

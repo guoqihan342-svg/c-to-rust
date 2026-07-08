@@ -552,3 +552,31 @@ fn clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang() {
         rust,
     );
 }
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_scalar_div_rem_contract_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/scalar_div_rem_contract_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "scalar_div_rem_contract")
+            .expect("lower committed clang AST scalar div/rem fixture");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from scalar div/rem fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(lowered.globals.is_empty());
+    assert!(rust.contains("pub fn scalar_div_rem_contract(value: i32) -> i32"));
+    assert!(
+        rust.contains(".checked_div(3i32).expect(\"division by zero or signed overflow\")"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains(".checked_rem(5i32).expect(\"modulo by zero or signed overflow\")"),
+        "{rust}"
+    );
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-scalar-div-rem-contract", rust);
+}
