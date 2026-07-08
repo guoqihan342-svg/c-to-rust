@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror while_countdown_positive_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+  "helper_stdout_sha256": "80982a75c9556b1a4d4deffc03e144899be0049eff0b950534e6c8afe6eacd58",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./while_countdown_positive_oracle",
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_hashes": {
+    "c_helper": "9edc01259e1ac45e3f2752654825183e0521f3b65d0129b52cf5d59b2041860f",
+    "generator": "81f56b1fffa960e8bf1ab91312c2beaf061f0a7e40afd5719248fc66c9ff770c"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

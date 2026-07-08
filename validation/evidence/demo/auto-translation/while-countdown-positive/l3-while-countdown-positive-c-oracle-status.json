@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+    "sha256": "4de8402cfbcad7793075cd2848c601403eb6ecc7f12131bbf01804d0d69180af",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 5,
+  "fixture": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+  "fixture_sha256": "4de8402cfbcad7793075cd2848c601403eb6ecc7f12131bbf01804d0d69180af",
+  "harness_draft": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c-oracle-harness-draft.c",
+    "sha256": "fcc12a796a2c80ae42516dbde6e74fdb1f67025ec1f0ece24cffa68e6e2e1490",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_slice_id": "while-countdown-positive",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

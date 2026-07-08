@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-while-countdown-positive-performance-smoke.json",
+    "sha256": "f98be2e2ad9db6a672934b062117ce2ff709162df475010faeb5736e3e57565d",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "while-countdown-positive",
+  "status": "recorded",
+  "target_id": "demo"
+}

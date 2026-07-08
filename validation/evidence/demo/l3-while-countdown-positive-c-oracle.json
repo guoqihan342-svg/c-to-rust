@@ -1,0 +1,67 @@
+{
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -3,
+      "status": "ok",
+      "value": -3
+    },
+    {
+      "coverage_kind": "zero",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "single_iteration",
+      "id": "one",
+      "return_value": 0,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "multi_iteration",
+      "id": "three",
+      "return_value": 0,
+      "status": "ok",
+      "value": 3
+    },
+    {
+      "coverage_kind": "multi_iteration",
+      "id": "seven",
+      "return_value": 0,
+      "status": "ok",
+      "value": 7
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No break, continue, goto, switch, do-while, or for-loop claim.",
+    "No pointer, aliasing, struct, array, or external callee behavior.",
+    "No INT_MAX stress case; fixture inputs are bounded to keep the C oracle fast."
+  ],
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/fixtures/while-countdown-positive.c",
+      "validation/l2_slices/tools/generate_while_countdown_positive_oracle.py"
+    ],
+    "functions": [
+      "while_countdown_positive"
+    ],
+    "signature": "int while_countdown_positive(int value)"
+  },
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

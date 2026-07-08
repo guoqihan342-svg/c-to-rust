@@ -3591,7 +3591,7 @@
     },
     {
       "id": "complex-control-flow-fail-closed",
-      "status": "partial",
+      "status": "covered",
       "ir_constructs": [
         "IrStmt::While",
         "IrStmt::Break",
@@ -3613,6 +3613,15 @@
         "clang_fixture_replay": {
           "status": "covered",
           "evidence": [
+            {
+              "name": "while countdown positive AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_while_countdown_positive_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs",
+              "assertion": "requires WhileStmt with value > 0 condition and value = value - 1 assignment to lower through typed IR and emit safe Rust"
+            },
             {
               "name": "control-flow refusal AST JSON fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/control_flow_refusals_ast.json"
@@ -3660,6 +3669,15 @@
           "status": "covered",
           "evidence": [
             {
+              "name": "while-countdown-positive generated Rust draft",
+              "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-draft.rs",
+              "assertion": "generated draft emits pub fn while_countdown_positive(mut value: i32) -> i32 with a checked decrement while loop"
+            },
+            {
+              "name": "clang_ast_fixture_replays_while_countdown_positive_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed IR while/do-while/for control-flow emitted Rust tests",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -3670,8 +3688,35 @@
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "this row records translator/unit-level control-flow evidence only; no named-slice C/Rust differential gate is claimed"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "while-countdown-positive C oracle",
+              "path": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json"
+            },
+            {
+              "name": "while-countdown-positive Rust replay report",
+              "path": "validation/evidence/demo/l3-while-countdown-positive-rust-report.json"
+            },
+            {
+              "name": "while-countdown-positive schema-aware diff",
+              "path": "validation/evidence/demo/l3-while-countdown-positive-diff.json"
+            },
+            {
+              "name": "while-countdown-positive negative diff",
+              "path": "validation/evidence/demo/l3-while-countdown-positive-negative-diff.json"
+            },
+            {
+              "name": "while-countdown-positive unsafe ledger",
+              "path": "validation/evidence/demo/l3-while-countdown-positive-unsafe-ledger.json"
+            },
+            {
+              "name": "while-countdown-positive generated draft final verification",
+              "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact named while countdown slice"
+            }
+          ],
+          "scope_note": "covers the named while-countdown-positive slice only; goto/switch/relooper support remains fail-closed evidence, not a C/Rust semantic pass claim"
         },
         "legacy_fallback": {
           "status": "covered",
@@ -3685,6 +3730,18 @@
         "route_evidence": {
           "status": "covered",
           "evidence": [
+            {
+              "name": "while-countdown-positive route decision",
+              "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json"
+            },
+            {
+              "name": "while-countdown-positive validation profile",
+              "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json"
+            },
+            {
+              "name": "while-countdown-positive capability delta",
+              "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-capability-delta.json"
+            },
             {
               "name": "auto-migration L4 route refusal evidence for switch/goto",
               "path": "validation/tools/test_auto_migrate.py",
@@ -3705,6 +3762,18 @@
         }
       },
       "positive_cases": [
+        {
+          "name": "clang_ast_fixture_replays_while_countdown_positive_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "while-countdown-positive named-slice L3 evidence validator",
+          "path": "validation/tools/test_while_countdown_l3_evidence.py"
+        },
+        {
+          "name": "while-countdown-positive L2 Rust replay",
+          "path": "validation/l2_slices/tests/while_countdown_positive.rs"
+        },
         {
           "name": "typed_ir_emits_scalar_while_with_integer_condition",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"

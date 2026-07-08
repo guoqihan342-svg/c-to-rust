@@ -1,0 +1,57 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-while-countdown-positive-20260708",
+    "slice_spec_sha256=ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+    "fixture_hash=while-countdown-positive-fixture",
+    "build_profile_hash=dbecd7a4dad5547eaee09644cf2eb9a288369f84c7bb3efc56fdc4681bec80f5",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "validation/l2_slices/fixtures/while-countdown-positive.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/while_countdown_positive.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "f4c757e8ff06f3dcdf0ebd7cc8fccf259b599ac1",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "while-countdown-positive",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-while-countdown-positive.json",
+    "sha256": "ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/while-countdown-positive.c"
+    ],
+    "functions": [
+      "while_countdown_positive"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "demo"
+}

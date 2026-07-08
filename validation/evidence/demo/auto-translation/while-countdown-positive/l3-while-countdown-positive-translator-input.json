@@ -1,0 +1,54 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/while-countdown-positive.c",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    }
+  },
+  "c_source": "int while_countdown_positive(int value) { while (value > 0) { value = value - 1; } return value; }",
+  "fixture_hash": "while-countdown-positive-fixture",
+  "function_name": "while_countdown_positive",
+  "function_source_span": {
+    "byte_end": 109,
+    "byte_start": 0,
+    "file": "validation/l2_slices/fixtures/while-countdown-positive.c",
+    "line_end": 6,
+    "line_start": 1,
+    "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+  },
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_file": "validation/l2_slices/fixtures/while-countdown-positive.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/while-countdown-positive.c": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/while-countdown-positive.c",
+      "role": "source",
+      "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+    }
+  ],
+  "source_root": ".",
+  "target_id": "demo"
+}

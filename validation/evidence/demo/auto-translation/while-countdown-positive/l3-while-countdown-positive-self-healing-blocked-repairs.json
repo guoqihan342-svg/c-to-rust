@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-while-countdown-positive-20260708",
+    "fixture_hash=while-countdown-positive-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "status": "none",
+  "target_id": "demo"
+}

@@ -618,3 +618,25 @@ fn clang_ast_fixture_replays_scalar_div_rem_contract_without_clang() {
     );
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-scalar-div-rem-contract", rust);
 }
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+fn clang_ast_fixture_replays_while_countdown_positive_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/while_countdown_positive_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "while_countdown_positive")
+            .expect("lower committed clang AST while countdown fixture");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from while countdown fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(lowered.globals.is_empty());
+    assert!(rust.contains("pub fn while_countdown_positive(mut value: i32) -> i32"));
+    assert!(rust.contains("while (value > 0i32) {"), "{rust}");
+    assert!(rust.contains("value = value.checked_sub(1i32).expect(\"signed subtraction overflow\");"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-while-countdown-positive", rust);
+}

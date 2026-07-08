@@ -1,0 +1,177 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c2rust-baseline-manifest.json",
+    "sha256": "a57851b61c8b5f8000a32e0400d84ea5d7aeace298755db6e56c5cdbb1ade7de",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-while-countdown-positive-20260708",
+    "slice_spec_sha256=ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+    "fixture_hash=while-countdown-positive-fixture",
+    "build_profile_hash=dbecd7a4dad5547eaee09644cf2eb9a288369f84c7bb3efc56fdc4681bec80f5",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-cfg.json",
+      "status": "recorded"
+    },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-context-pack.json",
+      "status": "not_applicable"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/demo-while-countdown-positive.json",
+      "sha256": "ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "f4c757e8ff06f3dcdf0ebd7cc8fccf259b599ac1",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+    "sha256": "f7d76cf5ba1a63a700b4f4336ee6896441a86ca5547d8176818d0f18ae56e6e1",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "draft_generated",
+  "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {},
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "8db6e1a35a2406db99d6e4c792e24a6b53637965c35f30857cde361c47658177",
+    "status": "passed"
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

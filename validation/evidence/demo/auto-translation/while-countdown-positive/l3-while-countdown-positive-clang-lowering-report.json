@@ -1,0 +1,384 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json"
+  ],
+  "durable_evidence": {
+    "clang_path": "",
+    "clang_version": "not_configured",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "f5054d864288f2300d3119ae99a7413c3c6b0de6849689f4e39616dc529fd5c1",
+    "typed_ir_sha256": "e85953d1f2a9a5e04fe8f1032f017c69c34e49d12d5f269f27cb8710af2e0493"
+  },
+  "errors": [],
+  "fixture_hash": "while-countdown-positive-fixture",
+  "frontend": "clang",
+  "function_name": "while_countdown_positive",
+  "lowering_report": {
+    "arguments": [
+      "--ast-json-fixture",
+      "crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json",
+      "validation/l2_slices/fixtures/while-countdown-positive.c"
+    ],
+    "clang_path": null,
+    "diagnostics": [
+      "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_ast_json_fixture",
+    "function_ir": {
+      "body": [
+        {
+          "While": {
+            "body": [
+              {
+                "Assign": {
+                  "source_span": null,
+                  "target": {
+                    "Var": {
+                      "name": "value",
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  },
+                  "value": {
+                    "Binary": {
+                      "lhs": {
+                        "LValueToRValue": {
+                          "expr": {
+                            "Var": {
+                              "name": "value",
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "int",
+                                "is_const": false,
+                                "kind": {
+                                  "Integer": {
+                                    "signed": true,
+                                    "width": 32
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "int",
+                                "width_bits": 32
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "target": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "op": "Sub",
+                      "rhs": {
+                        "LitInt": {
+                          "source_span": null,
+                          "spelling": "1",
+                          "ty": {
+                            "canonical": "int",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": true,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "int",
+                            "width_bits": 32
+                          },
+                          "value": 1
+                        }
+                      },
+                      "source_span": null,
+                      "ty": {
+                        "canonical": "int",
+                        "is_const": false,
+                        "kind": {
+                          "Integer": {
+                            "signed": true,
+                            "width": 32
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "int",
+                        "width_bits": 32
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "condition": {
+              "Binary": {
+                "lhs": {
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "value",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "source_span": null,
+                    "target": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Gt",
+                "rhs": {
+                  "LitInt": {
+                    "source_span": null,
+                    "spelling": "0",
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    },
+                    "value": 0
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            },
+            "source_span": null
+          }
+        },
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "LValueToRValue": {
+                "expr": {
+                  "Var": {
+                    "name": "value",
+                    "source_span": null,
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "source_span": null,
+                "target": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "while_countdown_positive",
+      "params": [
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "while_countdown_positive",
+    "globals": [],
+    "source_file": "./validation/l2_slices/fixtures/while-countdown-positive.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json",
+    "compile_commands": null,
+    "function_source_span": {
+      "byte_end": 109,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/while-countdown-positive.c",
+      "line_end": 6,
+      "line_start": 1,
+      "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+    },
+    "logical_source_file": "validation/l2_slices/fixtures/while-countdown-positive.c",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/while-countdown-positive.c": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+    },
+    "source_root": "."
+  },
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_file": "./validation/l2_slices/fixtures/while-countdown-positive.c",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [
+      {
+        "code": "signed_sub_no_overflow",
+        "detail": "C signed subtraction must not overflow unless the slice contract declares a wrapping profile",
+        "ir_node": "IrExpr::Binary.Sub",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      }
+    ],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "f5054d864288f2300d3119ae99a7413c3c6b0de6849689f4e39616dc529fd5c1",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "e85953d1f2a9a5e04fe8f1032f017c69c34e49d12d5f269f27cb8710af2e0493"
+  }
+}

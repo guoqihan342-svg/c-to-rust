@@ -1,0 +1,18 @@
+{
+  "case_id": "negative",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "negative",
+    "field": "return_value",
+    "mutated_c_value": -2,
+    "rust_value": -3
+  },
+  "level": "L3",
+  "mutation": "first oracle case return_value is changed by +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

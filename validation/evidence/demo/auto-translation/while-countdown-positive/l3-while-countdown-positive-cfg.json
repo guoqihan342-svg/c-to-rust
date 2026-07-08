@@ -1,0 +1,105 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-while-countdown-positive-20260708",
+    "slice_spec_sha256=ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+    "fixture_hash=while-countdown-positive-fixture",
+    "build_profile_hash=dbecd7a4dad5547eaee09644cf2eb9a288369f84c7bb3efc56fdc4681bec80f5",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "while",
+            "return"
+          ],
+          "statements": [
+            "while",
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "while-0"
+        },
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-1"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "while_countdown_positive",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int while_countdown_positive(int value)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 1,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "f4c757e8ff06f3dcdf0ebd7cc8fccf259b599ac1",
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-while-countdown-positive.json",
+    "sha256": "ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+    "status": "ready"
+  },
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

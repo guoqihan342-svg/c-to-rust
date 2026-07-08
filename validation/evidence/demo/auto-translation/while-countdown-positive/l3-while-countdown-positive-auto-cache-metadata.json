@@ -1,0 +1,178 @@
+{
+  "alias_gate_identity": {
+    "alias_set_count": 0,
+    "aliasing_proven": false,
+    "decision": "not_applicable",
+    "precondition_count": 0,
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "build_profile_hash": "dbecd7a4dad5547eaee09644cf2eb9a288369f84c7bb3efc56fdc4681bec80f5",
+  "c2rust_baseline_identity": {
+    "sha256": "4e2fc6de7c8aa589069207488eecd9159f8c6b5737e237a5ef1ddff3ac17f8a9",
+    "status": "skipped"
+  },
+  "c_oracle_harness_identity": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c-oracle-harness-draft.c",
+    "sha256": "fcc12a796a2c80ae42516dbde6e74fdb1f67025ec1f0ece24cffa68e6e2e1490",
+    "status": "draft"
+  },
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "competition_environment_identity",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+    "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "clang_lowering_identity": {
+    "clang_path": "",
+    "clang_path_status": "not_configured",
+    "clang_version": "not_configured",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-while-countdown-positive.json",
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report"
+  ],
+  "competition_environment_identity": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "dependent_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c2rust-baseline-manifest.json",
+      "sha256": "a57851b61c8b5f8000a32e0400d84ea5d7aeace298755db6e56c5cdbb1ade7de",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+      "sha256": "f7d76cf5ba1a63a700b4f4336ee6896441a86ca5547d8176818d0f18ae56e6e1",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "8db6e1a35a2406db99d6e4c792e24a6b53637965c35f30857cde361c47658177",
+      "status": "passed"
+    }
+  },
+  "effect_graph_identity": {
+    "alias_gate_decision": "not_applicable",
+    "alias_sensitive": false,
+    "read_effect_count": 0,
+    "read_nodes": [],
+    "schema_version": 2,
+    "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+    "write_effect_count": 0,
+    "write_nodes": []
+  },
+  "fixture_hash": "while-countdown-positive-fixture",
+  "global_dependency_identity": {
+    "count": 0,
+    "names": [],
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "rust_replay",
+    "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+    "auto_translation_manifest",
+    "summary"
+  ],
+  "oracle_boundary_contract_identity": {
+    "sha256": "2111b8ae6924d9bfc659c4bba2c5f83b93077429bc4d0c0238b42ee382616648",
+    "status": "sufficient_for_semantic_pass"
+  },
+  "route_decision_identity": {
+    "sha256": "5051ec4b182c3e43bc4a783a94ab412309bff3e7d13e8a7056c19f51aa519afa",
+    "status": "recorded"
+  },
+  "scalar_ub_contract_identity": {
+    "sha256": "21f157d5dbc15a94f5fa7c4dab507ae485356de8502b475273d21ab854ef2385",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 2,
+    "type_map": 1
+  },
+  "slice_id": "while-countdown-positive",
+  "slice_spec_sha256": "ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/while-countdown-positive.c": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+  "translator_version": "0.1.0",
+  "validation_profile_identity": {
+    "sha256": "e32a90034c80c17647bae0c3382256cec0252dd269a6ddc9238b94416469047c",
+    "status": "passed"
+  }
+}

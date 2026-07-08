@@ -1,0 +1,49 @@
+{
+  "accepted_negative_diff": {
+    "path": "validation/evidence/demo/l3-while-countdown-positive-negative-diff.json",
+    "sha256": "ecdbd77c5f29f7fc69456ec9a7e472c6808af20eaad08b28df9c91f3cea52181",
+    "status": "passed"
+  },
+  "accepted_negative_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c2rust-baseline-manifest.json",
+    "sha256": "a57851b61c8b5f8000a32e0400d84ea5d7aeace298755db6e56c5cdbb1ade7de",
+    "status": "skipped"
+  },
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "negative",
+    "field": "return_value",
+    "mutated_c_value": -2,
+    "rust_value": -3
+  },
+  "mutation_detected": true,
+  "negative_diff_gate": "schema_aware_negative_diff",
+  "required_inputs": {
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "negative_diff_actual_status": "expected_failed",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed",
+    "schema_diff_required_first_mismatch": null,
+    "schema_diff_required_status": "passed"
+  },
+  "root_blocked_by": [],
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+    "sha256": "f7d76cf5ba1a63a700b4f4336ee6896441a86ca5547d8176818d0f18ae56e6e1",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "status": "expected_failed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "8db6e1a35a2406db99d6e4c792e24a6b53637965c35f30857cde361c47658177",
+    "status": "passed"
+  }
+}

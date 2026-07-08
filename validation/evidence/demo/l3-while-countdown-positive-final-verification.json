@@ -1,0 +1,21 @@
+{
+  "c_oracle_status": "passed",
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json"
+  },
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "negative_diff_mutation_detected": true,
+  "rust_check_status": "passed",
+  "rust_report_status": "passed",
+  "schema_diff_status": "passed",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED",
+  "unsafe_status": "passed",
+  "version_config_status": "recorded"
+}

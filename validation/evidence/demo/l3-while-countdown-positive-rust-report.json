@@ -1,0 +1,53 @@
+{
+  "c_source_boundary": "int while_countdown_positive(int value) { while (value > 0) { value = value - 1; } return value; }",
+  "cargo_test_status": "passed",
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -3,
+      "status": "ok",
+      "value": -3
+    },
+    {
+      "coverage_kind": "zero",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "single_iteration",
+      "id": "one",
+      "return_value": 0,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "multi_iteration",
+      "id": "three",
+      "return_value": 0,
+      "status": "ok",
+      "value": 3
+    },
+    {
+      "coverage_kind": "multi_iteration",
+      "id": "seven",
+      "return_value": 0,
+      "status": "ok",
+      "value": 7
+    }
+  ],
+  "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test while_countdown_positive",
+  "fixture": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/while_countdown_positive.rs",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

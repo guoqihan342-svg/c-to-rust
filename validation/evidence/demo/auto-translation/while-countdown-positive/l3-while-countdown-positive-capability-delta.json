@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "cap-while-countdown-positive-typed_ir_zero_token_deterministic",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+        "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "while-countdown-positive",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "gov-while-countdown-positive-typed_ir_zero_token_deterministic-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+        "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L0",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-while-countdown-positive-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/while-countdown-positive.c": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

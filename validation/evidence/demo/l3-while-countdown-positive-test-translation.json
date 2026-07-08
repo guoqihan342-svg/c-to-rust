@@ -1,0 +1,86 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "while condition value > 0",
+      "single iteration decrement",
+      "multi-iteration decrement",
+      "zero-iteration zero input",
+      "zero-iteration negative input"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-while-countdown-positive-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-while-countdown-positive-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-while-countdown-positive-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-while-countdown-positive-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test while_countdown_positive",
+      "file": "validation/l2_slices/tests/while_countdown_positive.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "while_countdown_positive_matches_c_oracle_with_loop_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "while-countdown-positive-fixture",
+        "operation_count": 5,
+        "path": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-while-countdown-positive-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the while countdown C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/while_countdown_positive.rs::while_countdown_positive_matches_c_oracle_with_loop_boundary",
+      "source": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/while-countdown-positive.c",
+        "role": "source",
+        "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+      }
+    ],
+    "functions": [
+      "while_countdown_positive"
+    ],
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "c_source": "int while_countdown_positive(int value) { while (value > 0) { value = value - 1; } return value; }",
+        "function": "while_countdown_positive",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 2147483647,
+              "minimum": -2147483648
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 109,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/while-countdown-positive.c",
+          "line_end": 6,
+          "line_start": 1,
+          "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+        }
+      }
+    ],
+    "structured_control_flow_contract": {
+      "allowed_constructs": [
+        "while",
+        "comparison_condition",
+        "scalar_assignment",
+        "return"
+      ],
+      "disallowed_constructs": [
+        "break",
+        "continue",
+        "goto",
+        "switch",
+        "do_while",
+        "for"
+      ]
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general CFG relooper support",
+      "whole-program control-flow coverage",
+      "signed arithmetic overflow equivalence outside the committed bounded fixture"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No break, continue, goto, switch, do-while, or for-loop claim.",
+      "No pointer, aliasing, struct, array, or external callee behavior.",
+      "No INT_MAX stress case; fixture inputs are bounded to keep the C oracle fast."
+    ]
+  },
+  "fixture": {
+    "hash": "while-countdown-positive-fixture",
+    "path": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "while_countdown_positive",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/while_countdown_positive.rs",
+    "module_path": "validation/l2_slices/src/while_countdown_positive.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "while_countdown_positive",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/while_countdown_positive.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -1,0 +1,31 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-while-countdown-positive-unsafe-ledger.json",
+    "sha256": "89120ca94e44e73c28befb83a6b2cf332c9953bb4251aef26690e00f329f7223",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c2rust-baseline-manifest.json",
+    "sha256": "a57851b61c8b5f8000a32e0400d84ea5d7aeace298755db6e56c5cdbb1ade7de",
+    "status": "skipped"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+    "sha256": "f7d76cf5ba1a63a700b4f4336ee6896441a86ca5547d8176818d0f18ae56e6e1",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "8db6e1a35a2406db99d6e4c792e24a6b53637965c35f30857cde361c47658177",
+    "status": "passed"
+  }
+}

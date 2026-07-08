@@ -1,0 +1,271 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+        "fixture_sha256": "4de8402cfbcad7793075cd2848c601403eb6ecc7f12131bbf01804d0d69180af",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "4de8402cfbcad7793075cd2848c601403eb6ecc7f12131bbf01804d0d69180af",
+          "diff": "f941a6bf2f78055abf1783e7fb7a033b3634e8c3b9233021af3dc18978e7be38",
+          "final_verification": "bf013fb38d59e8f20aa9c898e02633b207d0e87cb62c4e81f3488c9ad140c2ba",
+          "negative_diff": "ecdbd77c5f29f7fc69456ec9a7e472c6808af20eaad08b28df9c91f3cea52181",
+          "performance_smoke": "f98be2e2ad9db6a672934b062117ce2ff709162df475010faeb5736e3e57565d",
+          "rust_report": "87d9342725c375fbd984d1940a32143fc6390b903e9571fb6d4e5714e9e801f7",
+          "unsafe_ledger": "89120ca94e44e73c28befb83a6b2cf332c9953bb4251aef26690e00f329f7223",
+          "unsafe_scan": "029f44c0525781210b6159ffa508bc043ccfe0c90fb7369cf759a0fcc6340a51",
+          "version_manifest": "776f158a3671a4b9f5428899c29f77f520c57d6bd3ff534882d644cad7f445ec"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-while-countdown-positive-diff.json",
+          "final_verification": "validation/evidence/demo/l3-while-countdown-positive-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-while-countdown-positive-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-while-countdown-positive-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-while-countdown-positive-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-while-countdown-positive-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-while-countdown-positive-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-while-countdown-positive-version-manifest.json"
+        },
+        "slice_id": "while-countdown-positive",
+        "source_commit": "demo-while-countdown-positive-20260708",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+          "sha256": "4de8402cfbcad7793075cd2848c601403eb6ecc7f12131bbf01804d0d69180af",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-while-countdown-positive-negative-diff.json",
+          "sha256": "ecdbd77c5f29f7fc69456ec9a7e472c6808af20eaad08b28df9c91f3cea52181",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-while-countdown-positive-rust-report.json",
+          "sha256": "87d9342725c375fbd984d1940a32143fc6390b903e9571fb6d4e5714e9e801f7",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-while-countdown-positive-diff.json",
+          "sha256": "f941a6bf2f78055abf1783e7fb7a033b3634e8c3b9233021af3dc18978e7be38",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-while-countdown-positive-unsafe-ledger.json",
+          "sha256": "89120ca94e44e73c28befb83a6b2cf332c9953bb4251aef26690e00f329f7223",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-while-countdown-positive-unsafe-scan.json",
+          "sha256": "029f44c0525781210b6159ffa508bc043ccfe0c90fb7369cf759a0fcc6340a51",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-atyecc27\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-atyecc27\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-atyecc27\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/while-countdown-positive/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/while-countdown-positive/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/while-countdown-positive/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-draft.rs",
+        "sha256": "f5054d864288f2300d3119ae99a7413c3c6b0de6849689f4e39616dc529fd5c1",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "while-countdown-positive",
+      "source_commit": "demo-while-countdown-positive-20260708",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [
+      "No full project migration claim.",
+      "No break, continue, goto, switch, do-while, or for-loop claim.",
+      "No pointer, aliasing, struct, array, or external callee behavior.",
+      "No INT_MAX stress case; fixture inputs are bounded to keep the C oracle fast.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general CFG relooper support",
+      "whole-program control-flow coverage",
+      "signed arithmetic overflow equivalence outside the committed bounded fixture",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c2rust-baseline-manifest.json",
+      "sha256": "a57851b61c8b5f8000a32e0400d84ea5d7aeace298755db6e56c5cdbb1ade7de",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c-oracle-status.json",
+      "sha256": "5924ba01869b6c8a05b4c88003f4dcfc5def80599fe5bb4eb6d7df93b6fb30df",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-auto-cache-metadata.json",
+      "sha256": "662c3b51a8bb9484ece3da0889c07727fe4213a8532d65e4269ec49e5bcd300a",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-clang-lowering-report.json",
+      "sha256": "b3ba8acd1a9c783255da7de07a507746f9eb33d0d8551b58d1ed260144307c9f",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-config-profile.json",
+      "profile_id": "demo-while-countdown-positive-wsl-gcc",
+      "sha256": "6a4bd5dff932f41d3c64bcc119eff3a8f8c2fa382e677566597f39f89f136f8a",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-context-pack.json",
+      "sha256": "45b9030978f3ba766960fcb18cc6041897cda7be299b93739a2471a37d36053d",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-final-verification.json",
+      "sha256": "966d428bca11ec0aa2cdd01190f1de7916dbab314ca42ea15ff40f6e2e8cfb95",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-negative-diff.json",
+      "sha256": "b88fd4e745141ca15a55604fdff79796ead43267865b1713152785097b2fce88",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "0081d3b1bb765cdb9ea6ba41481b3b606a9dcb79f837233ab193d7065f6ef869",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-pointer-graph.json",
+      "sha256": "1b18494bc6897db6b4d0a183850ff485f1b152d1d524dbb98dc4b4f28219d761",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-route-decision.json",
+      "sha256": "f7d76cf5ba1a63a700b4f4336ee6896441a86ca5547d8176818d0f18ae56e6e1",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/rust-check.json",
+      "sha256": "19e1e866f077f3dc340da820b4efe18b0f1f9ee05eadc714e18491d56377161a",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-rust-report.json",
+      "sha256": "3053c22d9ef52b14f4964fca6e010fc86ca5d046d4b6a1c8b47adc5b33f27322",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-diff.json",
+      "sha256": "d8464daa6a5b8635f338687f583762959017773c88bf82c29052704471f9c2e2",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-slice-contract.json",
+      "sha256": "652dfc348a7d64721749e9897d9a8ee5b50c9f0a8500344c30765773984b59d1",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-summary.json",
+      "sha256": "e64d9350a317112725918221a2b3f0b9f9749e290197b546a4a09725a8eb2956",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-test-translation-generated.json",
+      "sha256": "0f66123a1641de5d36734c274a4f55cc88974ca9ad983819aedc3200cf094f96",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-unsafe-ledger.json",
+      "sha256": "88b78e78e1846663aac98ce57e4aa9d48dadddab34a588eae265a5b850e1dd89",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-unsafe-scan.json",
+      "sha256": "1f29addba28a2c01be02521374d40f36e6b5b07a8e863ed29247ac572f10df01",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "8db6e1a35a2406db99d6e4c792e24a6b53637965c35f30857cde361c47658177",
+      "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-c2rust-verified-unsafe-baseline.json",
+      "sha256": "9978a22e000b2e2dbd43e67d0830319df62ce32add270c8269532f5525071a27",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-version-manifest.json",
+      "sha256": "612cf3e83d682d304ca9f6e5e7b00b244849368bd115190aafcf60611fe168fb",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "while-countdown-positive-fixture",
+    "operation_count": 5,
+    "path": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "f4c757e8ff06f3dcdf0ebd7cc8fccf259b599ac1",
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

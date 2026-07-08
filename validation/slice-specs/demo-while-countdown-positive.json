@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "while-countdown-positive",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "while_countdown_positive",
+  "c_source": "int while_countdown_positive(int value) { while (value > 0) { value = value - 1; } return value; }",
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "fixture_hash": "while-countdown-positive-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": ".",
+    "source_commit": "demo-while-countdown-positive-20260708",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/while-countdown-positive.c": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/while-countdown-positive.c",
+        "role": "source",
+        "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+      }
+    ],
+    "functions": [
+      "while_countdown_positive"
+    ],
+    "signatures": [
+      {
+        "function": "while_countdown_positive",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": -2147483648,
+              "maximum": 2147483647
+            }
+          }
+        ],
+        "c_source": "int while_countdown_positive(int value) { while (value > 0) { value = value - 1; } return value; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/while-countdown-positive.c",
+          "line_start": 1,
+          "line_end": 6,
+          "byte_start": 0,
+          "byte_end": 109,
+          "sha256": "c271e9b108c1eb537cad18196977dc34b8202de76827a725efb118cccb119ced"
+        }
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared"
+    },
+    "structured_control_flow_contract": {
+      "allowed_constructs": [
+        "while",
+        "comparison_condition",
+        "scalar_assignment",
+        "return"
+      ],
+      "disallowed_constructs": [
+        "break",
+        "continue",
+        "goto",
+        "switch",
+        "do_while",
+        "for"
+      ]
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-while-countdown-positive-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/fixtures/while-countdown-positive.c",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/while_countdown_positive_ast.json",
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering",
+        "fixture binds a single structured while loop with scalar condition and assignment"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "while-countdown-positive-fixture",
+    "path": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/while-countdown-positive-c-oracle.json",
+    "hash": "while-countdown-positive-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int",
+          "range": [
+            -3,
+            7
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": false
+    },
+    "cases": [
+      {
+        "id": "negative",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json"
+      },
+      {
+        "id": "zero",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json"
+      },
+      {
+        "id": "one",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json"
+      },
+      {
+        "id": "three",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json"
+      },
+      {
+        "id": "seven",
+        "input_ref": "cases[4]",
+        "expected_ref": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-while-countdown-positive-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-while-countdown-positive-rust-report.json",
+    "diff": "validation/evidence/demo/l3-while-countdown-positive-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-while-countdown-positive-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-while-countdown-positive-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-while-countdown-positive-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-while-countdown-positive-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-while-countdown-positive-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-while-countdown-positive-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/while_countdown_positive.rs",
+    "public_api": [
+      {
+        "name": "while_countdown_positive",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/while_countdown_positive.rs",
+    "api_name": "while_countdown_positive",
+    "test_file": "validation/l2_slices/tests/while_countdown_positive.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No break, continue, goto, switch, do-while, or for-loop claim.",
+      "No pointer, aliasing, struct, array, or external callee behavior.",
+      "No INT_MAX stress case; fixture inputs are bounded to keep the C oracle fast."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general CFG relooper support",
+      "whole-program control-flow coverage",
+      "signed arithmetic overflow equivalence outside the committed bounded fixture"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No break, continue, goto, switch, do-while, or for-loop claim.",
+    "No pointer, aliasing, struct, array, or external callee behavior.",
+    "No INT_MAX stress case; fixture inputs are bounded to keep the C oracle fast."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.scalar_arithmetic_contract",
+    "c_boundary.structured_control_flow_contract",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/while-countdown-positive/l3-while-countdown-positive-translator-input.json",
+    "sha256": "ba521937424c193cb233c54334f0817752179844d6b63fc00ca91c2fe33eb6b4",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-while-countdown-positive-20260708",
+    "slice_spec_sha256=ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+    "fixture_hash=while-countdown-positive-fixture",
+    "build_profile_hash=dbecd7a4dad5547eaee09644cf2eb9a288369f84c7bb3efc56fdc4681bec80f5",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "f4c757e8ff06f3dcdf0ebd7cc8fccf259b599ac1",
+  "schema_version": 1,
+  "slice_id": "while-countdown-positive",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-while-countdown-positive.json",
+    "sha256": "ec2690d4d97efec478c428cfd5d498fb83baeaffd7c068c8e02a1d2b56068c9c",
+    "status": "ready"
+  },
+  "source_commit": "demo-while-countdown-positive-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}
