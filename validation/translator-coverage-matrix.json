@@ -2678,7 +2678,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make now has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence; this counts only for that bound named slice and does not generalize record-field semantic acceptance.",
+          "scope_note": "real-fdb-blob-make has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence. The refreshed real-fdb-kv-set exact generated draft now consumes accepted named-slice record-field evidence to emit a non-opaque FdbBlob and passes the uninitialized-DB return-code fixture gates. These count only for their bound named slices and do not generalize record-field semantic acceptance, layout/ABI proof, or initialized KV semantics.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
@@ -2700,6 +2700,24 @@
             {
               "name": "real-fdb-blob-make unsafe ledger",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-unsafe-ledger.json"
+            },
+            {
+              "name": "real-fdb-kv-set final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-final-verification.json",
+              "proof_class": "generated_draft_acceptance_bound_named_slice_fixture"
+            },
+            {
+              "name": "real-fdb-kv-set C/Rust diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-set negative diff",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-set generated Rust draft with non-opaque FdbBlob",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
+              "proof_class": "candidate_context_with_bound_fixture_semantic_acceptance"
             }
           ]
         },
@@ -2736,6 +2754,21 @@
               "proof_class": "translator_input_preserves_accepted_named_slice_evidence"
             },
             {
+              "name": "real-fdb-kv-set validation profile with non-opaque FdbBlob draft acceptance",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json",
+              "proof_class": "committed_l1_generated_draft_acceptance_bound_fixture"
+            },
+            {
+              "name": "real-fdb-kv-set clang lowering report with accepted named-slice record fields",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-clang-lowering-report.json",
+              "proof_class": "committed_clang_lowering_record_field_enrichment"
+            },
+            {
+              "name": "real-fdb-kv-set rust check with fixture-bound external callee context",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/rust-check.json",
+              "proof_class": "committed_rust_check_passed_fixture_bound_external_context"
+            },
+            {
               "name": "real-fdb-blob-make rust check",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/rust-check.json",
               "proof_class": "committed_rust_check_passed"
@@ -2756,7 +2789,7 @@
               "proof_class": "committed_wsl_local_simulation_matched_not_oracle"
             }
           ],
-          "reason": "committed L1 candidate_generated provenance plus Rust compile/replay fixture evidence and fixture-bound C harness diagnostic execution exists; accepted semantic C oracle/diff evidence remains a separate gap"
+          "reason": "committed named-slice candidate provenance plus Rust compile/replay, accepted C oracle/diff evidence, and fixture-bound replay evidence now exist for the bounded fdb_blob_make and real-fdb-kv-set slices; initialized KV semantics, external callee semantics, and general record layout/ABI remain separate gaps"
         }
       },
       "positive_cases": [
@@ -3567,7 +3600,7 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route, and real-fdb-kv-del now has named-slice generated_draft_acceptance evidence for the uninitialized-DB return-code fixture after accepted C oracle, Rust replay, schema diff, negative diff, unsafe, and final gates pass. This does not generalize to strlen-, strnlen-, memory-function-specific semantics or the initialized delete path.",
+          "scope_note": "Existing C/Rust diff evidence covers the generic demo direct-call expression route. real-fdb-kv-del and real-fdb-kv-set now have named-slice generated_draft_acceptance evidence for their uninitialized-DB return-code fixtures after accepted C oracle, Rust replay, schema diff, negative diff, unsafe, and final gates pass. This does not generalize to strlen-, strnlen-, memory-function-specific semantics, external callee semantics, or initialized KV set/delete paths.",
           "evidence": [
             {
               "name": "call expression diff evidence",
@@ -3592,6 +3625,21 @@
             {
               "name": "real-fdb-kv-del negative diff",
               "path": "validation/evidence/flashdb/l3-real-fdb-kv-del-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-kv-set accepted final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-final-verification.json",
+              "proof_class": "generated_draft_acceptance_bound_named_slice_fixture"
+            },
+            {
+              "name": "real-fdb-kv-set generated replay report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-test-translation-generated.json",
+              "proof_class": "fixture_bound_external_callee_replay"
+            },
+            {
+              "name": "real-fdb-kv-set rust-check external callee context",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/rust-check.json",
+              "proof_class": "fixture_bound_external_callee_context"
             }
           ]
         },
@@ -3601,7 +3649,7 @@
         },
         "route_evidence": {
           "status": "covered",
-          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. real-fdb-kv-del is now a recorded L1 named-slice route with generated_draft_acceptance passed for the bound uninitialized-DB fixture; strlen-, strnlen-, memory-function-specific semantics and initialized kv-del semantics still require separate named-slice gates.",
+          "scope_note": "Existing route evidence covers the generic demo direct-call expression route. real-fdb-kv-del and real-fdb-kv-set are recorded L1 named-slice routes with generated_draft_acceptance passed for their bound uninitialized-DB fixtures; strlen-, strnlen-, memory-function-specific semantics, external callee semantics, and initialized KV set/delete semantics still require separate named-slice gates.",
           "evidence": [
             {
               "name": "call expression route decision",
@@ -3618,6 +3666,18 @@
             {
               "name": "real-fdb-kv-del final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-del/l3-real-fdb-kv-del-final-verification.json"
+            },
+            {
+              "name": "real-fdb-kv-set route decision",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-route-decision.json"
+            },
+            {
+              "name": "real-fdb-kv-set validation profile",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-kv-set final verification",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-final-verification.json"
             }
           ]
         }

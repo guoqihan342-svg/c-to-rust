@@ -59,6 +59,66 @@
         "source": "src/fdb_kvdb.c#fdb_kv_del"
       }
     ],
+    "external_direct_callees": [
+      {
+        "definition_status": "stdlib_model_pending_named_slice_evidence",
+        "name": "strlen",
+        "signature_ref": "sig-stdlib-strlen",
+        "source_files": [
+          {
+            "path": "stdlib/string.h",
+            "sha256": "stdlib-symbolic-source"
+          }
+        ],
+        "source_ref": "stdlib:string.h#strlen",
+        "stub_boundary": "blocked_until_readonly_string_contract"
+      },
+      {
+        "accepted_named_slice_evidence": {
+          "boundary": "This validates fdb_blob_make through accepted named-slice evidence only; it does not validate the fdb_kv_set caller or its generated Rust draft.",
+          "final_verification": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
+          "slice_id": "real-fdb-blob-make",
+          "target_id": "flashdb"
+        },
+        "definition_status": "real_source_bound",
+        "name": "fdb_blob_make",
+        "signature_ref": "sig-fdb-blob-make",
+        "source_files": [
+          {
+            "path": "src/fdb_utils.c",
+            "sha256": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+          }
+        ],
+        "source_ref": "src/fdb_utils.c#fdb_blob_make",
+        "stub_boundary": "blocked_until_callee_semantics_verified"
+      },
+      {
+        "definition_status": "real_source_bound",
+        "name": "fdb_kv_set_blob",
+        "signature_ref": "sig-fdb-kv-set-blob",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#fdb_kv_set_blob",
+        "stub_boundary": "blocked_until_callee_semantics_verified"
+      },
+      {
+        "definition_status": "real_source_bound",
+        "name": "fdb_kv_del",
+        "signature_ref": "sig-fdb-kv-del",
+        "source_files": [
+          {
+            "path": "src/fdb_kvdb.c",
+            "sha256": "f917a62faaa28bca738d9cd0b115e791e2d2a333ad0530fca8ba558a3750a030"
+          }
+        ],
+        "source_ref": "src/fdb_kvdb.c#fdb_kv_del",
+        "stub_boundary": "blocked_until_callee_semantics_verified"
+      }
+    ],
     "signatures": [
       {
         "c_source": "fdb_err_t fdb_kv_set(fdb_kvdb_t db, const char *key, const char *value)\n{\n    struct fdb_blob blob;\n\n    if (value) {\n        return fdb_kv_set_blob(db, key, fdb_blob_make(&blob, value, strlen(value)));\n    } else {\n        return fdb_kv_del(db, key);\n    }\n}",

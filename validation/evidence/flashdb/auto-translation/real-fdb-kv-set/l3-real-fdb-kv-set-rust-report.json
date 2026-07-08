@@ -11,7 +11,7 @@
   },
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-    "sha256": "255abf2007c398e8da99bf4178435478278d4fe1789db57441f454f9e6451dff",
+    "sha256": "5a15bf6159ade278458f9bec4449c068c0f8f82417a1ef012e12ec9d06a4fae0",
     "status": "accepted_after_gates"
   },
   "generated_draft_semantic_pass": false,
@@ -74,8 +74,8 @@
           "diff": "69f18cade3382380bfab9aa0e29673a10737878bb26b22e1598e6f35900045fe",
           "negative_diff": "3b552de26ebbab5d01656feaf40e2b8869e73554e67fae0339a167e3ff4e5ed2",
           "rust_report": "720ec308798ebfad87a670c2fccb9e0e4783af301eac4b9adbc129faf9743256",
-          "unsafe_ledger": "2c5d7304b360d9a7fba3726af35baa587860eaffd38016c7a31cb67dd1ac7dc6",
-          "unsafe_scan": "4dd3cbe3b4d88e53444a4de87d94de24e9300caac9b1e8bb1b97f7f92b606d6d"
+          "unsafe_ledger": "8872b7c933ecaaf848fbf8f50ae422bb8a95ebabf4c4c8ea1cd41fcece98d208",
+          "unsafe_scan": "dc796e99774302d2723981b59706fab41d419c12d3abe08eb8546f864a6a8861"
         },
         "paths": {
           "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-set-c-oracle.json",
@@ -127,10 +127,10 @@
       "generated_draft_replay_pass": true,
       "generated_draft_semantic_pass": true,
       "replay_execution": {
-        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-7quya7vp/generated_replay.rs -o /tmp/c2r-generated-replay-7quya7vp/generated_replay.exe",
+        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-zez7kgv7/generated_replay.rs -o /tmp/c2r-generated-replay-zez7kgv7/generated_replay.exe",
         "compile_returncode": 0,
         "phase": "run",
-        "run_command": "/tmp/c2r-generated-replay-7quya7vp/generated_replay.exe --nocapture",
+        "run_command": "/tmp/c2r-generated-replay-zez7kgv7/generated_replay.exe --nocapture",
         "run_returncode": 0,
         "status": "passed",
         "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/generated-rust-replay.stderr.log",
@@ -142,7 +142,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-rust-draft.rs",
-        "sha256": "255abf2007c398e8da99bf4178435478278d4fe1789db57441f454f9e6451dff",
+        "sha256": "5a15bf6159ade278458f9bec4449c068c0f8f82417a1ef012e12ec9d06a4fae0",
         "status": "accepted_after_gates"
       },
       "schema_version": 1,
@@ -156,16 +156,16 @@
     "known_gaps": [],
     "level": "L3",
     "replay_execution": {
-      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-7quya7vp/generated_replay.rs -o /tmp/c2r-generated-replay-7quya7vp/generated_replay.exe",
+      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-zez7kgv7/generated_replay.rs -o /tmp/c2r-generated-replay-zez7kgv7/generated_replay.exe",
       "compile_returncode": 0,
       "phase": "run",
-      "run_command": "/tmp/c2r-generated-replay-7quya7vp/generated_replay.exe --nocapture",
+      "run_command": "/tmp/c2r-generated-replay-zez7kgv7/generated_replay.exe --nocapture",
       "run_returncode": 0,
       "status": "passed",
       "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/generated-rust-replay.stderr.log",
       "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/generated-rust-replay.stdout.log"
     },
-    "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
+    "repo_commit": "d24a3ff4ebabae513faf5f4dacc77a2cff4ed242",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_kv_set",

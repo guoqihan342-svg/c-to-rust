@@ -475,7 +475,7 @@
   "fixture": "validation/l2_slices/fixtures/real-fdb-kv-set.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
+  "repo_commit": "d24a3ff4ebabae513faf5f4dacc77a2cff4ed242",
   "schema_version": 1,
   "signature_bindings": [
     {

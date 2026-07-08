@@ -19,8 +19,8 @@
     },
     "frontend": "clang_ast_dump_json",
     "hash_algorithm": "sha256",
-    "rust_draft_sha256": "255abf2007c398e8da99bf4178435478278d4fe1789db57441f454f9e6451dff",
-    "typed_ir_sha256": "3fe5a667001397aad5d38f39e2e52774fefab72290a0274941b23c2f6fc33f16"
+    "rust_draft_sha256": "5a15bf6159ade278458f9bec4449c068c0f8f82417a1ef012e12ec9d06a4fae0",
+    "typed_ir_sha256": "e645d1f5fc015533aa7252689a922adb6781257a4606fbf3db400bbcf485f10e"
   },
   "errors": [],
   "fixture_hash": "real-fdb-kv-set-fixture",
@@ -31,7 +31,7 @@
       "-Isources/FlashDB/inc",
       "-Isources/FlashDB/tests",
       "--slice-source-from-spec",
-      "<host>/c2r-slice-source-flashdb-real-fdb-kv-set-68389.c",
+      "<host>/c2r-slice-source-flashdb-real-fdb-kv-set-86403.c",
       "src/fdb_kvdb.c"
     ],
     "clang_path": "<host>/clang",
@@ -63,19 +63,41 @@
                 "Record": {
                   "fields": [
                     {
-                      "name": "_c2r_opaque",
+                      "name": "buf",
                       "ty": {
-                        "canonical": "uint8_t",
+                        "canonical": "void *",
+                        "is_const": false,
+                        "kind": {
+                          "Pointer": {
+                            "pointee": {
+                              "canonical": "void",
+                              "is_const": false,
+                              "kind": "Void",
+                              "source_span": null,
+                              "spelled": "void",
+                              "width_bits": null
+                            }
+                          }
+                        },
+                        "source_span": null,
+                        "spelled": "void *",
+                        "width_bits": null
+                      }
+                    },
+                    {
+                      "name": "size",
+                      "ty": {
+                        "canonical": "size_t",
                         "is_const": false,
                         "kind": {
                           "Integer": {
                             "signed": false,
-                            "width": 8
+                            "width": 64
                           }
                         },
                         "source_span": null,
-                        "spelled": "unsigned char",
-                        "width_bits": 8
+                        "spelled": "size_t",
+                        "width_bits": 64
                       }
                     }
                   ],
@@ -282,19 +304,41 @@
                                           "Record": {
                                             "fields": [
                                               {
-                                                "name": "_c2r_opaque",
+                                                "name": "buf",
                                                 "ty": {
-                                                  "canonical": "uint8_t",
+                                                  "canonical": "void *",
+                                                  "is_const": false,
+                                                  "kind": {
+                                                    "Pointer": {
+                                                      "pointee": {
+                                                        "canonical": "void",
+                                                        "is_const": false,
+                                                        "kind": "Void",
+                                                        "source_span": null,
+                                                        "spelled": "void",
+                                                        "width_bits": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_span": null,
+                                                  "spelled": "void *",
+                                                  "width_bits": null
+                                                }
+                                              },
+                                              {
+                                                "name": "size",
+                                                "ty": {
+                                                  "canonical": "size_t",
                                                   "is_const": false,
                                                   "kind": {
                                                     "Integer": {
                                                       "signed": false,
-                                                      "width": 8
+                                                      "width": 64
                                                     }
                                                   },
                                                   "source_span": null,
-                                                  "spelled": "unsigned char",
-                                                  "width_bits": 8
+                                                  "spelled": "size_t",
+                                                  "width_bits": 64
                                                 }
                                               }
                                             ],
@@ -320,19 +364,41 @@
                                             "Record": {
                                               "fields": [
                                                 {
-                                                  "name": "_c2r_opaque",
+                                                  "name": "buf",
                                                   "ty": {
-                                                    "canonical": "uint8_t",
+                                                    "canonical": "void *",
+                                                    "is_const": false,
+                                                    "kind": {
+                                                      "Pointer": {
+                                                        "pointee": {
+                                                          "canonical": "void",
+                                                          "is_const": false,
+                                                          "kind": "Void",
+                                                          "source_span": null,
+                                                          "spelled": "void",
+                                                          "width_bits": null
+                                                        }
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "void *",
+                                                    "width_bits": null
+                                                  }
+                                                },
+                                                {
+                                                  "name": "size",
+                                                  "ty": {
+                                                    "canonical": "size_t",
                                                     "is_const": false,
                                                     "kind": {
                                                       "Integer": {
                                                         "signed": false,
-                                                        "width": 8
+                                                        "width": 64
                                                       }
                                                     },
                                                     "source_span": null,
-                                                    "spelled": "unsigned char",
-                                                    "width_bits": 8
+                                                    "spelled": "size_t",
+                                                    "width_bits": 64
                                                   }
                                                 }
                                               ],
@@ -447,19 +513,41 @@
                                       "Record": {
                                         "fields": [
                                           {
-                                            "name": "_c2r_opaque",
+                                            "name": "buf",
                                             "ty": {
-                                              "canonical": "uint8_t",
+                                              "canonical": "void *",
+                                              "is_const": false,
+                                              "kind": {
+                                                "Pointer": {
+                                                  "pointee": {
+                                                    "canonical": "void",
+                                                    "is_const": false,
+                                                    "kind": "Void",
+                                                    "source_span": null,
+                                                    "spelled": "void",
+                                                    "width_bits": null
+                                                  }
+                                                }
+                                              },
+                                              "source_span": null,
+                                              "spelled": "void *",
+                                              "width_bits": null
+                                            }
+                                          },
+                                          {
+                                            "name": "size",
+                                            "ty": {
+                                              "canonical": "size_t",
                                               "is_const": false,
                                               "kind": {
                                                 "Integer": {
                                                   "signed": false,
-                                                  "width": 8
+                                                  "width": 64
                                                 }
                                               },
                                               "source_span": null,
-                                              "spelled": "unsigned char",
-                                              "width_bits": 8
+                                              "spelled": "size_t",
+                                              "width_bits": 64
                                             }
                                           }
                                         ],
@@ -651,9 +739,9 @@
     "readonly_globals": [],
     "runtime_preconditions": [],
     "rust_draft_generated": true,
-    "rust_draft_sha256": "255abf2007c398e8da99bf4178435478278d4fe1789db57441f454f9e6451dff",
+    "rust_draft_sha256": "5a15bf6159ade278458f9bec4449c068c0f8f82417a1ef012e12ec9d06a4fae0",
     "semantic_pass": false,
     "status": "generated",
-    "typed_ir_sha256": "3fe5a667001397aad5d38f39e2e52774fefab72290a0274941b23c2f6fc33f16"
+    "typed_ir_sha256": "e645d1f5fc015533aa7252689a922adb6781257a4606fbf3db400bbcf485f10e"
   }
 }

@@ -9,8 +9,8 @@
       "diff": "69f18cade3382380bfab9aa0e29673a10737878bb26b22e1598e6f35900045fe",
       "negative_diff": "3b552de26ebbab5d01656feaf40e2b8869e73554e67fae0339a167e3ff4e5ed2",
       "rust_report": "720ec308798ebfad87a670c2fccb9e0e4783af301eac4b9adbc129faf9743256",
-      "unsafe_ledger": "2c5d7304b360d9a7fba3726af35baa587860eaffd38016c7a31cb67dd1ac7dc6",
-      "unsafe_scan": "4dd3cbe3b4d88e53444a4de87d94de24e9300caac9b1e8bb1b97f7f92b606d6d"
+      "unsafe_ledger": "8872b7c933ecaaf848fbf8f50ae422bb8a95ebabf4c4c8ea1cd41fcece98d208",
+      "unsafe_scan": "dc796e99774302d2723981b59706fab41d419c12d3abe08eb8546f864a6a8861"
     },
     "paths": {
       "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-set-c-oracle.json",
@@ -51,7 +51,7 @@
   "config_header": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-set/l3-real-fdb-kv-set-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "8233d6716757d769dee86b887030433092cbcf8d8b3c7aa6b22cecea8eebb6c5"
+    "sha256": "1f39203934fa5991e1428ce270516e191ea8b9cf37539e725ffeb22eae7ae472"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -68,7 +68,7 @@
     "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics."
   ],
   "profile_id": "flashdb-real-fdb-kv-set-real-source",
-  "repo_commit": "c3b3f205d6c1698df232be5ea052c9bab9500389",
+  "repo_commit": "d24a3ff4ebabae513faf5f4dacc77a2cff4ed242",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],
