@@ -1,0 +1,44 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/implicit_integer_noop_cast_ast.json",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "int identity_noop(int value) { return value; }",
+  "fixture_hash": "implicit-integer-noop-cast-fixture",
+  "function_name": "identity_noop",
+  "function_source_span": {
+    "byte_end": 49,
+    "byte_start": 0,
+    "file": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+    "line_end": 3,
+    "line_start": 1,
+    "sha256": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+  },
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_file": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/implicit-integer-noop-cast.c": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+      "role": "source",
+      "sha256": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+    }
+  ],
+  "source_root": ".",
+  "target_id": "demo"
+}

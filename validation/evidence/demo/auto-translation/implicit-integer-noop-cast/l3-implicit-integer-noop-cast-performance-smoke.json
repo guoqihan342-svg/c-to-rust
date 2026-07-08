@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-performance-smoke.json",
+    "sha256": "5dc82e225a44c14bbe120543a7f10eef6fcfb1b5e2069f4a48affdbe60dff871",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "implicit-integer-noop-cast",
+  "status": "recorded",
+  "target_id": "demo"
+}

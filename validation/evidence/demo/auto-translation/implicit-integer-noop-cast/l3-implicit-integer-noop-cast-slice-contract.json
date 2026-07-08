@@ -1,0 +1,98 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+        "role": "source",
+        "sha256": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+      }
+    ],
+    "functions": [
+      "identity_noop"
+    ],
+    "implicit_cast_contract": {
+      "cast_kind": "NoOp",
+      "requires_explicit_ir_cast": true,
+      "source_context": "return conversion",
+      "source_type": "int",
+      "target_type": "int",
+      "value_preserving": true
+    },
+    "signatures": [
+      {
+        "c_source": "int identity_noop(int value) { return value; }",
+        "function": "identity_noop",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 2147483647,
+              "minimum": -2147483648
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 49,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+          "line_end": 3,
+          "line_start": 1,
+          "sha256": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general implicit cast support",
+      "target-dependent integer conversion coverage",
+      "floating-point or pointer cast lowering"
+    ],
+    "non_goals": [
+      "No numeric value-changing cast claim.",
+      "No floating-point, pointer, enum, or target-dependent integer cast claim.",
+      "No pointer, aliasing, struct, or external callee behavior.",
+      "No whole-program migration claim."
+    ]
+  },
+  "fixture": {
+    "hash": "implicit-integer-noop-cast-fixture",
+    "path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "identity_noop",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/implicit_integer_noop_cast.rs",
+    "module_path": "validation/l2_slices/src/implicit_integer_noop_cast.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "identity_noop",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/implicit_integer_noop_cast.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

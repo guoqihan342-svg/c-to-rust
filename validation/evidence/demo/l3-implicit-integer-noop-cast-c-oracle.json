@@ -1,0 +1,67 @@
+{
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "return_value": -2147483648,
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -1,
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 1,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max",
+      "return_value": 2147483647,
+      "status": "ok",
+      "value": 2147483647
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No numeric value-changing cast claim.",
+    "No floating-point, pointer, enum, or target-dependent integer cast claim.",
+    "No pointer, aliasing, struct, or external callee behavior.",
+    "No whole-program migration claim."
+  ],
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+      "validation/l2_slices/tools/generate_implicit_integer_noop_cast_oracle.py"
+    ],
+    "functions": [
+      "identity_noop"
+    ],
+    "signature": "int identity_noop(int value)"
+  },
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

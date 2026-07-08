@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror implicit_integer_noop_cast_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+  "helper_stdout_sha256": "beabd2cf49a6292eeba5621b8a91e5fc1791e8ea7b492997f496e2431826f91d",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./implicit_integer_noop_cast_oracle",
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_hashes": {
+    "c_helper": "d496e6a45badd4db50326bba8cabf7da7fc18573367d9cb283eba1df340332bc",
+    "generator": "09d8f3603cf3a05f6bd562a6d9ed565b6f737ab3a153ee8a6d933479f5fb6f36"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

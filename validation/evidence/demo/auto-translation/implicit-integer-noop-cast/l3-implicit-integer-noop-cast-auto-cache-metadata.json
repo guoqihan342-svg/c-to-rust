@@ -1,0 +1,178 @@
+{
+  "alias_gate_identity": {
+    "alias_set_count": 0,
+    "aliasing_proven": false,
+    "decision": "not_applicable",
+    "precondition_count": 0,
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "build_profile_hash": "4a8ebe3bfd3b6f570981e2635ccdd9f6df0f109ac55af594fd9b603036938918",
+  "c2rust_baseline_identity": {
+    "sha256": "35040f7febc6a9686b918f51e9d5d87137f5f7f79dada875682c5781ea2a1e03",
+    "status": "skipped"
+  },
+  "c_oracle_harness_identity": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c-oracle-harness-draft.c",
+    "sha256": "c39d948b4d344996e9bcd7cb151065f926090d129efee382dbab77e4b2d39ef6",
+    "status": "draft"
+  },
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "competition_environment_identity",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+    "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "clang_lowering_identity": {
+    "clang_path": "",
+    "clang_path_status": "not_configured",
+    "clang_version": "not_configured",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-implicit-integer-noop-cast.json",
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report"
+  ],
+  "competition_environment_identity": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "dependent_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-baseline-manifest.json",
+      "sha256": "6679a2792d803a7e2aa3a8bca2021295d9f3cf70ee57e127a25b21715238c930",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json",
+      "sha256": "c7e119bbd3431c050a5da40c1261f2476fc44eee052aca5e49b9395ec65789b9",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "cd77c1f3ff05ea818f3a461346265f0d15df966e633c5d34ca0f9c8313c0995d",
+      "status": "passed"
+    }
+  },
+  "effect_graph_identity": {
+    "alias_gate_decision": "not_applicable",
+    "alias_sensitive": false,
+    "read_effect_count": 0,
+    "read_nodes": [],
+    "schema_version": 2,
+    "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+    "write_effect_count": 0,
+    "write_nodes": []
+  },
+  "fixture_hash": "implicit-integer-noop-cast-fixture",
+  "global_dependency_identity": {
+    "count": 0,
+    "names": [],
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "rust_replay",
+    "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+    "auto_translation_manifest",
+    "summary"
+  ],
+  "oracle_boundary_contract_identity": {
+    "sha256": "cc0e77380d3a6c2aa6fb1ab3bc9e9e0ecaf6d27de6510247998e5b03b30b8836",
+    "status": "sufficient_for_semantic_pass"
+  },
+  "route_decision_identity": {
+    "sha256": "c2dd9e0e17dcf17dd37b8bb5c86c360c3e643841fe9d1b01333c715139072ce1",
+    "status": "recorded"
+  },
+  "scalar_ub_contract_identity": {
+    "sha256": "c38e77c2798fe0569483cd96c88b0f3cc0b44317aab36ae6bc03a1a770c55bba",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 2,
+    "type_map": 1
+  },
+  "slice_id": "implicit-integer-noop-cast",
+  "slice_spec_sha256": "5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/implicit-integer-noop-cast.c": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+  "translator_version": "0.1.0",
+  "validation_profile_identity": {
+    "sha256": "d7b2064e6d9812da5e5374c463c5ff9f02586491a830ecc6a4bbb7b4a547ebfb",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "implicit integer NoOp cast return conversion",
+      "negative input identity",
+      "zero input identity",
+      "positive input identity",
+      "i32 low/high boundaries"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test implicit_integer_noop_cast",
+      "file": "validation/l2_slices/tests/implicit_integer_noop_cast.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "implicit_integer_noop_cast_matches_c_oracle_with_identity_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "implicit-integer-noop-cast-fixture",
+        "operation_count": 5,
+        "path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the implicit integer NoOp cast C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/implicit_integer_noop_cast.rs::implicit_integer_noop_cast_matches_c_oracle_with_identity_boundary",
+      "source": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}

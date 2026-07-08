@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "cap-implicit-integer-noop-cast-typed_ir_zero_token_deterministic",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json",
+        "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "implicit-integer-noop-cast",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "gov-implicit-integer-noop-cast-typed_ir_zero_token_deterministic-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json",
+        "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L0",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-implicit-integer-noop-cast-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/implicit-integer-noop-cast.c": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

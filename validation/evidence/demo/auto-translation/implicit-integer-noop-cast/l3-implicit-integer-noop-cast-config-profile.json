@@ -1,0 +1,93 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+    "fixture_sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+      "diff": "15bde2aa334a4fcb4d42ee0afa91d7d6e32f6ace637ab5baf171c9cd4e4c103d",
+      "final_verification": "a406eb4b1b00e5df322678b2586d090ebcb907f46c1e2677f22ed98522d91780",
+      "negative_diff": "b9e1f87023fdf80f9332c1070e3117228249adb9b8e634551a517077acddd0ba",
+      "performance_smoke": "5dc82e225a44c14bbe120543a7f10eef6fcfb1b5e2069f4a48affdbe60dff871",
+      "rust_report": "71bfc2f70ad02f5f77071e184976fa52d2a5cb371336ac3a96163a24aed1c104",
+      "unsafe_ledger": "e9a2b17d4f56068577dfd7a175bec9fe6be773720a86a0681418c8de0e9d262d",
+      "unsafe_scan": "e7ad71b37ac2540e4cd6bc501783e764c57ed6142ae9fe925149d1cfae61bbb4",
+      "version_manifest": "2640f2f5ce085ebd5a1e43ada27acd8a86a448f647a172137019746198298ad9"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json",
+      "final_verification": "validation/evidence/demo/l3-implicit-integer-noop-cast-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-implicit-integer-noop-cast-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-implicit-integer-noop-cast-version-manifest.json"
+    },
+    "slice_id": "implicit-integer-noop-cast",
+    "source_commit": "demo-implicit-integer-noop-cast-20260708",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-implicit-integer-noop-cast-20260708",
+    "slice_spec_sha256=5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385",
+    "fixture_hash=implicit-integer-noop-cast-fixture",
+    "build_profile_hash=4a8ebe3bfd3b6f570981e2635ccdd9f6df0f109ac55af594fd9b603036938918",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/l2_slices/fixtures/implicit-integer-noop-cast.c"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "e70f6227553a20312eac5e0f1fe205323410b7ae55aa55e5e5da3c0a221dff8e"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "implicit-integer-noop-cast-fixture",
+    "operation_count": 5,
+    "path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No numeric value-changing cast claim.",
+    "No floating-point, pointer, enum, or target-dependent integer cast claim.",
+    "No pointer, aliasing, struct, or external callee behavior.",
+    "No whole-program migration claim."
+  ],
+  "profile_id": "demo-implicit-integer-noop-cast-wsl-gcc",
+  "repo_commit": "4c2838fe64c417b8fb925013b616d036e75293d6",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "case_id": "int-min",
+  "expected_failure": true,
+  "first_mismatch": {
+    "case_id": "int-min",
+    "field": "return_value",
+    "mutated_c_value": -2147483647,
+    "rust_value": -2147483648
+  },
+  "level": "L3",
+  "mutation": "first oracle case return_value is changed by +1",
+  "mutation_detected": true,
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "expected_failed",
+  "target_id": "demo"
+}

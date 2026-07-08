@@ -1,0 +1,17 @@
+{
+  "target_id": "demo",
+  "slice_id": "implicit-integer-noop-cast",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-auto-translation-plan.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-auto-translation-events.jsonl",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-type-map.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-cfg.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-pointer-graph.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-ai-candidate-manifest.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-blocked-repairs.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-rust-draft.rs",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-clang-dry-run.json",
+    "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-clang-lowering-report.json"
+  ]
+}

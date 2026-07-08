@@ -1,0 +1,424 @@
+{
+  "accepted_evidence_authoritative": false,
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-baseline-manifest.json",
+        "sha256": "6679a2792d803a7e2aa3a8bca2021295d9f3cf70ee57e127a25b21715238c930",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-baseline-manifest.json",
+          "sha256": "6679a2792d803a7e2aa3a8bca2021295d9f3cf70ee57e127a25b21715238c930",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L0",
+        "status": "not_refused"
+      },
+      "route_level": "L0",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "81118cad0368dfe8b515460248370da08129a1ff0110763ce50c4ff7d94f5bb0",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-clang-lowering-report.json",
+        "sha256": "b6e345468740ce6245a7b60e25433d3d678e39a803a888373b745356a56860d4",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "f0fb7a65e9fd522ac0a2f15ce84e2a7d7d9e076750634df73752c1b6e19e9328"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+      "fixture_sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+        "diff": "15bde2aa334a4fcb4d42ee0afa91d7d6e32f6ace637ab5baf171c9cd4e4c103d",
+        "final_verification": "a406eb4b1b00e5df322678b2586d090ebcb907f46c1e2677f22ed98522d91780",
+        "negative_diff": "b9e1f87023fdf80f9332c1070e3117228249adb9b8e634551a517077acddd0ba",
+        "performance_smoke": "5dc82e225a44c14bbe120543a7f10eef6fcfb1b5e2069f4a48affdbe60dff871",
+        "rust_report": "71bfc2f70ad02f5f77071e184976fa52d2a5cb371336ac3a96163a24aed1c104",
+        "unsafe_ledger": "e9a2b17d4f56068577dfd7a175bec9fe6be773720a86a0681418c8de0e9d262d",
+        "unsafe_scan": "e7ad71b37ac2540e4cd6bc501783e764c57ed6142ae9fe925149d1cfae61bbb4",
+        "version_manifest": "2640f2f5ce085ebd5a1e43ada27acd8a86a448f647a172137019746198298ad9"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+        "diff": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json",
+        "final_verification": "validation/evidence/demo/l3-implicit-integer-noop-cast-final-verification.json",
+        "negative_diff": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json",
+        "performance_smoke": "validation/evidence/demo/l3-implicit-integer-noop-cast-performance-smoke.json",
+        "rust_report": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+        "unsafe_ledger": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-scan.json",
+        "version_manifest": "validation/evidence/demo/l3-implicit-integer-noop-cast-version-manifest.json"
+      },
+      "slice_id": "implicit-integer-noop-cast",
+      "source_commit": "demo-implicit-integer-noop-cast-20260708",
+      "status": "accepted",
+      "target_id": "demo",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+        "sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json",
+        "sha256": "b9e1f87023fdf80f9332c1070e3117228249adb9b8e634551a517077acddd0ba",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+        "sha256": "71bfc2f70ad02f5f77071e184976fa52d2a5cb371336ac3a96163a24aed1c104",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json",
+        "sha256": "15bde2aa334a4fcb4d42ee0afa91d7d6e32f6ace637ab5baf171c9cd4e4c103d",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+        "sha256": "e9a2b17d4f56068577dfd7a175bec9fe6be773720a86a0681418c8de0e9d262d",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-scan.json",
+        "sha256": "e7ad71b37ac2540e4cd6bc501783e764c57ed6142ae9fe925149d1cfae61bbb4",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-ytqtmob5\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-ytqtmob5\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-ytqtmob5\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-rust-draft.rs",
+      "sha256": "81118cad0368dfe8b515460248370da08129a1ff0110763ce50c4ff7d94f5bb0",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "implicit-integer-noop-cast",
+    "source_commit": "demo-implicit-integer-noop-cast-20260708",
+    "status": "passed",
+    "target_id": "demo"
+  },
+  "generated_draft_semantic_pass": true,
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "negative_diff",
+    "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
+    "kani"
+  ],
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/l2_slices/fixtures/implicit-integer-noop-cast.c",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 5,
+      "case_source": "fixture_contract",
+      "declared_case_count": 5,
+      "fixture_hash": "implicit-integer-noop-cast-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering",
+        "fixture binds a clang-proven implicit integer NoOp return conversion and explicit LValueToRValue operand"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
+      "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
+  "profile": "L0-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "C_ORACLE_GENERATED",
+    "compile": "passed"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff"
+  ],
+  "route_level": "L0",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "general implicit cast support",
+        "target-dependent integer conversion coverage",
+        "floating-point or pointer cast lowering"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": true,
+      "parameters": [
+        {
+          "name": "value",
+          "range": [
+            -2147483648,
+            2147483647
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_gates": [],
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-implicit-integer-noop-cast-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/implicit-integer-noop-cast.c": "82e95d204df1416e9913c1facc692ed2a7f363fdf85da50769e7d98c296487c5"
+    },
+    "source_root": "."
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

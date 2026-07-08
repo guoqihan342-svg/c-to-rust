@@ -1,0 +1,53 @@
+{
+  "c_source_boundary": "int identity_noop(int value) { return value; }",
+  "cargo_test_status": "passed",
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "return_value": -2147483648,
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -1,
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 1,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max",
+      "return_value": 2147483647,
+      "status": "ok",
+      "value": 2147483647
+    }
+  ],
+  "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test implicit_integer_noop_cast",
+  "fixture": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/implicit_integer_noop_cast.rs",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

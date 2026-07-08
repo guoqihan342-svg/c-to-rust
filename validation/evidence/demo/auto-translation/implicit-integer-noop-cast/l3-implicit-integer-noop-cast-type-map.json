@@ -1,0 +1,52 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-translator-input.json",
+    "sha256": "e70f6227553a20312eac5e0f1fe205323410b7ae55aa55e5e5da3c0a221dff8e",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-implicit-integer-noop-cast-20260708",
+    "slice_spec_sha256=5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385",
+    "fixture_hash=implicit-integer-noop-cast-fixture",
+    "build_profile_hash=4a8ebe3bfd3b6f570981e2635ccdd9f6df0f109ac55af594fd9b603036938918",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "4c2838fe64c417b8fb925013b616d036e75293d6",
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-implicit-integer-noop-cast.json",
+    "sha256": "5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385",
+    "status": "ready"
+  },
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

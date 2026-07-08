@@ -6,6 +6,7 @@ pub mod enum_constant;
 pub mod external_direct_callee;
 pub mod fdb_blob_make;
 pub mod fdb_calc_crc32;
+pub mod implicit_integer_noop_cast;
 pub mod libuv_ip4_addr;
 pub mod scalar_div_rem_contract;
 pub mod signed_rshift_contract;

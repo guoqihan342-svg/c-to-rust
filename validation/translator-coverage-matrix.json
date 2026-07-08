@@ -650,7 +650,7 @@
     },
     {
       "id": "implicit-cast-boundary",
-      "status": "partial",
+      "status": "covered",
       "ir_constructs": [
         "ImplicitCastExpr",
         "IntegralCast explicit typed IR cast in preserved value contexts",
@@ -783,20 +783,72 @@
             {
               "name": "clang_ast_fixture_replays_integral_c_style_cast_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "implicit-integer-noop-cast generated Rust draft",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-rust-draft.rs"
+            },
+            {
+              "name": "implicit-integer-noop-cast generated draft replay",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-test-translation-generated.json"
             }
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "implicit-cast skeleton hardening is not a named-slice C/Rust differential gate"
+          "status": "covered",
+          "scope_note": "Covered for the named implicit-integer-noop-cast slice only: clang-proven int-to-int NoOp return conversion with a value-preserving i32 identity boundary.",
+          "evidence": [
+            {
+              "name": "implicit-integer-noop-cast C oracle",
+              "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast Rust replay report",
+              "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast schema-aware C/Rust diff",
+              "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast negative diff",
+              "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast unsafe ledger",
+              "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast generated draft final verification",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact named implicit integer NoOp cast slice"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
           "reason": "clang AST skeleton cast handling does not call the legacy string translator"
         },
         "route_evidence": {
-          "status": "gap",
-          "reason": "expression-level clang frontend unit tests do not produce route-decision evidence"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "implicit-integer-noop-cast route decision",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast validation profile",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast capability delta",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-capability-delta.json"
+            },
+            {
+              "name": "implicit-integer-noop-cast evidence manifest",
+              "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-evidence-manifest.json"
+            }
+          ]
         }
       },
       "positive_cases": [
@@ -815,6 +867,14 @@
         {
           "name": "clang_ast_fixture_replays_implicit_integer_noop_cast_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "implicit-integer-noop-cast named-slice L3 evidence validator",
+          "path": "validation/tools/test_implicit_integer_noop_cast_l3_evidence.py"
+        },
+        {
+          "name": "implicit-integer-noop-cast L2 Rust replay",
+          "path": "validation/l2_slices/tests/implicit_integer_noop_cast.rs"
         },
         {
           "name": "clang_ast_fixture_replays_integer_lvalue_to_rvalue_return_without_clang",

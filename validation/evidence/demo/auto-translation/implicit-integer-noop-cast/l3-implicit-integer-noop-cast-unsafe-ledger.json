@@ -1,0 +1,31 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+    "sha256": "e9a2b17d4f56068577dfd7a175bec9fe6be773720a86a0681418c8de0e9d262d",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-baseline-manifest.json",
+    "sha256": "6679a2792d803a7e2aa3a8bca2021295d9f3cf70ee57e127a25b21715238c930",
+    "status": "skipped"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json",
+    "sha256": "c7e119bbd3431c050a5da40c1261f2476fc44eee052aca5e49b9395ec65789b9",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "cd77c1f3ff05ea818f3a461346265f0d15df966e633c5d34ca0f9c8313c0995d",
+    "status": "passed"
+  }
+}

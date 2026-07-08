@@ -1,0 +1,57 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-implicit-integer-noop-cast-20260708",
+    "slice_spec_sha256=5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385",
+    "fixture_hash=implicit-integer-noop-cast-fixture",
+    "build_profile_hash=4a8ebe3bfd3b6f570981e2635ccdd9f6df0f109ac55af594fd9b603036938918",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "validation/l2_slices/fixtures/implicit-integer-noop-cast.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/implicit_integer_noop_cast.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "4c2838fe64c417b8fb925013b616d036e75293d6",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "implicit-integer-noop-cast",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-implicit-integer-noop-cast.json",
+    "sha256": "5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/implicit-integer-noop-cast.c"
+    ],
+    "functions": [
+      "identity_noop"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "demo"
+}

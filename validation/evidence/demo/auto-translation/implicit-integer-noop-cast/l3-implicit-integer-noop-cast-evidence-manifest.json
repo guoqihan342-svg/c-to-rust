@@ -1,0 +1,271 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+        "fixture_sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+          "diff": "15bde2aa334a4fcb4d42ee0afa91d7d6e32f6ace637ab5baf171c9cd4e4c103d",
+          "final_verification": "a406eb4b1b00e5df322678b2586d090ebcb907f46c1e2677f22ed98522d91780",
+          "negative_diff": "b9e1f87023fdf80f9332c1070e3117228249adb9b8e634551a517077acddd0ba",
+          "performance_smoke": "5dc82e225a44c14bbe120543a7f10eef6fcfb1b5e2069f4a48affdbe60dff871",
+          "rust_report": "71bfc2f70ad02f5f77071e184976fa52d2a5cb371336ac3a96163a24aed1c104",
+          "unsafe_ledger": "e9a2b17d4f56068577dfd7a175bec9fe6be773720a86a0681418c8de0e9d262d",
+          "unsafe_scan": "e7ad71b37ac2540e4cd6bc501783e764c57ed6142ae9fe925149d1cfae61bbb4",
+          "version_manifest": "2640f2f5ce085ebd5a1e43ada27acd8a86a448f647a172137019746198298ad9"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json",
+          "final_verification": "validation/evidence/demo/l3-implicit-integer-noop-cast-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-implicit-integer-noop-cast-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-implicit-integer-noop-cast-version-manifest.json"
+        },
+        "slice_id": "implicit-integer-noop-cast",
+        "source_commit": "demo-implicit-integer-noop-cast-20260708",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+          "sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-negative-diff.json",
+          "sha256": "b9e1f87023fdf80f9332c1070e3117228249adb9b8e634551a517077acddd0ba",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-rust-report.json",
+          "sha256": "71bfc2f70ad02f5f77071e184976fa52d2a5cb371336ac3a96163a24aed1c104",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-diff.json",
+          "sha256": "15bde2aa334a4fcb4d42ee0afa91d7d6e32f6ace637ab5baf171c9cd4e4c103d",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+          "sha256": "e9a2b17d4f56068577dfd7a175bec9fe6be773720a86a0681418c8de0e9d262d",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-unsafe-scan.json",
+          "sha256": "e7ad71b37ac2540e4cd6bc501783e764c57ed6142ae9fe925149d1cfae61bbb4",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-ytqtmob5\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-ytqtmob5\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-ytqtmob5\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-rust-draft.rs",
+        "sha256": "81118cad0368dfe8b515460248370da08129a1ff0110763ce50c4ff7d94f5bb0",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "implicit-integer-noop-cast",
+      "source_commit": "demo-implicit-integer-noop-cast-20260708",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [
+      "No numeric value-changing cast claim.",
+      "No floating-point, pointer, enum, or target-dependent integer cast claim.",
+      "No pointer, aliasing, struct, or external callee behavior.",
+      "No whole-program migration claim.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general implicit cast support",
+      "target-dependent integer conversion coverage",
+      "floating-point or pointer cast lowering",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-baseline-manifest.json",
+      "sha256": "6679a2792d803a7e2aa3a8bca2021295d9f3cf70ee57e127a25b21715238c930",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c-oracle-status.json",
+      "sha256": "f799fe3c11096ddd22eca02826e34b1c730fd6d12d6c36884bb7b62d5b478e0f",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-auto-cache-metadata.json",
+      "sha256": "7a600707d714bcb8a3acd000952d40ca3f24b7d1f2869be379a334d8dadf1854",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-clang-lowering-report.json",
+      "sha256": "b6e345468740ce6245a7b60e25433d3d678e39a803a888373b745356a56860d4",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-config-profile.json",
+      "profile_id": "demo-implicit-integer-noop-cast-wsl-gcc",
+      "sha256": "ae197a5d2b1a87d505039599e97de48378d96d83d66d5aef22554f31dffd0973",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-context-pack.json",
+      "sha256": "06e11d341ed01914d0da93b441d2522b15d7a07a3322639842b454889eb78a22",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-final-verification.json",
+      "sha256": "d1b977ee6fb58f6dff95287cc7a4682a2432899225a819252ae5ee5480fb8518",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-negative-diff.json",
+      "sha256": "d4b688e2b87659b8d1efb7ab98750a38cd42c2eff2fbb7e7f54f9b6ca325df01",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "630f88066ed543c3b54e5a902115c296047036aba250e43dbca4c6665eab3635",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-pointer-graph.json",
+      "sha256": "f369ad766e6d0626aff48cabfa2bcd65ef21b4e4a1235ecfbfc42c7908fef05f",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json",
+      "sha256": "c7e119bbd3431c050a5da40c1261f2476fc44eee052aca5e49b9395ec65789b9",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/rust-check.json",
+      "sha256": "9e4422b91fd6d2fe5db77c15d3d9e5370915f3b038197369fa8dac293a1ef384",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-rust-report.json",
+      "sha256": "a01f144b0523eeaf946ad021c4c14b03d5ac4a9d2b6a9de456e7bc65a31a6dc9",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-diff.json",
+      "sha256": "6324f1ee7f712650795c5155298161f8b008c134f53479ae4b77c908d148dab0",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-slice-contract.json",
+      "sha256": "4d712f15b3857bf7e1945b8acd5b49d2b6df6f164d92a108e8369a15b21aad70",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-summary.json",
+      "sha256": "16922c9794bc9e28efdf1f8f0c9cd7064f954f512bcb99ca54f352903c59185c",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-test-translation-generated.json",
+      "sha256": "ceec3f57cebc404eb38a6013ec333d079f1370b95ea4dc2d9dd67fd896b699a9",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-unsafe-ledger.json",
+      "sha256": "b6df6ad6c210a1aae454281564a7fb14c024c95e8313fda7f4e3a0c6742b0c02",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-unsafe-scan.json",
+      "sha256": "bd824e5531b8a92c408621912706596d3dda6a570195dc3c6cd3cbea16a8b68b",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "cd77c1f3ff05ea818f3a461346265f0d15df966e633c5d34ca0f9c8313c0995d",
+      "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-verified-unsafe-baseline.json",
+      "sha256": "8ec5bd7cf3c8c9fab1aa970aaaed9686d9df732f4c3ca0a2f2ecd0c0430e1607",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-version-manifest.json",
+      "sha256": "f0f49123de4486ebaa35cd06a914a54139f3cdb14584062044821e70328a3146",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "implicit-integer-noop-cast-fixture",
+    "operation_count": 5,
+    "path": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "4c2838fe64c417b8fb925013b616d036e75293d6",
+  "schema_version": 1,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

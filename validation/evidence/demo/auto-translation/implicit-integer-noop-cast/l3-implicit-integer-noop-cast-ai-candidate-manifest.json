@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c2rust-baseline-manifest.json",
+    "sha256": "6679a2792d803a7e2aa3a8bca2021295d9f3cf70ee57e127a25b21715238c930",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-implicit-integer-noop-cast-20260708",
+    "slice_spec_sha256=5356a3847e2ad593674ed2bb8f8c16b5b70e020d0b534385a4e6c7d775d79385",
+    "fixture_hash=implicit-integer-noop-cast-fixture",
+    "build_profile_hash=4a8ebe3bfd3b6f570981e2635ccdd9f6df0f109ac55af594fd9b603036938918",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-route-decision.json",
+    "sha256": "c7e119bbd3431c050a5da40c1261f2476fc44eee052aca5e49b9395ec65789b9",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "implicit-integer-noop-cast",
+  "status": "not_used",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "cd77c1f3ff05ea818f3a461346265f0d15df966e633c5d34ca0f9c8313c0995d",
+    "status": "passed"
+  }
+}

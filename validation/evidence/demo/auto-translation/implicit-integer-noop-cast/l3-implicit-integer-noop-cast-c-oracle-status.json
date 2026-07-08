@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-implicit-integer-noop-cast-c-oracle.json",
+    "sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 5,
+  "fixture": "validation/l2_slices/fixtures/implicit-integer-noop-cast-c-oracle.json",
+  "fixture_sha256": "1a89b17c53d59461b0d967ffd80179157a6eba6b209c9e452d6cb978e9be4bee",
+  "harness_draft": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/implicit-integer-noop-cast/l3-implicit-integer-noop-cast-c-oracle-harness-draft.c",
+    "sha256": "c39d948b4d344996e9bcd7cb151065f926090d129efee382dbab77e4b2d39ef6",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "implicit-integer-noop-cast",
+  "source_commit": "demo-implicit-integer-noop-cast-20260708",
+  "source_slice_id": "implicit-integer-noop-cast",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}
