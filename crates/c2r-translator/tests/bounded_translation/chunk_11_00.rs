@@ -215,6 +215,65 @@ fdb_blob_t make_blob_typedef(fdb_blob_t blob, const void *value, size_t len) {\n
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
 #[ignore = "requires real clang AST smoke test opt-in"]
+fn clang_ast_dump_emits_readonly_record_pointer_raw_pointer_field_return_when_enabled() {
+    let clang_path = real_clang_ast_test_setup();
+    let out_dir = unique_out_dir("clang-real-readonly-record-pointer-raw-field-return");
+    fs::create_dir_all(&out_dir).unwrap();
+    let source_file = out_dir.join("readonly_record_pointer_raw_field_return.c");
+    fs::write(
+        &source_file,
+        "#include <stddef.h>\n#include <stdint.h>\n\
+struct fdb_blob { uint8_t *buf; size_t size; };\n\
+uint8_t *blob_buf(const struct fdb_blob *blob) { return blob->buf; }\n",
+    )
+    .unwrap();
+    let environment = std::collections::BTreeMap::from([(
+        "CLANG_PATH".to_string(),
+        clang_path.to_string_lossy().into_owned(),
+    )]);
+
+    let report = lower_function_from_clang_ast_dump_report(&environment, &source_file, "blob_buf");
+
+    assert_eq!(report.status, "lowered", "{:?}", report.errors);
+    let function = report.function_ir.as_ref().expect("function ir");
+    let [IrStmt::Return {
+        value:
+            Some(IrExpr::Member {
+                field,
+                is_arrow: true,
+                ..
+            }),
+        ..
+    }] = function.body.as_slice()
+    else {
+        panic!(
+            "expected raw pointer field return from readonly record pointer, got {:?}",
+            function.body
+        );
+    };
+    assert_eq!(field, "buf");
+
+    let emitted = emit_rust_from_ir(function)
+        .expect("emit raw pointer field return from real clang AST");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("pub buf: *mut u8"), "{rust}");
+    assert!(
+        rust.contains("pub fn blob_buf(blob: &FdbBlob) -> *mut u8"),
+        "{rust}"
+    );
+    assert!(rust.contains("return blob.buf;"), "{rust}");
+    assert_rust_snippet_compiles(
+        "typed-ir-real-clang-readonly-record-pointer-raw-field-return",
+        rust,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
+#[ignore = "requires real clang AST smoke test opt-in"]
 fn clang_ast_dump_emits_mutable_record_pointer_field_read_after_assignment_when_enabled() {
     let clang_path = real_clang_ast_test_setup();
     let out_dir = unique_out_dir("clang-real-mutable-record-pointer-field-read-after-assignment");

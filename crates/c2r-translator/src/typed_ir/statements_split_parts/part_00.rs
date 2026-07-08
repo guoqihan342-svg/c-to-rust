@@ -218,6 +218,14 @@ fn emit_stmt(
                 {
                     return Ok(line);
                 }
+                if let Some(line) = emit_record_pointer_field_raw_pointer_return(
+                    value,
+                    return_type,
+                    indent_level,
+                    symbols,
+                )? {
+                    return Ok(line);
+                }
                 if count_post_increment_byte_reads(value) > 1 {
                     return Err("multiple post-increment byte reads are unsupported".to_string());
                 }

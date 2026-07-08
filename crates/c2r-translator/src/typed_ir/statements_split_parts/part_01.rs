@@ -195,6 +195,74 @@ fn emit_function_pointer_decay_return(
     Ok(Some(format!("{indent}return {value};\n")))
 }
 
+fn emit_record_pointer_field_raw_pointer_return(
+    value: &IrExpr,
+    return_type: &IrType,
+    indent_level: usize,
+    symbols: &HashSet<String>,
+) -> Result<Option<String>, String> {
+    let Some(expected_pointer_ty) = emit_record_pointer_field_type(return_type) else {
+        return Ok(None);
+    };
+    let IrExpr::Member {
+        base,
+        field,
+        ty,
+        is_arrow: true,
+        ..
+    } = value
+    else {
+        return Err(format!(
+            "pointer value return {} requires explicit ownership/lifetime/ABI lowering",
+            type_label(return_type)
+        ));
+    };
+    if ty != return_type {
+        return Err(format!(
+            "record pointer field return type {} does not match function return type {}",
+            type_label(ty),
+            type_label(return_type)
+        ));
+    }
+    let source_pointer_ty = emit_record_pointer_field_type(ty).ok_or_else(|| {
+        format!(
+            "record pointer field return field {field} has unsupported type {}",
+            type_label(ty)
+        )
+    })?;
+    if source_pointer_ty != expected_pointer_ty {
+        return Err(format!(
+            "record pointer field return type {source_pointer_ty} does not match expected type {expected_pointer_ty}"
+        ));
+    }
+    let IrExpr::Var {
+        name: base_name,
+        ty: base_ty,
+        ..
+    } = base.as_ref()
+    else {
+        return Err(
+            "record pointer field return base must be a direct readonly record pointer variable"
+                .to_string(),
+        );
+    };
+    if !symbols.contains(base_name) {
+        return Err(format!(
+            "record pointer field return base {base_name} is not declared"
+        ));
+    }
+    readonly_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "record pointer field return base {base_name} has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    let base_name = emit_identifier(base_name, "record pointer field return base")?;
+    let field = emit_identifier(field, "record pointer field return field")?;
+    let indent = "    ".repeat(indent_level);
+    Ok(Some(format!("{indent}return {base_name}.{field};\n")))
+}
+
 fn emit_function_pointer_decay_assignment(
     target: &IrExpr,
     value: &IrExpr,

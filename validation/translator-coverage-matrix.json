@@ -2301,6 +2301,7 @@
         "record value field read",
         "record field assignment",
         "readonly record pointer field read",
+        "readonly record pointer raw pointer field return",
         "mutable record pointer field write",
         "mutable record pointer opaque void and integer pointer field writes",
         "mutable record pointer non-void pointer field read after definite write",
@@ -2352,6 +2353,11 @@
               "proof_class": "optional_real_clang_smoke"
             },
             {
+              "name": "clang_ast_dump_emits_readonly_record_pointer_raw_pointer_field_return_when_enabled",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_11_00.rs",
+              "proof_class": "optional_real_clang_smoke"
+            },
+            {
               "name": "record_inventory_from_ast_keeps_duplicate_complete_record_definitions_with_same_fields",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             },
@@ -2388,6 +2394,10 @@
             {
               "name": "typed_ir_emits_mutable_record_pointer_nonvoid_pointer_field_read_after_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_readonly_record_pointer_raw_pointer_field_return",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs"
             },
             {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
@@ -2447,6 +2457,11 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_keeps_direct_raw_pointer_return_fail_closed",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs",
+              "fail_closed_reason": "ordinary direct raw pointer returns still require explicit ownership/lifetime/ABI lowering"
+            },
+            {
               "name": "typed_ir_rejects_integer_to_opaque_pointer_field_cast_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2484,6 +2499,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_readonly_record_pointer_raw_pointer_field_return",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs"
+            },
+            {
               "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2516,12 +2535,12 @@
         },
         "c_rust_diff": {
           "status": "covered",
-          "scope_note": "real-fdb-blob-make has L4 accepted-evidence-authoritative semantic pass evidence; generated_draft_semantic_pass remains false and this does not count as translator-generated semantic acceptance.",
+          "scope_note": "real-fdb-blob-make now has generated_draft_semantic_pass=true after generated_draft_acceptance gates plus L4 accepted-evidence-authoritative semantic pass evidence; this counts only for that bound named slice and does not generalize record-field semantic acceptance.",
           "evidence": [
             {
               "name": "real-fdb-blob-make final verification",
               "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json",
-              "proof_class": "accepted_evidence_authoritative_not_generated_draft"
+              "proof_class": "generated_draft_acceptance_bound_named_slice"
             },
             {
               "name": "real-fdb-blob-make C/Rust diff",
@@ -2634,6 +2653,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_readonly_record_pointer_raw_pointer_field_return",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs"
+        },
+        {
           "name": "typed_ir_emits_mutable_record_pointer_opaque_pointer_field_cast_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -2660,6 +2683,11 @@
         {
           "name": "clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "proof_class": "optional_real_clang_smoke"
+        },
+        {
+          "name": "clang_ast_dump_emits_readonly_record_pointer_raw_pointer_field_return_when_enabled",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_11_00.rs",
           "proof_class": "optional_real_clang_smoke"
         }
       ],
@@ -2693,6 +2721,11 @@
           "name": "typed_ir_rejects_mutable_record_pointer_nonvoid_pointer_field_read_before_write",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "non-void pointer field reads are only admitted as raw pointer copies after the same mutable record pointer field has definite write evidence"
+        },
+        {
+          "name": "typed_ir_keeps_direct_raw_pointer_return_fail_closed",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_03.rs",
+          "fail_closed_reason": "ordinary direct raw pointer returns still require explicit ownership/lifetime/ABI lowering"
         },
         {
           "name": "typed_ir_rejects_integer_to_opaque_pointer_field_cast_write",

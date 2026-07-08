@@ -488,3 +488,82 @@ fn typed_ir_emits_local_record_address_passed_to_direct_call() {
         ),
     );
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_readonly_record_pointer_raw_pointer_field_return() {
+    let u8_ty = ir_u8();
+    let mut_u8_ptr_ty = ir_pointer("uint8_t *", "uint8_t *", u8_ty, false);
+    let blob_ty = ir_record_with_fields(
+        "fdb_blob",
+        vec![("buf", mut_u8_ptr_ty.clone()), ("size", ir_usize())],
+    );
+    let const_blob_ptr_ty = ir_pointer(
+        "const struct fdb_blob *",
+        "const struct fdb_blob *",
+        ir_const(blob_ty.clone()),
+        false,
+    );
+    let ir = IrFunction {
+        name: "blob_buf".to_string(),
+        return_type: mut_u8_ptr_ty.clone(),
+        params: vec![IrParam {
+            name: "blob".to_string(),
+            ty: const_blob_ptr_ty,
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(IrExpr::Member {
+                base: Box::new(ir_var("blob", ir_pointer(
+                    "const struct fdb_blob *",
+                    "const struct fdb_blob *",
+                    ir_const(blob_ty),
+                    false,
+                ))),
+                field: "buf".to_string(),
+                ty: mut_u8_ptr_ty,
+                is_arrow: true,
+                source_span: None,
+            }),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("emit readonly record pointer raw field return");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains("pub struct FdbBlob"), "{rust}");
+    assert!(rust.contains("pub buf: *mut u8"), "{rust}");
+    assert!(rust.contains("pub fn blob_buf(blob: &FdbBlob) -> *mut u8"), "{rust}");
+    assert!(rust.contains("return blob.buf;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-readonly-record-pointer-raw-field-return", rust);
+}
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_keeps_direct_raw_pointer_return_fail_closed() {
+    let u8_ty = ir_u8();
+    let mut_u8_ptr_ty = ir_pointer("uint8_t *", "uint8_t *", u8_ty, false);
+    let ir = IrFunction {
+        name: "return_raw_pointer".to_string(),
+        return_type: mut_u8_ptr_ty.clone(),
+        params: vec![IrParam {
+            name: "ptr".to_string(),
+            ty: mut_u8_ptr_ty.clone(),
+            source_span: None,
+        }],
+        body: vec![IrStmt::Return {
+            value: Some(ir_var("ptr", mut_u8_ptr_ty)),
+            source_span: None,
+        }],
+        source_span: None,
+    };
+
+    let error = emit_rust_from_ir(&ir).expect_err("direct raw pointer return must stay closed");
+
+    assert_eq!(error.route.route, CandidateRoute::Unsupported);
+    assert!(error.reason.contains("pointer value return"), "{:?}", error.reason);
+    assert!(error.reason.contains("uint8_t *"), "{:?}", error.reason);
+}

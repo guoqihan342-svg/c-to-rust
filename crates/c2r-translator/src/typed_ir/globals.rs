@@ -65,6 +65,47 @@ fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
     }
 }
 
+fn emit_function_return_type(function: &IrFunction) -> Result<Option<String>, String> {
+    if let Some(pointer_ty) = emit_direct_record_pointer_field_return_type(function)? {
+        return Ok(Some(pointer_ty));
+    }
+    emit_return_type(&function.return_type)
+}
+
+fn emit_direct_record_pointer_field_return_type(
+    function: &IrFunction,
+) -> Result<Option<String>, String> {
+    let Some(pointer_ty) = emit_record_pointer_field_type(&function.return_type) else {
+        return Ok(None);
+    };
+    let Some(IrStmt::Return {
+        value:
+            Some(IrExpr::Member {
+                base,
+                ty,
+                is_arrow: true,
+                ..
+            }),
+        ..
+    }) = function.body.last()
+    else {
+        return Ok(None);
+    };
+    if ty != &function.return_type {
+        return Ok(None);
+    }
+    let IrExpr::Var { ty: base_ty, .. } = base.as_ref() else {
+        return Ok(None);
+    };
+    readonly_record_pointer_pointee_type(base_ty).ok_or_else(|| {
+        format!(
+            "record pointer field return base has unsupported type {}",
+            type_label(base_ty)
+        )
+    })?;
+    Ok(Some(pointer_ty))
+}
+
 fn emit_scalar_type(ty: &IrType) -> Result<String, String> {
     match &ty.kind {
         IrTypeKind::Integer { signed, width } => {

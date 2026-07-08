@@ -76,7 +76,7 @@ fn emit_scalar_rust_from_ir_with_globals_and_policy(
     globals: &[IrGlobal],
     policy: EmitPolicy,
 ) -> Result<String, String> {
-    let return_type = emit_return_type(&function.return_type)?;
+    let return_type = emit_function_return_type(function)?;
     if return_type.is_some() && !ends_with_return_value(&function.body) {
         return Err("non-void function must end with a return value".to_string());
     }
