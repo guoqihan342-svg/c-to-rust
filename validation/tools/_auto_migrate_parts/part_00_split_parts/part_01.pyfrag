@@ -339,16 +339,36 @@ def rust_check_binding_status(callee: dict[str, Any]) -> str:
     return "unknown"
 
 
-def mark_rust_check_binding(callee: dict[str, Any], status: str, signature: str) -> None:
+def mark_rust_check_binding(
+    callee: dict[str, Any],
+    status: str,
+    signature: str,
+    *,
+    allowed_use: str = "rustc_compile_only",
+) -> None:
     callee["rust_check_binding"] = {
         "status": status,
-        "allowed_use": "rustc_compile_only",
+        "allowed_use": allowed_use,
         "signature": signature,
         "semantics_verified": False,
     }
 
 
-def rust_check_harness_only_external_stub(callee: dict[str, Any], text: str) -> str | None:
+def flashdb_kv_set_fixture_model_allowed(spec: dict[str, Any] | None, name: str) -> bool:
+    return (
+        isinstance(spec, dict)
+        and spec.get("target_id") == "flashdb"
+        and spec.get("slice_id") == "real-fdb-kv-set"
+        and behavior_fields(spec) == ["return_code"]
+        and name in {"fdb_blob_make", "fdb_kv_set_blob", "fdb_kv_del"}
+    )
+
+
+def rust_check_harness_only_external_stub(
+    callee: dict[str, Any],
+    text: str,
+    spec: dict[str, Any] | None = None,
+) -> str | None:
     name = rust_identifier(callee["name"])
     if "FdbBlob" not in text:
         return None
@@ -380,6 +400,30 @@ def rust_check_harness_only_external_stub(callee: dict[str, Any], text: str) -> 
     if f"fn {name}(" in text:
         mark_rust_check_binding(callee, "already_present", signature)
         return None
+    if flashdb_kv_set_fixture_model_allowed(spec, name):
+        body_lines = {
+            "fdb_blob_make": [
+                "    blob.buf = value_buf as *mut core::ffi::c_void;",
+                "    blob.size = buf_len;",
+                "    blob",
+            ],
+            "fdb_kv_set_blob": [
+                "    let _ = (db, key);",
+                "    let _ = (blob.buf, blob.size);",
+                "    7i32",
+            ],
+            "fdb_kv_del": [
+                "    let _ = (db, key);",
+                "    7i32",
+            ],
+        }[name]
+        mark_rust_check_binding(
+            callee,
+            "fixture_model",
+            signature,
+            allowed_use="fixture_bound_rust_replay_only",
+        )
+        return signature + " {\n" + "\n".join(body_lines) + "\n}"
     body_lines = {
         "fdb_blob_make": [
             "    let _ = (value_buf, buf_len);",
@@ -410,15 +454,20 @@ def rust_check_external_binding_report(context: dict[str, Any]) -> dict[str, Any
         for callee in context.get("declared", [])
         if isinstance(callee.get("rust_check_binding"), dict)
     ]
+    allowed_uses = {str(item["allowed_use"]) for item in bindings}
     return {
-        "status": "emitted" if any(item["status"] == "harness_only" for item in bindings) else "none",
-        "allowed_use": "rustc_compile_only",
+        "status": "emitted" if bindings else "none",
+        "allowed_use": next(iter(allowed_uses)) if len(allowed_uses) == 1 else "mixed",
         "semantics_verified": False,
         "bindings": bindings,
     }
 
 
-def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> bool:
+def inject_external_callee_stubs(
+    draft_path: Path,
+    context: dict[str, Any],
+    spec: dict[str, Any] | None = None,
+) -> bool:
     callees = context.get("declared", [])
     if not callees:
         return False
@@ -431,7 +480,7 @@ def inject_external_callee_stubs(draft_path: Path, context: dict[str, Any]) -> b
             "not_emitted_named_slice_evidence",
             "not_emitted_flashdb_signature_context",
         }:
-            stub = rust_check_harness_only_external_stub(callee, text)
+            stub = rust_check_harness_only_external_stub(callee, text, spec)
             if stub is not None:
                 stubs.append(stub)
             continue

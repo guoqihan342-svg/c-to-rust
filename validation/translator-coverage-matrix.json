@@ -2751,6 +2751,7 @@
         "direct CallExpr",
         "simple function pointer parameter direct call",
         "bounded external callee context",
+        "fixture-bound external callee Rust replay model for real-fdb-kv-set",
         "modeled C assert(int) direct call",
         "modeled C abs(int) direct call with checked runtime precondition",
         "modeled C strlen(const char *) direct call with NUL-termination precondition",
@@ -3054,6 +3055,10 @@
             {
               "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "test_real_fdb_kv_set_fixture_bound_external_model_replay_runs",
+              "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_01.pyfrag"
             }
           ]
         },
@@ -3532,6 +3537,10 @@
         {
           "name": "typed_ir_emits_binary_with_side_effect_call_and_independent_plain_operand",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "test_real_fdb_kv_set_fixture_bound_external_model_replay_runs",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_03_split_parts/part_01.pyfrag"
         }
       ],
       "negative_cases": [
