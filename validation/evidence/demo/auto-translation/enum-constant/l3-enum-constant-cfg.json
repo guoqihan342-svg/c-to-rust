@@ -1,0 +1,93 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "fixture_hash=enum-constant-fixture",
+    "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "return"
+          ],
+          "statements": [
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-0"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "add_status",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int add_status(int value)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "7450e69e37f18c6893677197931bfaf566fb3351",
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-enum-constant.json",
+    "sha256": "da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "status": "ready"
+  },
+  "source_commit": "demo-enum-constant-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

@@ -1777,7 +1777,7 @@
     },
     {
       "id": "enum-constant-subset",
-      "status": "partial",
+      "status": "covered",
       "ir_constructs": [
         "EnumConstantDecl explicit non-negative integer ConstantExpr",
         "DeclRefExpr to EnumConstantDecl rewritten to typed IR integer literal",
@@ -1906,16 +1906,62 @@
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "enum constant/type subset currently has no committed named-slice C/Rust differential gate"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "enum-constant C oracle",
+              "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json"
+            },
+            {
+              "name": "enum-constant Rust replay report",
+              "path": "validation/evidence/demo/l3-enum-constant-rust-report.json"
+            },
+            {
+              "name": "enum-constant schema-aware diff",
+              "path": "validation/evidence/demo/l3-enum-constant-diff.json"
+            },
+            {
+              "name": "enum-constant negative diff",
+              "path": "validation/evidence/demo/l3-enum-constant-negative-diff.json"
+            },
+            {
+              "name": "enum-constant unsafe ledger",
+              "path": "validation/evidence/demo/l3-enum-constant-unsafe-ledger.json"
+            },
+            {
+              "name": "enum-constant final verification",
+              "path": "validation/evidence/demo/l3-enum-constant-final-verification.json"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
           "reason": "enum constant/type subset is clang AST fixture replay only and does not call the legacy string translator"
         },
         "route_evidence": {
-          "status": "gap",
-          "reason": "enum constant/type subset does not yet have committed route-decision evidence"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "enum-constant route decision",
+              "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-route-decision.json"
+            },
+            {
+              "name": "enum-constant validation profile",
+              "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-validation-profile.json"
+            },
+            {
+              "name": "enum-constant generated final verification",
+              "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-final-verification.json"
+            },
+            {
+              "name": "enum-constant capability delta",
+              "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-capability-delta.json"
+            },
+            {
+              "name": "enum-constant clang lowering report",
+              "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-clang-lowering-report.json"
+            }
+          ]
         }
       },
       "positive_cases": [
@@ -1954,6 +2000,14 @@
         {
           "name": "clang_ast_fixture_lowers_enum_local_variable_branch_and_assignment_with_target_abi",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "enum-constant named-slice L3 evidence validator",
+          "path": "validation/tools/test_enum_constant_l3_evidence.py"
+        },
+        {
+          "name": "enum-constant L2 Rust replay",
+          "path": "validation/l2_slices/tests/enum_constant.rs"
         }
       ],
       "negative_cases": [

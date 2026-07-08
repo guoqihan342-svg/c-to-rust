@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "enum-constant",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "add_status",
+  "c_source": "int add_status(int value) { return value + STATUS_OK; }",
+  "source_commit": "demo-enum-constant-20260708",
+  "fixture_hash": "enum-constant-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": ".",
+    "source_commit": "demo-enum-constant-20260708",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/enum-constant.c": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/enum-constant.c",
+        "role": "source",
+        "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+      }
+    ],
+    "functions": [
+      "add_status"
+    ],
+    "signatures": [
+      {
+        "function": "add_status",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": -2147483648,
+              "maximum": 2147483640
+            }
+          }
+        ],
+        "c_source": "int add_status(int value) { return value + STATUS_OK; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/enum-constant.c",
+          "line_start": 2,
+          "line_end": 2,
+          "byte_start": 47,
+          "byte_end": 102,
+          "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+        }
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "global",
+        "name": "STATUS_OK",
+        "value": 7,
+        "source": "validation/l2_slices/fixtures/enum-constant.c"
+      }
+    ],
+    "enum_constant_contract": {
+      "accepted_shapes": [
+        "explicit_i32_enum_constant_in_integer_expression"
+      ],
+      "required_provenance": [
+        "EnumConstantDecl ConstantExpr value",
+        "clang_ast_fixture"
+      ],
+      "unsupported": [
+        "implicit_enum_constant_without_explicit_value",
+        "enum_typed_public_api",
+        "sizeof_enum_layout_without_abi"
+      ]
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared"
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-enum-constant-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/fixtures/enum-constant.c",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json",
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "enum-constant-fixture",
+    "path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+    "hash": "enum-constant-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int",
+          "range": [
+            -2147483648,
+            2147483640
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": false
+    },
+    "cases": [
+      {
+        "id": "int-min",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json"
+      },
+      {
+        "id": "negative",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json"
+      },
+      {
+        "id": "minus-seven",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json"
+      },
+      {
+        "id": "zero",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json"
+      },
+      {
+        "id": "int-max-minus-seven",
+        "input_ref": "cases[4]",
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+    "diff": "validation/evidence/demo/l3-enum-constant-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-enum-constant-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-enum-constant-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-enum-constant-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-enum-constant-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-enum-constant-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/enum_constant.rs",
+    "public_api": [
+      {
+        "name": "add_status",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/enum_constant.rs",
+    "api_name": "add_status",
+    "test_file": "validation/l2_slices/tests/enum_constant.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No implicit enum constant without explicit ConstantExpr value.",
+      "No enum-typed public API or enum layout ABI claim.",
+      "No support for INT_MAX because signed C overflow is undefined behavior.",
+      "No pointer, aliasing, struct, or external callee behavior."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "complete enum type lowering",
+      "sizeof(enum) layout equivalence",
+      "signed overflow equivalence"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No implicit enum constant without explicit ConstantExpr value.",
+    "No enum-typed public API or enum layout ABI claim.",
+    "No support for INT_MAX because signed C overflow is undefined behavior.",
+    "No pointer, aliasing, struct, or external callee behavior."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.enum_constant_contract",
+    "c_boundary.scalar_arithmetic_contract",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

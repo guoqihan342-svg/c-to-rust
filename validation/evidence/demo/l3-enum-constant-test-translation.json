@@ -1,0 +1,86 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "explicit enum constant",
+      "negative values",
+      "zero crossing",
+      "nominal values",
+      "i32 low/high non-overflow boundaries"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-enum-constant-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-enum-constant-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test enum_constant",
+      "file": "validation/l2_slices/tests/enum_constant.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "enum_constant_matches_c_oracle_with_safe_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "enum-constant-fixture",
+        "operation_count": 5,
+        "path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the enum-constant C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/enum_constant.rs::enum_constant_matches_c_oracle_with_safe_boundary",
+      "source": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}

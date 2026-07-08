@@ -1,0 +1,285 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json"
+  ],
+  "durable_evidence": {
+    "clang_path": "",
+    "clang_version": "not_configured",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "e24391a7be53eab62f7303ade985d911c2a8de1392d9dd6785ce1822321f64f0",
+    "typed_ir_sha256": "c3640d074912e733750bf7b369ac796dbef4e6c7ffc28839540a710bbb817751"
+  },
+  "errors": [],
+  "fixture_hash": "enum-constant-fixture",
+  "frontend": "clang",
+  "function_name": "add_status",
+  "lowering_report": {
+    "arguments": [
+      "--ast-json-fixture",
+      "crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json",
+      "validation/l2_slices/fixtures/enum-constant.c"
+    ],
+    "clang_path": null,
+    "diagnostics": [
+      "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_ast_json_fixture",
+    "function_ir": {
+      "body": [
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "Binary": {
+                "lhs": {
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "value",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "source_span": null,
+                    "target": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Add",
+                "rhs": {
+                  "LitInt": {
+                    "source_span": null,
+                    "spelling": "7",
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    },
+                    "value": 7
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "add_status",
+      "params": [
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "add_status",
+    "globals": [
+      {
+        "init": {
+          "IntegerArray": [
+            7,
+            0
+          ]
+        },
+        "name": "status_table",
+        "source_span": null,
+        "ty": {
+          "canonical": "int[2]",
+          "is_const": true,
+          "kind": {
+            "Array": {
+              "element": {
+                "canonical": "int",
+                "is_const": false,
+                "kind": {
+                  "Integer": {
+                    "signed": true,
+                    "width": 32
+                  }
+                },
+                "source_span": null,
+                "spelled": "int",
+                "width_bits": 32
+              },
+              "len": 2
+            }
+          },
+          "source_span": null,
+          "spelled": "const int[2]",
+          "width_bits": null
+        }
+      }
+    ],
+    "source_file": "./validation/l2_slices/fixtures/enum-constant.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json",
+    "compile_commands": null,
+    "function_source_span": {
+      "byte_end": 102,
+      "byte_start": 47,
+      "file": "validation/l2_slices/fixtures/enum-constant.c",
+      "line_end": 2,
+      "line_start": 2,
+      "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+    },
+    "logical_source_file": "validation/l2_slices/fixtures/enum-constant.c",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/enum-constant.c": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+    },
+    "source_root": "."
+  },
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "source_file": "./validation/l2_slices/fixtures/enum-constant.c",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [
+      {
+        "array_len": 2,
+        "canonical_type": "int[2]",
+        "init_kind": "integer_array",
+        "name": "status_table",
+        "spelled_type": "const int[2]",
+        "value_count": 2
+      }
+    ],
+    "runtime_preconditions": [
+      {
+        "code": "signed_add_no_overflow",
+        "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+        "ir_node": "IrExpr::Binary.Add",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      }
+    ],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "e24391a7be53eab62f7303ade985d911c2a8de1392d9dd6785ce1822321f64f0",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "c3640d074912e733750bf7b369ac796dbef4e6c7ffc28839540a710bbb817751"
+  }
+}

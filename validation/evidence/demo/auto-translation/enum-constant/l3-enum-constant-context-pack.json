@@ -1,0 +1,80 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "fixture_hash=enum-constant-fixture",
+    "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "int",
+      "source": "C99"
+    },
+    {
+      "kind": "global",
+      "name": "STATUS_OK",
+      "source": "validation/l2_slices/fixtures/enum-constant.c",
+      "value": 7
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "validation/l2_slices/fixtures/enum-constant.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/enum_constant.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+  "global_dependencies": [
+    {
+      "definition_status": "declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "STATUS_OK",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "",
+      "source": "validation/l2_slices/fixtures/enum-constant.c",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "7450e69e37f18c6893677197931bfaf566fb3351",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "enum-constant",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-enum-constant.json",
+    "sha256": "da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/enum-constant.c"
+    ],
+    "functions": [
+      "add_status"
+    ],
+    "globals": [
+      "STATUS_OK"
+    ],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-enum-constant-20260708",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "demo"
+}

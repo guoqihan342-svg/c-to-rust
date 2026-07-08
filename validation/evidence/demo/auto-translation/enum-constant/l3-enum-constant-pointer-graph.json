@@ -1,0 +1,43 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "fixture_hash=enum-constant-fixture",
+    "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "context_pack_ref": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "slice has no pointer surface",
+  "repo_commit": "7450e69e37f18c6893677197931bfaf566fb3351",
+  "schema_version": 2,
+  "slice_id": "enum-constant",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/enum-constant.c"
+    ],
+    "functions": [
+      "add_status"
+    ],
+    "globals": [
+      "STATUS_OK"
+    ],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-enum-constant-20260708",
+  "status": "not_applicable",
+  "target_id": "demo"
+}

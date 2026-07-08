@@ -1,0 +1,44 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c2rust-baseline-manifest.json",
+    "sha256": "86038380286314179549939700ddaccc0fda0815e2f379ae51fada2176529aea",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-ylbikyi6 F:\\agent\\crustpaper\\0630\\validation\\evidence\\demo\\auto-translation\\enum-constant\\l3-enum-constant-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-route-decision.json",
+    "sha256": "751fb5447e00a823a599e13f5550c0f6abf76f99d22fd75b3e0f8b4de10cca47",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "rustc_compile_only",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "d8dd4dd04d124dd6013186c636e3a9e017b86db205c69ba248aa1a58108cf078",
+    "status": "passed"
+  }
+}

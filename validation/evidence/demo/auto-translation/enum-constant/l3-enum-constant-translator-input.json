@@ -1,0 +1,54 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/enum_constant_ast.json",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/enum-constant.c",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    }
+  },
+  "c_source": "int add_status(int value) { return value + STATUS_OK; }",
+  "fixture_hash": "enum-constant-fixture",
+  "function_name": "add_status",
+  "function_source_span": {
+    "byte_end": 102,
+    "byte_start": 47,
+    "file": "validation/l2_slices/fixtures/enum-constant.c",
+    "line_end": 2,
+    "line_start": 2,
+    "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+  },
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "source_file": "validation/l2_slices/fixtures/enum-constant.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/enum-constant.c": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/enum-constant.c",
+      "role": "source",
+      "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+    }
+  ],
+  "source_root": ".",
+  "target_id": "demo"
+}

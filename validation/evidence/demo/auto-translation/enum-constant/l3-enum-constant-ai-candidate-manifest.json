@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c2rust-baseline-manifest.json",
+    "sha256": "86038380286314179549939700ddaccc0fda0815e2f379ae51fada2176529aea",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "fixture_hash=enum-constant-fixture",
+    "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-route-decision.json",
+    "sha256": "751fb5447e00a823a599e13f5550c0f6abf76f99d22fd75b3e0f8b4de10cca47",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "enum-constant",
+  "status": "not_used",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "d8dd4dd04d124dd6013186c636e3a9e017b86db205c69ba248aa1a58108cf078",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror enum_constant_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+  "helper_stdout_sha256": "a470af6bc1850bde3083e10ae68ee3d712871b182c1b854948aaae192fa8e77d",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./enum_constant_oracle",
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "source_hashes": {
+    "c_helper": "1d5dbb4b52c6aeabec7b1d04547add39eb7064777f2339547633b9dbc8a0b94a",
+    "generator": "19cc40309f09133b83abc6f3a15636ea0943c9a1b7ea6096ad34c22ba34b2378"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

@@ -1,0 +1,381 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+    "sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 5,
+  "compile_command_draft": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "l3-enum-constant-c-oracle-harness-draft.c",
+      "validation/l2_slices/fixtures/enum-constant.c",
+      "-o",
+      "l3-enum-constant-c-oracle-harness-draft.exe"
+    ],
+    "defines": [],
+    "link_source_files": [
+      {
+        "path": "validation/l2_slices/fixtures/enum-constant.c",
+        "resolution": "declared_path",
+        "resolved_path": "validation/l2_slices/fixtures/enum-constant.c",
+        "role": "source",
+        "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+      }
+    ],
+    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "oracle_source_mode": "declared_c_boundary_sources",
+    "resolved_include_paths": [],
+    "source_root": ".",
+    "status": "draft_not_executed",
+    "working_directory": "validation/evidence/demo/auto-translation/enum-constant"
+  },
+  "compile_execution": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "l3-enum-constant-c-oracle-harness-draft.c",
+      "validation/l2_slices/fixtures/enum-constant.c",
+      "-o",
+      "l3-enum-constant-c-oracle-harness-draft.exe"
+    ],
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
+    ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command succeeded, but execution/diff gates are still required."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/enum-constant && /usr/bin/cc -std=c99 /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/validation/l2_slices/fixtures/enum-constant.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.exe"
+    ],
+    "harness_execution": {
+      "argv": [
+        "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "diagnostics": [
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
+      ],
+      "executable_path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.exe",
+      "execution_argv": [
+        "C:\\WINDOWS\\system32\\wsl.exe",
+        "-e",
+        "sh",
+        "-lc",
+        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/enum-constant && /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.exe"
+      ],
+      "output_gate": {
+        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+        "compared_fields": [
+          "return_value",
+          "status"
+        ],
+        "diagnostics": [
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+        ],
+        "expected_stdout_fragments": [
+          "fixture case int-min return_value matched",
+          "fixture case int-min status matched",
+          "fixture case negative return_value matched",
+          "fixture case negative status matched",
+          "fixture case minus-seven return_value matched",
+          "fixture case minus-seven status matched",
+          "fixture case zero return_value matched",
+          "fixture case zero status matched",
+          "fixture case int-max-minus-seven return_value matched",
+          "fixture case int-max-minus-seven status matched"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
+        "gate": "c_oracle_harness_output",
+        "matched_stdout_fragments": [
+          "fixture case int-min return_value matched",
+          "fixture case int-min status matched",
+          "fixture case negative return_value matched",
+          "fixture case negative status matched",
+          "fixture case minus-seven return_value matched",
+          "fixture case minus-seven status matched",
+          "fixture case zero return_value matched",
+          "fixture case zero status matched",
+          "fixture case int-max-minus-seven return_value matched",
+          "fixture case int-max-minus-seven status matched"
+        ],
+        "missing_stdout_fragments": [],
+        "schema_version": 1,
+        "semantic_pass": false,
+        "status": "matched_not_oracle"
+      },
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for add_status\nfixture input: validation/l2_slices/fixtures/enum-constant-c-oracle.json\nfixture case int-min return_value matched\nfixture case int-min status matched\nfixture case negative return_value matched\nfixture case negative status matched\nfixture case minus-seven return_value matched\nfixture case minus-seven status matched\nfixture case zero return_value matched\nfixture case zero status matched\nfixture case int-max-minus-seven return_value matched\nfixture case int-max-minus-seven status matched\n",
+      "timeout_seconds": 30,
+      "toolchain_adapter": "wsl",
+      "working_directory": "validation/evidence/demo/auto-translation/enum-constant"
+    },
+    "requested_compiler": "cc",
+    "returncode": 0,
+    "semantic_pass": false,
+    "status": "compile_succeeded_not_oracle",
+    "stderr": "",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    "working_directory": "validation/evidence/demo/auto-translation/enum-constant"
+  },
+  "fixture": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+  "fixture_binding": {
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ],
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": -2147483641,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "id": "int-min",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": -5,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "id": "negative",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 0,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "id": "minus-seven",
+        "input_ref": "cases[2]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 7,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "id": "zero",
+        "input_ref": "cases[3]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 2147483647,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "id": "int-max-minus-seven",
+        "input_ref": "cases[4]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      }
+    ],
+    "case_count": 5,
+    "expected_output_status": "declared_not_executed",
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json"
+  },
+  "fixture_sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+  "global_linkage_requirements": [
+    {
+      "definition_status": "declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "STATUS_OK",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "",
+      "source": "validation/l2_slices/fixtures/enum-constant.c",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      }
+    }
+  ],
+  "harness_contract": {
+    "fixture": {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": -2147483641,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "id": "int-min",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": -5,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "id": "negative",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 0,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "id": "minus-seven",
+          "input_ref": "cases[2]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 7,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "id": "zero",
+          "input_ref": "cases[3]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 2147483647,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "id": "int-max-minus-seven",
+          "input_ref": "cases[4]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        }
+      ],
+      "case_count": 5,
+      "expected_output_status": "declared_not_executed",
+      "observable_outputs": [
+        "return_value",
+        "status"
+      ],
+      "path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json"
+    },
+    "function_prototype": "int add_status(int value);",
+    "global_dependencies": [
+      {
+        "definition_status": "declared",
+        "kind": "global",
+        "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+        "name": "STATUS_OK",
+        "semantic_status": "required_before_acceptance",
+        "sha256": "",
+        "source": "validation/l2_slices/fixtures/enum-constant.c",
+        "source_span": {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      }
+    ],
+    "oracle_harness_includes": [],
+    "oracle_source_mode": "declared_c_boundary_sources",
+    "source_files": [
+      {
+        "path": "validation/l2_slices/fixtures/enum-constant.c",
+        "role": "source",
+        "sha256": "60bbacccf6d22b3e1af75672e9bd5a6e8f219e83cb24c81b5cf2f49d5bf97389"
+      }
+    ],
+    "status": "draft_requires_review"
+  },
+  "harness_draft": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.c",
+    "sha256": "061d3f9f0f16a0aa2d95fa04a415d78f6026a77c25cfe27f796039a29baa9c16",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "source_slice_id": "enum-constant",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

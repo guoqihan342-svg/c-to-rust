@@ -1,0 +1,177 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c2rust-baseline-manifest.json",
+    "sha256": "86038380286314179549939700ddaccc0fda0815e2f379ae51fada2176529aea",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "fixture_hash=enum-constant-fixture",
+    "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-cfg.json",
+      "status": "recorded"
+    },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-context-pack.json",
+      "status": "not_applicable"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/demo-enum-constant.json",
+      "sha256": "da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "7450e69e37f18c6893677197931bfaf566fb3351",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-route-decision.json",
+    "sha256": "751fb5447e00a823a599e13f5550c0f6abf76f99d22fd75b3e0f8b4de10cca47",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "status": "draft_generated",
+  "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {},
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "d8dd4dd04d124dd6013186c636e3a9e017b86db205c69ba248aa1a58108cf078",
+    "status": "passed"
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

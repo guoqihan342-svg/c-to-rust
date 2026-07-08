@@ -1,0 +1,53 @@
+{
+  "c_source_boundary": "enum status { STATUS_OK = 7, STATUS_PENDING }; int add_status(int value) { return value + STATUS_OK; }",
+  "cargo_test_status": "passed",
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "return_value": -2147483641,
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -5,
+      "status": "ok",
+      "value": -12
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "minus-seven",
+      "return_value": 0,
+      "status": "ok",
+      "value": -7
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 7,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max-minus-seven",
+      "return_value": 2147483647,
+      "status": "ok",
+      "value": 2147483640
+    }
+  ],
+  "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test enum_constant",
+  "fixture": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/enum_constant.rs",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

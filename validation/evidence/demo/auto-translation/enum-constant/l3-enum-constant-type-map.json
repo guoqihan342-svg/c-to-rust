@@ -1,0 +1,67 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-translator-input.json",
+    "sha256": "660a3975da0cd58e98bf3bd0b88ceba576740272ced2408d8e35a7d62b579a51",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "fixture_hash=enum-constant-fixture",
+    "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [
+    {
+      "definition_status": "declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "STATUS_OK",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "",
+      "source": "validation/l2_slices/fixtures/enum-constant.c",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      }
+    }
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "7450e69e37f18c6893677197931bfaf566fb3351",
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-enum-constant.json",
+    "sha256": "da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+    "status": "ready"
+  },
+  "source_commit": "demo-enum-constant-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

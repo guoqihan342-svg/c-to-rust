@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-enum-constant-performance-smoke.json",
+    "sha256": "33d57e20738534dd2091b50bf691197131798ce3aea1c6cbe1f03b4a59e5e52d",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "enum-constant",
+  "status": "recorded",
+  "target_id": "demo"
+}

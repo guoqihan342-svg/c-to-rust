@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-enum-constant-20260708",
+    "fixture_hash=enum-constant-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "enum-constant",
+  "status": "none",
+  "target_id": "demo"
+}

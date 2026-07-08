@@ -1,0 +1,282 @@
+{
+  "accepted_rust_report": {
+    "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+    "sha256": "cf81f2695bb69e5b1b734ea46fefd0a1a874ae578ddab625cb0cf26bbf2f0668",
+    "status": "passed"
+  },
+  "case_count": 5,
+  "fixture": {
+    "path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+    "sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca"
+  },
+  "generated_draft": {
+    "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-draft.rs",
+    "sha256": "e24391a7be53eab62f7303ade985d911c2a8de1392d9dd6785ce1822321f64f0",
+    "status": "accepted_after_gates"
+  },
+  "generated_draft_semantic_pass": false,
+  "replay": {
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ],
+    "cache_invalidation_keys": [
+      "source_commit=demo-enum-constant-20260708",
+      "slice_spec_sha256=da724b65c249dbfe0a259744e37380a21336e16df666fec7545862cf7c065f30",
+      "fixture_hash=enum-constant-fixture",
+      "build_profile_hash=d38fb5edfa803338b1553b604aff0e2fc8ee3e2e8dd478455a68730005dbd89a",
+      "translator_version=0.1.0",
+      "schema_version=1"
+    ],
+    "coverage": {
+      "error_paths": [],
+      "main_paths": [
+        "return_value",
+        "status"
+      ],
+      "negative_cases": [
+        "negative diff must be generated before acceptance"
+      ]
+    },
+    "evidence_links": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+        "sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+        "sha256": "37b679415d7e510136a302134271bbede68c10a2450cc0c6464d2436f8e707ca",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-draft.rs",
+        "status": "accepted_after_gates"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+        "sha256": "cf81f2695bb69e5b1b734ea46fefd0a1a874ae578ddab625cb0cf26bbf2f0668",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-enum-constant-diff.json",
+        "sha256": "ef9ea4b932557f7d6f881d97f5ac226841f822873ebde422cd65e6597804fca8",
+        "status": "passed"
+      }
+    },
+    "fixture": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+        "fixture_sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+          "diff": "ef9ea4b932557f7d6f881d97f5ac226841f822873ebde422cd65e6597804fca8",
+          "final_verification": "9bc257332064bc12b80441e4638be58dd4bddade7ed6e7c611021da3513a21b1",
+          "negative_diff": "37b679415d7e510136a302134271bbede68c10a2450cc0c6464d2436f8e707ca",
+          "performance_smoke": "33d57e20738534dd2091b50bf691197131798ce3aea1c6cbe1f03b4a59e5e52d",
+          "rust_report": "cf81f2695bb69e5b1b734ea46fefd0a1a874ae578ddab625cb0cf26bbf2f0668",
+          "unsafe_ledger": "17e196a037adddf56ca4ed6705fa336d9280ce5923525dafab086b2a2d260b36",
+          "unsafe_scan": "ab5e7735245c366bb7e0159621adc67bba321273d529fd8861196b632937cce9",
+          "version_manifest": "fbed6194f41574a85873860eebd4a75094d98d0d107ae60a256682ec6513b4a9"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-enum-constant-diff.json",
+          "final_verification": "validation/evidence/demo/l3-enum-constant-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-enum-constant-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-enum-constant-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-enum-constant-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-enum-constant-version-manifest.json"
+        },
+        "slice_id": "enum-constant",
+        "source_commit": "demo-enum-constant-20260708",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+          "sha256": "37b679415d7e510136a302134271bbede68c10a2450cc0c6464d2436f8e707ca",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+          "sha256": "cf81f2695bb69e5b1b734ea46fefd0a1a874ae578ddab625cb0cf26bbf2f0668",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-enum-constant-diff.json",
+          "sha256": "ef9ea4b932557f7d6f881d97f5ac226841f822873ebde422cd65e6597804fca8",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-enum-constant-unsafe-ledger.json",
+          "sha256": "17e196a037adddf56ca4ed6705fa336d9280ce5923525dafab086b2a2d260b36",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-enum-constant-unsafe-scan.json",
+          "sha256": "ab5e7735245c366bb7e0159621adc67bba321273d529fd8861196b632937cce9",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gxmeh6_y\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gxmeh6_y\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gxmeh6_y\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/enum-constant/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/enum-constant/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/enum-constant/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-draft.rs",
+        "sha256": "e24391a7be53eab62f7303ade985d911c2a8de1392d9dd6785ce1822321f64f0",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "enum-constant",
+      "source_commit": "demo-enum-constant-20260708",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [],
+    "level": "L3",
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gxmeh6_y\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gxmeh6_y\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gxmeh6_y\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/enum-constant/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/enum-constant/generated-rust-replay.stdout.log"
+    },
+    "repo_commit": "7450e69e37f18c6893677197931bfaf566fb3351",
+    "rust_tests": [
+      {
+        "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml enum_constant",
+        "file": "validation/l2_slices/tests/enum_constant.rs",
+        "framework": "cargo test",
+        "source": "accepted replay evidence",
+        "test_names": [
+          "accepted_enum_constant_replay"
+        ]
+      },
+      {
+        "cargo_command": "cargo test replay_enum_constant_fixture_contract",
+        "file": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-replay-test-draft.rs",
+        "framework": "cargo test",
+        "status": "generated_draft",
+        "test_names": [
+          "replay_enum_constant_fixture_contract"
+        ]
+      }
+    ],
+    "schema_version": 1,
+    "slice_id": "enum-constant",
+    "source_commit": "demo-enum-constant-20260708",
+    "source_test_inputs": {
+      "fixtures": [
+        {
+          "hash": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+          "operation_count": 5,
+          "path": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+          "source_kind": "fixture"
+        }
+      ],
+      "oracle_reports": [
+        {
+          "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+          "sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+          "status": "passed"
+        },
+        {
+          "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+          "sha256": "cf81f2695bb69e5b1b734ea46fefd0a1a874ae578ddab625cb0cf26bbf2f0668",
+          "status": "passed"
+        }
+      ],
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; this exact generated replay draft is accepted by generated_draft_acceptance."
+    },
+    "status": "recorded",
+    "target_id": "demo",
+    "test_draft": "validation/evidence/demo/auto-translation/enum-constant/l3-enum-constant-rust-replay-test-draft.rs",
+    "translation_mappings": [
+      {
+        "behavior_fields": [
+          "return_value",
+          "status"
+        ],
+        "coverage_kind": "main_path",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-enum-constant-c-oracle.json",
+            "sha256": "f0fe61c1d2956703d0c34a8c86c58c3e6292b5831caa123cd5939442cb62bdca",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-enum-constant-rust-report.json",
+            "sha256": "cf81f2695bb69e5b1b734ea46fefd0a1a874ae578ddab625cb0cf26bbf2f0668",
+            "status": "passed"
+          },
+          {
+            "path": "validation/evidence/demo/l3-enum-constant-diff.json",
+            "sha256": "ef9ea4b932557f7d6f881d97f5ac226841f822873ebde422cd65e6597804fca8",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/tests/enum_constant.rs::accepted_enum_constant_replay",
+        "source": "validation/l2_slices/fixtures/enum-constant-c-oracle.json",
+        "status": "mapped"
+      },
+      {
+        "behavior_fields": [
+          "return_value",
+          "status"
+        ],
+        "coverage_kind": "negative_case",
+        "evidence": [
+          {
+            "path": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+            "sha256": "37b679415d7e510136a302134271bbede68c10a2450cc0c6464d2436f8e707ca",
+            "status": "passed"
+          }
+        ],
+        "rust_test": "validation/l2_slices/src/bin/emit_reports.rs::emit_enum_constant_negative_diff",
+        "source": "validation/evidence/demo/l3-enum-constant-negative-diff.json",
+        "status": "mapped"
+      }
+    ]
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "enum-constant",
+  "source_commit": "demo-enum-constant-20260708",
+  "source_slice_id": "enum-constant",
+  "status": "passed",
+  "target_id": "demo"
+}
