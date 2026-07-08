@@ -1,0 +1,85 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "leading zero-fill index",
+      "middle zero-fill index",
+      "designated initializer value index",
+      "trailing zero-fill index"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sparse_designated_array_lookup",
+      "file": "validation/l2_slices/tests/sparse_designated_array_lookup.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "sparse_designated_array_lookup_matches_c_oracle_with_sparse_initializer"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "sparse-designated-array-lookup-fixture",
+        "operation_count": 4,
+        "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the sparse designated array C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/sparse_designated_array_lookup.rs::sparse_designated_array_lookup_matches_c_oracle_with_sparse_initializer",
+      "source": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}

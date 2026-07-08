@@ -1,0 +1,32 @@
+{
+  "accepted_unsafe_scan": {
+    "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-scan.json",
+    "sha256": "9292fa390db3004f81efc7fe74b12c0ff4522cd6290c1217d6ccb43581b3d52b",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+    "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+    "status": "skipped"
+  },
+  "first_party_non_test_unsafe_count": 0,
+  "first_party_non_test_unsafe_ratio": 0.0,
+  "generated_draft_unsafe_count": 0,
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+    "sha256": "f28a33639f49bb7edb59da3c15970285bdbf70b11b53581ce53c37541b8f15ae",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3961f9c5bfa80fc7eaf0c62ad1b3bef4f563bb51be962f2dff58196d50ffe57a",
+    "status": "passed"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-translator-input.json",
+    "sha256": "431987793e76e7fed634a915842611f7a73c660b38051e9db4db7157c0a8dd80",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-sparse-designated-array-lookup-20260708",
+    "slice_spec_sha256=bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "fixture_hash=sparse-designated-array-lookup-fixture",
+    "build_profile_hash=6657978deddff45ea88d536777c22fa125df5538e57eb9994c5d8496fa6422c2",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [
+    {
+      "definition_status": "declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "table",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "",
+      "source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      }
+    }
+  ],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "index",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "0098f34af05c982ceada20f233811003e17cdb96",
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-sparse-designated-array-lookup.json",
+    "sha256": "bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "status": "ready"
+  },
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

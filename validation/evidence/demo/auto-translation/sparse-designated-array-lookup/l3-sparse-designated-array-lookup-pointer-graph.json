@@ -1,0 +1,43 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-sparse-designated-array-lookup-20260708",
+    "slice_spec_sha256=bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "fixture_hash=sparse-designated-array-lookup-fixture",
+    "build_profile_hash=6657978deddff45ea88d536777c22fa125df5538e57eb9994c5d8496fa6422c2",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "context_pack_ref": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "slice has no pointer surface",
+  "repo_commit": "0098f34af05c982ceada20f233811003e17cdb96",
+  "schema_version": 2,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/sparse-designated-array-lookup.c"
+    ],
+    "functions": [
+      "sparse_designated_array_lookup"
+    ],
+    "globals": [
+      "table"
+    ],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "not_applicable",
+  "target_id": "demo"
+}

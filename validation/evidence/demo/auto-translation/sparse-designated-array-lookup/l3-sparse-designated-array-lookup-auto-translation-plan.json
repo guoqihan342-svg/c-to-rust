@@ -1,0 +1,177 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+    "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-sparse-designated-array-lookup-20260708",
+    "slice_spec_sha256=bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "fixture_hash=sparse-designated-array-lookup-fixture",
+    "build_profile_hash=6657978deddff45ea88d536777c22fa125df5538e57eb9994c5d8496fa6422c2",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "generated_artifacts": [
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_draft",
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "c_oracle_harness",
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    },
+    {
+      "generated_spans": [
+        {
+          "file": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-replay-test-draft.rs",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "generator": {
+        "name": "c2r-translator",
+        "version": "0.1.0"
+      },
+      "kind": "rust_replay_test",
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-replay-test-draft.rs",
+      "source_spans": [
+        {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      ],
+      "status": "candidate"
+    }
+  ],
+  "inputs": {
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-cfg.json",
+      "status": "recorded"
+    },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-context-pack.json",
+      "status": "not_applicable"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-pointer-graph.json",
+      "status": "not_applicable"
+    },
+    "slice_spec": {
+      "path": "validation/slice-specs/demo-sparse-designated-array-lookup.json",
+      "sha256": "bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+      "status": "ready"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-type-map.json",
+      "status": "recorded"
+    }
+  },
+  "level": "L3",
+  "repo_commit": "0098f34af05c982ceada20f233811003e17cdb96",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+    "sha256": "f28a33639f49bb7edb59da3c15970285bdbf70b11b53581ce53c37541b8f15ae",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "draft_generated",
+  "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
+  "translation_summary": {
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "reason": "slice has no input/output pointer alias surface",
+      "requires_noalias": false,
+      "risk_level": "none"
+    },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {},
+    "safe_public_api": true,
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir"
+    ],
+    "unsafe_candidate_count": 0,
+    "unsupported_lvalue_count": 0,
+    "unsupported_node_count": 0
+  },
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3961f9c5bfa80fc7eaf0c62ad1b3bef4f563bb51be962f2dff58196d50ffe57a",
+    "status": "passed"
+  },
+  "verification_plan": [
+    {
+      "command": "rustc --error-format=json <draft>",
+      "gate": "rust_check",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "generate accepted C oracle",
+      "gate": "c_oracle",
+      "required_before_acceptance": true
+    },
+    {
+      "command": "emit L3 evidence manifest",
+      "gate": "l3_manifest",
+      "required_before_acceptance": true
+    }
+  ]
+}

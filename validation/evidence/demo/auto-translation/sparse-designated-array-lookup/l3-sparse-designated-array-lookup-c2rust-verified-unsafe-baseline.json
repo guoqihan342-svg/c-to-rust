@@ -1,0 +1,127 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+    "fixture_sha256": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+      "diff": "e26aac8e109ab9e796b719a0f5e70723fed24e13dcc473e22f96f2b00ebaee69",
+      "final_verification": "1241e1e54ce91701eb628fc8ff4279ecb1c4331f2da5dcd96da399a8b61f86af",
+      "negative_diff": "ccf9e9636587729fff76a7a7b1014cc25240b618eb1faa224ff27655e9a4fdae",
+      "performance_smoke": "1a8e83b0714920de7e26511243f5514aeace39e97d5ad0e38677591ec9b16a31",
+      "rust_report": "0c3f1c68f988c206aecb85862f317763b523f63fbde02d92d6efeae9d643b209",
+      "unsafe_ledger": "121e0685143e6d6b144e6417285ab0431435fec4abefa29f227c6c30fef5defb",
+      "unsafe_scan": "9292fa390db3004f81efc7fe74b12c0ff4522cd6290c1217d6ccb43581b3d52b",
+      "version_manifest": "11ce9cbf47758c4ff7f0192fc87d3eeb64da3668aa0eb8930f39385cb6220a09"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+      "final_verification": "validation/evidence/demo/l3-sparse-designated-array-lookup-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-sparse-designated-array-lookup-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-sparse-designated-array-lookup-version-manifest.json"
+    },
+    "slice_id": "sparse-designated-array-lookup",
+    "source_commit": "demo-sparse-designated-array-lookup-20260708",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "blocked_reasons": [
+    "c2rust_baseline_not_generated",
+    "c2rust_output_missing",
+    "c2rust_compile_not_passed",
+    "c2rust_compile_artifact_missing",
+    "No Rust replay harness currently calls this exact C2Rust output sha."
+  ],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+    "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+    "status": "skipped"
+  },
+  "c2rust_output": null,
+  "claim_boundary": {
+    "accepted_evidence_reused": false,
+    "compile_only_is_semantic_pass": false,
+    "generated_draft_semantic_pass": false,
+    "scope": "C2Rust baseline verification status artifact; blocked until direct C2Rust output replay, diff, negative diff, unsafe ledger, and final verification are all bound to the same output.",
+    "semantic_pass": false
+  },
+  "compile_artifact": null,
+  "direct_c2rust_replay": {
+    "artifact": null,
+    "c2rust_output": null,
+    "compile_artifact": null,
+    "observable_replay_pass": false,
+    "reason": "No Rust replay harness currently calls this exact C2Rust output sha.",
+    "semantic_pass": false,
+    "status": "blocked"
+  },
+  "entry_function": "sparse_designated_array_lookup",
+  "fixture": {
+    "hash": "sparse-designated-array-lookup-fixture",
+    "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json"
+  },
+  "gate_refs": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-status.json",
+      "sha256": "bbb7efb9991d6f145c53ff6a4c9c43b16077d3a0a9643be1bf063ef4c4e0c1db",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-final-verification.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-negative-diff.json",
+      "sha256": "ba30e8b820c953930bc679c8e4be75f9124b41e38e4f43bd52cab3973d10b503",
+      "status": "passed"
+    },
+    "rust_replay": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-report.json",
+      "sha256": "e97b0fc8c5d1e83f48b6cb2a265e600d205bb6ade75554e8e0b5380e46c0ab0e",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-diff.json",
+      "sha256": "98763b7a7948e24e9f547263ce636b492ed916498dd0869468ac1d112d08ac4e",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+      "sha256": "77899ef6e7e51c0751911070c574ccd2dae390d05d3d27ba28fca3ce2f853bbc",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-unsafe-scan.json",
+      "sha256": "f7c71696d63f09535ed628ea0557ff906ef9590d2da5e69121b1c0ea956cf77c",
+      "status": "passed"
+    }
+  },
+  "generated_draft_semantic_pass": false,
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+    "sha256": "f28a33639f49bb7edb59da3c15970285bdbf70b11b53581ce53c37541b8f15ae",
+    "status": "recorded"
+  },
+  "same_output_gate_refs": null,
+  "schema_version": 1,
+  "semantic_claim_source": "blocked_missing_direct_c2rust_replay",
+  "semantic_pass": false,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "blocked",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3961f9c5bfa80fc7eaf0c62ad1b3bef4f563bb51be962f2dff58196d50ffe57a",
+    "status": "passed"
+  }
+}

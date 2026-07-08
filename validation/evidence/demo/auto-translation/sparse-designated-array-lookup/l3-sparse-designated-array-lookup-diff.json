@@ -1,0 +1,46 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+    "sha256": "e26aac8e109ab9e796b719a0f5e70723fed24e13dcc473e22f96f2b00ebaee69",
+    "status": "passed"
+  },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+    "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+    "sha256": "f28a33639f49bb7edb59da3c15970285bdbf70b11b53581ce53c37541b8f15ae",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3961f9c5bfa80fc7eaf0c62ad1b3bef4f563bb51be962f2dff58196d50ffe57a",
+    "status": "passed"
+  }
+}

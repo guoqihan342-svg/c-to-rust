@@ -1,0 +1,17 @@
+{
+  "target_id": "demo",
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-auto-translation-plan.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-auto-translation-events.jsonl",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-type-map.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-cfg.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-pointer-graph.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-ai-candidate-manifest.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-blocked-repairs.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-draft.rs",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-clang-dry-run.json",
+    "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-clang-lowering-report.json"
+  ]
+}

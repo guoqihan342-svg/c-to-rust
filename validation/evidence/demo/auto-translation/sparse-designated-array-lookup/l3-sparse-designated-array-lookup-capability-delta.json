@@ -1,0 +1,88 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "cap-sparse-designated-array-lookup-typed_ir_zero_token_deterministic",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "sparse-designated-array-lookup",
+      "semantic_pass": true
+    },
+    {
+      "blocked_callees": [],
+      "construct_id": "c_oracle_harness_matched_not_oracle",
+      "delta_id": "cap-sparse-designated-array-lookup-c_oracle_harness_matched_not_oracle",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-status.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_verification",
+      "negative_coverage": [
+        {
+          "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim",
+          "kind": "c_oracle_diagnostic_regression"
+        }
+      ],
+      "real_c_slice": "sparse-designated-array-lookup",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "gov-sparse-designated-array-lookup-typed_ir_zero_token_deterministic-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    },
+    {
+      "bound_to": "P0 capability delta; governance records that the C harness executed and matched fixture markers without semantic acceptance.",
+      "construct_id": "c_oracle_harness_matched_not_oracle",
+      "delta_id": "gov-sparse-designated-array-lookup-c_oracle_harness_matched_not_oracle-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-status.json",
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L0",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-sparse-designated-array-lookup-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/sparse-designated-array-lookup.c": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py",
+    "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_capability_ledger_records_c_oracle_matched_not_oracle_without_semantic_claim"
+  ]
+}

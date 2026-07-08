@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror sparse_designated_array_lookup_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+  "helper_stdout_sha256": "89cab0d799aba64adc93bbf5abd354ebc41acf71e80bdf19bdced9d9c021c4c4",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./sparse_designated_array_lookup_oracle",
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "source_hashes": {
+    "c_helper": "1b8599d5daa1ea3757d4595785bef7f6fa51334160dcc0ad1f9cc0e8c0fe0ddf",
+    "generator": "6fbf6bea9bd3e0d8d9b8246a45f2415b72178d474ba4f66612f6d0c207f0eb0c"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

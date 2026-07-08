@@ -1,0 +1,347 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+    "sha256": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 4,
+  "compile_command_draft": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "l3-sparse-designated-array-lookup-c-oracle-harness-draft.c",
+      "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+      "-o",
+      "l3-sparse-designated-array-lookup-c-oracle-harness-draft.exe"
+    ],
+    "defines": [],
+    "link_source_files": [
+      {
+        "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+        "resolution": "declared_path",
+        "resolved_path": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+        "role": "source",
+        "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+      }
+    ],
+    "link_strategy": "compile_harness_with_declared_c_boundary_sources",
+    "oracle_source_mode": "declared_c_boundary_sources",
+    "resolved_include_paths": [],
+    "source_root": ".",
+    "status": "draft_not_executed",
+    "working_directory": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup"
+  },
+  "compile_execution": {
+    "argv": [
+      "cc",
+      "-std=c99",
+      "l3-sparse-designated-array-lookup-c-oracle-harness-draft.c",
+      "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+      "-o",
+      "l3-sparse-designated-array-lookup-c-oracle-harness-draft.exe"
+    ],
+    "attempted": true,
+    "compiler_candidates": [
+      "cc",
+      "gcc",
+      "clang"
+    ],
+    "compiler_name": "cc",
+    "compiler_path": "/usr/bin/cc",
+    "diagnostics": [
+      "C oracle compile command succeeded, but execution/diff gates are still required."
+    ],
+    "execution_argv": [
+      "C:\\WINDOWS\\system32\\wsl.exe",
+      "-e",
+      "sh",
+      "-lc",
+      "cd /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/sparse-designated-array-lookup && /usr/bin/cc -std=c99 /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c /mnt/f/agent/crustpaper/0630/validation/l2_slices/fixtures/sparse-designated-array-lookup.c -o /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.exe"
+    ],
+    "harness_execution": {
+      "argv": [
+        "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.exe"
+      ],
+      "attempted": true,
+      "diagnostics": [
+        "C oracle harness executed, but execution output has not passed oracle diff gates."
+      ],
+      "executable_path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.exe",
+      "execution_argv": [
+        "C:\\WINDOWS\\system32\\wsl.exe",
+        "-e",
+        "sh",
+        "-lc",
+        "cd /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/sparse-designated-array-lookup && /mnt/f/agent/crustpaper/0630/validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.exe"
+      ],
+      "output_gate": {
+        "boundary": "Harness stdout markers are diagnostic only until accepted oracle diff gates pass.",
+        "compared_fields": [
+          "return_value",
+          "status"
+        ],
+        "diagnostics": [
+          "C oracle harness stdout matched draft fixture markers, but oracle diff gates are still required."
+        ],
+        "expected_stdout_fragments": [
+          "fixture case index-zero return_value matched",
+          "fixture case index-zero status matched",
+          "fixture case index-one return_value matched",
+          "fixture case index-one status matched",
+          "fixture case index-two return_value matched",
+          "fixture case index-two status matched",
+          "fixture case index-three return_value matched",
+          "fixture case index-three status matched"
+        ],
+        "fixture_expected_output_status": "declared_not_executed",
+        "gate": "c_oracle_harness_output",
+        "matched_stdout_fragments": [
+          "fixture case index-zero return_value matched",
+          "fixture case index-zero status matched",
+          "fixture case index-one return_value matched",
+          "fixture case index-one status matched",
+          "fixture case index-two return_value matched",
+          "fixture case index-two status matched",
+          "fixture case index-three return_value matched",
+          "fixture case index-three status matched"
+        ],
+        "missing_stdout_fragments": [],
+        "schema_version": 1,
+        "semantic_pass": false,
+        "status": "matched_not_oracle"
+      },
+      "returncode": 0,
+      "semantic_pass": false,
+      "status": "exited_zero_not_oracle",
+      "stderr": "",
+      "stdout": "oracle harness draft for sparse_designated_array_lookup\nfixture input: validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json\nfixture case index-zero return_value matched\nfixture case index-zero status matched\nfixture case index-one return_value matched\nfixture case index-one status matched\nfixture case index-two return_value matched\nfixture case index-two status matched\nfixture case index-three return_value matched\nfixture case index-three status matched\n",
+      "timeout_seconds": 30,
+      "toolchain_adapter": "wsl",
+      "working_directory": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup"
+    },
+    "requested_compiler": "cc",
+    "returncode": 0,
+    "semantic_pass": false,
+    "status": "compile_succeeded_not_oracle",
+    "stderr": "",
+    "stdout": "",
+    "toolchain_adapter": "wsl",
+    "toolchain_status_after_attempt": "COMPILE_SUCCEEDED_NOT_ORACLE",
+    "working_directory": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup"
+  },
+  "fixture": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+  "fixture_binding": {
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ],
+    "binding_status": "declared_not_executed",
+    "case_bindings": [
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 0,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "id": "index-zero",
+        "input_ref": "cases[0]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 0,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "id": "index-one",
+        "input_ref": "cases[1]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 7,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "id": "index-two",
+        "input_ref": "cases[2]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      },
+      {
+        "binding_status": "declared_not_executed",
+        "expected_outputs": {
+          "return_value": 0,
+          "status": "ok"
+        },
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "id": "index-three",
+        "input_ref": "cases[3]",
+        "missing_observable_outputs": [],
+        "observable_outputs": [
+          "return_value",
+          "status"
+        ]
+      }
+    ],
+    "case_count": 4,
+    "expected_output_status": "declared_not_executed",
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json"
+  },
+  "fixture_sha256": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+  "global_linkage_requirements": [
+    {
+      "definition_status": "declared",
+      "kind": "global",
+      "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+      "name": "table",
+      "semantic_status": "required_before_acceptance",
+      "sha256": "",
+      "source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      }
+    }
+  ],
+  "harness_contract": {
+    "fixture": {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "binding_status": "declared_not_executed",
+      "case_bindings": [
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 0,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+          "id": "index-zero",
+          "input_ref": "cases[0]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 0,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+          "id": "index-one",
+          "input_ref": "cases[1]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 7,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+          "id": "index-two",
+          "input_ref": "cases[2]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        },
+        {
+          "binding_status": "declared_not_executed",
+          "expected_outputs": {
+            "return_value": 0,
+            "status": "ok"
+          },
+          "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+          "id": "index-three",
+          "input_ref": "cases[3]",
+          "missing_observable_outputs": [],
+          "observable_outputs": [
+            "return_value",
+            "status"
+          ]
+        }
+      ],
+      "case_count": 4,
+      "expected_output_status": "declared_not_executed",
+      "observable_outputs": [
+        "return_value",
+        "status"
+      ],
+      "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json"
+    },
+    "function_prototype": "int sparse_designated_array_lookup(int index);",
+    "global_dependencies": [
+      {
+        "definition_status": "declared",
+        "kind": "global",
+        "linkage_requirement": "must be available to C oracle harness and Rust replay context",
+        "name": "table",
+        "semantic_status": "required_before_acceptance",
+        "sha256": "",
+        "source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+        "source_span": {
+          "file": "slice-spec",
+          "line_end": 1,
+          "line_start": 1
+        }
+      }
+    ],
+    "oracle_harness_includes": [],
+    "oracle_source_mode": "declared_c_boundary_sources",
+    "source_files": [
+      {
+        "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+        "role": "source",
+        "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+      }
+    ],
+    "status": "draft_requires_review"
+  },
+  "harness_draft": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c-oracle-harness-draft.c",
+    "sha256": "bbb825fd10077ceb3ad0178aac82cdda3cb2d15e335d611deb18d39cc2149bec",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "source_slice_id": "sparse-designated-array-lookup",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

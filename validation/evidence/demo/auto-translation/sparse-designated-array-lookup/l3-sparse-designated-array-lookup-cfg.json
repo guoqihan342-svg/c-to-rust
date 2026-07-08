@@ -1,0 +1,93 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-sparse-designated-array-lookup-20260708",
+    "slice_spec_sha256=bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "fixture_hash=sparse-designated-array-lookup-fixture",
+    "build_profile_hash=6657978deddff45ea88d536777c22fa125df5538e57eb9994c5d8496fa6422c2",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "return"
+          ],
+          "statements": [
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-0"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "sparse_designated_array_lookup",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int sparse_designated_array_lookup(int index)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "0098f34af05c982ceada20f233811003e17cdb96",
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-sparse-designated-array-lookup.json",
+    "sha256": "bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "status": "ready"
+  },
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

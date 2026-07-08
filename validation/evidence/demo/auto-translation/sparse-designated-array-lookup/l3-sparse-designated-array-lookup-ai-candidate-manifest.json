@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+    "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-sparse-designated-array-lookup-20260708",
+    "slice_spec_sha256=bc8e3680994a5de6c6b04d6c082c81f29e456727c0b08e17ad7c007b650b3067",
+    "fixture_hash=sparse-designated-array-lookup-fixture",
+    "build_profile_hash=6657978deddff45ea88d536777c22fa125df5538e57eb9994c5d8496fa6422c2",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+    "sha256": "f28a33639f49bb7edb59da3c15970285bdbf70b11b53581ce53c37541b8f15ae",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "not_used",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3961f9c5bfa80fc7eaf0c62ad1b3bef4f563bb51be962f2dff58196d50ffe57a",
+    "status": "passed"
+  }
+}

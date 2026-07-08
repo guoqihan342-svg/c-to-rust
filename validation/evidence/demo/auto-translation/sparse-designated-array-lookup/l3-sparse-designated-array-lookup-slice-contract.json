@@ -1,0 +1,117 @@
+{
+  "c_boundary": {
+    "array_initializer_contract": {
+      "array_length": 4,
+      "declared_designators": [
+        {
+          "index": 2,
+          "value": 7
+        }
+      ],
+      "element_type": "int",
+      "implicit_zero_fill_indices": [
+        0,
+        1,
+        3
+      ],
+      "initializer_kind": "fixed_integer_array_designated_initializer",
+      "lookup_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "global",
+        "name": "table",
+        "source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+        "role": "source",
+        "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+      }
+    ],
+    "functions": [
+      "sparse_designated_array_lookup"
+    ],
+    "signatures": [
+      {
+        "c_source": "static const int table[4] = { [2] = 7 }; int sparse_designated_array_lookup(int index) { return table[index]; }",
+        "function": "sparse_designated_array_lookup",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 3,
+              "minimum": 0
+            },
+            "c_type": "int",
+            "direction": "input",
+            "name": "index"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 115,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+          "line_end": 5,
+          "line_start": 1,
+          "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general designated initializer support",
+      "bounds checking for arbitrary index values",
+      "whole-program array initialization coverage"
+    ],
+    "non_goals": [
+      "No out-of-bounds or negative index execution.",
+      "No writable array or pointer aliasing behavior.",
+      "No multidimensional, non-integer, or non-constant designated initializer claim.",
+      "No whole-program migration claim."
+    ]
+  },
+  "fixture": {
+    "hash": "sparse-designated-array-lookup-fixture",
+    "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "sparse_designated_array_lookup",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/sparse_designated_array_lookup.rs",
+    "module_path": "validation/l2_slices/src/sparse_designated_array_lookup.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "sparse_designated_array_lookup",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/sparse_designated_array_lookup.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

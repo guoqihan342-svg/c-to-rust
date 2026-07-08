@@ -542,6 +542,51 @@ fn clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_c
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_sparse_designated_array_lookup_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/sparse_designated_array_lookup_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value(
+        &ast,
+        "sparse_designated_array_lookup",
+    )
+    .expect("sparse designated readonly array lookup should lower");
+    assert_eq!(lowered.globals.len(), 1);
+    assert_eq!(lowered.globals[0].name, "table");
+    assert_eq!(
+        lowered.globals[0].init,
+        IrGlobalInit::IntegerArray(vec![0, 0, 7, 0])
+    );
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("sparse designated readonly array lookup should emit");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("const TABLE: [i32; 4] = [0i32, 0i32, 7i32, 0i32];"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("pub fn sparse_designated_array_lookup(index: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("return TABLE[index as usize];"), "{rust}");
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-sparse-designated-array-lookup",
+        rust,
+        r#"
+    assert_eq!(sparse_designated_array_lookup(0), 0);
+    assert_eq!(sparse_designated_array_lookup(1), 0);
+    assert_eq!(sparse_designated_array_lookup(2), 7);
+    assert_eq!(sparse_designated_array_lookup(3), 0);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_rejects_referenced_unexpanded_global_designated_initializer_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../../fixtures/clang_ast/global_designated_array_initializer_ast.json"

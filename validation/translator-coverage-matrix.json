@@ -1373,7 +1373,7 @@
     },
     {
       "id": "fixed-integer-array-designated-initializer",
-      "status": "partial",
+      "status": "covered",
       "ir_constructs": [
         "fixed-size integer array initializer",
         "clang InitListExpr array_filler zero-fill",
@@ -1405,6 +1405,14 @@
             },
             {
               "name": "clang_ast_fixture_rejects_unexpanded_designated_initializer_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "sparse designated array lookup no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/sparse_designated_array_lookup_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_sparse_designated_array_lookup_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1443,20 +1451,72 @@
             {
               "name": "clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "sparse-designated-array-lookup generated Rust draft",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-draft.rs"
+            },
+            {
+              "name": "sparse-designated-array-lookup generated draft replay",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-test-translation-generated.json"
             }
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "no named real-source slice C oracle / Rust replay / diff gate is claimed for this initializer fixture"
+          "status": "covered",
+          "scope_note": "Covered for the named sparse-designated-array-lookup slice only: static const int[4] with one sparse index designator, implicit zero fill, and bounded indices 0..3.",
+          "evidence": [
+            {
+              "name": "sparse-designated-array-lookup C oracle",
+              "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup Rust replay report",
+              "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup schema-aware C/Rust diff",
+              "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup negative diff",
+              "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup unsafe ledger",
+              "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup generated draft final verification",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-final-verification.json",
+              "assertion": "generated_draft_semantic_pass=true for the exact named sparse designated array lookup slice"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
           "reason": "this capability is exercised through no-clang typed IR fixture replay, not the legacy string translator"
         },
         "route_evidence": {
-          "status": "gap",
-          "reason": "unit fixture replay does not produce route-decision evidence"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "sparse-designated-array-lookup route decision",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup validation profile",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup capability delta",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-capability-delta.json"
+            },
+            {
+              "name": "sparse-designated-array-lookup evidence manifest",
+              "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-evidence-manifest.json"
+            }
+          ]
         }
       },
       "positive_cases": [
@@ -1479,6 +1539,18 @@
         {
           "name": "clang_ast_fixture_lowers_sparse_designated_global_array_initializer_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_sparse_designated_array_lookup_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "sparse-designated-array-lookup named-slice L3 evidence validator",
+          "path": "validation/tools/test_sparse_designated_array_l3_evidence.py"
+        },
+        {
+          "name": "sparse-designated-array-lookup L2 Rust replay",
+          "path": "validation/l2_slices/tests/sparse_designated_array_lookup.rs"
         }
       ],
       "negative_cases": [

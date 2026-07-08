@@ -1,0 +1,46 @@
+{
+  "c_source_boundary": "static const int table[4] = { [2] = 7 }; int sparse_designated_array_lookup(int index) { return table[index]; }",
+  "cargo_test_status": "passed",
+  "case_count": 4,
+  "cases": [
+    {
+      "coverage_kind": "leading_zero_fill",
+      "id": "index-zero",
+      "index": 0,
+      "return_value": 0,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "middle_zero_fill",
+      "id": "index-one",
+      "index": 1,
+      "return_value": 0,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "designated_value",
+      "id": "index-two",
+      "index": 2,
+      "return_value": 7,
+      "status": "ok"
+    },
+    {
+      "coverage_kind": "trailing_zero_fill",
+      "id": "index-three",
+      "index": 3,
+      "return_value": 0,
+      "status": "ok"
+    }
+  ],
+  "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test sparse_designated_array_lookup",
+  "fixture": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/sparse_designated_array_lookup.rs",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

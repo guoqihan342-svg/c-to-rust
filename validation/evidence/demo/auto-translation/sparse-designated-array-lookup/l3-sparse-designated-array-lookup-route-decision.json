@@ -1,0 +1,278 @@
+{
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+        "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+          "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L0",
+        "status": "not_refused"
+      },
+      "route_level": "L0",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [
+        {
+          "array_len": 4,
+          "canonical_type": "int[4]",
+          "init_kind": "integer_array",
+          "name": "table",
+          "spelled_type": "const int[4]",
+          "value_count": 4
+        }
+      ],
+      "readonly_globals_identity": {
+        "count": 1,
+        "names": [
+          "table"
+        ],
+        "sha256": "125d92f62a2a9170760d7d3922dbee697abb84f6a773699a4407a82ba418d1df"
+      },
+      "runtime_preconditions": [],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "599516d90980620af8cf33f808d78e41c01ad270cb7b2a97b0487c24e17bf951",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 0,
+        "status": "not_applicable",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-clang-lowering-report.json",
+        "sha256": "3dac6858e1c452d0ec933d201d072ced2f5bc47c837ec8ddf1caf7c14882f2de",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "ee7a7c47ec9ba525eb12fa5f99dfda27ae820a90803697c34eb9c9646b80258e"
+    }
+  },
+  "level": "L0",
+  "misroute": null,
+  "policy": {
+    "fixed_loop_count_required": false,
+    "goal": "dev",
+    "repair_budget_source": "run_policy"
+  },
+  "rationale": [
+    {
+      "feature": "typed_ir_zero_token_deterministic",
+      "route": "GenericTypedIr",
+      "token_cost": 0,
+      "weight": "deterministic_typed_ir"
+    }
+  ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "general designated initializer support",
+        "bounds checking for arbitrary index values",
+        "whole-program array initialization coverage"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": false,
+      "parameters": [
+        {
+          "name": "index",
+          "range": [
+            0,
+            3
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "source_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+      "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+      "status": "skipped"
+    },
+    "cfg": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-cfg.json",
+      "sha256": "7239c50e67d531a56d605b3392a16c42cd239d281657824cfa2c81aefd1c4152",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-clang-lowering-report.json",
+      "sha256": "3dac6858e1c452d0ec933d201d072ced2f5bc47c837ec8ddf1caf7c14882f2de",
+      "status": "lowered"
+    },
+    "pointer_graph": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-pointer-graph.json",
+      "sha256": "c1df29e93a2026f601ca353606215606381ba4e8a5920469aa2879b827aeb592",
+      "status": "not_applicable"
+    },
+    "translation_plan": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-auto-translation-plan.json",
+      "status": "draft_generated"
+    },
+    "type_map": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-type-map.json",
+      "sha256": "32de8956c5bc86fb659df50e0607fdacab2cdeebd83d0e6de1cb3e0c5518200a",
+      "status": "recorded"
+    }
+  },
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-sparse-designated-array-lookup-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/sparse-designated-array-lookup.c": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translator": {
+    "candidate_generation_allowed": true,
+    "kind": "tier1"
+  },
+  "verification_profile": "L0-dev"
+}

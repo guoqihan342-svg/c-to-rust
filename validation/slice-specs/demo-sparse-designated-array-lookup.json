@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "sparse-designated-array-lookup",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "sparse_designated_array_lookup",
+  "c_source": "static const int table[4] = { [2] = 7 }; int sparse_designated_array_lookup(int index) { return table[index]; }",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "fixture_hash": "sparse-designated-array-lookup-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": ".",
+    "source_commit": "demo-sparse-designated-array-lookup-20260708",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/sparse-designated-array-lookup.c": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+        "role": "source",
+        "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+      }
+    ],
+    "functions": [
+      "sparse_designated_array_lookup"
+    ],
+    "signatures": [
+      {
+        "function": "sparse_designated_array_lookup",
+        "return_type": "int",
+        "parameters": [
+          {
+            "name": "index",
+            "c_type": "int",
+            "direction": "input",
+            "bounds": {
+              "minimum": 0,
+              "maximum": 3
+            }
+          }
+        ],
+        "c_source": "static const int table[4] = { [2] = 7 }; int sparse_designated_array_lookup(int index) { return table[index]; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+          "line_start": 1,
+          "line_end": 5,
+          "byte_start": 0,
+          "byte_end": 115,
+          "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+        }
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      },
+      {
+        "kind": "global",
+        "name": "table",
+        "source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c"
+      }
+    ],
+    "array_initializer_contract": {
+      "initializer_kind": "fixed_integer_array_designated_initializer",
+      "array_length": 4,
+      "element_type": "int",
+      "declared_designators": [
+        {
+          "index": 2,
+          "value": 7
+        }
+      ],
+      "implicit_zero_fill_indices": [
+        0,
+        1,
+        3
+      ],
+      "lookup_indices": [
+        0,
+        1,
+        2,
+        3
+      ]
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-sparse-designated-array-lookup-wsl-gcc",
+    "compiler_command_source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/sparse_designated_array_lookup_ast.json",
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering",
+        "fixture binds a static const integer array with a sparse designated initializer and bounded lookup indices"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "sparse-designated-array-lookup-fixture",
+    "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+    "hash": "sparse-designated-array-lookup-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "index",
+          "type": "int",
+          "range": [
+            0,
+            3
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": false
+    },
+    "cases": [
+      {
+        "id": "index-zero",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json"
+      },
+      {
+        "id": "index-one",
+        "input_ref": "cases[1]",
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json"
+      },
+      {
+        "id": "index-two",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json"
+      },
+      {
+        "id": "index-three",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+    "diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-sparse-designated-array-lookup-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-sparse-designated-array-lookup-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-sparse-designated-array-lookup-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/sparse_designated_array_lookup.rs",
+    "public_api": [
+      {
+        "name": "sparse_designated_array_lookup",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/sparse_designated_array_lookup.rs",
+    "api_name": "sparse_designated_array_lookup",
+    "test_file": "validation/l2_slices/tests/sparse_designated_array_lookup.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No out-of-bounds or negative index execution.",
+      "No writable array or pointer aliasing behavior.",
+      "No multidimensional, non-integer, or non-constant designated initializer claim.",
+      "No whole-program migration claim."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "general designated initializer support",
+      "bounds checking for arbitrary index values",
+      "whole-program array initialization coverage"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No out-of-bounds or negative index execution.",
+    "No writable array or pointer aliasing behavior.",
+    "No multidimensional, non-integer, or non-constant designated initializer claim.",
+    "No whole-program migration claim."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.array_initializer_contract",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

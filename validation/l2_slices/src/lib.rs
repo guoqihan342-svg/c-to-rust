@@ -9,6 +9,7 @@ pub mod fdb_calc_crc32;
 pub mod libuv_ip4_addr;
 pub mod scalar_div_rem_contract;
 pub mod signed_rshift_contract;
+pub mod sparse_designated_array_lookup;
 pub mod sqlite_varint;
 pub mod store_add_one;
 pub mod sum_i32_buffer;

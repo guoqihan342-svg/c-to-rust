@@ -1,0 +1,44 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/sparse_designated_array_lookup_ast.json",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "static const int table[4] = { [2] = 7 }; int sparse_designated_array_lookup(int index) { return table[index]; }",
+  "fixture_hash": "sparse-designated-array-lookup-fixture",
+  "function_name": "sparse_designated_array_lookup",
+  "function_source_span": {
+    "byte_end": 115,
+    "byte_start": 0,
+    "file": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+    "line_end": 5,
+    "line_start": 1,
+    "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+  },
+  "slice_id": "sparse-designated-array-lookup",
+  "source_commit": "demo-sparse-designated-array-lookup-20260708",
+  "source_file": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/sparse-designated-array-lookup.c": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/sparse-designated-array-lookup.c",
+      "role": "source",
+      "sha256": "d93c730d7ccddd77f03ec9311a931a74a2ca9ffd39c4ce781f1ef65b8edbed0a"
+    }
+  ],
+  "source_root": ".",
+  "target_id": "demo"
+}

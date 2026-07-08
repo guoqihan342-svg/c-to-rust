@@ -1,0 +1,44 @@
+{
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-c2rust-baseline-manifest.json",
+    "sha256": "6be8c7744e2034ea6e98998285c605d757f3e4737330b2306c10aab8a3f20166",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-zw4haeb2 F:\\agent\\crustpaper\\0630\\validation\\evidence\\demo\\auto-translation\\sparse-designated-array-lookup\\l3-sparse-designated-array-lookup-rust-draft.rs",
+  "error_count": 0,
+  "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-route-decision.json",
+    "sha256": "f28a33639f49bb7edb59da3c15970285bdbf70b11b53581ce53c37541b8f15ae",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "rustc_compile_only",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
+  "schema_version": 1,
+  "self_healing": {
+    "blocked_repairs": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-self-healing-blocked-repairs.json",
+    "patch_events": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-patch-events.jsonl",
+    "status": "none"
+  },
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "3961f9c5bfa80fc7eaf0c62ad1b3bef4f563bb51be962f2dff58196d50ffe57a",
+    "status": "passed"
+  }
+}

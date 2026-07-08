@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-sparse-designated-array-lookup-20260708",
+    "fixture_hash=sparse-designated-array-lookup-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "none",
+  "target_id": "demo"
+}

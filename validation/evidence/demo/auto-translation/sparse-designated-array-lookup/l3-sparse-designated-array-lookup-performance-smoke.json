@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-performance-smoke.json",
+    "sha256": "1a8e83b0714920de7e26511243f5514aeace39e97d5ad0e38677591ec9b16a31",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "recorded",
+  "target_id": "demo"
+}

@@ -1,0 +1,138 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+    "fixture_sha256": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+      "diff": "e26aac8e109ab9e796b719a0f5e70723fed24e13dcc473e22f96f2b00ebaee69",
+      "final_verification": "1241e1e54ce91701eb628fc8ff4279ecb1c4331f2da5dcd96da399a8b61f86af",
+      "negative_diff": "ccf9e9636587729fff76a7a7b1014cc25240b618eb1faa224ff27655e9a4fdae",
+      "performance_smoke": "1a8e83b0714920de7e26511243f5514aeace39e97d5ad0e38677591ec9b16a31",
+      "rust_report": "0c3f1c68f988c206aecb85862f317763b523f63fbde02d92d6efeae9d643b209",
+      "unsafe_ledger": "121e0685143e6d6b144e6417285ab0431435fec4abefa29f227c6c30fef5defb",
+      "unsafe_scan": "9292fa390db3004f81efc7fe74b12c0ff4522cd6290c1217d6ccb43581b3d52b",
+      "version_manifest": "11ce9cbf47758c4ff7f0192fc87d3eeb64da3668aa0eb8930f39385cb6220a09"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+      "final_verification": "validation/evidence/demo/l3-sparse-designated-array-lookup-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-sparse-designated-array-lookup-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-sparse-designated-array-lookup-version-manifest.json"
+    },
+    "slice_id": "sparse-designated-array-lookup",
+    "source_commit": "demo-sparse-designated-array-lookup-20260708",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/sparse-designated-array-lookup-c-oracle.json",
+      "fixture_sha256": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+        "diff": "e26aac8e109ab9e796b719a0f5e70723fed24e13dcc473e22f96f2b00ebaee69",
+        "final_verification": "1241e1e54ce91701eb628fc8ff4279ecb1c4331f2da5dcd96da399a8b61f86af",
+        "negative_diff": "ccf9e9636587729fff76a7a7b1014cc25240b618eb1faa224ff27655e9a4fdae",
+        "performance_smoke": "1a8e83b0714920de7e26511243f5514aeace39e97d5ad0e38677591ec9b16a31",
+        "rust_report": "0c3f1c68f988c206aecb85862f317763b523f63fbde02d92d6efeae9d643b209",
+        "unsafe_ledger": "121e0685143e6d6b144e6417285ab0431435fec4abefa29f227c6c30fef5defb",
+        "unsafe_scan": "9292fa390db3004f81efc7fe74b12c0ff4522cd6290c1217d6ccb43581b3d52b",
+        "version_manifest": "11ce9cbf47758c4ff7f0192fc87d3eeb64da3668aa0eb8930f39385cb6220a09"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+        "final_verification": "validation/evidence/demo/l3-sparse-designated-array-lookup-final-verification.json",
+        "negative_diff": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json",
+        "performance_smoke": "validation/evidence/demo/l3-sparse-designated-array-lookup-performance-smoke.json",
+        "rust_report": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+        "unsafe_ledger": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-scan.json",
+        "version_manifest": "validation/evidence/demo/l3-sparse-designated-array-lookup-version-manifest.json"
+      },
+      "slice_id": "sparse-designated-array-lookup",
+      "source_commit": "demo-sparse-designated-array-lookup-20260708",
+      "status": "accepted",
+      "target_id": "demo",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-c-oracle.json",
+        "sha256": "39a92b870a4d8bc60ca704d59e5162ab0c5e34efdc9bb8326fc6df8f190f7151",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-negative-diff.json",
+        "sha256": "ccf9e9636587729fff76a7a7b1014cc25240b618eb1faa224ff27655e9a4fdae",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-rust-report.json",
+        "sha256": "0c3f1c68f988c206aecb85862f317763b523f63fbde02d92d6efeae9d643b209",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-diff.json",
+        "sha256": "e26aac8e109ab9e796b719a0f5e70723fed24e13dcc473e22f96f2b00ebaee69",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-ledger.json",
+        "sha256": "121e0685143e6d6b144e6417285ab0431435fec4abefa29f227c6c30fef5defb",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/demo/l3-sparse-designated-array-lookup-unsafe-scan.json",
+        "sha256": "9292fa390db3004f81efc7fe74b12c0ff4522cd6290c1217d6ccb43581b3d52b",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gwkfc1q8\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gwkfc1q8\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gwkfc1q8\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/sparse-designated-array-lookup/l3-sparse-designated-array-lookup-rust-draft.rs",
+      "sha256": "599516d90980620af8cf33f808d78e41c01ad270cb7b2a97b0487c24e17bf951",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "sparse-designated-array-lookup",
+    "source_commit": "demo-sparse-designated-array-lookup-20260708",
+    "status": "passed",
+    "target_id": "demo"
+  },
+  "generated_draft_semantic_pass": true,
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "sparse-designated-array-lookup",
+  "status": "passed",
+  "summary": "Auto-translation run completed with accepted C oracle, Rust replay, diff, negative diff, unsafe, version/cache, and final-verification evidence binding.",
+  "target_id": "demo"
+}
