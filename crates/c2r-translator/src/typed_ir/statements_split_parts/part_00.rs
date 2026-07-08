@@ -290,6 +290,11 @@ fn emit_stmt(
             {
                 return Ok(format!("{indent}{line}\n"));
             }
+            if let Some(line) = emit_discarded_inc_dec_statement(expr, symbols, context)
+                .map_err(|detail| format!("expr {detail}"))?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             if let Some(line) = emit_discarded_pointer_return_call_statement(expr, symbols, context)
                 .map_err(|detail| format!("expr {detail}"))?
             {

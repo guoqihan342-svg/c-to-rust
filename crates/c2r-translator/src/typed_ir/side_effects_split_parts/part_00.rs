@@ -160,7 +160,7 @@ fn emit_expr_with_prelude(
             indent_level,
             path,
         ),
-        IrExpr::IncDec { .. } => emit_inc_dec_value_expr(expr, symbols, indent_level)
+        IrExpr::IncDec { .. } => emit_inc_dec_value_expr(expr, symbols, context, indent_level)
             .map_err(|detail| format!("{path} {detail}"))?
             .ok_or_else(|| format!("{path} inc/dec expression is unsupported")),
         IrExpr::Deref { ptr, ty, .. } if matches!(ptr.as_ref(), IrExpr::IncDec { .. }) => {
@@ -327,6 +327,9 @@ fn side_effect_expr_assigned_var_name(expr: &IrExpr) -> Result<Option<&str>, Str
     if let Some(name) = scalar_inc_dec_assigned_var_name(expr) {
         return Ok(Some(name.as_str()));
     }
+    if let Some(name) = member_inc_dec_assigned_base_var_name(expr) {
+        return Ok(Some(name.as_str()));
+    }
     let IrExpr::Call { args, .. } = expr else {
         return Ok(None);
     };
@@ -339,6 +342,25 @@ fn side_effect_expr_assigned_var_name(expr: &IrExpr) -> Result<Option<&str>, Str
                 .to_string(),
         ),
     }
+}
+
+fn member_inc_dec_assigned_base_var_name(expr: &IrExpr) -> Option<&String> {
+    let IrExpr::IncDec { target, ty, .. } = expr else {
+        return None;
+    };
+    let IrExpr::Member {
+        base,
+        ty: target_ty,
+        is_arrow: true,
+        ..
+    } = target.as_ref()
+    else {
+        return None;
+    };
+    let IrExpr::Var { name, .. } = base.as_ref() else {
+        return None;
+    };
+    (target_ty == ty && is_integer_type(target_ty)).then_some(name)
 }
 
 fn expr_mentions_var(expr: &IrExpr, expected: &str) -> bool {
@@ -401,34 +423,55 @@ fn emit_single_inc_dec_call_statement_expr(
 fn emit_prefix_inc_dec_value_expr(
     expr: &IrExpr,
     symbols: &HashSet<String>,
+    context: &EmitContext,
     indent_level: usize,
 ) -> Result<Option<EmittedExpr>, String> {
     let IrExpr::IncDec {
         target,
+        op,
         prefix: true,
+        ty,
         ..
     } = expr
     else {
         return Ok(None);
     };
-    let Some(line) = emit_prefix_inc_dec_statement(expr, symbols)? else {
-        return Ok(None);
-    };
-    let IrExpr::Var { name, .. } = target.as_ref() else {
-        return Ok(None);
-    };
-
     let indent = "    ".repeat(indent_level);
-    let name = emit_identifier(name, "prefix inc/dec value target")?;
+
+    if let Some(line) = emit_prefix_inc_dec_statement(expr, symbols)? {
+        let IrExpr::Var { name, .. } = target.as_ref() else {
+            return Ok(None);
+        };
+        let name = emit_identifier(name, "prefix inc/dec value target")?;
+        return Ok(Some(EmittedExpr {
+            prelude: format!("{indent}{line}\n"),
+            expr: name,
+        }));
+    }
+
+    let Some((target_name, target_ty)) =
+        emit_member_inc_dec_value_target(target, ty, symbols, context, "prefix inc/dec target")?
+    else {
+        return Ok(None);
+    };
+    let one = emit_integer_literal(1, target_ty)
+        .map_err(|detail| format!("prefix inc/dec step {detail}"))?;
+    let rhs = emit_inc_dec_assignment_rhs(&target_name, target_ty, op, &one).ok_or_else(|| {
+        format!(
+            "prefix inc/dec target {target_name} has unsupported type {}",
+            type_label(target_ty)
+        )
+    })?;
     Ok(Some(EmittedExpr {
-        prelude: format!("{indent}{line}\n"),
-        expr: name,
+        prelude: format!("{indent}{target_name} = {rhs};\n"),
+        expr: target_name,
     }))
 }
 
 fn emit_postfix_inc_dec_value_expr(
     expr: &IrExpr,
     symbols: &mut HashSet<String>,
+    context: &EmitContext,
     indent_level: usize,
 ) -> Result<Option<EmittedExpr>, String> {
     let IrExpr::IncDec {
@@ -441,32 +484,36 @@ fn emit_postfix_inc_dec_value_expr(
     else {
         return Ok(None);
     };
-    let IrExpr::Var {
+    let (name, target_ty) = if let IrExpr::Var {
         name,
         ty: target_ty,
         ..
     } = target.as_ref()
-    else {
+    {
+        if !symbols.contains(name) {
+            return Err(format!("postfix inc/dec target {name} is not declared"));
+        }
+        if target_ty != ty {
+            return Err(format!(
+                "postfix inc/dec target {name} type {} does not match result type {}",
+                type_label(target_ty),
+                type_label(ty)
+            ));
+        }
+        if !is_integer_type(target_ty) {
+            return Err(format!(
+                "postfix inc/dec target {name} has unsupported type {}",
+                type_label(target_ty)
+            ));
+        }
+        (emit_identifier(name, "postfix inc/dec target")?, target_ty)
+    } else if let Some((target_name, target_ty)) =
+        emit_member_inc_dec_value_target(target, ty, symbols, context, "postfix inc/dec target")?
+    {
+        (target_name, target_ty)
+    } else {
         return Ok(None);
     };
-    if !symbols.contains(name) {
-        return Err(format!("postfix inc/dec target {name} is not declared"));
-    }
-    if target_ty != ty {
-        return Err(format!(
-            "postfix inc/dec target {name} type {} does not match result type {}",
-            type_label(target_ty),
-            type_label(ty)
-        ));
-    }
-    if !is_integer_type(target_ty) {
-        return Err(format!(
-            "postfix inc/dec target {name} has unsupported type {}",
-            type_label(target_ty)
-        ));
-    }
-
-    let name = emit_identifier(name, "postfix inc/dec target")?;
     let one = emit_integer_literal(1, target_ty)
         .map_err(|detail| format!("postfix inc/dec step {detail}"))?;
     let rhs = emit_inc_dec_assignment_rhs(&name, target_ty, op, &one).ok_or_else(|| {
@@ -495,12 +542,52 @@ fn emit_postfix_inc_dec_value_expr(
 fn emit_inc_dec_value_expr(
     expr: &IrExpr,
     symbols: &mut HashSet<String>,
+    context: &EmitContext,
     indent_level: usize,
 ) -> Result<Option<EmittedExpr>, String> {
-    if let Some(emitted) = emit_prefix_inc_dec_value_expr(expr, symbols, indent_level)? {
+    if let Some(emitted) = emit_prefix_inc_dec_value_expr(expr, symbols, context, indent_level)? {
         return Ok(Some(emitted));
     }
-    emit_postfix_inc_dec_value_expr(expr, symbols, indent_level)
+    emit_postfix_inc_dec_value_expr(expr, symbols, context, indent_level)
+}
+
+fn emit_member_inc_dec_value_target<'a>(
+    target: &'a IrExpr,
+    result_ty: &IrType,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+    path: &str,
+) -> Result<Option<(String, &'a IrType)>, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty: target_ty,
+        is_arrow,
+        ..
+    } = target
+    else {
+        return Ok(None);
+    };
+    if !*is_arrow {
+        return Ok(None);
+    }
+    if target_ty != result_ty {
+        return Err(format!(
+            "{path} field {field} type {} does not match result type {}",
+            type_label(target_ty),
+            type_label(result_ty)
+        ));
+    }
+    if !is_integer_type(target_ty) {
+        return Err(format!(
+            "{path} field {field} has unsupported type {}",
+            type_label(target_ty)
+        ));
+    }
+    let target_name =
+        emit_mutable_record_pointer_member_assignment_target(base, field, target_ty, symbols, context)
+            .map_err(|detail| format!("{path} {detail}"))?;
+    Ok(Some((target_name, target_ty)))
 }
 
 fn emit_inc_dec_assignment_rhs(

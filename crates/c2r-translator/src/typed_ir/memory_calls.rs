@@ -111,6 +111,112 @@ fn emit_prefix_inc_dec_statement(
     Ok(Some(format!("{name} = {rhs};")))
 }
 
+fn emit_discarded_inc_dec_statement(
+    expr: &IrExpr,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::IncDec { target, op, ty, .. } = expr else {
+        return Ok(None);
+    };
+
+    if let Some(line) = emit_discarded_scalar_inc_dec_statement(target, ty, op, symbols)? {
+        return Ok(Some(line));
+    }
+    emit_discarded_record_pointer_member_inc_dec_statement(target, ty, op, symbols, context)
+}
+
+fn emit_discarded_scalar_inc_dec_statement(
+    target: &IrExpr,
+    result_ty: &IrType,
+    op: &IrIncDecOp,
+    symbols: &HashSet<String>,
+) -> Result<Option<String>, String> {
+    let IrExpr::Var {
+        name,
+        ty: target_ty,
+        ..
+    } = target
+    else {
+        return Ok(None);
+    };
+    if !symbols.contains(name) {
+        return Err(format!("inc/dec statement target {name} is not declared"));
+    }
+    if target_ty != result_ty {
+        return Err(format!(
+            "inc/dec statement target {name} type {} does not match result type {}",
+            type_label(target_ty),
+            type_label(result_ty)
+        ));
+    }
+    if !is_integer_type(target_ty) {
+        return Err(format!(
+            "inc/dec statement target {name} has unsupported type {}",
+            type_label(target_ty)
+        ));
+    }
+    let name = emit_identifier(name, "inc/dec statement target")?;
+    emit_inc_dec_statement_assignment(&name, target_ty, op, "inc/dec statement")
+        .map(Some)
+}
+
+fn emit_discarded_record_pointer_member_inc_dec_statement(
+    target: &IrExpr,
+    result_ty: &IrType,
+    op: &IrIncDecOp,
+    symbols: &HashSet<String>,
+    context: &EmitContext,
+) -> Result<Option<String>, String> {
+    let IrExpr::Member {
+        base,
+        field,
+        ty: target_ty,
+        is_arrow,
+        ..
+    } = target
+    else {
+        return Ok(None);
+    };
+    if !*is_arrow {
+        return Ok(None);
+    }
+    if target_ty != result_ty {
+        return Err(format!(
+            "inc/dec statement field {field} type {} does not match result type {}",
+            type_label(target_ty),
+            type_label(result_ty)
+        ));
+    }
+    if !is_integer_type(target_ty) {
+        return Err(format!(
+            "inc/dec statement field {field} has unsupported type {}",
+            type_label(target_ty)
+        ));
+    }
+    let target_name =
+        emit_mutable_record_pointer_member_assignment_target(base, field, target_ty, symbols, context)
+            .map_err(|detail| format!("inc/dec statement {detail}"))?;
+    emit_inc_dec_statement_assignment(&target_name, target_ty, op, "inc/dec statement")
+        .map(Some)
+}
+
+fn emit_inc_dec_statement_assignment(
+    target_name: &str,
+    target_ty: &IrType,
+    op: &IrIncDecOp,
+    path: &str,
+) -> Result<String, String> {
+    let one = emit_integer_literal(1, target_ty).map_err(|detail| format!("{path} step {detail}"))?;
+    let rhs = emit_inc_dec_assignment_rhs(target_name, target_ty, op, &one).ok_or_else(|| {
+        format!(
+            "{path} target {target_name} has unsupported type {}",
+            type_label(target_ty)
+        )
+    })?;
+    Ok(format!("{target_name} = {rhs};"))
+}
+
 fn validate_c_memset_statement_shape<'a>(
     args: &'a [IrExpr],
     ty: &IrType,

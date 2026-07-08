@@ -579,6 +579,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_postfix_inc_statement_for_i32_scalar",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
           "name": "typed_ir_emits_prefix_dec_statement_for_usize_scalar",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -640,11 +644,6 @@
           "name": "typed_ir_rejects_signed_right_shift_without_contract",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "signed right shift is implementation-defined without an explicit slice contract"
-        },
-        {
-          "name": "typed_ir_keeps_prefix_inc_dec_member_target_fail_closed",
-          "path": "crates/c2r-translator/tests/bounded_translation.rs",
-          "fail_closed_reason": "prefix inc/dec statement-position support is limited to simple scalar variables"
         }
       ]
     },
@@ -2399,7 +2398,9 @@
         "recursive nested record zero initializer for address-taken direct-call candidates",
         "embedded slice source C oracle harness diagnostic execution",
         "record value field inc/dec for ForStmt step",
-        "mutable record pointer field inc/dec for ForStmt step"
+        "mutable record pointer field inc/dec for ForStmt step",
+        "mutable record pointer field value-position inc/dec",
+        "mutable record pointer field statement-position inc/dec"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -2516,6 +2517,26 @@
             {
               "name": "typed_ir_for_emits_mutable_record_pointer_field_inc_dec_step_assignment",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_prefix_inc_value_decl_initializer_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_postfix_inc_value_decl_initializer_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_postfix_inc_direct_call_arg_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_prefix_inc_dec_statement_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_postfix_inc_dec_statement_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
             }
           ]
         },
@@ -2558,6 +2579,16 @@
             {
               "name": "for_step_stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_step",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
+            },
+            {
+              "name": "typed_ir_rejects_const_record_pointer_arrow_field_inc_dec_statement",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+              "fail_closed_reason": "statement-position mutable record pointer field inc/dec still requires mutable ownership evidence and rejects const record pointer bases"
+            },
+            {
+              "name": "typed_ir_rejects_member_inc_dec_value_when_sibling_reads_same_record_pointer_base",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+              "fail_closed_reason": "value-position mutable record pointer field inc/dec conservatively rejects sibling reads of the same record pointer base"
             }
           ]
         },
@@ -2616,6 +2647,26 @@
             {
               "name": "typed_ir_for_emits_mutable_record_pointer_field_inc_dec_step_assignment",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_prefix_inc_value_decl_initializer_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_postfix_inc_value_decl_initializer_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_postfix_inc_direct_call_arg_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_prefix_inc_dec_statement_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+            },
+            {
+              "name": "typed_ir_emits_postfix_inc_dec_statement_for_mutable_record_pointer_field",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
             }
           ]
         },
@@ -2767,6 +2818,26 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_prefix_inc_value_decl_initializer_for_mutable_record_pointer_field",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
+          "name": "typed_ir_emits_postfix_inc_value_decl_initializer_for_mutable_record_pointer_field",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
+          "name": "typed_ir_emits_postfix_inc_direct_call_arg_for_mutable_record_pointer_field",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
+          "name": "typed_ir_emits_prefix_inc_dec_statement_for_mutable_record_pointer_field",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
+          "name": "typed_ir_emits_postfix_inc_dec_statement_for_mutable_record_pointer_field",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs"
+        },
+        {
           "name": "clang_ast_dump_emits_record_field_inc_dec_for_step_when_enabled",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "proof_class": "optional_real_clang_smoke"
@@ -2827,6 +2898,16 @@
           "name": "for_step_stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_step",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
           "fail_closed_reason": "ForStmt step record pointer arrow-field inc/dec still requires a non-const direct mutable record pointer variable base"
+        },
+        {
+          "name": "typed_ir_rejects_const_record_pointer_arrow_field_inc_dec_statement",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+          "fail_closed_reason": "standalone record pointer arrow-field inc/dec still requires a non-const direct mutable record pointer variable base"
+        },
+        {
+          "name": "typed_ir_rejects_member_inc_dec_value_when_sibling_reads_same_record_pointer_base",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_02_02.rs",
+          "fail_closed_reason": "value-position mutable record pointer field inc/dec is admitted only when sibling expressions do not read the same record pointer base"
         }
       ]
     },

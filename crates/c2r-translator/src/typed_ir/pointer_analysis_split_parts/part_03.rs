@@ -296,18 +296,38 @@ fn collect_mutable_record_pointer_write_params_from_body(
 ) -> Result<(), String> {
     for stmt in body {
         match stmt {
-            IrStmt::Assign { target, .. } => {
+            IrStmt::Decl { init, .. } => {
+                if let Some(init) = init {
+                    collect_mutable_record_pointer_write_params_from_expr(
+                        init,
+                        mutable_record_pointer_params,
+                        write_params,
+                    )?;
+                }
+            }
+            IrStmt::Assign { target, value, .. } => {
                 collect_mutable_record_pointer_write_param_from_target(
                     target,
                     mutable_record_pointer_params,
                     write_params,
-                )?
+                )?;
+                collect_mutable_record_pointer_write_params_from_expr(
+                    value,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
             }
             IrStmt::If {
+                condition,
                 then_body,
                 else_body,
                 ..
             } => {
+                collect_mutable_record_pointer_write_params_from_expr(
+                    condition,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
                 collect_mutable_record_pointer_write_params_from_body(
                     then_body,
                     mutable_record_pointer_params,
@@ -319,21 +339,51 @@ fn collect_mutable_record_pointer_write_params_from_body(
                     write_params,
                 )?;
             }
-            IrStmt::While { body, .. } | IrStmt::DoWhile { body, .. } => {
+            IrStmt::While { condition, body, .. } => {
+                collect_mutable_record_pointer_write_params_from_expr(
+                    condition,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
                 collect_mutable_record_pointer_write_params_from_body(
                     body,
                     mutable_record_pointer_params,
                     write_params,
                 )?;
             }
+            IrStmt::DoWhile {
+                body, condition, ..
+            } => {
+                collect_mutable_record_pointer_write_params_from_body(
+                    body,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+                collect_mutable_record_pointer_write_params_from_expr(
+                    condition,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
             IrStmt::For {
-                init, step, body, ..
+                init,
+                condition,
+                step,
+                body,
+                ..
             } => {
                 collect_mutable_record_pointer_write_params_from_body(
                     init,
                     mutable_record_pointer_params,
                     write_params,
                 )?;
+                if let Some(condition) = condition {
+                    collect_mutable_record_pointer_write_params_from_expr(
+                        condition,
+                        mutable_record_pointer_params,
+                        write_params,
+                    )?;
+                }
                 if let Some(step) = step {
                     collect_mutable_record_pointer_write_params_from_body(
                         std::slice::from_ref(step.as_ref()),
@@ -347,15 +397,131 @@ fn collect_mutable_record_pointer_write_params_from_body(
                     write_params,
                 )?;
             }
-            IrStmt::Decl { .. }
-            | IrStmt::Return { .. }
-            | IrStmt::Break { .. }
-            | IrStmt::Continue { .. }
-            | IrStmt::Expr { .. }
-            | IrStmt::Unsupported { .. } => {}
+            IrStmt::Return { value, .. } => {
+                if let Some(value) = value {
+                    collect_mutable_record_pointer_write_params_from_expr(
+                        value,
+                        mutable_record_pointer_params,
+                        write_params,
+                    )?;
+                }
+            }
+            IrStmt::Expr { expr, .. } => {
+                collect_mutable_record_pointer_write_params_from_expr(
+                    expr,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
+            IrStmt::Break { .. } | IrStmt::Continue { .. } | IrStmt::Unsupported { .. } => {}
         }
     }
     Ok(())
+}
+
+fn collect_mutable_record_pointer_write_params_from_expr(
+    expr: &IrExpr,
+    mutable_record_pointer_params: &HashMap<&str, &IrType>,
+    write_params: &mut HashSet<String>,
+) -> Result<(), String> {
+    match expr {
+        IrExpr::IncDec { target, .. } => {
+            collect_mutable_record_pointer_write_param_from_target(
+                target,
+                mutable_record_pointer_params,
+                write_params,
+            )?;
+            collect_mutable_record_pointer_write_params_from_expr(
+                target,
+                mutable_record_pointer_params,
+                write_params,
+            )
+        }
+        IrExpr::Binary { lhs, rhs, .. } => {
+            collect_mutable_record_pointer_write_params_from_expr(
+                lhs,
+                mutable_record_pointer_params,
+                write_params,
+            )?;
+            collect_mutable_record_pointer_write_params_from_expr(
+                rhs,
+                mutable_record_pointer_params,
+                write_params,
+            )
+        }
+        IrExpr::Unary { operand, .. }
+        | IrExpr::Cast { expr: operand, .. }
+        | IrExpr::LValueToRValue { expr: operand, .. }
+        | IrExpr::ArrayToPointerDecay { expr: operand, .. }
+        | IrExpr::FunctionToPointerDecay { expr: operand, .. }
+        | IrExpr::Member { base: operand, .. }
+        | IrExpr::Deref { ptr: operand, .. }
+        | IrExpr::AddrOf { operand, .. } => {
+            collect_mutable_record_pointer_write_params_from_expr(
+                operand,
+                mutable_record_pointer_params,
+                write_params,
+            )
+        }
+        IrExpr::Conditional {
+            condition,
+            then_expr,
+            else_expr,
+            ..
+        } => {
+            collect_mutable_record_pointer_write_params_from_expr(
+                condition,
+                mutable_record_pointer_params,
+                write_params,
+            )?;
+            collect_mutable_record_pointer_write_params_from_expr(
+                then_expr,
+                mutable_record_pointer_params,
+                write_params,
+            )?;
+            collect_mutable_record_pointer_write_params_from_expr(
+                else_expr,
+                mutable_record_pointer_params,
+                write_params,
+            )
+        }
+        IrExpr::Index { base, index, .. } => {
+            collect_mutable_record_pointer_write_params_from_expr(
+                base,
+                mutable_record_pointer_params,
+                write_params,
+            )?;
+            collect_mutable_record_pointer_write_params_from_expr(
+                index,
+                mutable_record_pointer_params,
+                write_params,
+            )
+        }
+        IrExpr::ArrayLiteral { elements, .. } => {
+            for element in elements {
+                collect_mutable_record_pointer_write_params_from_expr(
+                    element,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
+            Ok(())
+        }
+        IrExpr::Call { args, .. } => {
+            for arg in args {
+                collect_mutable_record_pointer_write_params_from_expr(
+                    arg,
+                    mutable_record_pointer_params,
+                    write_params,
+                )?;
+            }
+            Ok(())
+        }
+        IrExpr::LitInt { .. }
+        | IrExpr::NullPtr { .. }
+        | IrExpr::Var { .. }
+        | IrExpr::Unsupported { .. } => Ok(()),
+    }
 }
 
 fn collect_mutable_record_pointer_write_param_from_target(

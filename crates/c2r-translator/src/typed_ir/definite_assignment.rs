@@ -520,8 +520,18 @@ fn validate_definite_assignment_expr(
             }
             Ok(())
         }
-        IrExpr::IncDec { target, .. } => validate_definite_assignment_expr(target, state)
-            .map_err(|detail| format!("inc/dec target {detail}")),
+        IrExpr::IncDec { target, .. } => {
+            if let Some(key) =
+                mutable_record_pointer_field_key_for_definite_assignment(target, state)?
+            {
+                validate_definite_assignment_target(target, state)
+                    .map_err(|detail| format!("inc/dec target {detail}"))?;
+                state.assign_mutable_record_pointer_field(key);
+                return Ok(());
+            }
+            validate_definite_assignment_expr(target, state)
+                .map_err(|detail| format!("inc/dec target {detail}"))
+        }
         IrExpr::Deref { ptr, .. } => {
             validate_definite_assignment_expr(ptr, state)
                 .map_err(|detail| format!("deref pointer {detail}"))?;
