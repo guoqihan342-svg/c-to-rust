@@ -40,7 +40,7 @@ After a successful focused run, the runner writes `selected-entrypoints-validati
 
 With `--require-local-artifacts`, `validate_judge_entrypoints` also deep-validates non-smoke `competition_summary` artifacts through `validate_competition_run_summary.py`, including workflow metrics, before/after refs, repair history, unsafe accounting, final-gate rules, and slice counts.
 
-The same public packet now folds C2Rust baseline manifest status into route-governance and the milestone scorecard: `raw_c2rust.c2rust_baseline_rollup` deduplicates by evidence root, shows manifest/source/compile-pass counts, and still keeps raw C2Rust at `semantic_gate=false` plus `translation_coverage_numerator=0`; typed-IR generated-draft acceptance is counted separately, and the coverage matrix now derives `translator_generated_semantic_pass_count=18`, including `real-fdb-calc-crc32`, `real-fdb-blob-make`, `real-fdb-kv-del`, `real-fdb-kv-set`, `zlib-ng/adler32-step`, and a set of demo exact typed-IR drafts.
+The same public packet now folds C2Rust baseline manifest status into route-governance and the milestone scorecard: `raw_c2rust.c2rust_baseline_rollup` deduplicates by evidence root, shows manifest/source/compile-pass counts, and still keeps raw C2Rust at `semantic_gate=false` plus `translation_coverage_numerator=0`; typed-IR generated-draft acceptance is counted separately, and the coverage matrix now derives `translator_generated_semantic_pass_count=21`, including `real-fdb-calc-crc32`, `real-fdb-blob-make`, `real-fdb-kv-del`, `real-fdb-kv-set`, `real-fdb-kv-to-blob`, `zlib-ng/adler32-step`, and a set of demo exact typed-IR drafts.
 
 Primary real FlashDB run:
 
@@ -111,7 +111,7 @@ Fallback artifacts:
 - `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 
-Boundary: the real FlashDB exhibit binds accepted-evidence before/after artifacts for `real-fdb-calc-crc32` and unsafe 2 -> 0. `judge-demo-report.json.repair_summary` only aggregates repair/retry/rollback fields from bound workflow metrics / before-after exhibit data and does not replace the validator or oracle. The C2Rust baseline now has generated + compile-only + direct replay observable-passed evidence, but it remains `candidate_context_only` / `semantic_pass=false`; typed-IR generated Rust drafts count only when their exact drafts have `generated_draft_acceptance.status=passed`, and the current translator-generated numerator is 18.
+Boundary: the real FlashDB exhibit binds accepted-evidence before/after artifacts for `real-fdb-calc-crc32` and unsafe 2 -> 0. `judge-demo-report.json.repair_summary` only aggregates repair/retry/rollback fields from bound workflow metrics / before-after exhibit data and does not replace the validator or oracle. The C2Rust baseline now has generated + compile-only + direct replay observable-passed evidence, but it remains `candidate_context_only` / `semantic_pass=false`; typed-IR generated Rust drafts count only when their exact drafts have `generated_draft_acceptance.status=passed`, and the current translator-generated numerator is 21.
 
 ## Maintenance Notes
 

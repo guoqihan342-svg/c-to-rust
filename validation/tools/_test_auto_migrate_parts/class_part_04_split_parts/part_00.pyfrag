@@ -225,6 +225,47 @@ class _AutoMigrateTestsPart04:
                 "declared_not_executed",
             )
 
+    def test_record_pointer_identity_return_oracle_harness_binds_real_fdb_kv_to_blob_cases(self) -> None:
+        module = load_auto_migrate_module()
+        spec_path = REPO_ROOT / "validation" / "slice-specs" / "flashdb-real-fdb-kv-to-blob.json"
+        spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="auto-migrate-real-fdb-kv-to-blob-oracle-") as tmp:
+            evidence_dir = Path(tmp) / "evidence"
+            evidence_dir.mkdir()
+
+            module.generate_oracle_harness_draft(spec, evidence_dir, skip=True)
+
+            harness = (evidence_dir / "l3-real-fdb-kv-to-blob-c-oracle-harness-draft.c").read_text(
+                encoding="utf-8"
+            )
+            oracle = json.loads(
+                (evidence_dir / "l3-real-fdb-kv-to-blob-c-oracle-status.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                oracle["compile_command_draft"]["link_strategy"],
+                "compile_harness_with_embedded_slice_source",
+            )
+            self.assertEqual(oracle["compile_command_draft"]["link_source_files"], [])
+            self.assertIn("#include <flashdb.h>\n", harness)
+            self.assertIn(
+                "fdb_blob_t fdb_kv_to_blob(fdb_kv_t kv, fdb_blob_t blob)\n{",
+                harness,
+            )
+            self.assertIn("struct fdb_kv nominal_kv_value_kv = {0};", harness)
+            self.assertIn("nominal_kv_value_kv.addr.start = (uint32_t)4096u;", harness)
+            self.assertIn("nominal_kv_value_blob.saved.len = (size_t)3u;", harness)
+            self.assertIn(
+                "fdb_blob_t actual_nominal_kv_value_blob = fdb_kv_to_blob(&nominal_kv_value_kv, &nominal_kv_value_blob);",
+                harness,
+            )
+            for case_id in ("zero-addresses-empty-value", "nominal-kv-value", "max-u32-addresses"):
+                for field in ("return_same_blob", "blob.saved.meta_addr", "blob.saved.addr", "blob.saved.len"):
+                    self.assertIn(f"fixture case {case_id} {field} matched", harness)
+            self.assertNotIn("TODO: load fixture values", harness)
+            self.assertNotIn("is not supported by this record-pointer identity-return", harness)
+
     def test_c_oracle_harness_execution_uses_absolute_paths_for_relative_evidence_dir(self) -> None:
         module = load_auto_migrate_module()
         target_dir = REPO_ROOT / "target"

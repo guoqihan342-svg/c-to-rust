@@ -18,7 +18,7 @@
         }
       ],
       "real_c_slice": "real-fdb-kv-to-blob",
-      "semantic_pass": false
+      "semantic_pass": true
     }
   ],
   "governance_delta": [

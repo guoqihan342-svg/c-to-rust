@@ -1,12 +1,12 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-baseline-manifest.json",
-    "sha256": "fe1a83b01e6ae7ba4af52a914a45c2daafb6bea987c327fa23be8d702ac7b329",
+    "sha256": "dfb35be1879f61222794caf53ad593524f5f47fac8cb43945b14b4779593bf26",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=1d9d94a12cae20d4413f7b6b31b08ccc3f6e7aa7ccd50f0f2bd40581ef3e3f31",
+    "slice_spec_sha256=9e7382bc40f2420f99d8118756b776aedbc92d2b91bf1f5e4cdff533a5f5f1c7",
     "fixture_hash=real-fdb-kv-to-blob-fixture",
     "build_profile_hash=1e0a33cc99cd0cd11d457d6481ba2541850641426abcb92234286392d02d5644",
     "translator_version=0.1.0",
@@ -107,7 +107,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-kv-to-blob.json",
-      "sha256": "1d9d94a12cae20d4413f7b6b31b08ccc3f6e7aa7ccd50f0f2bd40581ef3e3f31",
+      "sha256": "9e7382bc40f2420f99d8118756b776aedbc92d2b91bf1f5e4cdff533a5f5f1c7",
       "status": "ready"
     },
     "type_map": {
@@ -116,11 +116,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "0516aae6a86d8fa1cdb8568e456b5dff3e60443b",
+  "repo_commit": "538b4722970075fc3857fcdc6aec18b35221d933",
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-route-decision.json",
-    "sha256": "927aee5907ce1504e09b1b6862572c70e3b884a2463c0354042ac8f43acc7405",
+    "sha256": "71472f95f4e18b7df925362a739f5d602121847358c727e49bae70488ddb1c03",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -167,8 +167,8 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "e48e68ef1ae2ea8a7c78dc641de88d649f722d0303b3c9b9835c0eedee68144f",
-    "status": "incomplete"
+    "sha256": "4833a80fe4d5b78a15cd3f3e556b6fa0ebfc57c93683b17d9daf1a5ac861e2ef",
+    "status": "passed"
   },
   "verification_plan": [
     {

@@ -26,6 +26,7 @@
     "source_branch": "competition"
   },
   "c_boundary": {
+    "oracle_source_mode": "embedded_slice_c_source",
     "files": [
       {
         "path": "src/fdb_kvdb.c",

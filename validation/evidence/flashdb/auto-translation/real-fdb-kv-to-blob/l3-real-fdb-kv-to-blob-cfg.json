@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=1d9d94a12cae20d4413f7b6b31b08ccc3f6e7aa7ccd50f0f2bd40581ef3e3f31",
+    "slice_spec_sha256=9e7382bc40f2420f99d8118756b776aedbc92d2b91bf1f5e4cdff533a5f5f1c7",
     "fixture_hash=real-fdb-kv-to-blob-fixture",
     "build_profile_hash=1e0a33cc99cd0cd11d457d6481ba2541850641426abcb92234286392d02d5644",
     "translator_version=0.1.0",
@@ -112,12 +112,12 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "0516aae6a86d8fa1cdb8568e456b5dff3e60443b",
+  "repo_commit": "538b4722970075fc3857fcdc6aec18b35221d933",
   "schema_version": 1,
   "slice_id": "real-fdb-kv-to-blob",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-kv-to-blob.json",
-    "sha256": "1d9d94a12cae20d4413f7b6b31b08ccc3f6e7aa7ccd50f0f2bd40581ef3e3f31",
+    "sha256": "9e7382bc40f2420f99d8118756b776aedbc92d2b91bf1f5e4cdff533a5f5f1c7",
     "status": "ready"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",

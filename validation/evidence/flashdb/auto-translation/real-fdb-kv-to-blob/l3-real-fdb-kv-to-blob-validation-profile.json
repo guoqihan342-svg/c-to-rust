@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-baseline-manifest.json",
-        "sha256": "fe1a83b01e6ae7ba4af52a914a45c2daafb6bea987c327fa23be8d702ac7b329",
+        "sha256": "dfb35be1879f61222794caf53ad593524f5f47fac8cb43945b14b4779593bf26",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -36,7 +36,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-c2rust-baseline-manifest.json",
-          "sha256": "fe1a83b01e6ae7ba4af52a914a45c2daafb6bea987c327fa23be8d702ac7b329",
+          "sha256": "dfb35be1879f61222794caf53ad593524f5f47fac8cb43945b14b4779593bf26",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -172,48 +172,78 @@
     "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
   },
   "generated_draft_acceptance": {
-    "accepted_evidence_binding": null,
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-kv-to-blob.json",
+      "fixture_sha256": "d3905d7c080b56b3c3264edc63ca29418b8b171adbdb56931a68125033ff4ffe",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "642fd260e9e66c0f491f9512aac7fd7a1d2a3d63beb9a5cf1f3a6852e62fd8a0",
+        "diff": "28712a5643b69ad912a8df1a8e772630ca4cdcfe7a10e682a4ad821db3a26ba7",
+        "negative_diff": "af24a61fccf0d6c7a95e1a5905b57032b792a3473808e82d0812968c468ab929",
+        "rust_report": "c97931368e5e8197eaad1883967c7bec2763b1041eda12493a5766a300cbcc21",
+        "unsafe_ledger": "702aac55fb4219bd5582a1a22e3d315fb5d0df6deb73b8690944b239fafd1609",
+        "unsafe_scan": "387bc1c3e0674ad0b30970bb39d29bae34443087c4eeaefa545936cb05f2a417"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-kv-to-blob",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
     "accepted_evidence_refs": {
       "c_oracle": {
-        "status": "missing"
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-c-oracle.json",
+        "sha256": "642fd260e9e66c0f491f9512aac7fd7a1d2a3d63beb9a5cf1f3a6852e62fd8a0",
+        "status": "passed"
       },
       "negative_diff": {
-        "status": "missing"
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-negative-diff.json",
+        "sha256": "af24a61fccf0d6c7a95e1a5905b57032b792a3473808e82d0812968c468ab929",
+        "status": "expected_failed"
       },
       "rust_report": {
-        "status": "missing"
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-rust-report.json",
+        "sha256": "c97931368e5e8197eaad1883967c7bec2763b1041eda12493a5766a300cbcc21",
+        "status": "passed"
       },
       "schema_diff": {
-        "status": "missing"
+        "path": "validation/evidence/flashdb/l3-real-fdb-kv-to-blob-diff.json",
+        "sha256": "28712a5643b69ad912a8df1a8e772630ca4cdcfe7a10e682a4ad821db3a26ba7",
+        "status": "passed"
       },
       "unsafe_ledger": {
-        "status": "missing"
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-ledger.json",
+        "status": "passed"
       },
       "unsafe_scan": {
-        "status": "missing"
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/l3-real-fdb-kv-to-blob-unsafe-scan.json",
+        "status": "passed"
       }
     },
-    "blocked_reasons": [
-      "accepted_evidence_binding_missing",
-      "generated_replay_not_passed",
-      "c_oracle_not_passed",
-      "c_oracle_path_missing",
-      "rust_report_not_passed",
-      "rust_report_path_missing",
-      "schema_diff_not_passed",
-      "schema_diff_path_missing",
-      "negative_diff_not_passed",
-      "negative_diff_path_missing",
-      "unsafe_scan_not_passed",
-      "unsafe_scan_path_missing",
-      "unsafe_ledger_not_passed",
-      "unsafe_ledger_path_missing"
-    ],
+    "blocked_reasons": [],
     "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
-    "claim_source": "blocked_generated_draft_acceptance",
-    "generated_draft_replay_pass": false,
-    "generated_draft_semantic_pass": false,
-    "replay_execution": {},
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gc8apoi5\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gc8apoi5\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gc8apoi5\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/generated-rust-replay.stdout.log"
+    },
     "rust_check": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-kv-to-blob/rust-check.json",
       "status": "passed"
@@ -226,10 +256,10 @@
     "schema_version": 1,
     "slice_id": "real-fdb-kv-to-blob",
     "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "status": "blocked",
+    "status": "passed",
     "target_id": "flashdb"
   },
-  "generated_draft_semantic_pass": false,
+  "generated_draft_semantic_pass": true,
   "goal": "dev",
   "loop_policy": {
     "fixed_project_loop_count_required": false,
@@ -258,6 +288,7 @@
       }
     },
     "fixture_representativeness": {
+      "accepted_oracle_case_count": 3,
       "case_source": "fixture_contract",
       "declared_case_count": 3,
       "fixture_hash": "real-fdb-kv-to-blob-fixture",
@@ -265,9 +296,7 @@
       "limitations": [],
       "representativeness": "bounded_fixture_contract"
     },
-    "insufficient_reasons": [
-      "fixture_accepted_oracle_case_count_missing"
-    ],
+    "insufficient_reasons": [],
     "observable_outputs": [
       "return_same_blob",
       "blob.saved.meta_addr",
@@ -291,7 +320,7 @@
       "sanitizer_status": "not_run"
     },
     "schema_version": 1,
-    "status": "insufficient",
+    "status": "sufficient_for_semantic_pass",
     "target": {
       "char_align": "unknown",
       "char_width": 8,
@@ -318,7 +347,7 @@
   },
   "profile": "L1-dev",
   "required_gate_status": {
-    "c_oracle_diff": "DRAFT_GENERATED",
+    "c_oracle_diff": "C_ORACLE_GENERATED",
     "compile": "passed"
   },
   "required_gates": [
@@ -355,12 +384,7 @@
     "status": "recorded"
   },
   "schema_version": 1,
-  "skipped_gates": [
-    {
-      "gate": "c_oracle_diff",
-      "reason": "DRAFT_GENERATED"
-    }
-  ],
+  "skipped_gates": [],
   "slice_id": "real-fdb-kv-to-blob",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "source_identity": {
@@ -375,7 +399,7 @@
     "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
     "source_root": "sources/FlashDB"
   },
-  "status": "incomplete",
+  "status": "passed",
   "target_id": "flashdb",
   "tool_boundaries": {
     "c_ub": [

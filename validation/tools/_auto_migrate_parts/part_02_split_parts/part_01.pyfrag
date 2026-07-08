@@ -108,6 +108,8 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
     if behavior_fields(spec) != ["return_code"]:
         if fdb_blob_make_replay_supported(spec):
             return rust_replay_fdb_blob_make_cases_source(spec, fixture_binding)
+        if fdb_kv_to_blob_replay_supported(spec):
+            return rust_replay_fdb_kv_to_blob_cases_source(spec, fixture_binding)
         if pure_uint32_value_replay_supported(spec):
             return rust_replay_pure_uint32_value_cases_source(spec, fixture_binding)
         if signed_i32_return_value_replay_supported(spec):
@@ -177,6 +179,15 @@ def fdb_blob_make_replay_supported(spec: dict[str, Any]) -> bool:
         "return_same_blob",
         "blob.buf",
         "blob.size",
+    ]
+
+
+def fdb_kv_to_blob_replay_supported(spec: dict[str, Any]) -> bool:
+    return required_str(spec, "function_name") == "fdb_kv_to_blob" and behavior_fields(spec) == [
+        "return_same_blob",
+        "blob.saved.meta_addr",
+        "blob.saved.addr",
+        "blob.saved.len",
     ]
 
 
@@ -1527,6 +1538,117 @@ def rust_replay_fdb_blob_make_case_literal(spec: dict[str, Any], case_binding: d
     )
 
 
+def rust_replay_fdb_kv_to_blob_cases_source(spec: dict[str, Any], fixture_binding: dict[str, Any]) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_fdb_kv_to_blob_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by the fdb_kv_to_blob replay draft generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        "        kv_addr_start: u32,\n",
+        "        kv_addr_value: u32,\n",
+        "        kv_value_len: usize,\n",
+        "        initial_blob_saved_meta_addr: u32,\n",
+        "        initial_blob_saved_addr: u32,\n",
+        "        initial_blob_saved_len: usize,\n",
+        "        blob_saved_meta_addr: u32,\n",
+        "        blob_saved_addr: u32,\n",
+        "        blob_saved_len: usize,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            "        let kv = FdbKv {\n",
+            "            addr: FdbKvAddr { start: case.kv_addr_start, value: case.kv_addr_value },\n",
+            "            value_len: case.kv_value_len,\n",
+            "        };\n",
+            "        let mut blob = FdbBlob {\n",
+            "            buf: core::ptr::null_mut(),\n",
+            "            size: 0usize,\n",
+            "            saved: FdbBlobSaved {\n",
+            "                meta_addr: case.initial_blob_saved_meta_addr,\n",
+            "                addr: case.initial_blob_saved_addr,\n",
+            "                len: case.initial_blob_saved_len,\n",
+            "            },\n",
+            "        };\n",
+            "        let blob_ptr = &mut blob as *mut FdbBlob;\n",
+            "        let returned_ptr = {\n",
+            f"            let returned = {function_name}(&kv, &mut blob);\n",
+            "            returned as *mut FdbBlob\n",
+            "        };\n",
+            '        assert_eq!(returned_ptr, blob_ptr, "{} return_same_blob drifted", case.id);\n',
+            '        assert_eq!(blob.saved.meta_addr, case.blob_saved_meta_addr, "{} blob.saved.meta_addr drifted", case.id);\n',
+            '        assert_eq!(blob.saved.addr, case.blob_saved_addr, "{} blob.saved.addr drifted", case.id);\n',
+            '        assert_eq!(blob.saved.len, case.blob_saved_len, "{} blob.saved.len drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_fdb_kv_to_blob_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    if expected_outputs.get("return_same_blob") is not True:
+        return None
+    kv = case_payload.get("kv")
+    initial_blob_saved = case_payload.get("initial_blob_saved")
+    if not isinstance(kv, dict) or not isinstance(initial_blob_saved, dict):
+        return None
+    kv_addr_start = kv.get("addr.start")
+    kv_addr_value = kv.get("addr.value")
+    kv_value_len = kv.get("value_len")
+    initial_meta_addr = initial_blob_saved.get("meta_addr")
+    initial_addr = initial_blob_saved.get("addr")
+    initial_len = initial_blob_saved.get("len")
+    expected_meta_addr = expected_outputs.get("blob.saved.meta_addr")
+    expected_addr = expected_outputs.get("blob.saved.addr")
+    expected_len = expected_outputs.get("blob.saved.len")
+    if not all(is_uint32_value(value) for value in [kv_addr_start, kv_addr_value, initial_meta_addr, initial_addr, expected_meta_addr, expected_addr]):
+        return None
+    if not all(is_size_value(value) for value in [kv_value_len, initial_len, expected_len]):
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"kv_addr_start: {int(kv_addr_start)}u32, "
+        f"kv_addr_value: {int(kv_addr_value)}u32, "
+        f"kv_value_len: {int(kv_value_len)}usize, "
+        f"initial_blob_saved_meta_addr: {int(initial_meta_addr)}u32, "
+        f"initial_blob_saved_addr: {int(initial_addr)}u32, "
+        f"initial_blob_saved_len: {int(initial_len)}usize, "
+        f"blob_saved_meta_addr: {int(expected_meta_addr)}u32, "
+        f"blob_saved_addr: {int(expected_addr)}u32, "
+        f"blob_saved_len: {int(expected_len)}usize "
+        "},\n"
+    )
+
+
 def rust_replay_fixture_case_literal(spec: dict[str, Any], case_binding: dict[str, Any]) -> str | None:
     case_payload = oracle_fixture_input_payload(spec, case_binding)
     if not isinstance(case_payload, dict):
@@ -1672,6 +1794,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
     if (
         behavior_fields(spec) != ["return_code"]
         and not fdb_blob_make_replay_supported(spec)
+        and not fdb_kv_to_blob_replay_supported(spec)
         and not pure_uint32_value_replay_supported(spec)
         and not signed_i32_return_value_replay_supported(spec)
         and not single_i32_return_value_replay_supported(spec)

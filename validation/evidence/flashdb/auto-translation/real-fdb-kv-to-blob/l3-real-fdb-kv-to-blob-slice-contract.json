@@ -53,6 +53,7 @@
     "functions": [
       "fdb_kv_to_blob"
     ],
+    "oracle_source_mode": "embedded_slice_c_source",
     "pointer_contract": {
       "alias_contract": {
         "complete_alias_safety": false,
