@@ -282,6 +282,20 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             self.assertTrue(capability["negative_cases"], capability["id"])
             self.assertFalse(capability["missing_links"], capability["id"])
 
+    def test_legacy_fallback_telemetry_is_provenance_coverage_not_semantic_claim(self) -> None:
+        report = translator_coverage_matrix.build_report(Path("."))
+        legacy = next(
+            capability
+            for capability in report["capabilities"]
+            if capability["id"] == "legacy-fallback-telemetry"
+        )
+
+        self.assertEqual(legacy["status"], "covered")
+        self.assertEqual(legacy["dimension_status"]["runtime_emitted_rust"]["status"], "not_applicable")
+        self.assertEqual(legacy["dimension_status"]["c_rust_diff"]["status"], "not_applicable")
+        self.assertEqual(legacy["dimension_status"]["legacy_fallback"]["status"], "covered")
+        self.assertEqual(legacy["dimension_status"]["route_evidence"]["status"], "covered")
+
     def test_core_ci_runs_translator_coverage_matrix_gate(self) -> None:
         workflow = Path(".github/workflows/core-translator-validation-ci.yml")
         text = workflow.read_text(encoding="utf-8")

@@ -3641,7 +3641,7 @@
     },
     {
       "id": "legacy-fallback-telemetry",
-      "status": "partial",
+      "status": "covered",
       "ir_constructs": [
         "translation_source",
         "fallback_from",
@@ -3672,12 +3672,12 @@
           ]
         },
         "runtime_emitted_rust": {
-          "status": "gap",
-          "reason": "fallback telemetry is currently validated by artifact fields/events, not rustc execution"
+          "status": "not_applicable",
+          "reason": "fallback telemetry records provenance and retired-fallback refusal behavior; it must not produce or claim runtime emitted Rust as semantic evidence"
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "fallback telemetry is provenance coverage and does not imply C/Rust semantic equivalence"
+          "status": "not_applicable",
+          "reason": "fallback telemetry is provenance coverage and must remain outside C/Rust semantic equivalence accounting"
         },
         "legacy_fallback": {
           "status": "covered",
@@ -3689,6 +3689,10 @@
             {
               "name": "translation_events_jsonl_preserves_fallback_then_generated_order",
               "path": "crates/c2r-translator/src/artifact_io.rs"
+            },
+            {
+              "name": "normalized artifacts preserve translation fallback source",
+              "path": "validation/tools/_test_auto_migrate_parts/class_part_02_split_parts/part_00.pyfrag"
             }
           ]
         },
@@ -3698,6 +3702,10 @@
             {
               "name": "route candidate set binds fallback source",
               "path": "validation/tools/test_validate_auto_translation_evidence.py"
+            },
+            {
+              "name": "auto translation event schema accepts translation_fallback event",
+              "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_00.pyfrag"
             }
           ]
         }
@@ -3706,6 +3714,18 @@
         {
           "name": "clang_lowering_fallback_to_legacy_is_recorded_in_plan_and_events",
           "path": "crates/c2r-translator/src/artifacts.rs"
+        },
+        {
+          "name": "translation_events_jsonl_preserves_fallback_then_generated_order",
+          "path": "crates/c2r-translator/src/artifact_io.rs"
+        },
+        {
+          "name": "normalized artifacts preserve translation fallback source",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_02_split_parts/part_00.pyfrag"
+        },
+        {
+          "name": "legacy fallback telemetry provenance matrix boundary",
+          "path": "validation/tools/test_translator_coverage_matrix.py"
         }
       ],
       "negative_cases": [
