@@ -8,11 +8,11 @@
         for risk in alias_risks
     ):
         return (
-            "L2",
+            "L1",
             {
                 "feature": "alias_requires_noalias_contract",
                 "risk_count": len(alias_risks),
-                "weight": "medium",
+                "weight": "explicit_precondition",
             },
         )
     return None
@@ -87,6 +87,7 @@ def emit_validation_profile(
     oracle: dict[str, Any],
     rust_check: dict[str, Any],
     accepted: dict[str, Any] | None = None,
+    replay: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Write the profile that owns required gates for this route.
 
@@ -128,6 +129,15 @@ def emit_validation_profile(
     compile_passed = rust_check.get("status") == "passed"
     oracle_passed = oracle.get("status") == "C_ORACLE_GENERATED"
     oracle_contract = oracle_boundary_contract(spec, accepted=accepted, oracle=oracle)
+    generated_draft_acceptance = generated_draft_acceptance_binding(
+        spec,
+        evidence_dir,
+        route_decision,
+        rust_check,
+        replay or {},
+        accepted,
+    )
+    generated_draft_semantic_pass = generated_draft_acceptance_passed(generated_draft_acceptance)
     if accepted is not None and oracle_contract.get("status") != "sufficient_for_semantic_pass":
         skipped.append(
             {
@@ -159,7 +169,8 @@ def emit_validation_profile(
         "scalar_ub_contract": route_decision.get("scalar_ub_contract", scalar_ub_contract(spec)),
         "oracle_boundary_contract": oracle_contract,
         "accepted_evidence_authoritative": accepted_authoritative,
-        "generated_draft_semantic_pass": False,
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
+        "generated_draft_acceptance": generated_draft_acceptance,
         "loop_policy": {
             "source": "run_policy",
             "fixed_project_loop_count_required": False,

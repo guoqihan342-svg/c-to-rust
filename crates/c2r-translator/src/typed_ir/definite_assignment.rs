@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::hash::Hash;
 
 use super::{
-    emit_mutable_record_pointer_field_type, emit_scalar_type, mutable_record_pointer_pointee_type,
-    type_label, EmitContext, IrExpr, IrFunction, IrGlobal, IrStmt, IrType,
-    MutableRecordPointerFieldKey,
+    emit_function_pointer_param_type, emit_mutable_record_pointer_field_type, emit_scalar_type,
+    mutable_record_pointer_pointee_type, type_label, EmitContext, IrExpr, IrFunction, IrGlobal,
+    IrStmt, IrType, MutableRecordPointerFieldKey,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -441,7 +441,12 @@ fn validate_definite_assignment_expr(
             }
             Ok(())
         }
-        IrExpr::Call { args, .. } => {
+        IrExpr::Call { callee, args, .. } => {
+            if state.declared.contains(callee) {
+                state
+                    .require_initialized(callee)
+                    .map_err(|detail| format!("call callee {detail}"))?;
+            }
             for (index, arg) in args.iter().enumerate() {
                 validate_definite_assignment_expr(arg, state)
                     .map_err(|detail| format!("call arg[{index}] {detail}"))?;
@@ -496,5 +501,5 @@ fn mutable_record_pointer_field_key_for_definite_assignment(
 }
 
 fn should_track_definite_assignment_type(ty: &IrType) -> bool {
-    emit_scalar_type(ty).is_ok()
+    emit_scalar_type(ty).is_ok() || matches!(emit_function_pointer_param_type(ty), Ok(Some(_)))
 }

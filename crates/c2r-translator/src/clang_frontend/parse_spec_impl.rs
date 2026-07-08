@@ -48,7 +48,7 @@ impl ClangParseSpec {
             function_name: spec.function_name.clone(),
             include_paths: spec.build_profile.include_paths.clone(),
             defines: spec.build_profile.defines.clone(),
-            target_abi: spec.build_profile.target.clone(),
+            target_abi: spec.build_profile.resolved_target_abi(),
             compile_commands: spec.compile_commands.as_ref().map(PathBuf::from),
             source_file_hashes: spec.source_file_hashes.clone(),
             function_source_span: Some(function_source_span),

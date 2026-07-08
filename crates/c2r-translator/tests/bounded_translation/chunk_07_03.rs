@@ -487,3 +487,50 @@ fn clang_parse_spec_preserves_target_abi_profile() {
     assert_eq!(target_abi.pointer_width, 64);
     assert_eq!(target_abi.pointer_align, 64);
 }
+
+#[cfg(feature = "clang-frontend")]
+#[test]
+fn clang_parse_spec_resolves_known_target_abi_profile_from_build_metadata() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "target-abi-from-triple",
+        "source_commit": "1234567",
+        "function_name": "identity_size",
+        "c_source": "size_t identity_size(size_t value) { return value; }",
+        "fixture_hash": "fixture-sha",
+        "source_root": "C:/src/project",
+        "source_file": "src/size.c",
+        "source_file_hashes": {
+            "src/size.c": "source-file-sha"
+        },
+        "function_source_span": {
+            "file": "src/size.c",
+            "line_start": 1,
+            "line_end": 1,
+            "byte_start": 0,
+            "byte_end": 48,
+            "sha256": "function-span-sha"
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "target_triple": "x86_64-pc-windows-msvc",
+            "abi": "msvc",
+            "compiler_command_source": "unit-test",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+
+    let parse_spec = ClangParseSpec::from_slice_spec(&spec).expect("clang parse spec");
+    let target_abi = parse_spec
+        .target_abi
+        .expect("known target metadata should resolve to ABI profile");
+
+    assert_eq!(target_abi.triple_or_abi, "x86_64-pc-windows-msvc");
+    assert_eq!(target_abi.int_width, 32);
+    assert_eq!(target_abi.long_width, 32);
+    assert_eq!(target_abi.long_long_width, 64);
+    assert_eq!(target_abi.pointer_width, 64);
+    assert_eq!(target_abi.endianness.as_deref(), Some("little"));
+}

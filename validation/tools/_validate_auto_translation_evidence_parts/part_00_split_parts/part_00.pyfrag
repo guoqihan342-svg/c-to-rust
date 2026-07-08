@@ -386,6 +386,18 @@ def validate_route_baseline_profile_refs(evidence_dir: Path, prefix: str, slice_
     require_ref(final.get("c2rust_baseline"), baseline_path, "final_verification.c2rust_baseline")
     require_ref(final.get("route_decision"), route_path, "final_verification.route_decision")
     require_ref(final.get("validation_profile"), profile_path, "final_verification.validation_profile")
+    test_translation = load_json(evidence_dir / f"{prefix}-test-translation-generated.json")
+    validate_generated_draft_acceptance_gate(
+        evidence_dir,
+        prefix,
+        slice_spec,
+        route,
+        profile,
+        auto_manifest,
+        l3_manifest,
+        final,
+        test_translation,
+    )
     verified_baseline_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
     if (
         verified_baseline_path.exists()

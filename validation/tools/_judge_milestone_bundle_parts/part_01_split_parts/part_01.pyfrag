@@ -128,7 +128,11 @@ def build_opencode_evidence_policy(sources: list[dict[str, Any]]) -> dict[str, A
     }
 
 
-def build_must_not_claim(opencode_runtime: dict[str, Any]) -> list[str]:
+def build_must_not_claim(
+    opencode_runtime: dict[str, Any],
+    *,
+    project_agnostic_acceptance: dict[str, Any] | None = None,
+) -> list[str]:
     claims = [
         "accepted_evidence_is_not_translator_generated_coverage",
         "blocked_repairs_are_not_translation_success",
@@ -140,6 +144,8 @@ def build_must_not_claim(opencode_runtime: dict[str, Any]) -> list[str]:
     ]
     if opencode_runtime.get("enabled_entrypoint_count", 0):
         claims.append("opencode_chat_output_is_semantic_evidence")
+    if not isinstance(project_agnostic_acceptance, dict) or project_agnostic_acceptance.get("status") != "passed":
+        claims.append("project_agnostic_full_conversion_without_acceptance_report")
     return claims
 
 
@@ -287,6 +293,14 @@ def build_quantitative_evaluation(
         workflow_rollup.get("unsafe_reduction", {}) if isinstance(workflow_rollup.get("unsafe_reduction"), dict) else {}
     )
     accepted_evidence_count = int_or_zero(route_rollup.get("accepted_evidence_semantic_pass_count"))
+    capability_delta = (
+        route_rollup.get("capability_vs_governance_delta", {})
+        if isinstance(route_rollup.get("capability_vs_governance_delta"), dict)
+        else {}
+    )
+    translator_generated_semantic_pass_count = int_or_zero(
+        capability_delta.get("translator_generated_semantic_pass_count")
+    )
     c2rust_baseline_rollup = (
         route_rollup.get("c2rust_baseline")
         if isinstance(route_rollup.get("c2rust_baseline"), dict)
@@ -325,9 +339,7 @@ def build_quantitative_evaluation(
         },
         "outcome_counts": {
             "accepted_evidence_semantic_pass_count": accepted_evidence_count,
-            "translator_generated_semantic_pass_count": int_or_zero(
-                semantic_evidence.get("translator_generated_semantic_pass_count")
-            ),
+            "translator_generated_semantic_pass_count": translator_generated_semantic_pass_count,
             "translation_coverage_numerator": 0,
             "generated_draft_semantic_pass": False,
             "blocked_repair_count": int_or_zero(blocked_rollup.get("blocked_repair_count")),

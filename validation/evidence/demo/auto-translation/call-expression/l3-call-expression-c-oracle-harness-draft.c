@@ -14,7 +14,7 @@
 /* fixture case: zero input_ref=cases[2] expected_ref=validation/evidence/demo/l3-call-expression-c-oracle.json expected_outputs={"call_expression_contexts": ["declaration_initializer", "assignment", "return"], "call_expression_count": 3, "return_value": 0, "source_calls": ["int first = call_expression_chain(value - 1)", "value = call_expression_chain(first - 1)", "return call_expression_chain(value - 1)"], "status": "ok"} */
 /* fixture case: one input_ref=cases[3] expected_ref=validation/evidence/demo/l3-call-expression-c-oracle.json expected_outputs={"call_expression_contexts": ["declaration_initializer", "assignment", "return"], "call_expression_count": 3, "return_value": 0, "source_calls": ["int first = call_expression_chain(value - 1)", "value = call_expression_chain(first - 1)", "return call_expression_chain(value - 1)"], "status": "ok"} */
 /* fixture case: three input_ref=cases[5] expected_ref=validation/evidence/demo/l3-call-expression-c-oracle.json expected_outputs={"call_expression_contexts": ["declaration_initializer", "assignment", "return"], "call_expression_count": 3, "return_value": 0, "source_calls": ["int first = call_expression_chain(value - 1)", "value = call_expression_chain(first - 1)", "return call_expression_chain(value - 1)"], "status": "ok"} */
-/* source file: validation/l2_slices/tools/generate_call_expression_oracle.py (sha256: unknown) */
+/* source file: validation/l2_slices/fixtures/call-expression-chain.c (sha256: 9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864) */
 /* source file: validation/l2_slices/fixtures/call-expression-c-oracle.json (sha256: unknown) */
 int call_expression_chain(int value);
 

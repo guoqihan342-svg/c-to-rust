@@ -1,0 +1,72 @@
+{
+  "active_frontend": {
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "kind": "clang_ast_dump_json",
+    "required_env": [
+      "CLANG_PATH"
+    ],
+    "uses_libclang": false
+  },
+  "artifact_kind": "clang-dry-run",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "dry_run": {
+    "active_frontend": {
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "kind": "clang_ast_dump_json",
+      "required_env": [
+        "CLANG_PATH"
+      ],
+      "uses_libclang": false
+    },
+    "arguments": [],
+    "claim_boundary": {
+      "affects_manifest_status": false,
+      "affects_semantic_pass": false,
+      "authoritative_evidence": false,
+      "role": "diagnostic_only"
+    },
+    "compile_commands": null,
+    "diagnostics": [
+      "LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "function_name": "store_add_one",
+    "source_file": "validation/l2_slices/fixtures/store-add-one.c",
+    "source_root": ".",
+    "status": "diagnostic_only"
+  },
+  "errors": [],
+  "frontend": "clang",
+  "metadata": {
+    "function_source_span": {
+      "byte_end": 73,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/store-add-one.c",
+      "line_end": 1,
+      "line_start": 1,
+      "sha256": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+    },
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+      "validation/l2_slices/fixtures/store-add-one.c": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "status": "diagnostic_only",
+  "target_id": "demo"
+}

@@ -1,12 +1,44 @@
 {
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-kwzm9r2e C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\copy-i32-ptr-arith\\l3-copy-i32-ptr-arith-rust-draft.rs",
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+    "status": "skipped"
+  },
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-eqc2hhfr validation\\evidence\\demo\\auto-translation\\copy-i32-ptr-arith\\l3-copy-i32-ptr-arith-rust-draft.rs",
   "error_count": 0,
   "errors": [],
+  "external_callee_context": {
+    "blocked_callees": [],
+    "blocked_count": 0,
+    "declared_callees": [],
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "status": "not_applicable"
+  },
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
+    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+    "status": "recorded"
+  },
+  "rust_check_harness_only_bindings": {
+    "allowed_use": "rustc_compile_only",
+    "bindings": [],
+    "semantics_verified": false,
+    "status": "none"
+  },
   "schema_version": 1,
   "self_healing": {
     "blocked_repairs": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-self-healing-blocked-repairs.json",
     "patch_events": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-patch-events.jsonl",
     "status": "none"
   },
-  "status": "passed"
+  "status": "passed",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+    "status": "passed"
+  }
 }

@@ -148,6 +148,172 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "store_pair_restrict",
+      "type": {
+        "qualType": "void (int *restrict, int *restrict, int, int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "left",
+          "type": {
+            "qualType": "int *restrict"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "right",
+          "type": {
+            "qualType": "int *restrict"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "first",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "second",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "int"
+              },
+              "inner": [
+                {
+                  "kind": "ArraySubscriptExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int *restrict"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "left"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "IntegerLiteral",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "value": "0"
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "first"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "int"
+              },
+              "inner": [
+                {
+                  "kind": "ArraySubscriptExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int *"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int *restrict"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "right"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "IntegerLiteral",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "value": "0"
+                    }
+                  ]
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "LValueToRValue",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "referencedDecl": {
+                        "kind": "ParmVarDecl",
+                        "name": "second"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

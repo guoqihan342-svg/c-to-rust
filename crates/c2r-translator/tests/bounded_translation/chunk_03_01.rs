@@ -429,3 +429,84 @@ fn typed_ir_rejects_multiple_mutable_pointer_index_assignments_without_alias_pro
         error.reason
     );
 }
+
+#[cfg(feature = "typed-ir")]
+#[test]
+fn typed_ir_emits_multiple_restrict_mutable_out_pointer_writes() {
+    let i32_ty = ir_i32();
+    let mutable_i32_restrict_ptr = ir_pointer("int *restrict", "int *restrict", i32_ty.clone(), false);
+    let ir = IrFunction {
+        name: "store_pair_restrict".to_string(),
+        return_type: ir_void(),
+        params: vec![
+            IrParam {
+                name: "left".to_string(),
+                ty: mutable_i32_restrict_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "right".to_string(),
+                ty: mutable_i32_restrict_ptr.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "first".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+            IrParam {
+                name: "second".to_string(),
+                ty: i32_ty.clone(),
+                source_span: None,
+            },
+        ],
+        body: vec![
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("left", mutable_i32_restrict_ptr.clone())),
+                    index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_var("first", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Assign {
+                target: IrExpr::Index {
+                    base: Box::new(ir_var("right", mutable_i32_restrict_ptr)),
+                    index: Box::new(ir_lit(0, "0", i32_ty.clone())),
+                    ty: i32_ty.clone(),
+                    source_span: None,
+                },
+                value: ir_var("second", i32_ty.clone()),
+                source_span: None,
+            },
+            IrStmt::Return {
+                value: None,
+                source_span: None,
+            },
+        ],
+        source_span: None,
+    };
+
+    let emitted = emit_rust_from_ir(&ir).expect("restrict params provide multi-output noalias proof");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(rust.contains(
+        "pub fn store_pair_restrict(mut left: &mut [i32], mut right: &mut [i32], first: i32, second: i32)"
+    ));
+    assert!(rust.contains("left[0i32 as usize] = first;"));
+    assert!(rust.contains("right[0i32 as usize] = second;"));
+    assert_rust_snippet_runs(
+        "typed-ir-multiple-restrict-mutable-out-pointer-writes",
+        rust,
+        r#"
+    let mut left = [0i32];
+    let mut right = [0i32];
+    store_pair_restrict(&mut left, &mut right, 11, 22);
+    assert_eq!(left[0], 11);
+    assert_eq!(right[0], 22);
+"#,
+    );
+}

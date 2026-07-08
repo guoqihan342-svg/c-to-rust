@@ -93,17 +93,21 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
         ledger = report["capability_delta_ledger"]
         self.assertGreaterEqual(ledger["ledger_count"], 1)
         self.assertGreaterEqual(
-            ledger["by_construct"]["blocked_artifact"]["refused"],
-            1,
-        )
-        self.assertGreaterEqual(
             ledger["by_construct"]["external_direct_callee_context"]["refused"],
             1,
         )
+        self.assertGreaterEqual(
+            ledger["by_construct"]["typed_ir_candidate_generated"]["candidate"],
+            1,
+        )
+        self.assertGreaterEqual(
+            ledger["by_construct"]["typed_ir_zero_token_deterministic"]["candidate"],
+            1,
+        )
         self.assertGreaterEqual(ledger["blocked_callee_count"], 1)
-        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 0)
-        self.assertEqual(ledger["semantic_pass_count"], 0)
-        self.assertGreaterEqual(ledger["accepted_evidence_semantic_pass_count"], 2)
+        self.assertEqual(ledger["translator_generated_semantic_pass_count"], 8)
+        self.assertEqual(ledger["semantic_pass_count"], 8)
+        self.assertGreaterEqual(ledger["accepted_evidence_semantic_pass_count"], 1)
         self.assertIn("not semantic acceptance evidence", ledger["claim_boundary"])
 
     def test_capability_delta_ledger_keeps_refusal_separate_from_semantic_pass(self) -> None:
@@ -239,7 +243,7 @@ class TranslatorCoverageMatrixTests(unittest.TestCase):
             (
                 "l4-refused-semantic-pass",
                 {"capability_delta": [{"semantic_pass": True}]},
-                "L4/refused capability delta cannot set semantic_pass=true",
+                "L4/refused semantic_pass=true requires generated_draft_acceptance.status=passed",
             ),
         ]
         for name, override, expected in cases:

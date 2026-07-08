@@ -1,9 +1,9 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
-    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "fixture_hash=copy-i32-ptr-arith-fixture",
-    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "build_profile_hash=bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -13,50 +13,8 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [
-            {
-              "decision": "bounded_input_buffer",
-              "lvalue_kind": "bounded_input_buffer",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "return 0",
-              "statement_index": 1,
-              "translation_rule_id": "bounded-input-buffer-read"
-            },
-            {
-              "decision": "bounded_pointer_arithmetic_input_read",
-              "lvalue_kind": "bounded_pointer_arithmetic_input_buffer",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "",
-              "statement_index": 2,
-              "translation_rule_id": "bounded-pointer-arithmetic-input-read"
-            },
-            {
-              "decision": "bounded_pointer_arithmetic_output_write",
-              "lvalue_kind": "bounded_pointer_arithmetic_output_buffer",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "",
-              "statement_index": 3,
-              "translation_rule_id": "bounded-pointer-arithmetic-output-write"
-            }
-          ],
-          "lvalue_kinds": [
-            "none",
-            "bounded_input_buffer",
-            "bounded_pointer_arithmetic_input_buffer",
-            "bounded_pointer_arithmetic_output_buffer"
-          ],
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -64,19 +22,27 @@
           },
           "statement_kinds": [
             "for",
-            "bounded_input_buffer_read",
-            "bounded_pointer_arithmetic_input_read",
-            "bounded_pointer_arithmetic_output_write",
             "return"
           ],
           "statements": [
-            "for (int i = 0; i < len; i++) { *(out + i) = *(values + i); }",
-            "return 0"
-          ]
+            "for",
+            "return"
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
       "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "for-0"
+        },
         {
           "from": "entry",
           "kind": "return",
@@ -85,7 +51,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-1"
         }
       ],
       "entry_block": "entry",
@@ -96,7 +62,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "0",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -115,17 +81,21 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 1,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-copy-i32-ptr-arith.json",
-    "sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "sha256": "c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "status": "ready"
   },
   "source_commit": "demo-copy-i32-ptr-arith-20260625",

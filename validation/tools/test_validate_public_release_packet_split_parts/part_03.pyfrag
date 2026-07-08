@@ -62,6 +62,7 @@
             "translation_coverage_numerator": 0,
             "boundary": "Competition host readiness is an H9 launch contract, not semantic acceptance.",
         },
+        "project_agnostic_acceptance": project_agnostic_acceptance,
         "proof_classes": packet_validator.expected_proof_class_rollup_from_run_report(run_report_payload),
         "semantic_evidence_rollup": {
             "accepted_evidence_semantic_pass_count": 1,

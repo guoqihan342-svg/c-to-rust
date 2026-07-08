@@ -307,7 +307,7 @@ fn direct_call_callee_name(callee: &Value) -> Result<String, String> {
                 .ok_or_else(|| "callee is missing referenced function name".to_string())?;
             match string_field(referenced_decl, "kind").as_deref() {
                 Some("FunctionDecl") => Ok(name),
-                Some("ParmVarDecl") => {
+                Some("ParmVarDecl") | Some("VarDecl") => {
                     let ty = expr_type(callee).map_err(|error| error.message)?;
                     if clang_type_is_function_pointer(&ty) {
                         Ok(name)

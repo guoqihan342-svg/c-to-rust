@@ -16,6 +16,7 @@
     "proof_class_rollup",
     "publishability",
     "competition_host_readiness",
+    "project_agnostic_acceptance",
     "semantic_evidence_rollup",
     "core_translation_quality",
     "before_after_repair_exhibit",
@@ -159,6 +160,9 @@
     "competition_host_readiness": {
       "$ref": "#/definitions/competitionHostReadiness"
     },
+    "project_agnostic_acceptance": {
+      "$ref": "#/definitions/projectAgnosticAcceptance"
+    },
     "semantic_evidence_rollup": {
       "type": "object",
       "additionalProperties": true,
@@ -170,7 +174,7 @@
       ],
       "properties": {
         "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0},
-        "translator_generated_semantic_pass_count": {"const": 0},
+        "translator_generated_semantic_pass_count": {"type": "integer", "minimum": 0},
         "generated_draft_semantic_pass": {"const": false},
         "translation_coverage_numerator": {"const": 0},
         "source_generated_draft_semantic_pass": {"type": "boolean"},
@@ -279,7 +283,7 @@
             "unsafe_reduction": {"$ref": "#/definitions/unsafeReduction"},
             "semantic_gate": {"const": false},
             "generated_draft_semantic_pass": {"const": false},
-            "translation_coverage_numerator": {"const": 0}
+            "translation_coverage_numerator": {"type": "integer", "minimum": 0}
           }
         },
         "semantic_gate": {"const": false},
@@ -662,7 +666,7 @@
           "properties": {
             "ledger_count": {"type": "integer", "minimum": 0},
             "delta_count": {"type": "integer", "minimum": 0},
-            "translator_generated_semantic_pass_count": {"const": 0},
+            "translator_generated_semantic_pass_count": {"type": "integer", "minimum": 0},
             "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0}
           }
         },
@@ -856,7 +860,7 @@
           ],
           "properties": {
             "accepted_evidence_semantic_pass_count": {"type": "integer", "minimum": 0},
-            "translator_generated_semantic_pass_count": {"const": 0},
+            "translator_generated_semantic_pass_count": {"type": "integer", "minimum": 0},
             "translation_coverage_numerator": {"const": 0},
             "generated_draft_semantic_pass": {"const": false},
             "blocked_repair_count": {"type": "integer", "minimum": 0},
@@ -1054,6 +1058,7 @@
         "competition_config_archive",
         "judge_entrypoints_run_report",
         "readiness_report",
+        "project_agnostic_acceptance",
         "judge_milestone_bundle",
         "supported_subset",
         "published_entrypoints",
@@ -1104,6 +1109,7 @@
         "competition_config_archive": {"type": "object", "additionalProperties": true, "required": ["status"]},
         "judge_entrypoints_run_report": {"$ref": "#/definitions/artifactRef"},
         "readiness_report": {"$ref": "#/definitions/artifactRef"},
+        "project_agnostic_acceptance": {"$ref": "#/definitions/projectAgnosticAcceptance"},
         "judge_milestone_bundle": {
           "type": "object",
           "additionalProperties": true,
@@ -1190,6 +1196,56 @@
         "status": {"type": "string"},
         "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
       }
+    },
+    "projectAgnosticAcceptance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "report_kind",
+        "claim_scope",
+        "status",
+        "semantic_gate",
+        "translation_coverage_numerator",
+        "sample_case_only",
+        "boundary"
+      ],
+      "properties": {
+        "report_kind": {"const": "project-agnostic-full-conversion-acceptance-gate"},
+        "claim_scope": {"const": "project_agnostic_full_conversion"},
+        "status": {"enum": ["passed", "blocked"]},
+        "semantic_gate": {"const": false},
+        "translation_coverage_numerator": {"const": 0},
+        "sample_case_only": {"type": "boolean"},
+        "artifact": {"$ref": "#/definitions/artifactRef"},
+        "blocker": {"type": "string"},
+        "reason": {"type": "string"},
+        "validated": {"type": "object", "additionalProperties": true},
+        "boundary": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "passed"}}
+          },
+          "then": {
+            "required": ["artifact", "validated"],
+            "properties": {
+              "sample_case_only": {"const": false}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "blocked"}}
+          },
+          "then": {
+            "required": ["blocker"],
+            "properties": {
+              "sample_case_only": {"const": true}
+            }
+          }
+        }
+      ]
     },
     "releaseTagReadiness": {
       "type": "object",

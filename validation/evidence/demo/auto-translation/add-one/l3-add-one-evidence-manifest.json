@@ -1,0 +1,269 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+        "fixture_sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+          "diff": "c756e299e0f1ffd6d6e23954132153391caf6ba3739674067e7d9e3b770d9615",
+          "final_verification": "0bd7b0b79a29a1c052ef92e80a91518771bee6e88ed83b41c6bdcb66532ec1b3",
+          "negative_diff": "dc616ed64185afc8f9e824a1756d7e3c3aee38937d683bab373b0450ad5313c7",
+          "performance_smoke": "322546e0e07bef5df148d5f730235df71d25567075ee1369f512f02224806e31",
+          "rust_report": "37107f4791d7a964115ee759b0f48b279d03dcd388e15605496f5afd27c070c3",
+          "unsafe_ledger": "12f15d583ee5e7cad2d9414d2d633b79c401acf85675fe2c153ee04cb1c6a989",
+          "unsafe_scan": "5469c50a3b4bd4d576556f605cd75bf7c72927075da4ec8f2ebec3110f8fc683",
+          "version_manifest": "57ea955677385a3c14725e89e2001c5c287df981ea79e1816ec21a35da1cfd1a"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-add-one-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-add-one-diff.json",
+          "final_verification": "validation/evidence/demo/l3-add-one-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-add-one-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-add-one-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-add-one-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-add-one-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-add-one-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-add-one-version-manifest.json"
+        },
+        "slice_id": "add-one",
+        "source_commit": "demo-add-one-20260708",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-add-one-c-oracle.json",
+          "sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-add-one-negative-diff.json",
+          "sha256": "dc616ed64185afc8f9e824a1756d7e3c3aee38937d683bab373b0450ad5313c7",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-add-one-rust-report.json",
+          "sha256": "37107f4791d7a964115ee759b0f48b279d03dcd388e15605496f5afd27c070c3",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-add-one-diff.json",
+          "sha256": "c756e299e0f1ffd6d6e23954132153391caf6ba3739674067e7d9e3b770d9615",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-add-one-unsafe-ledger.json",
+          "sha256": "12f15d583ee5e7cad2d9414d2d633b79c401acf85675fe2c153ee04cb1c6a989",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-add-one-unsafe-scan.json",
+          "sha256": "5469c50a3b4bd4d576556f605cd75bf7c72927075da4ec8f2ebec3110f8fc683",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-6h73po_s\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-6h73po_s\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-6h73po_s\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/add-one/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/add-one/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/add-one/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-rust-draft.rs",
+        "sha256": "65c118c3fe0f75545048b6c5f95970970ab10ba311145fdf27748826d6c598ce",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "add-one",
+      "source_commit": "demo-add-one-20260708",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [
+      "No full project migration claim.",
+      "No support for INT_MAX because signed C overflow is undefined behavior.",
+      "No pointer, aliasing, struct, or external callee behavior.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "signed overflow equivalence",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-baseline-manifest.json",
+      "sha256": "f6e61378f583283a932032a5af87210a3ce52eb226eed41f51af256c5571eabf",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c-oracle-status.json",
+      "sha256": "48de4996566eb49822607f77950fa4255bfc46b81e6318d2a55cbc8cde6b93c2",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-auto-cache-metadata.json",
+      "sha256": "5ed27590c2c30da98c71f2ce788d840428b60337a7332a5a15890f8a56b55379",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-clang-lowering-report.json",
+      "sha256": "4cbdc0ad30d7268f66420aa04a024298f57f0bfa1a09525b7ee7f19b2df19b99",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-config-profile.json",
+      "profile_id": "demo-add-one-wsl-gcc",
+      "sha256": "8734eb2856133200c6e4b56a655c360c6cc0ce7b53043ee29aed507e39b61960",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-context-pack.json",
+      "sha256": "f33ba76c305dc4957b416ea237686ea6c972df20c67bbf4629340dcad5ba9a8d",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-final-verification.json",
+      "sha256": "f2a22083c8bfe9d89470a15a5dde062f4b00d94d71a3aa41c6ee784f22eaf1a7",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-negative-diff.json",
+      "sha256": "0917eb99dd460f6bd1628a90bc892a90866960a62c398f54fa97ac84b0b1dba3",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "87959889311a08c61cef2e104cf303de97483b6216f3290377c908e8171fcbad",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-pointer-graph.json",
+      "sha256": "74d8e1a3d2451703be5d42e9eb86463b64700695f1e6eecdba83bd60327e813b",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-route-decision.json",
+      "sha256": "674e73ec6b35a8e9592965a9d91d69771f24cad25326c62e5055c220b2cc4afb",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/add-one/rust-check.json",
+      "sha256": "c15c8a016edf69ae162e0ac506decf34a8819396d6f83030cb04acce619af2ca",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-rust-report.json",
+      "sha256": "803a6cb0f9dd5235f2fa8a5238cd2c8f22f819a12a21ef0e737795885cdb08aa",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-diff.json",
+      "sha256": "9893814eefa34d591fe647b457c22965879d24def86e10ba06337fd375d590a3",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-slice-contract.json",
+      "sha256": "275c5d1df20a3046337148b1ffe1bc95a6933553ac3462ee04ceb76318546213",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-summary.json",
+      "sha256": "584b012ad0397a27f0a6e89fa4d20f9d100761667a7860103a8d80a6173d6961",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-test-translation-generated.json",
+      "sha256": "1cd1ee1e73a45838e33f5de725f7a64022f68bb787fdb41b93e9d83c396c1ef8",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-unsafe-ledger.json",
+      "sha256": "23e9016788c4aad23ad6b84bb237bc9054f6917b8a71aa7a00190f5fee496087",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-unsafe-scan.json",
+      "sha256": "15cb0170a391eebe203944518c1cd2c1525673d28464a4942bed8ec3f1c36f7c",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "0b2b68ec221d6538626b1e389a0a219a595322728cb1272ff50ec7dcb20542da",
+      "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-verified-unsafe-baseline.json",
+      "sha256": "17f5e5a67becead15f209a0d436044f1db5c53739b389f07e6b7c7880737cbac",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-version-manifest.json",
+      "sha256": "e07fd0cd2c1e241d789deb2cebadeaacb6078c712b3af6147024f8f1bb3d2f43",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "add-one-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/add-one-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,14 +1,14 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-translator-input.json",
-    "sha256": "570b3f3d6bd0755a4d7b587f797cd6ab91bc0a5833e9c8e28a3f804d46f0b0da",
+    "sha256": "40e8e3db800040e6d87d065554b1f0ae6b59d8eb3e349fef62097324e21fe2f4",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-signed-rshift-contract-20260628",
-    "slice_spec_sha256=759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "slice_spec_sha256=a64c67904ea84c9897af1537f5a2940cbfadc4fc7f31a09408c2fb807a529121",
     "fixture_hash=signed-rshift-contract-fixture",
-    "build_profile_hash=794acdc07cd148daef66f3ac991c47da6f1ea339057c6c393c881d6e45a560a1",
+    "build_profile_hash=e75970cb4cf218e9ce0f5a4c8bf434cd044dcd83d298369664e66d2b26ac4f02",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -23,7 +23,7 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "value",
@@ -33,7 +33,7 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "count",
@@ -43,15 +43,15 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     }
   ],
-  "repo_commit": "b65e4588f2bed12629980158dfbc2b4958fc57b2",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "signed-rshift-contract",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-signed-rshift-contract.json",
-    "sha256": "759a642fc8ed2e10d21ebe8b2be26ac17331996824938c46049446908bd4db29",
+    "sha256": "a64c67904ea84c9897af1537f5a2940cbfadc4fc7f31a09408c2fb807a529121",
     "status": "ready"
   },
   "source_commit": "demo-signed-rshift-contract-20260628",

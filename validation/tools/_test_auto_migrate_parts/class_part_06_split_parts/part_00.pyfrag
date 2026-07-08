@@ -252,9 +252,12 @@ class _AutoMigrateTestsPart06:
             self.assertNotEqual(validation_result.returncode, 0)
             self.assertIn("semantic pass requires manifest.status=passed", validation_result.stderr + validation_result.stdout)
 
-    def test_real_fdb_calc_crc32_clang_typed_ir_unavailable_refuses_candidate_route(self) -> None:
+    def test_real_fdb_calc_crc32_missing_clang_path_refuses_candidate_route(self) -> None:
         with tempfile.TemporaryDirectory(prefix="auto-migrate-test-") as tmp:
             out_root = Path(tmp) / "evidence"
+            environment = dict(os.environ)
+            environment.pop("CLANG_PATH", None)
+            environment.pop("LIBCLANG_PATH", None)
             result = subprocess.run(
                 [
                     sys.executable,
@@ -267,7 +270,7 @@ class _AutoMigrateTestsPart06:
                     "--emit-clang-lowering-report",
                 ],
                 cwd=REPO_ROOT,
-                env=self._env_with_clang_path(),
+                env=environment,
                 text=True,
                 capture_output=True,
             )

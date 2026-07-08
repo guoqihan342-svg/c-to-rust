@@ -1,0 +1,85 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "negative values",
+      "zero crossing",
+      "nominal values",
+      "i32 low/high non-overflow boundaries"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-add-one-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-add-one-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-add-one-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-add-one-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-add-one-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test add_one",
+      "file": "validation/l2_slices/tests/add_one.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "add_one_matches_c_oracle_with_safe_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "add-one-fixture",
+        "operation_count": 6,
+        "path": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-add-one-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-add-one-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the C helper, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/add_one.rs::add_one_matches_c_oracle_with_safe_boundary",
+      "source": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}

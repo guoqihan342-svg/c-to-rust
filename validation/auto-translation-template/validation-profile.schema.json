@@ -27,7 +27,8 @@
     "route_level": {"enum": ["L0", "L1", "L2", "L3", "L4"]},
     "goal": {"type": "string", "minLength": 1},
     "competition_environment": {"$ref": "#/definitions/competitionEnvironment"},
-    "generated_draft_semantic_pass": {"const": false},
+    "generated_draft_semantic_pass": {"type": "boolean"},
+    "generated_draft_acceptance": {"$ref": "#/definitions/generatedDraftAcceptance"},
     "accepted_evidence_authoritative": {"type": "boolean"},
     "candidate_generation": {"$ref": "#/definitions/candidateGenerationEvidence"},
     "oracle_boundary_contract": {"$ref": "#/definitions/oracleBoundaryContract"},
@@ -72,9 +73,38 @@
           "skipped_gates": {"type": "array", "maxItems": 0}
         }
       }
+    },
+    {
+      "if": {
+        "required": ["generated_draft_semantic_pass"],
+        "properties": {"generated_draft_semantic_pass": {"const": true}}
+      },
+      "then": {
+        "required": ["generated_draft_acceptance"],
+        "properties": {
+          "generated_draft_acceptance": {
+            "required": ["status", "generated_draft_semantic_pass", "claim_source"],
+            "properties": {
+              "status": {"const": "passed"},
+              "generated_draft_semantic_pass": {"const": true},
+              "claim_source": {"const": "generated_draft_replay_with_accepted_oracle_binding"}
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
+    "generatedDraftAcceptance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "generated_draft_semantic_pass"],
+      "properties": {
+        "status": {"enum": ["passed", "blocked"]},
+        "generated_draft_semantic_pass": {"type": "boolean"},
+        "claim_source": {"type": "string", "minLength": 1}
+      }
+    },
     "oracleBoundaryContract": {
       "type": "object",
       "additionalProperties": true,

@@ -43,6 +43,10 @@ def is_uint32_value(value: Any) -> bool:
     return type(value) is int and 0 <= value <= 0xFFFFFFFF
 
 
+def is_i32_value(value: Any) -> bool:
+    return type(value) is int and -(2**31) <= value <= 2**31 - 1
+
+
 def is_size_value(value: Any) -> bool:
     return type(value) is int and value >= 0
 

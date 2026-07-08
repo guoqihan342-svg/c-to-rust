@@ -309,6 +309,173 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "bump_point_x_for_step",
+      "type": {
+        "qualType": "void (struct point *, int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "p",
+          "type": {
+            "qualType": "struct point *"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "limit",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ForStmt",
+              "inner": [
+                {
+                  "kind": "DeclStmt",
+                  "inner": [
+                    {
+                      "kind": "VarDecl",
+                      "name": "i",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "init": "c",
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {},
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "<",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "VarDecl",
+                            "name": "i"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "limit"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "UnaryOperator",
+                  "opcode": "++",
+                  "isPostfix": true,
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "MemberExpr",
+                      "name": "x",
+                      "isArrow": true,
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "ImplicitCastExpr",
+                          "castKind": "LValueToRValue",
+                          "type": {
+                            "qualType": "struct point *"
+                          },
+                          "inner": [
+                            {
+                              "kind": "DeclRefExpr",
+                              "type": {
+                                "qualType": "struct point *"
+                              },
+                              "referencedDecl": {
+                                "kind": "ParmVarDecl",
+                                "name": "p"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "kind": "CompoundStmt",
+                  "inner": [
+                    {
+                      "kind": "UnaryOperator",
+                      "opcode": "++",
+                      "isPostfix": true,
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "VarDecl",
+                            "name": "i"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

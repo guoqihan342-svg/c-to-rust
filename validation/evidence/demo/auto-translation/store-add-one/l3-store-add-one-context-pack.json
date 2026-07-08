@@ -1,12 +1,13 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "call_edge_to_callee_binding": [],
   "call_edges": [
     {
       "kind": "type",
@@ -14,23 +15,45 @@
       "source": "C99"
     }
   ],
+  "callee_sources": [],
   "direct_c_files": [
-    "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+    "validation/l2_slices/fixtures/store-add-one.c",
     "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
   ],
+  "direct_call_edges": [],
   "direct_rust_files": [
     "validation/l2_slices/src/store_add_one.rs"
   ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
   "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+  "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
+  "signature_bindings": [],
   "slice_id": "store-add-one",
   "slice_spec": {
     "path": "validation/slice-specs/demo-store-add-one.json",
-    "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084"
+    "sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/store-add-one.c",
+      "validation/l2_slices/fixtures/store-add-one-c-oracle.json"
+    ],
+    "functions": [
+      "store_add_one"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
   },
   "source_commit": "demo-store-add-one-20260625",
   "status": "recorded",
+  "stub_boundaries": [],
   "target_id": "demo"
 }

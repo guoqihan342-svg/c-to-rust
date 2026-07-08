@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "cap-store-add-one-typed_ir_candidate_generated",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+        "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "store-add-one",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_candidate_generated",
+      "delta_id": "gov-store-add-one-typed_ir_candidate_generated-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+        "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L1",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "store-add-one",
+  "source_commit": "demo-store-add-one-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-store-add-one-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/store-add-one.c": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

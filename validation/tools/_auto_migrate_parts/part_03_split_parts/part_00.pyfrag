@@ -29,7 +29,12 @@ def write_route_refused_patch(
     events_path = evidence_dir / f"l3-{slice_id}-patch-events.jsonl"
     blocked_path = evidence_dir / f"l3-{slice_id}-self-healing-blocked-repairs.json"
     draft_path = next(evidence_dir.glob("l3-*-rust-draft.rs"), None)
-    reason = "Route decision refused candidate generation for unsupported C semantics."
+    reason = (
+        "Route governance deferred semantic acceptance for a generated candidate; "
+        "the generated Rust remains candidate evidence."
+        if route_has_generated_rust_draft(route_decision)
+        else "Route decision refused candidate generation for unsupported C semantics."
+    )
     event = {
         "schema_version": 1,
         "patch_id": "patch-route-refused-1",
@@ -148,6 +153,7 @@ def route_refused_repair_playbook(
     route_decision: dict[str, Any],
 ) -> dict[str, Any]:
     gap = route_refused_ir_feature_gap(spec, evidence_dir, route_decision)
+    has_generated_draft = route_has_generated_rust_draft(route_decision)
     smallest_next_test = {
         "kind": "route_refusal_regression",
         "command": (
@@ -171,12 +177,19 @@ def route_refused_repair_playbook(
         "ir_feature_gap": gap,
         "oracle_fixture_gap": {
             "status": "not_blocking",
-            "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
+            "reason": (
+                "Generated candidate evidence exists, but oracle/diff/negative/unsafe gates still control semantic acceptance."
+                if has_generated_draft
+                else "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate."
+            ),
         },
         "candidate_routes": repair_candidate_routes(gap["kind"]),
         "smallest_next_test": smallest_next_test,
         "human_intervention_point": (
-            "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, "
+            "Bind the generated candidate to the required oracle, diff, negative, unsafe, and final verification gates "
+            "before promoting it."
+            if has_generated_draft
+            else "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, "
             "then rerun auto_migrate before promoting any candidate."
         ),
     }
@@ -252,7 +265,13 @@ def emit_capability_delta_ledger(
         verification_commands.append(str(repair["smallest_next_test"]["command"]))
     if not verification_commands:
         verification_commands.append("python -B validation/tools/validate_auto_translation_evidence.py")
-    generated_status = "refused" if route_refuses_candidate_generation(route_decision) else generated_rust_draft_status(route_decision)
+    generated_status = (
+        "candidate"
+        if route_has_generated_rust_draft(route_decision)
+        else "refused"
+        if route_refuses_candidate_generation(route_decision)
+        else generated_rust_draft_status(route_decision)
+    )
     semantic_pass = bool(validation_profile.get("generated_draft_semantic_pass") is True)
     capability_delta = [
         {
@@ -330,7 +349,7 @@ def emit_capability_delta_ledger(
                 "kind": "evidence_contract",
                 "construct_id": replay_construct_id,
                 "evidence_refs": replay_refs,
-                "bound_to": "P0 capability delta; governance records that Rust replay passed without semantic acceptance.",
+                "bound_to": "P0 capability delta; governance records Rust replay plus generated_draft_acceptance status for this exact draft.",
             }
         )
         if replay_command not in verification_commands:
@@ -393,7 +412,7 @@ def emit_capability_delta_ledger(
         "capability_delta": capability_delta,
         "governance_delta": governance_delta,
         "verification_commands": verification_commands,
-        "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+        "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
     }
     write_json(evidence_dir / f"{prefix}-capability-delta.json", payload)
     return payload

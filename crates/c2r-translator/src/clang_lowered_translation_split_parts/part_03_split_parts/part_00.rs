@@ -106,6 +106,50 @@
             source_span: None,
         }
     }
+
+    #[test]
+    fn clang_ast_fixture_is_preferred_over_available_clang_path() {
+        let parse_spec = clang_frontend::ClangParseSpec {
+            source_root: PathBuf::from("."),
+            source_file: PathBuf::from("add_one.c"),
+            function_name: "add_one".to_string(),
+            include_paths: Vec::new(),
+            defines: Vec::new(),
+            target_abi: None,
+            compile_commands: None,
+            source_file_hashes: std::collections::BTreeMap::new(),
+            function_source_span: None,
+        };
+        let environment = std::collections::BTreeMap::from([(
+            "CLANG_PATH".to_string(),
+            std::env::current_exe()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+        )]);
+
+        let report = lower_parse_spec_report_with_optional_ast_fixture(
+            &environment,
+            &parse_spec,
+            Some("crates/c2r-translator/fixtures/clang_ast/add_one_ast.json"),
+        );
+
+        assert_eq!(report.status, "lowered");
+        assert_eq!(report.frontend, "clang_ast_json_fixture");
+        assert_eq!(report.clang_path, None);
+        assert_eq!(
+            report
+                .function_ir
+                .as_ref()
+                .map(|function| function.name.as_str()),
+            Some("add_one")
+        );
+        assert!(report
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("external clang AST dump was not invoked")));
+    }
+
     #[test]
     fn clang_lowered_ir_records_direct_call_expression_evidence() {
         let i32_ty = signed_ty("int", "int", 32);

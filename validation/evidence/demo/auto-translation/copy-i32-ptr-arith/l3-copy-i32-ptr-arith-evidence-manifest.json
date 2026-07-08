@@ -1,5 +1,6 @@
 {
   "claim_boundary": {
+    "accepted_evidence_authoritative": false,
     "accepted_metadata_differences": [],
     "alias_gate": {
       "complete_alias_safety": false,
@@ -32,6 +33,112 @@
       "canonical_writes",
       "write_count"
     ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+        "fixture_sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+          "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
+          "final_verification": "fc4e92f3d7d2686c538777c4114f002a5755a9c849717e8d9960e8fe7f275871",
+          "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
+          "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
+          "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
+          "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
+          "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
+          "version_manifest": "94f71e2c12d9cacbd8b00a88607e8440ccdc9bf1cc9f4bc06f3b9fb3fe3b916a"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-copy-i32-ptr-arith-diff.json",
+          "final_verification": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-copy-i32-ptr-arith-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-copy-i32-ptr-arith-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-version-manifest.json"
+        },
+        "slice_id": "copy-i32-ptr-arith",
+        "source_commit": "demo-copy-i32-ptr-arith-20260625",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
+          "sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
+          "sha256": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-rust-report.json",
+          "sha256": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-diff.json",
+          "sha256": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-ledger.json",
+          "sha256": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-scan.json",
+          "sha256": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-rust-draft.rs",
+        "sha256": "2f3dd7a1e6a488679de030887ced8bd695f8aff8dd2a31f613f9b91b530df09d",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "copy-i32-ptr-arith",
+      "source_commit": "demo-copy-i32-ptr-arith-20260625",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
     "known_gaps": [
       "No full project migration claim.",
       "No support for NULL values or out pointers.",
@@ -39,7 +146,7 @@
       "No proof for aliasing or overlap between values and out.",
       "No support for signed overflow; fixture values are copied without arithmetic.",
       "No arbitrary pointer arithmetic beyond *(values + i) reads and *(out + i) writes.",
-      "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence."
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
     ],
     "must_not_claim": [
       "full automatic C99/C11 translation",
@@ -50,113 +157,123 @@
       "semantic equivalence for this auto-generated Rust draft",
       "full C99/C11 automatic translation"
     ],
-    "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
   },
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+      "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c-oracle-status.json",
-      "sha256": "a8d0f2da22451e81726712263b08edf64cd9952dcd653e0ad3e0ea85bc88b00a",
+      "sha256": "2fb917261e2488840c8be4b116391b29ba951ac4bba266a73143ffeb684041cd",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-auto-cache-metadata.json",
-      "sha256": "9447d511645f9d57ef027ef4ef58968e32b0a7ac7f343724c82d2fae58a77668",
+      "sha256": "2411670ca2386b28d0c453e8ca371f61eac227d10c30c15861181490d6fe3aab",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-clang-lowering-report.json",
+      "sha256": "c2c85f104dd07b93cbc4f7be9817bb59064e559a3b72b7f1066751cdbfd87b75",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-config-profile.json",
       "profile_id": "demo-copy-i32-ptr-arith-wsl-gcc",
-      "sha256": "be3ae673b7a8de787a5aefa328063e021721648cde14de0f0df05b44baf578bc",
+      "sha256": "5a1a76b1e6b605ec6564bf5dabe1dbdb6f63f85978c7f53d7aa828beed5637ef",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-context-pack.json",
-      "sha256": "a27c101c04d1743c8799fe0f77ba600872c7b21c3f51deb9ff209f469d06af28",
+      "sha256": "6c8524ec8db783b2d331ac39c614535855166e1651540ccbde5147e51a59f548",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-final-verification.json",
-      "sha256": "234089bf6bf6a9aec93ac44c4009f2edbf962b8f9facd9743fa651ad885a1f29",
+      "sha256": "0befaeb6d844e0fb23e5e726890c2a5f423bd73f2b2661e1ac246a68f6efe79b",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-negative-diff.json",
-      "sha256": "cd2018706f500cfbf6be50f2917676f9fcb207164cea57de5ff8b2ed8d1f75e2",
+      "sha256": "9433926a70a6fe069a759d612dfe839a4bebfe837ee27457e0fd22acea260139",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "8f57805f4df5cdbe7a822bbdd636f1d3d2f60ebfe8b1fc9e4754ae6ce209dd76",
+      "sha256": "eaa0cfb6a869d01bbc94008825180886c05ebed6e8244268eccb8a38e9e1e86c",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
-      "sha256": "205ae1b77cefbb227ec616a9071838520dabd6891068732a0e0f0469d8ad1c41",
+      "sha256": "67e9fdaf41091a003b7a222121bb17f4c2623e06b7250d41cb42c388233a805b",
       "status": "recorded"
     },
     "route_decision": {
-      "level": "L2",
+      "level": "L1",
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-      "sha256": "9fc022231ddebca3356fa86709a4a1d2a73994e60d7de9816c2f53d82a657984",
+      "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/rust-check.json",
-      "sha256": "08ef7bbe56e8c89ab2a4e6cb8241473f5a992739e331051e3fba03ead520e16e",
+      "sha256": "18a0ad84e17c4ffd916e709280bfb329af4869c1e89c22cb25ce19974c04977e",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-rust-report.json",
-      "sha256": "265c80d4152899319bc49e817ae808c037eb62bcba34ab2b42825c39c5517ead",
+      "sha256": "15b755fa1fd5988a81f596ebea23133cea122b81940110be2cab163af0949c9a",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-diff.json",
-      "sha256": "89f39cbb87d28c14f9a0ca2c7f604650f5f0bca587d475c4b43c2d02f5ee04e1",
+      "sha256": "debb84c9427f552c058d6edc3810a0ff01ae8f6cd2e6a28d7fc41481cd9f6539",
       "status": "passed"
     },
     "slice_contract": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-slice-contract.json",
-      "sha256": "e88744ed0fba4c41c405069796dfbd48ff393c74d7c524ecb3d0d48dbd11e8ba",
+      "sha256": "33cf8a01c244812f4941c8c340599705fbe70bdbd81616f04db9ec8fdf38fae5",
       "status": "recorded"
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-summary.json",
-      "sha256": "f7cabf5164c05375ab7be15aac1b187b77676d9018ebc03019146488743581f5",
+      "sha256": "bc24c12486ec4d92b7f483f19b9cfbd1c3667690a787214ed793898c922fbb22",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-test-translation-generated.json",
-      "sha256": "e5d99539554d06021dfdb23a82a7bce6da23693cdc2b8c0c6197d1aa2dc16fb6",
+      "sha256": "e48eebdaeda10ca9b4014327829e444c099d96cf833c357934d2033d91601617",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-unsafe-ledger.json",
-      "sha256": "830bbd467e619955113c0ce8b17bbe37b54a1a628de08e54e2fe266a34dcde05",
+      "sha256": "4e5e7efaa47d74fffcae700e0df3ecb239187c1fa1a27bf25d8a799579f95f6d",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-unsafe-scan.json",
-      "sha256": "e9c8882e6b4b74d51875a17311b66ce6c82725d2ef040e49cf86cb88b04f162c",
+      "sha256": "d8ff9c642a1727bf053764f588c3a5fbb1edc5bb5443e40d8e971f0f00d727c4",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
-      "profile": "L2-dev",
-      "sha256": "a6128f934dedb7ed71bb846282e1c0da5a846ebb70d69d6affda506df47860a7",
+      "profile": "L1-dev",
+      "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
       "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-verified-unsafe-baseline.json",
+      "sha256": "bf7aab1ab1f15e7b087a82416c3d661548245cad76984061e6c594c190677c50",
+      "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-version-manifest.json",
-      "sha256": "c8de03fdb9d29269107df667f89127f0bb19e7ace098fa403e6707541292a67c",
+      "sha256": "24dcb9b9168920a7f3921d3633f567880a8265ddebd5567eacc026fa1db54786",
       "status": "recorded"
     }
   },
@@ -166,7 +283,7 @@
     "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "source_commit": "demo-copy-i32-ptr-arith-20260625",

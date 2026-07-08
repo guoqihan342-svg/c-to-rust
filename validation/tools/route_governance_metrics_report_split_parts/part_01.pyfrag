@@ -146,8 +146,12 @@ def coverage_metrics_from(coverage_report: dict[str, Any]) -> dict[str, Any]:
     route_statuses = require_dict(ledger, "route_statuses")
     ledgers = ledger.get("ledgers", [])
     require(isinstance(ledgers, list), "capability_delta_ledger ledgers must be a list")
-    if translator_generated_semantic_pass_count > 0 and ledgers and all(
-        milestone_release_report.is_l4_refused(item) for item in ledgers
+    generated_acceptance_count = milestone_release_report.generated_draft_semantic_pass_count_from_ledgers(ledgers)
+    if (
+        translator_generated_semantic_pass_count > 0
+        and ledgers
+        and all(milestone_release_report.is_l4_refused(item) for item in ledgers)
+        and generated_acceptance_count < translator_generated_semantic_pass_count
     ):
         raise SystemExit("L4/refused ledger entries cannot be the translation coverage numerator")
 
@@ -156,6 +160,7 @@ def coverage_metrics_from(coverage_report: dict[str, Any]) -> dict[str, Any]:
         route_levels=route_levels,
         route_statuses=route_statuses,
         semantic_pass_count=translator_generated_semantic_pass_count,
+        generated_draft_semantic_pass_count=generated_acceptance_count,
     )
     return {
         "translation_coverage_numerator": translator_generated_semantic_pass_count,

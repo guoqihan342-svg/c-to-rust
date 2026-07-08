@@ -115,6 +115,8 @@
       "division_by_zero": "not_declared",
       "shift_count": "runtime_precondition_in_range",
       "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
       "signed_overflow": "not_declared",
       "signed_right_shift": "explicit_implementation_defined_contract",
       "wrapping_profile": "not_declared"

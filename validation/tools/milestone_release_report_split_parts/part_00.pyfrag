@@ -122,13 +122,20 @@ def build_report(
     route_statuses = require_dict(ledger, "route_statuses")
     ledgers = ledger.get("ledgers", [])
     require(isinstance(ledgers, list), "capability_delta_ledger ledgers must be a list")
-    if translator_generated_semantic_pass_count > 0 and ledgers and all(is_l4_refused(item) for item in ledgers):
+    generated_acceptance_count = generated_draft_semantic_pass_count_from_ledgers(ledgers)
+    if (
+        translator_generated_semantic_pass_count > 0
+        and ledgers
+        and all(is_l4_refused(item) for item in ledgers)
+        and generated_acceptance_count < translator_generated_semantic_pass_count
+    ):
         raise SystemExit("L4/refused ledger entries cannot be the translation coverage numerator")
     candidate_classification = classify_candidate_statuses(
         generated_status,
         route_levels=route_levels,
         route_statuses=route_statuses,
         semantic_pass_count=translator_generated_semantic_pass_count,
+        generated_draft_semantic_pass_count=generated_acceptance_count,
     )
 
     blockers = []
@@ -239,6 +246,7 @@ def classify_candidate_statuses(
     route_levels: dict[str, Any],
     route_statuses: dict[str, Any],
     semantic_pass_count: int,
+    generated_draft_semantic_pass_count: int = 0,
 ) -> dict[str, Any]:
     normalized = {
         str(key): require_nonnegative_int(value, f"generated_candidate_status.{key}")
@@ -248,9 +256,13 @@ def classify_candidate_statuses(
     blocked_count = sum(normalized.get(status, 0) for status in BLOCKED_STATUSES)
     generated_count = sum(normalized.get(status, 0) for status in GENERATED_CANDIDATE_STATUSES)
     semantic_status_count = sum(normalized.get(status, 0) for status in SEMANTIC_PASS_STATUSES)
+    generated_acceptance_semantic_count = require_nonnegative_int(
+        generated_draft_semantic_pass_count,
+        "generated_draft_semantic_pass_count",
+    )
     require(
-        semantic_pass_count <= semantic_status_count,
-        "semantic_pass_count must be backed by semantic-pass generated_candidate_status entries",
+        semantic_pass_count <= semantic_status_count + generated_acceptance_semantic_count,
+        "semantic_pass_count must be backed by semantic-pass generated_candidate_status entries or generated draft acceptance ledgers",
     )
     if semantic_pass_count > 0:
         route_level_l3 = require_nonnegative_int(route_levels.get("L3", 0), "route_levels.L3")
@@ -258,17 +270,19 @@ def classify_candidate_statuses(
             require_nonnegative_int(route_statuses.get(status, 0), f"route_statuses.{status}")
             for status in SEMANTIC_ROUTE_STATUSES
         )
-        require(route_level_l3 >= semantic_pass_count, "semantic_pass_count must be backed by L3 route evidence")
-        require(
-            semantic_route_count >= semantic_pass_count,
-            "semantic_pass_count must be backed by accepted/passed route status",
-        )
+        if generated_acceptance_semantic_count < semantic_pass_count:
+            require(route_level_l3 >= semantic_pass_count, "semantic_pass_count must be backed by L3 route evidence")
+            require(
+                semantic_route_count >= semantic_pass_count,
+                "semantic_pass_count must be backed by accepted/passed route status",
+            )
     return {
         "refused_delta_count": refused_count,
         "blocked_delta_count": blocked_count,
         "generated_candidate_delta_count": generated_count,
         "semantic_pass_delta_count": semantic_pass_count,
         "semantic_pass_status_count": semantic_status_count,
+        "generated_draft_semantic_pass_count": generated_acceptance_semantic_count,
         "unclassified_delta_count": sum(normalized.values())
         - refused_count
         - blocked_count

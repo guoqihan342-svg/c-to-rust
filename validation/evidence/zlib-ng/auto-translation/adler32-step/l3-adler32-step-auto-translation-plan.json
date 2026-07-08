@@ -1,14 +1,14 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
-    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+    "sha256": "93e475b783d85a04eaf0541798da15fb11daa931cda1611fee63033a85bfd07f",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-    "slice_spec_sha256=de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
+    "slice_spec_sha256=de7ffd6008c1630bef4824f664c32c45ea6bd8d55303d20d47ebcb8bfc5c774c",
     "fixture_hash=zlib-adler32-fixture",
-    "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+    "build_profile_hash=df0671deb7b92d9016732a0f3ecd92853d26fa2c3f3af72354618987ccd51935",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=not_applicable",
@@ -37,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -60,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -83,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     }
   ],
   "inputs": {
@@ -105,7 +105,7 @@
     },
     "slice_spec": {
       "path": "validation/slice-specs/zlib-adler32-step.json",
-      "sha256": "de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
+      "sha256": "de7ffd6008c1630bef4824f664c32c45ea6bd8d55303d20d47ebcb8bfc5c774c",
       "status": "ready"
     },
     "type_map": {
@@ -114,20 +114,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
-    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "sha256": "74d385fda3dc3978f253222584b1264aaf6f63f0450bb7087eea24134f5ccf82",
     "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "adler32-step",
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-  "status": "blocked",
+  "status": "draft_generated",
   "target_id": "zlib-ng",
   "translation_source": {
-    "selected": "legacy-string-translator"
+    "selected": "clang-lowered-typed-ir"
   },
   "translation_summary": {
     "alias_gate": {
@@ -145,7 +145,7 @@
     "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
     "translation_rule_ids": [
-      "structured-return-expression"
+      "clang-lowered-typed-ir"
     ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
@@ -154,7 +154,7 @@
   "validation_profile": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
+    "sha256": "af53732a6958e07af29d0c803ade409435eaae8f489d6cecbac6d128ccf8cf77",
     "status": "passed"
   },
   "verification_plan": [

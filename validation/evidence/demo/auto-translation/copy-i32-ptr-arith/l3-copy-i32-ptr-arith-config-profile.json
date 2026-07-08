@@ -2,18 +2,18 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
-    "fixture_sha256": "31fb2903c83e4056cb843f8b604ba74b22c1ec4adb4490c43cafffb40a9cd83f",
+    "fixture_sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
       "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
-      "final_verification": "69e04090ae42a2b0b5159cbe9e98ee5acd90fa5f8a5f45ac21c45e01239b19d6",
+      "final_verification": "fc4e92f3d7d2686c538777c4114f002a5755a9c849717e8d9960e8fe7f275871",
       "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
       "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
       "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
       "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
       "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
-      "version_manifest": "04642cf61fb33ed0dd82ac159a3633456df2d2bd02de3b5894ef53fb35daaa05"
+      "version_manifest": "94f71e2c12d9cacbd8b00a88607e8440ccdc9bf1cc9f4bc06f3b9fb3fe3b916a"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
@@ -37,16 +37,16 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
-    "slice_spec_sha256=3f970916833b589d9a83af5caa43d77b18ac6882d93d9b989748cbeaa06c9250",
+    "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "fixture_hash=copy-i32-ptr-arith-fixture",
-    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "build_profile_hash=bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "compile_profile": {
     "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
     "command_args": [
-      "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py"
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c"
     ],
     "config_header_included": true,
     "include_paths": []
@@ -54,7 +54,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "3f970916833b589d9a83af5caa43d77b18ac6882d93d9b989748cbeaa06c9250"
+    "sha256": "c15eb7145a05752cff9cf668bef6f5c03658857234758167d2aaee773df99679"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -74,7 +74,7 @@
     "No arbitrary pointer arithmetic beyond *(values + i) reads and *(out + i) writes."
   ],
   "profile_id": "demo-copy-i32-ptr-arith-wsl-gcc",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

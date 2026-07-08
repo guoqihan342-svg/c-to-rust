@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c-oracle-harness-draft.c",
-    "sha256": "2c091209980c8edb10ffd36732c6769394fff57551406a230aa1d73d128bac7b",
+    "sha256": "6b79be1727027a4328d964988326d2b89f3f43ebc47388ffebd4e50c5c438114",
     "status": "draft"
   },
   "schema_version": 1,

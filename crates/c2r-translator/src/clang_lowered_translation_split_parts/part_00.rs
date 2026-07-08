@@ -79,37 +79,32 @@ pub(crate) fn lower_parse_spec_report_with_optional_ast_fixture(
     parse_spec: &clang_frontend::ClangParseSpec,
     ast_fixture: Option<&str>,
 ) -> clang_frontend::ClangLoweringReport {
-    let report =
-        clang_frontend::lower_function_from_clang_parse_spec_report(environment, parse_spec);
-    if report.function_ir.is_some() || !clang_report_allows_fixture_fallback(&report) {
-        return report;
-    }
     let Some(ast_fixture) = ast_fixture.map(str::trim).filter(|value| !value.is_empty()) else {
-        return report;
+        return clang_frontend::lower_function_from_clang_parse_spec_report(
+            environment,
+            parse_spec,
+        );
     };
-    lower_parse_spec_from_ast_fixture_report(environment, parse_spec, ast_fixture, report)
-}
 
-fn clang_report_allows_fixture_fallback(report: &clang_frontend::ClangLoweringReport) -> bool {
-    report.status == "unavailable"
-        && report.errors.iter().any(|error| {
-            error.kind == "missing_clang_path" || error.kind == "clang_ast_dump_unavailable"
-        })
+    lower_parse_spec_from_ast_fixture_report(
+        environment,
+        parse_spec,
+        ast_fixture,
+        vec![format!(
+            "clang AST JSON fixture replay selected from slice spec; external clang AST dump was not invoked: {}",
+            normalize_path(&resolve_ast_fixture_path(ast_fixture))
+        )],
+    )
 }
 
 fn lower_parse_spec_from_ast_fixture_report(
     environment: &BTreeMap<String, String>,
     parse_spec: &clang_frontend::ClangParseSpec,
     ast_fixture: &str,
-    unavailable_report: clang_frontend::ClangLoweringReport,
+    diagnostics: Vec<String>,
 ) -> clang_frontend::ClangLoweringReport {
     let fixture_path = resolve_ast_fixture_path(ast_fixture);
     let logical_source_file = parse_spec.source_root.join(&parse_spec.source_file);
-    let mut diagnostics = unavailable_report.diagnostics.clone();
-    diagnostics.push(format!(
-        "clang AST JSON fixture replay used after clang AST dump was unavailable: {}",
-        normalize_path(&fixture_path)
-    ));
 
     let result = match fs::read_to_string(&fixture_path) {
         Ok(raw_json) => match serde_json::from_str::<serde_json::Value>(&raw_json) {
@@ -221,8 +216,51 @@ pub(crate) fn emit_policy_from_spec(spec: &SliceSpec) -> typed_ir::EmitPolicy {
     };
     typed_ir::EmitPolicy {
         signed_right_shift,
+        noalias_param_pairs: noalias_param_pairs_from_spec(spec),
         ..Default::default()
     }
+}
+
+fn noalias_param_pairs_from_spec(spec: &SliceSpec) -> Vec<typed_ir::NoAliasParamPair> {
+    let inputs: Vec<&str> = spec
+        .c_boundary
+        .pointer_contract
+        .input_buffers
+        .iter()
+        .map(|item| item.name.as_str())
+        .collect();
+    let outputs: Vec<&str> = spec
+        .c_boundary
+        .pointer_contract
+        .output_pointers
+        .iter()
+        .map(|item| item.name.as_str())
+        .collect();
+    spec.c_boundary
+        .pointer_contract
+        .noalias_required
+        .iter()
+        .filter_map(|pair| {
+            let [left, right] = pair.as_slice() else {
+                return None;
+            };
+            let left = left.as_str();
+            let right = right.as_str();
+            if inputs.contains(&left) && outputs.contains(&right) {
+                Some(typed_ir::NoAliasParamPair {
+                    readonly_param: left.to_string(),
+                    mutable_param: right.to_string(),
+                })
+            } else if inputs.contains(&right) && outputs.contains(&left) {
+                Some(typed_ir::NoAliasParamPair {
+                    readonly_param: right.to_string(),
+                    mutable_param: left.to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 /// Mirrors an already-emitted typed IR function into translator evidence.
@@ -237,7 +275,18 @@ fn record_clang_lowered_ir_evidence(
 ) {
     record_ir_type_mapping("return", &function.return_type, &spec.build_profile, result);
     for param in &function.params {
-        record_ir_type_mapping(&param.name, &param.ty, &spec.build_profile, result);
+        let rust_type_override = if ir_has_byte_cursor_read(function, &param.name) {
+            Some("&[u8]".to_string())
+        } else {
+            None
+        };
+        record_ir_type_mapping_with_rust_type_override(
+            &param.name,
+            &param.ty,
+            &spec.build_profile,
+            rust_type_override,
+            result,
+        );
     }
     record_ir_decl_type_mappings(&function.body, &spec.build_profile, result);
     record_ir_call_expression_evidence(&function.body, result);

@@ -21,6 +21,100 @@
             )
         )
         run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        project_acceptance_path = temp_dir / "summary" / "project-agnostic-acceptance.json"
+        out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
+        index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
+        project_acceptance_ref = write_project_agnostic_acceptance_report(project_acceptance_path)
+        write_json(
+            index_path,
+            {
+                "report_kind": "judge-evidence-index",
+                "core_translation_quality": {
+                    "final_gate_status": "failed",
+                    "semantic_pass_count": 0,
+                    "translation_coverage_numerator": 0,
+                    "generated_draft_semantic_pass": False,
+                    "repair_summary": {
+                        "status": "verified",
+                        "repair_round_cap": 5,
+                        "observed_repair_unit_count": 1,
+                        "auto_recovered_unit_count": 1,
+                        "rollback_evidence_count": 1,
+                    },
+                    "unsafe_reduction": {
+                        "status": "measured",
+                        "baseline_total_unsafe": 2,
+                        "current_total_unsafe": 1,
+                        "reduced_by": 1,
+                    },
+                },
+            },
+        )
+        write_json(
+            run_report_path,
+            {
+                "schema_version": 1,
+                "report_kind": "judge-entrypoints-run-report",
+                "status": "passed",
+                "entrypoint_count": 1,
+                "claim_boundary": {"semantic_gate": False, "semantic_claim_source": "validator-owned-artifacts"},
+                "summary": {
+                    "readiness": {
+                        "all_entrypoints_executed": True,
+                        "executed_count": 1,
+                        "configured_count": 1,
+                        "validation_status": "passed",
+                    },
+                    "claim_boundary": {
+                        "semantic_gate": False,
+                        "generated_draft_semantic_pass": False,
+                        "translation_coverage_numerator": 0,
+                    },
+                },
+                "entrypoints": [
+                    {
+                        "id": "before_after_judge_demo",
+                        "status": "passed",
+                        "exit_code": 0,
+                        "proof_class": "local-simulation",
+                        "key_artifacts": {"judge_evidence_index": repo_relative(index_path)},
+                    }
+                ],
+                "validation": {
+                    "status": "passed",
+                    "project_agnostic_acceptance_report": project_acceptance_ref,
+                    "entrypoints": [
+                        {
+                            "id": "before_after_judge_demo",
+                            "expected_artifacts": {
+                                "judge_evidence_index": artifact_ref(index_path),
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+
+        report = bundle.build_judge_milestone_bundle(
+            run_report_path=run_report_path,
+            out_path=out_path,
+            repo_root=REPO_ROOT,
+        )
+
+        repair_blockers = [blocker for blocker in report["blockers"] if blocker.startswith("repair_accounting_")]
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(repair_blockers, [])
+
+    def test_bundle_blocks_without_project_agnostic_full_conversion_acceptance(self) -> None:
+        from validation.tools import judge_milestone_bundle as bundle
+
+        temp_dir = Path(
+            tempfile.mkdtemp(
+                prefix="judge-milestone-project-agnostic-missing-",
+                dir=REPO_ROOT / "target",
+            )
+        )
+        run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
         out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
         index_path = temp_dir / "before-after" / "harness" / "judge-evidence-index.json"
         write_json(
@@ -98,9 +192,18 @@
             repo_root=REPO_ROOT,
         )
 
-        repair_blockers = [blocker for blocker in report["blockers"] if blocker.startswith("repair_accounting_")]
-        self.assertEqual(report["status"], "passed")
-        self.assertEqual(repair_blockers, [])
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["project_agnostic_acceptance"]["status"], "blocked")
+        self.assertEqual(
+            report["project_agnostic_acceptance"]["blocker"],
+            "project_agnostic_full_conversion_report_missing",
+        )
+        self.assertIn("project_agnostic_full_conversion_report_missing", report["blockers"])
+        self.assertIn("project_agnostic_full_conversion_without_acceptance_report", report["must_not_claim"])
+        self.assertEqual(
+            report["publication_manifest"]["project_agnostic_acceptance"],
+            report["project_agnostic_acceptance"],
+        )
 
     def test_bundle_blocks_opencode_runtime_missing_explicit_evidence_boundary_fields(self) -> None:
         from validation.tools import judge_milestone_bundle as bundle

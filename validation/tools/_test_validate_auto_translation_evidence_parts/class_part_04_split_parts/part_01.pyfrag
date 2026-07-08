@@ -214,7 +214,9 @@
         evidence_dir = out_root / "demo" / "auto-translation" / "call-expression"
         shutil.copytree(source_dir, evidence_dir)
         self._backfill_route_baseline_profile_evidence(evidence_dir, "demo", "call-expression")
+        self._downgrade_call_expression_fixture_to_accepted_evidence_only(evidence_dir)
         prefix = "l3-call-expression"
+        self._refresh_call_expression_verified_unsafe_baseline_ref(evidence_dir, prefix)
         self._refresh_call_expression_accepted_oracle_binding(evidence_dir, prefix)
         self._assert_call_expression_passed_diff_gate_fields(evidence_dir, prefix)
         self._bind_manifest_ref(evidence_dir, prefix, "schema_diff", evidence_dir / f"{prefix}-diff.json", "passed")
@@ -232,9 +234,169 @@
             evidence_dir / f"{prefix}-rust-report.json",
             "passed",
         )
+        self._localize_call_expression_auto_translation_refs(evidence_dir)
+        self._refresh_call_expression_route_source_artifact_refs(evidence_dir, prefix)
+        self._refresh_call_expression_verified_unsafe_baseline_ref(evidence_dir, prefix)
         self._refresh_manifest_evidence_ref_hashes(evidence_dir, prefix)
         spec_path = REPO_ROOT / "validation" / "slice-specs" / "demo-call-expression.json"
         return spec_path, out_root, evidence_dir
+
+    def _refresh_call_expression_route_source_artifact_refs(
+        self,
+        evidence_dir: Path,
+        prefix: str,
+    ) -> None:
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        route = json.loads(route_path.read_text(encoding="utf-8"))
+        for ref in route.get("source_artifacts", {}).values():
+            if isinstance(ref, dict) and isinstance(ref.get("path"), str):
+                resolved = Path(ref["path"])
+                if resolved.exists():
+                    ref["sha256"] = self._sha256(resolved)
+        self._write_json(route_path, route)
+
+        route_ref = self._ref(route_path, route.get("status", "recorded"))
+        route_ref["level"] = route.get("level")
+        for ref_path, key_path in [
+            (evidence_dir / f"{prefix}-auto-translation-manifest.json", ("route_decision",)),
+            (evidence_dir / f"{prefix}-evidence-manifest.json", ("evidence", "route_decision")),
+            (evidence_dir / f"{prefix}-final-verification.json", ("route_decision",)),
+        ]:
+            payload = json.loads(ref_path.read_text(encoding="utf-8"))
+            target = payload
+            for key in key_path[:-1]:
+                target = target[key]
+            target[key_path[-1]] = route_ref
+            self._write_json(ref_path, payload)
+
+        cache_path = evidence_dir / f"{prefix}-auto-cache-metadata.json"
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cache["route_decision_identity"] = {
+            "status": route.get("status", "recorded"),
+            "sha256": self._sha256_json(route),
+        }
+        cache.setdefault("dependent_artifacts", {})["route_decision"] = route_ref
+        self._write_json(cache_path, cache)
+
+    def _localize_call_expression_auto_translation_refs(self, evidence_dir: Path) -> None:
+        repo_prefix = "validation/evidence/demo/auto-translation/call-expression/"
+        for path in evidence_dir.glob("*.json"):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            localized, changed = self._localize_auto_translation_ref_value(
+                payload,
+                repo_prefix,
+                evidence_dir,
+            )
+            if changed:
+                self._write_json(path, localized)
+
+    def _localize_auto_translation_ref_value(
+        self,
+        value: object,
+        repo_prefix: str,
+        evidence_dir: Path,
+    ) -> tuple[object, bool]:
+        if isinstance(value, str):
+            if value.startswith(repo_prefix):
+                return (evidence_dir / value.removeprefix(repo_prefix)).as_posix(), True
+            return value, False
+        if isinstance(value, list):
+            changed = False
+            localized_items = []
+            for item in value:
+                localized_item, item_changed = self._localize_auto_translation_ref_value(
+                    item,
+                    repo_prefix,
+                    evidence_dir,
+                )
+                localized_items.append(localized_item)
+                changed = item_changed or changed
+            return localized_items, changed
+        if isinstance(value, dict):
+            changed = False
+            localized_dict = {}
+            for key, item in value.items():
+                localized_item, item_changed = self._localize_auto_translation_ref_value(
+                    item,
+                    repo_prefix,
+                    evidence_dir,
+                )
+                localized_dict[key] = localized_item
+                changed = item_changed or changed
+            return localized_dict, changed
+        return value, False
+
+    def _refresh_call_expression_verified_unsafe_baseline_ref(
+        self,
+        evidence_dir: Path,
+        prefix: str,
+    ) -> None:
+        verified_path = evidence_dir / f"{prefix}-c2rust-verified-unsafe-baseline.json"
+        if not verified_path.exists():
+            return
+        verified = json.loads(verified_path.read_text(encoding="utf-8"))
+        baseline_path = evidence_dir / f"{prefix}-c2rust-baseline-manifest.json"
+        route_path = evidence_dir / f"{prefix}-route-decision.json"
+        profile_path = evidence_dir / f"{prefix}-validation-profile.json"
+        if baseline_path.exists():
+            baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+            verified["c2rust_baseline"] = self._ref(
+                baseline_path,
+                baseline.get("status", "skipped"),
+            )
+        if route_path.exists():
+            route = json.loads(route_path.read_text(encoding="utf-8"))
+            route_ref = self._ref(route_path, route.get("status", "recorded"))
+            route_ref["level"] = route.get("level")
+            verified["route_decision"] = route_ref
+        if profile_path.exists():
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile_ref = self._ref(profile_path, profile.get("status", "passed"))
+            profile_ref["profile"] = profile.get("profile")
+            verified["validation_profile"] = profile_ref
+        for ref in verified.get("gate_refs", {}).values():
+            if not isinstance(ref, dict) or not isinstance(ref.get("path"), str):
+                continue
+            resolved = Path(ref["path"])
+            if resolved.exists():
+                ref["sha256"] = self._sha256(resolved)
+        self._write_json(verified_path, verified)
+        verified_ref = self._ref(verified_path, verified.get("status", "blocked"))
+        for ref_path, key_path in [
+            (evidence_dir / f"{prefix}-auto-translation-manifest.json", ("verified_unsafe_baseline",)),
+            (evidence_dir / f"{prefix}-evidence-manifest.json", ("evidence", "verified_unsafe_baseline")),
+            (evidence_dir / f"{prefix}-final-verification.json", ("verified_unsafe_baseline",)),
+        ]:
+            payload = json.loads(ref_path.read_text(encoding="utf-8"))
+            target = payload
+            for key in key_path[:-1]:
+                target = target[key]
+            target[key_path[-1]] = verified_ref
+            self._write_json(ref_path, payload)
+
+    def _downgrade_call_expression_fixture_to_accepted_evidence_only(self, evidence_dir: Path) -> None:
+        prefix = "l3-call-expression"
+        for path in evidence_dir.glob(f"{prefix}-*.json"):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if self._clear_generated_draft_acceptance(payload):
+                self._write_json(path, payload)
+
+    def _clear_generated_draft_acceptance(self, payload: object) -> bool:
+        changed = False
+        if isinstance(payload, dict):
+            if "generated_draft_acceptance" in payload:
+                payload.pop("generated_draft_acceptance")
+                changed = True
+            for key, value in list(payload.items()):
+                if key == "generated_draft_semantic_pass" and value is True:
+                    payload[key] = False
+                    changed = True
+                else:
+                    changed = self._clear_generated_draft_acceptance(value) or changed
+        elif isinstance(payload, list):
+            for item in payload:
+                changed = self._clear_generated_draft_acceptance(item) or changed
+        return changed
 
     def _refresh_call_expression_accepted_oracle_binding(self, evidence_dir: Path, prefix: str) -> None:
         c_oracle_path = evidence_dir / f"{prefix}-c-oracle-status.json"

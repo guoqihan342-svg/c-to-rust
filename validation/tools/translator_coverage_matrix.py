@@ -149,6 +149,7 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
         route_levels[route_level] += 1
         route_statuses[route_status] += 1
         accepted_evidence_semantic_pass = accepted_evidence_semantic_pass_for_ledger(path, payload)
+        generated_draft_semantic_pass = generated_draft_semantic_pass_for_ledger(path, payload)
         if accepted_evidence_semantic_pass:
             accepted_evidence_semantic_pass_count += 1
         governance_delta_count += len(governance)
@@ -162,6 +163,7 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
                 "route_status": route_status,
                 "delta_count": len(deltas),
                 "accepted_evidence_semantic_pass": accepted_evidence_semantic_pass,
+                "generated_draft_semantic_pass": generated_draft_semantic_pass,
             }
         )
         for delta in deltas:
@@ -175,8 +177,13 @@ def build_capability_delta_ledger(repo_root: Path, *, evidence_root: Path) -> di
             semantic_pass = delta.get("semantic_pass")
             require(isinstance(semantic_pass, bool), f"{ledger_path} semantic_pass must be boolean")
             require(
-                not (route_level == "L4" and route_status == "refused" and semantic_pass is True),
-                f"{ledger_path} L4/refused capability delta cannot set semantic_pass=true",
+                not (
+                    route_level == "L4"
+                    and route_status == "refused"
+                    and semantic_pass is True
+                    and not generated_draft_semantic_pass
+                ),
+                f"{ledger_path} L4/refused semantic_pass=true requires generated_draft_acceptance.status=passed",
             )
             evidence_refs = delta.get("evidence_refs")
             require(isinstance(evidence_refs, list) and evidence_refs, f"{ledger_path} evidence_refs are required")
@@ -233,11 +240,35 @@ def accepted_evidence_semantic_pass_for_ledger(path: Path, payload: dict[str, An
     return False
 
 
+def generated_draft_semantic_pass_for_ledger(path: Path, payload: dict[str, Any]) -> bool:
+    slice_id = payload.get("slice_id")
+    if not isinstance(slice_id, str) or not slice_id:
+        return False
+    prefix = f"l3-{slice_id}"
+    final_verification = path.with_name(f"{prefix}-final-verification.json")
+    profile = path.with_name(f"{prefix}-validation-profile.json")
+    if not final_verification.exists() or not profile.exists():
+        return False
+    return is_generated_draft_semantic_pass(load_json(final_verification)) and is_generated_draft_semantic_pass(
+        load_json(profile)
+    )
+
+
 def is_accepted_evidence_semantic_pass(payload: dict[str, Any]) -> bool:
     return (
         payload.get("semantic_pass") is True
         and payload.get("accepted_evidence_authoritative") is True
         and payload.get("generated_draft_semantic_pass") is False
+    )
+
+
+def is_generated_draft_semantic_pass(payload: dict[str, Any]) -> bool:
+    acceptance = payload.get("generated_draft_acceptance")
+    return (
+        payload.get("generated_draft_semantic_pass") is True
+        and isinstance(acceptance, dict)
+        and acceptance.get("status") == "passed"
+        and acceptance.get("generated_draft_semantic_pass") is True
     )
 
 

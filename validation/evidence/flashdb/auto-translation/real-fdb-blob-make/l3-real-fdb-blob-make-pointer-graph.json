@@ -17,7 +17,7 @@
   },
   "cache_invalidation_keys": [
     "source_commit=93d175549da579b8abac07bd175ce4c3f9dde829",
-    "slice_spec_sha256=d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646",
+    "slice_spec_sha256=b93b8f807f597a44ebc10fba7ea2d2f25631fea5614795b77c1c2c74ed8bde5b",
     "fixture_hash=real-fdb-blob-make-fixture",
     "build_profile_hash=37b8044ca53910218b8b88385e1d75a2e9c8afeb342ae17d53f86c27d96619db",
     "translator_version=0.1.0",
@@ -71,7 +71,7 @@
       "write_effects": []
     }
   ],
-  "repo_commit": "6a99a9d8330ee873cd456a96f1dd7e8765d810cd",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "risk_summary": {
     "alias_gate": {
       "complete_alias_safety": false,

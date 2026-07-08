@@ -1,17 +1,18 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
-    "sha256": "7465c7e7c4eb83ed3ba1a8aa087323ae69ca6ad0d8571b1d3da9ba4f180e9dec",
+    "sha256": "5e0c165abd4c856c5884439cf0a683ed1f286020d8bf0f4222ff27d5b7c81d89",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "global_dependencies": [],
   "level": "L3",
   "mappings": [
     {
@@ -22,7 +23,7 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "value",
@@ -32,25 +33,25 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "out",
-      "c_type": "int*",
+      "c_type": "int *",
       "confidence": "proven",
       "id": "type-3",
       "kind": "pointer",
-      "rust_type": "IntOutReport",
+      "rust_type": "*mut i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     }
   ],
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "store-add-one",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-store-add-one.json",
-    "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "status": "ready"
   },
   "source_commit": "demo-store-add-one-20260625",

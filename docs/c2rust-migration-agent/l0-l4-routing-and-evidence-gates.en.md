@@ -53,6 +53,7 @@ Direct-call / stdlib model details are not enumerated as route levels in this fi
 **L4**: two forms:
 1. **refused**: route decision is L4/refused. `translator.kind=refuse`. `candidate_generation_allowed=false`. Examples: function signature mismatch, unresolvable pointer graph, unsupported environment.
 2. **accepted evidence authoritative**: slice spec explicitly declares `claim_boundary.accepted_evidence_authoritative=true`. Route remains L4/refused, but semantic pass is bound to external accepted C oracle / Rust report / diff / negative diff / unsafe evidence, not generated draft.
+3. **generated draft accepted after gates**: route may still be L4/refused, but validation profile / final / manifest / test translation must all declare the same `generated_draft_acceptance.status=passed` and bind the exact Rust draft sha, rustc check, generated replay, C oracle, schema diff, negative diff, and unsafe scan/ledger. Only this path can count the exact generated draft as a translator-generated semantic pass.
 
 ## 3. Route Decision Logic
 
@@ -132,6 +133,7 @@ The current `candidate_generation` inventory is post-generation provenance: `sel
 4. L4/refused defaults to not-passed, unless slice spec declares `accepted_evidence_authoritative=true`
 5. `generated_draft_semantic_pass` must be false (generated draft does not claim semantics directly)
 6. When L4/refused passes through `accepted_evidence_authoritative=true`, reports must bind `accepted_evidence_binding` and keep `generated_draft_semantic_pass=false`.
+7. When L4/refused accepts an exact generated draft through `generated_draft_acceptance.status=passed`, the validator must require identical acceptance objects across profile, manifest, final, and test translation; route policy / candidate_generation still must not mark the raw candidate itself as accepted.
 
 ### 4.3 Profile-Route Relationship
 

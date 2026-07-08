@@ -8,10 +8,15 @@
     "risk_count": 0,
     "risk_level": "none"
   },
-  "build_profile_hash": "a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+  "build_profile_hash": "ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
   "c2rust_baseline_identity": {
-    "sha256": "8918d9896e63262a76e50dbc5b575a16b12a43a62a298af0585e9f4bcf7da566",
+    "sha256": "d0bbe6d4f521fcc2694249f2ea0c6d09ec8a29e3966863cbd421025c4a6df5cc",
     "status": "skipped"
+  },
+  "c_oracle_harness_identity": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
+    "sha256": "34930cea1c35e9c618c8ed7b045127d90dfc696e1e7d4fb0efc0901c6d8e9193",
+    "status": "draft"
   },
   "cache_input_fields": [
     "source_commit",
@@ -19,6 +24,7 @@
     "slice_spec_sha256",
     "fixture_hash",
     "build_profile_hash",
+    "competition_environment_identity",
     "cargo_lock_hash",
     "tool_versions",
     "schema_versions",
@@ -26,43 +32,94 @@
     "translator_manifest_sha256",
     "command_arguments",
     "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
     "c2rust_baseline_identity",
     "route_decision_identity",
     "validation_profile_identity",
-    "oracle_boundary_contract_identity"
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
   ],
   "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "clang_lowering_identity": {
+    "clang_path": "",
+    "clang_path_status": "not_configured",
+    "clang_version": "not_configured",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
     "validation/slice-specs/demo-store-add-one.json",
-    "--accept-existing-evidence"
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report"
   ],
+  "competition_environment_identity": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-      "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
+      "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
       "status": "skipped"
     },
     "route_decision": {
       "level": "L1",
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-      "sha256": "0ce195cc3f8815329a9377bff4510370c5ca4b30a64952b7a0d95d5d8ddc98b5",
+      "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
       "status": "recorded"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
       "profile": "L1-dev",
-      "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
+      "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
       "status": "passed"
     }
   },
+  "effect_graph_identity": {
+    "alias_gate_decision": "not_applicable",
+    "alias_sensitive": false,
+    "read_effect_count": 0,
+    "read_nodes": [],
+    "schema_version": 2,
+    "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+    "write_effect_count": 0,
+    "write_nodes": []
+  },
   "fixture_hash": "store-add-one-fixture",
+  "global_dependency_identity": {
+    "count": 0,
+    "names": [],
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
   "invalidates": [
     "context_pack",
     "type_map",
     "cfg",
     "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
     "rust_draft",
     "patch_plan",
     "ai_candidate",
@@ -72,17 +129,19 @@
     "negative_diff",
     "unsafe_ledger",
     "final_verification",
-    "summary",
-    "c2rust_baseline",
-    "route_decision",
-    "validation_profile"
+    "auto_translation_manifest",
+    "summary"
   ],
   "oracle_boundary_contract_identity": {
-    "sha256": "7b688f45d45d95295d75a2d6b584fe507c30c16da08a212198f9f61d9f83dff6",
+    "sha256": "b0ad8daf477453913e440d2522ef2ca07dff75684ae7ef82f35320ab2baa6fe5",
     "status": "sufficient_for_semantic_pass"
   },
   "route_decision_identity": {
-    "sha256": "6201eaf22ab70241a6330b9599e8e1bd88a9b3f3cfb2bd913796d2176273f368",
+    "sha256": "26a4c2d690865eed37de1f9040529839f34a533d1ef79543670dcf00d3b6ac69",
+    "status": "recorded"
+  },
+  "scalar_ub_contract_identity": {
+    "sha256": "29c1833d6196b591b0f5ca669fca67643f8f554c5c2a9a5d0fef3f34807bd8f1",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -91,15 +150,15 @@
     "auto_translation_plan": 1,
     "cfg": 1,
     "evidence_manifest": 1,
-    "pointer_graph": 1,
+    "pointer_graph": 2,
     "type_map": 1
   },
   "slice_id": "store-add-one",
-  "slice_spec_sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+  "slice_spec_sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
   "source_commit": "demo-store-add-one-20260625",
   "source_file_hashes": {
-    "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
-    "validation/l2_slices/tools/generate_store_add_one_oracle.py": "37a053e53bea8bb00c59a243b3c7f76b7d6c09fabbcac9e95039703f943f8bf4"
+    "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+    "validation/l2_slices/fixtures/store-add-one.c": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
   },
   "target_id": "demo",
   "tool_versions": {
@@ -108,10 +167,13 @@
     "python": "Python 3.14.2",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
-  "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "ab194dd21797594f4971b1b298a8edd7983d6a243fb5b5c296034382760bbbb1",
+    "sha256": "c791e2b50a396060572207c15e44933067d4962974a06704ed2c96ee2285f071",
     "status": "passed"
   }
 }

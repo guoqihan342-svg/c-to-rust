@@ -85,6 +85,31 @@ fn emit_expr_with_prelude(
                 expr: format!("({} as {target})", emitted.expr),
             })
         }
+        IrExpr::LValueToRValue { target, expr, .. } => {
+            if !is_integer_type(target) {
+                return Err(format!(
+                    "{path} lvalue-to-rvalue target {} is unsupported",
+                    type_label(target)
+                ));
+            }
+            let source_type = expr_type(expr)
+                .ok_or_else(|| format!("{path} lvalue-to-rvalue source type is unsupported"))?;
+            if !is_integer_type(source_type) {
+                return Err(format!(
+                    "{path} lvalue-to-rvalue source {} is unsupported",
+                    type_label(source_type)
+                ));
+            }
+            validate_expr_matches_type(expr, target, "lvalue-to-rvalue expr")
+                .map_err(|detail| format!("{path} {detail}"))?;
+            emit_expr_with_prelude(
+                expr,
+                symbols,
+                context,
+                indent_level,
+                &format!("{path} lvalue-to-rvalue expr"),
+            )
+        }
         IrExpr::ArrayToPointerDecay { .. } => Err(format!(
             "{path} array-to-pointer decay requires explicit lowering evidence"
         )),

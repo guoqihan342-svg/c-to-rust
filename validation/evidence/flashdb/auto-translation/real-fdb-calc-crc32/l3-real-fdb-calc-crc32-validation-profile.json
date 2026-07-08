@@ -4,7 +4,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+        "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
         "status": "generated"
       },
       "candidate_id": "c2rust-baseline",
@@ -23,11 +23,9 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "kind": "legacy-string-translator",
-        "role": "compatibility_rust_draft",
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -42,7 +40,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+          "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
           "status": "generated"
         },
         "candidate_id": "c2rust-baseline",
@@ -60,16 +58,7 @@
         "status": "generated"
       }
     ],
-    "compatibility_sources": [
-      {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": false,
-        "selected": "legacy-string-translator",
-        "semantic_pass": false
-      }
-    ],
+    "compatibility_sources": [],
     "generated_draft_semantic_pass": false,
     "governance_summary": {
       "candidate_generation_allowed": false,
@@ -81,10 +70,8 @@
       ],
       "fallback_summary": {
         "legacy_string_translator": {
-          "candidate_id": "compat:legacy-string-translator",
-          "fallback": false,
           "selected_as_primary": false,
-          "status": "compatibility_only"
+          "status": "not_used"
         }
       },
       "full_router": false,
@@ -128,12 +115,12 @@
       }
     },
     "primary_candidate": {
-      "candidate_id": "primary:unknown",
+      "candidate_id": "primary:clang-lowered-typed-ir",
       "fallback": false,
-      "selected": "unknown",
+      "selected": "clang-lowered-typed-ir",
       "semantic_pass": false
     },
-    "selected_candidate_id": null,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -197,33 +184,33 @@
       "rust_draft_sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
       "scalar_admission": {
         "contract_status": "recorded",
-        "covered": [],
+        "covered": [
+          {
+            "code": "shift_count_in_range",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.shift_count",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          }
+        ],
         "precondition_count": 1,
         "source_fields": [
           "c_boundary.scalar_arithmetic_contract",
           "fixture_contract.scalar_input_domain",
           "claim_boundary.must_not_claim"
         ],
-        "status": "unresolved",
-        "unresolved": [
-          {
-            "code": "shift_count_in_range",
-            "missing": [
-              "c_boundary.scalar_arithmetic_contract.shift_count",
-              "fixture_contract.scalar_input_domain"
-            ],
-            "status": "unresolved"
-          }
-        ]
+        "status": "covered",
+        "unresolved": []
       },
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "d2e4e8b8ce22a906e1850c264e3d21406e74df61ce78ee28d64a9551cd03efb6",
+        "sha256": "06dc0457c008f0bf4fe44a90da081806ab53f99d7805bda08f1ef7f1b2c82cf8",
         "status": "lowered"
       },
       "status": "generated",
-      "typed_ir_sha256": "9c75816a055a0ad6e81fa9742721d967305dc9b8ab623ef8ed29b4703192d078"
+      "typed_ir_sha256": "d7ce9365fe23d9ddacc5714ce92bf224b3cb642984fbc38baebee06bd9503215"
     }
   },
   "competition_environment": {
@@ -231,7 +218,95 @@
     "profile_id": "huawei-competition-ubuntu-24.04",
     "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
   },
-  "generated_draft_semantic_pass": false,
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+      "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+        "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+        "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+        "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+        "unsafe_ledger": "f62deeece7aae093e662d0128b3e8c8d528717af7484fd96d77610e3cf48d2a1",
+        "unsafe_scan": "40fd7828b4f069d8eee8d3c9b493829425fe6de659b996fd0572350add437d2d"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+        "diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+        "negative_diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+        "rust_report": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+        "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
+      },
+      "slice_id": "real-fdb-calc-crc32",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "accepted",
+      "target_id": "flashdb",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+        "sha256": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+        "sha256": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+        "sha256": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+        "sha256": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-j77_qcut/generated_replay.rs -o /tmp/c2r-generated-replay-j77_qcut/generated_replay.exe",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "/tmp/c2r-generated-replay-j77_qcut/generated_replay.exe --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
+      "sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "real-fdb-calc-crc32",
+    "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+    "status": "passed",
+    "target_id": "flashdb"
+  },
+  "generated_draft_semantic_pass": true,
   "goal": "dev",
   "loop_policy": {
     "fixed_project_loop_count_required": false,
@@ -309,7 +384,14 @@
     "ub_and_implementation_defined": {
       "implementation_defined_behavior": [],
       "known_ub": [],
-      "scalar_arithmetic_contract": {}
+      "scalar_arithmetic_contract": {
+        "division_by_zero": "not_declared",
+        "shift_count": "runtime_precondition_in_range",
+        "signed_division_overflow": "not_declared",
+        "signed_overflow": "not_declared",
+        "signed_right_shift": "not_declared",
+        "wrapping_profile": "not_declared"
+      }
     }
   },
   "profile": "L4-accepted-evidence",
@@ -325,8 +407,10 @@
   "scalar_ub_contract": {
     "c_boundary": {
       "division_by_zero": "not_declared",
-      "shift_count": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
       "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
       "signed_overflow": "not_declared",
       "signed_right_shift": "not_declared",
       "wrapping_profile": "not_declared"
@@ -339,9 +423,28 @@
       ]
     },
     "fixture_contract": {
-      "case_source": "not_declared",
+      "case_source": "fixture_cases",
       "covers_overflow_boundaries": false,
-      "parameters": []
+      "parameters": [
+        {
+          "excludes": [],
+          "name": "crc",
+          "range": [
+            0,
+            0
+          ],
+          "type": "uint32_t"
+        },
+        {
+          "excludes": [],
+          "name": "size",
+          "range": [
+            0,
+            9
+          ],
+          "type": "size_t"
+        }
+      ]
     },
     "status": "recorded"
   },

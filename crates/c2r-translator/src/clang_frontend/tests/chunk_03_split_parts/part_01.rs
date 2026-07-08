@@ -410,17 +410,16 @@
     }
 
     #[test]
-    fn function_return_type_from_type_object_rejects_function_pointer_return() {
+    fn function_return_type_from_type_object_allows_simple_function_pointer_return() {
         let type_object = serde_json::json!({
             "qualType": "int (*(void))(int)"
         });
 
-        let err = function_return_type_from_type_object(&type_object)
-            .expect_err("function pointer return must fail closed");
+        let ty = function_return_type_from_type_object(&type_object)
+            .expect("simple function pointer return should lower");
 
-        assert_eq!(err.kind, "unsupported_function_type");
-        assert!(err.message.contains("function pointer return"));
-        assert!(err.message.contains("explicit"));
+        assert_eq!(ty.spelled, "int (*)(int)");
+        assert!(matches!(ty.kind, ClangTypeKind::Pointer { .. }));
     }
 
     #[test]

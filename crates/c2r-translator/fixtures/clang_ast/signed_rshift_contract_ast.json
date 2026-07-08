@@ -1,0 +1,85 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "signed_rshift_contract",
+      "type": {
+        "qualType": "int (int, int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "ParmVarDecl",
+          "name": "count",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": ">>",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "count"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -8,7 +8,7 @@
   "blocked_by": [],
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-    "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
+    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
     "status": "skipped"
   },
   "compared_fields": [
@@ -22,6 +22,7 @@
     "c_oracle_actual_status": "C_ORACLE_GENERATED",
     "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
     "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
     "rust_report_actual_status": "passed",
     "rust_report_required_status": "passed",
     "schema_diff_actual_status": "passed"
@@ -29,7 +30,7 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-    "sha256": "0ce195cc3f8815329a9377bff4510370c5ca4b30a64952b7a0d95d5d8ddc98b5",
+    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -40,7 +41,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
+    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
     "status": "passed"
   }
 }

@@ -1,10 +1,10 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c2rust-baseline-manifest.json",
-    "sha256": "28050d9eacdda17856805e83fa68d74b30422d6136fcb6729ed9292c203ad6e6",
+    "sha256": "93e475b783d85a04eaf0541798da15fb11daa931cda1611fee63033a85bfd07f",
     "status": "skipped"
   },
-  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-nomll5i1 F:\\agent\\crustpaper\\0630\\validation\\evidence\\zlib-ng\\auto-translation\\adler32-step\\l3-adler32-step-rust-draft.rs",
+  "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-nm9dyupo validation\\evidence\\zlib-ng\\auto-translation\\adler32-step\\l3-adler32-step-rust-draft.rs",
   "error_count": 0,
   "errors": [],
   "external_callee_context": {
@@ -19,7 +19,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
-    "sha256": "1d74f892afa96ca84de6edb73dee813ba774bec0531d53680283f091582a5284",
+    "sha256": "74d385fda3dc3978f253222584b1264aaf6f63f0450bb7087eea24134f5ccf82",
     "status": "refused"
   },
   "rust_check_harness_only_bindings": {
@@ -38,7 +38,7 @@
   "validation_profile": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "93857becf27e90941bccaa8956af8ed2891ae046743258c524d420c649dced41",
+    "sha256": "af53732a6958e07af29d0c803ade409435eaae8f489d6cecbac6d128ccf8cf77",
     "status": "passed"
   }
 }

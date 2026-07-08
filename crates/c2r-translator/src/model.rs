@@ -16,6 +16,15 @@ pub struct BuildProfile {
     pub clang_available: bool,
 }
 
+impl BuildProfile {
+    pub fn resolved_target_abi(&self) -> Option<TargetAbiProfile> {
+        if let Some(target) = &self.target {
+            return Some(target.clone());
+        }
+        known_target_abi_profile(self.target_triple.as_deref(), self.abi.as_deref())
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TargetAbiProfile {
     pub triple_or_abi: String,
@@ -44,6 +53,62 @@ pub struct TargetAbiProfile {
     pub pointer_width: u16,
     #[serde(default)]
     pub pointer_align: u16,
+}
+
+fn known_target_abi_profile(
+    target_triple: Option<&str>,
+    abi: Option<&str>,
+) -> Option<TargetAbiProfile> {
+    let target_id = target_triple
+        .or(abi)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let triple = target_triple.unwrap_or_default().to_ascii_lowercase();
+    let abi = abi.unwrap_or_default().to_ascii_lowercase();
+
+    if triple.contains("x86_64") && triple.contains("windows") && triple.contains("msvc") {
+        return Some(inferred_target_abi_profile(target_id, 32, true));
+    }
+    if triple.contains("x86_64")
+        && (triple.contains("linux")
+            || triple.contains("darwin")
+            || triple.contains("freebsd")
+            || triple.contains("unknown-none"))
+        && !abi.contains("msvc")
+    {
+        return Some(inferred_target_abi_profile(target_id, 64, true));
+    }
+    if triple.contains("aarch64")
+        && (triple.contains("linux") || triple.contains("darwin") || triple.contains("windows"))
+    {
+        return Some(inferred_target_abi_profile(target_id, 64, true));
+    }
+
+    None
+}
+
+fn inferred_target_abi_profile(
+    triple_or_abi: &str,
+    long_width: u16,
+    plain_char_signed: bool,
+) -> TargetAbiProfile {
+    TargetAbiProfile {
+        triple_or_abi: triple_or_abi.to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        int_align: 32,
+        char_width: 8,
+        char_align: 8,
+        plain_char_signed: Some(plain_char_signed),
+        short_width: 16,
+        short_align: 16,
+        long_width,
+        long_align: long_width,
+        long_long_width: 64,
+        long_long_align: 64,
+        pointer_width: 64,
+        pointer_align: 64,
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -75,12 +140,30 @@ pub struct SliceSpec {
 pub struct CBoundary {
     #[serde(default)]
     pub scalar_arithmetic_contract: ScalarArithmeticContract,
+    #[serde(default)]
+    pub pointer_contract: PointerContract,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ScalarArithmeticContract {
     #[serde(default)]
     pub signed_right_shift: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PointerContract {
+    #[serde(default)]
+    pub input_buffers: Vec<PointerContractNode>,
+    #[serde(default)]
+    pub output_pointers: Vec<PointerContractNode>,
+    #[serde(default)]
+    pub noalias_required: Vec<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PointerContractNode {
+    #[serde(default)]
+    pub name: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

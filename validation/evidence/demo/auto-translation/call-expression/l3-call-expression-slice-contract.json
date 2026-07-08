@@ -31,8 +31,9 @@
     ],
     "files": [
       {
-        "path": "validation/l2_slices/tools/generate_call_expression_oracle.py",
-        "role": "source"
+        "path": "validation/l2_slices/fixtures/call-expression-chain.c",
+        "role": "source",
+        "sha256": "9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864"
       },
       {
         "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
@@ -42,6 +43,15 @@
     "functions": [
       "call_expression_chain"
     ],
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_negation": "runtime_precondition_no_overflow",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
     "signatures": [
       {
         "c_source": "int call_expression_chain(int value) { if (value <= 0) { return -value; } int first = call_expression_chain(value - 1); value = call_expression_chain(first - 1); return call_expression_chain(value - 1); }",
@@ -57,7 +67,15 @@
             "name": "value"
           }
         ],
-        "return_type": "int"
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 233,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/call-expression-chain.c",
+          "line_end": 8,
+          "line_start": 1,
+          "sha256": "9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864"
+        }
       }
     ]
   },

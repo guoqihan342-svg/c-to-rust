@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror add_one_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-add-one-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+  "helper_stdout_sha256": "02db157cc75371d24ae84eec991303ca736ac6adb5d6d53710d7aec6a1f35f6f",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./add_one_oracle",
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "source_hashes": {
+    "c_helper": "e9f03cbce712097fee1a6dc34d6951eaff8c47e71d6bbf10cde9806c417e0458",
+    "generator": "133992426a94cda13d23f81f28061b12d64507a0f9515ca5b63d0426407a943c"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

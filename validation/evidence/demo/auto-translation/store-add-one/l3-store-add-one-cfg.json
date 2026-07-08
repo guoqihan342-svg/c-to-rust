@@ -1,9 +1,9 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -13,37 +13,22 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [
-            {
-              "decision": "bounded_pointer_index",
-              "lvalue_kind": "bounded_pointer_index",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "out[0] = value + 1",
-              "statement_index": 0,
-              "translation_rule_id": "bounded-pointer-index-write"
-            }
-          ],
-          "lvalue_kinds": [
-            "bounded_pointer_index",
-            "none"
-          ],
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
             "line_start": 1
           },
           "statement_kinds": [
-            "pointer_write",
+            "assignment",
             "return"
           ],
           "statements": [
-            "out[0] = value + 1",
-            "return 0"
-          ]
+            "assign index",
+            "return"
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
@@ -56,7 +41,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-1"
         }
       ],
       "entry_block": "entry",
@@ -67,7 +52,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "0",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -86,17 +71,21 @@
         "has_switch": false,
         "if_count": 0,
         "loop_count": 0,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "store-add-one",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-store-add-one.json",
-    "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "status": "ready"
   },
   "source_commit": "demo-store-add-one-20260625",

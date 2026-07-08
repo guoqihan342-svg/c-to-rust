@@ -157,7 +157,7 @@
       "slice_id": "real-fdb-calc-crc32",
       "slice_spec": {
         "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-        "sha256": "c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70"
+        "sha256": "ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4"
       },
       "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
       "summary": {

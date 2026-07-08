@@ -1,0 +1,242 @@
+{
+  "artifact_kind": "clang-lowering-report",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "diagnostics": [
+    "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
+    "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/add_one_ast.json"
+  ],
+  "durable_evidence": {
+    "clang_path": "",
+    "clang_version": "not_configured",
+    "competition_environment": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "frontend": "clang_ast_dump_json",
+    "hash_algorithm": "sha256",
+    "rust_draft_sha256": "65c118c3fe0f75545048b6c5f95970970ab10ba311145fdf27748826d6c598ce",
+    "typed_ir_sha256": "97d1801c43c1ce471866f996d08dcc83a79d6864703252a38d9ea7fae037f5c3"
+  },
+  "errors": [],
+  "fixture_hash": "add-one-fixture",
+  "frontend": "clang",
+  "function_name": "add_one",
+  "lowering_report": {
+    "arguments": [
+      "--ast-json-fixture",
+      "crates/c2r-translator/fixtures/clang_ast/add_one_ast.json",
+      "validation/l2_slices/fixtures/add-one.c"
+    ],
+    "clang_path": null,
+    "diagnostics": [
+      "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
+      "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/add_one_ast.json"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "errors": [],
+    "frontend": "clang_ast_json_fixture",
+    "function_ir": {
+      "body": [
+        {
+          "Return": {
+            "source_span": null,
+            "value": {
+              "Binary": {
+                "lhs": {
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "value",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
+                    "source_span": null,
+                    "target": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    }
+                  }
+                },
+                "op": "Add",
+                "rhs": {
+                  "LitInt": {
+                    "source_span": null,
+                    "spelling": "1",
+                    "ty": {
+                      "canonical": "int",
+                      "is_const": false,
+                      "kind": {
+                        "Integer": {
+                          "signed": true,
+                          "width": 32
+                        }
+                      },
+                      "source_span": null,
+                      "spelled": "int",
+                      "width_bits": 32
+                    },
+                    "value": 1
+                  }
+                },
+                "source_span": null,
+                "ty": {
+                  "canonical": "int",
+                  "is_const": false,
+                  "kind": {
+                    "Integer": {
+                      "signed": true,
+                      "width": 32
+                    }
+                  },
+                  "source_span": null,
+                  "spelled": "int",
+                  "width_bits": 32
+                }
+              }
+            }
+          }
+        }
+      ],
+      "name": "add_one",
+      "params": [
+        {
+          "name": "value",
+          "source_span": null,
+          "ty": {
+            "canonical": "int",
+            "is_const": false,
+            "kind": {
+              "Integer": {
+                "signed": true,
+                "width": 32
+              }
+            },
+            "source_span": null,
+            "spelled": "int",
+            "width_bits": 32
+          }
+        }
+      ],
+      "return_type": {
+        "canonical": "int",
+        "is_const": false,
+        "kind": {
+          "Integer": {
+            "signed": true,
+            "width": 32
+          }
+        },
+        "source_span": null,
+        "spelled": "int",
+        "width_bits": 32
+      },
+      "source_span": null
+    },
+    "function_name": "add_one",
+    "globals": [],
+    "source_file": "./validation/l2_slices/fixtures/add-one.c",
+    "status": "lowered"
+  },
+  "metadata": {
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/add_one_ast.json",
+    "compile_commands": null,
+    "function_source_span": {
+      "byte_end": 45,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/add-one.c",
+      "line_end": 1,
+      "line_start": 1,
+      "sha256": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+    },
+    "logical_source_file": "validation/l2_slices/fixtures/add-one.c",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/add-one.c": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+    },
+    "source_root": "."
+  },
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "source_file": "./validation/l2_slices/fixtures/add-one.c",
+  "status": "lowered",
+  "target_id": "demo",
+  "typed_ir_candidate": {
+    "candidate_route": {
+      "candidate_generator": "GenericTypedIrEmitter",
+      "delete_when": [],
+      "deprecated": false,
+      "fallback": null,
+      "reasons": [
+        {
+          "code": "generic_typed_ir_subset",
+          "detail": "typed IR matched the current generic emitter subset"
+        }
+      ],
+      "replacement": null,
+      "route": "GenericTypedIr",
+      "route_id": "generic-typed-ir",
+      "suggested_required_gates": [
+        "rustc_smoke",
+        "typed_ir_contract_tests"
+      ],
+      "token_cost": 0
+    },
+    "readonly_globals": [],
+    "runtime_preconditions": [
+      {
+        "code": "signed_add_no_overflow",
+        "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+        "ir_node": "IrExpr::Binary.Add",
+        "source_span": null,
+        "type": {
+          "canonical": "int",
+          "kind": "integer",
+          "signed": true,
+          "spelled": "int",
+          "width": 32
+        }
+      }
+    ],
+    "rust_draft_generated": true,
+    "rust_draft_sha256": "65c118c3fe0f75545048b6c5f95970970ab10ba311145fdf27748826d6c598ce",
+    "semantic_pass": false,
+    "status": "generated",
+    "typed_ir_sha256": "97d1801c43c1ce471866f996d08dcc83a79d6864703252a38d9ea7fae037f5c3"
+  }
+}

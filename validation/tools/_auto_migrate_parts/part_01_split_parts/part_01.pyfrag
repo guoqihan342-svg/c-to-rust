@@ -56,17 +56,19 @@ def oracle_fixture_case_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
             binding_status = "expected_ref_only"
         else:
             binding_status = "missing_expected_outputs"
-        bindings.append(
-            {
-                "id": str(case.get("id") or f"case-{index}"),
-                "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
-                "expected_ref": str(case.get("expected_ref") or "missing"),
-                "expected_outputs": normalized_expected,
-                "observable_outputs": fields,
-                "missing_observable_outputs": missing_outputs,
-                "binding_status": binding_status,
-            }
-        )
+        binding = {
+            "id": str(case.get("id") or f"case-{index}"),
+            "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
+            "expected_ref": str(case.get("expected_ref") or "missing"),
+            "expected_outputs": normalized_expected,
+            "observable_outputs": fields,
+            "missing_observable_outputs": missing_outputs,
+            "binding_status": binding_status,
+        }
+        input_payload = case.get("inputs")
+        if isinstance(input_payload, dict) and input_payload:
+            binding["input_payload"] = input_payload
+        bindings.append(binding)
     return bindings
 
 
@@ -158,6 +160,8 @@ def oracle_fixture_execution_source(
         return c_oracle_fdb_blob_make_execution_source(spec, fixture_binding)
     if c_oracle_signature_supports_fdb_kv_set_call(spec, signature):
         return c_oracle_fdb_kv_set_execution_source(spec, fixture_binding)
+    if c_oracle_signature_supports_i32_return_value_call(spec, signature):
+        return c_oracle_i32_return_value_execution_source(spec, fixture_binding)
     if not c_oracle_signature_supports_return_code_call(spec, signature):
         return {"declarations": "", "statements": ""}
 
@@ -199,6 +203,81 @@ def c_oracle_signature_supports_return_code_call(
         for item in parameters
     ]
     return actual == expected
+
+
+def c_oracle_signature_supports_i32_return_value_call(
+    spec: dict[str, Any],
+    signature: dict[str, Any],
+) -> bool:
+    if normalize_c_type(str(signature.get("return_type") or "")) != "int":
+        return False
+    if behavior_fields(spec) != ["return_value", "status"]:
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return False
+    parameter = parameters[0]
+    return parameter.get("direction") == "input" and normalize_c_type(str(parameter.get("c_type") or "")) == "int"
+
+
+def c_oracle_i32_return_value_execution_source(
+    spec: dict[str, Any],
+    fixture_binding: dict[str, Any],
+) -> dict[str, str]:
+    statements: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_source = c_oracle_i32_return_value_case_execution_source(spec, case_binding)
+        if case_source is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            statements.append(
+                f"  /* TODO: fixture case {case_id} is not supported by this i32 return draft generator. */\n"
+            )
+            continue
+        statements.append(case_source["statements"])
+    return {"declarations": "", "statements": "".join(statements)}
+
+
+def c_oracle_i32_return_value_case_execution_source(
+    spec: dict[str, Any],
+    case_binding: dict[str, Any],
+) -> dict[str, str] | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    signature = c_function_signature(spec)
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return None
+    parameter_name = str(parameters[0].get("name") or "value")
+    input_value = case_payload.get(parameter_name)
+    expected_return = expected_outputs.get("return_value")
+    status = expected_outputs.get("status")
+    if not is_i32_value(input_value) or not is_i32_value(expected_return) or status != "ok":
+        return None
+
+    function_name = required_str(spec, "function_name")
+    case_id = str(case_binding.get("id") or "case")
+    case_ident = c_safe_ident(case_id)
+    actual_name = f"actual_{case_ident}_return_value"
+    expected_literal = c_integer_literal("int", int(expected_return))
+    input_literal = c_integer_literal("int", int(input_value))
+    statements = (
+        f"  int {actual_name} = {function_name}({input_literal});\n"
+        f"  if ({actual_name} != {expected_literal}) {{\n"
+        "    fprintf(stderr, "
+        f"{c_string_literal(case_id + ' return_value mismatch: expected ' + str(int(expected_return)) + ' got %d\n')}, "
+        f"{actual_name});\n"
+        "    return 1;\n"
+        "  }\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' return_value matched')});\n"
+        f"  puts({c_string_literal('fixture case ' + case_id + ' status matched')});\n"
+    )
+    return {"declarations": "", "statements": statements}
 
 
 def c_oracle_signature_supports_fdb_blob_make_call(
@@ -467,6 +546,9 @@ def c_oracle_case_execution_source(
 
 
 def oracle_fixture_input_payload(spec: dict[str, Any], case_binding: dict[str, Any]) -> Any | None:
+    inline_input = case_binding.get("input_payload")
+    if isinstance(inline_input, dict) and inline_input:
+        return inline_input
     fixture = spec.get("fixture_contract", {})
     input_ref = str(case_binding.get("input_ref") or "")
     candidate_refs = [fixture.get("path") or fixture.get("input"), case_binding.get("expected_ref")]

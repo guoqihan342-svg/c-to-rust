@@ -1,0 +1,52 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-translator-input.json",
+    "sha256": "ac3570678a624169dd57e67303aebb90bc4148341de17f1dea5fbfc4bafb60cb",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-one-20260708",
+    "slice_spec_sha256=c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "fixture_hash=add-one-fixture",
+    "build_profile_hash=89bcc6246ca4f7b2303fbf074bf38f5ca71b78e7e96b2e7d74c45af575dbed6e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-add-one.json",
+    "sha256": "c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "status": "ready"
+  },
+  "source_commit": "demo-add-one-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

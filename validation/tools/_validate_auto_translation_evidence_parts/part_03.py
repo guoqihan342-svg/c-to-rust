@@ -95,9 +95,11 @@ def validate_external_callee_accepted_named_slice_evidence(
         raise SystemExit(
             f"external callee {name} accepted named-slice evidence must be accepted_evidence_authoritative"
         )
-    if final.get("generated_draft_semantic_pass") is True or plan_binding.get("generated_draft_semantic_pass") is True:
+    final_generated_pass = final.get("generated_draft_semantic_pass") is True
+    binding_generated_pass = plan_binding.get("generated_draft_semantic_pass") is True
+    if binding_generated_pass != final_generated_pass:
         raise SystemExit(
-            f"external callee {name} accepted named-slice evidence must not accept generated draft semantics"
+            f"external callee {name} accepted named-slice generated draft semantic pass drift"
         )
 
 

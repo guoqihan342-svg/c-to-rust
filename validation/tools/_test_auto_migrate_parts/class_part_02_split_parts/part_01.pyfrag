@@ -113,7 +113,7 @@
                 route["rationale"],
             )
 
-    def test_generated_typed_ir_candidate_with_alias_risk_routes_l2_not_l1(self) -> None:
+    def test_generated_typed_ir_candidate_with_noalias_precondition_routes_l1(self) -> None:
         module = load_auto_migrate_module()
         spec = {
             "target_id": "demo",
@@ -193,8 +193,8 @@
                 {"status": "generated", "correctness_role": "candidate_context_only"},
             )
 
-            self.assertEqual(route["level"], "L2")
-            self.assertEqual(route["verification_profile"], "L2-dev")
+            self.assertEqual(route["level"], "L1")
+            self.assertEqual(route["verification_profile"], "L1-dev")
             self.assertEqual(
                 route["candidate_generation"]["typed_ir"]["candidate_route"]["route"],
                 "GenericTypedIr",
@@ -203,7 +203,7 @@
                 {
                     "feature": "alias_requires_noalias_contract",
                     "risk_count": 1,
-                    "weight": "medium",
+                    "weight": "explicit_precondition",
                 },
                 route["rationale"],
             )

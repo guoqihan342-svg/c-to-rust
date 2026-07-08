@@ -1,0 +1,92 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "int",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/add-one.c",
+        "role": "source",
+        "sha256": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+      }
+    ],
+    "functions": [
+      "add_one"
+    ],
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "signatures": [
+      {
+        "c_source": "int add_one(int value) { return value + 1; }",
+        "function": "add_one",
+        "parameters": [
+          {
+            "c_type": "int",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 45,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/add-one.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+        }
+      }
+    ]
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "whole-program alias safety",
+      "signed overflow equivalence"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No support for INT_MAX because signed C overflow is undefined behavior.",
+      "No pointer, aliasing, struct, or external callee behavior."
+    ]
+  },
+  "fixture": {
+    "hash": "add-one-fixture",
+    "path": "validation/l2_slices/fixtures/add-one-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "add_one",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/add_one.rs",
+    "module_path": "validation/l2_slices/src/add_one.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "add_one",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/add_one.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

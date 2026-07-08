@@ -48,6 +48,8 @@ fn emit_return_type(ty: &IrType) -> Result<Option<String>, String> {
         Ok(None)
     } else if let Some(pointee) = mutable_record_pointer_pointee_type(ty) {
         emit_value_type(pointee).map(|ty| Some(format!("&mut {ty}")))
+    } else if let Some(function_pointer_ty) = emit_function_pointer_param_type(ty)? {
+        Ok(Some(function_pointer_ty))
     } else if matches!(ty.kind, IrTypeKind::Pointer { .. }) {
         Err(format!(
             "pointer value return {} requires explicit ownership/lifetime/ABI lowering",

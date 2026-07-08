@@ -1,12 +1,13 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
-    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "fixture_hash=copy-i32-ptr-arith-fixture",
-    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "build_profile_hash=bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "call_edge_to_callee_binding": [],
   "call_edges": [
     {
       "kind": "type",
@@ -14,23 +15,45 @@
       "source": "C99"
     }
   ],
+  "callee_sources": [],
   "direct_c_files": [
-    "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
+    "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
     "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json"
   ],
+  "direct_call_edges": [],
   "direct_rust_files": [
     "validation/l2_slices/src/copy_i32_ptr_arith.rs"
   ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
   "fixture": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+  "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
+  "signature_bindings": [],
   "slice_id": "copy-i32-ptr-arith",
   "slice_spec": {
     "path": "validation/slice-specs/demo-copy-i32-ptr-arith.json",
-    "sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b"
+    "sha256": "c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json"
+    ],
+    "functions": [
+      "copy_i32_ptr_arith"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
   },
   "source_commit": "demo-copy-i32-ptr-arith-20260625",
   "status": "recorded",
+  "stub_boundaries": [],
   "target_id": "demo"
 }

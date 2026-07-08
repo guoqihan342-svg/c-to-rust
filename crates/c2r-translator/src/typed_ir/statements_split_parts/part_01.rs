@@ -169,6 +169,67 @@ fn emit_mutable_record_pointer_identity_return(
     Ok(Some(format!("{indent}return {name};\n")))
 }
 
+fn emit_function_pointer_decay_return(
+    value: &IrExpr,
+    return_type: &IrType,
+    indent_level: usize,
+) -> Result<Option<String>, String> {
+    if emit_function_pointer_param_type(return_type)?.is_none() {
+        return Ok(None);
+    }
+    let IrExpr::FunctionToPointerDecay { target, expr, .. } = value else {
+        return Err(
+            "function pointer return must be a direct function-to-pointer decay".to_string(),
+        );
+    };
+    if target != return_type {
+        return Err(format!(
+            "function pointer return target {} does not match function return type {}",
+            type_label(target),
+            type_label(return_type)
+        ));
+    }
+    let value = emit_function_pointer_decay_call_arg(target, expr)
+        .map_err(|detail| format!("function pointer return {detail}"))?;
+    let indent = "    ".repeat(indent_level);
+    Ok(Some(format!("{indent}return {value};\n")))
+}
+
+fn emit_function_pointer_decay_assignment(
+    target: &IrExpr,
+    value: &IrExpr,
+    target_name: &str,
+    target_ty: &IrType,
+) -> Result<Option<String>, String> {
+    if emit_function_pointer_param_type(target_ty)?.is_none() {
+        return Ok(None);
+    }
+    let IrExpr::Var { .. } = target else {
+        return Err("function pointer assignment target must be a local variable".to_string());
+    };
+    let IrExpr::FunctionToPointerDecay {
+        target: decay_target,
+        expr,
+        ..
+    } = value
+    else {
+        return Err(
+            "function pointer assignment value must be a direct function-to-pointer decay"
+                .to_string(),
+        );
+    };
+    if decay_target != target_ty {
+        return Err(format!(
+            "function pointer assignment target {} does not match assigned value target {}",
+            type_label(target_ty),
+            type_label(decay_target)
+        ));
+    }
+    let value = emit_function_pointer_decay_call_arg(decay_target, expr)
+        .map_err(|detail| format!("function pointer assignment {detail}"))?;
+    Ok(Some(format!("{target_name} = {value};")))
+}
+
 fn emit_mutable_record_pointer_member_assignment_target(
     base: &IrExpr,
     field: &str,

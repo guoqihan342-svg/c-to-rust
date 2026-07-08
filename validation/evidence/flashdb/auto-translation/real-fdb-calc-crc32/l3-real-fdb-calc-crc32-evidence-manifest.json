@@ -22,12 +22,100 @@
       "status": "not_applicable",
       "stub_kind": "none"
     },
-    "generated_draft_semantic_pass": false,
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+        "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+          "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+          "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+          "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+          "unsafe_ledger": "f62deeece7aae093e662d0128b3e8c8d528717af7484fd96d77610e3cf48d2a1",
+          "unsafe_scan": "40fd7828b4f069d8eee8d3c9b493829425fe6de659b996fd0572350add437d2d"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+          "diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+          "negative_diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+          "rust_report": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+          "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
+        },
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        "status": "accepted",
+        "target_id": "flashdb",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+          "sha256": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+          "sha256": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+          "sha256": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+          "sha256": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-j77_qcut/generated_replay.rs -o /tmp/c2r-generated-replay-j77_qcut/generated_replay.exe",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "/tmp/c2r-generated-replay-j77_qcut/generated_replay.exe --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
+        "sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "real-fdb-calc-crc32",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "passed",
+      "target_id": "flashdb"
+    },
+    "generated_draft_semantic_pass": true,
     "known_gaps": [
       "No full project migration claim.",
       "No semantic equivalence claim before L3 oracle/replay/diff evidence passes.",
       "No claim that syntax-only extraction proves typedef, macro, ABI, or layout semantics.",
-      "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence."
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
     ],
     "must_not_claim": [
       "full automatic C99/C11 translation",
@@ -36,50 +124,50 @@
       "semantic equivalence for this auto-generated Rust draft",
       "full C99/C11 automatic translation"
     ],
-    "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
   },
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+      "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
       "status": "generated"
     },
     "c_oracle": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c-oracle-status.json",
-      "sha256": "1a8abeddaadd4ecab3af82532ad4bff8b4d2b7c24287745756082cc1e427aff8",
+      "sha256": "b5b9ec17cfceaa785f5732bcea9cb511ab892e9b3662671b3c5dc1b3b2202e95",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-cache-metadata.json",
-      "sha256": "3f8b95fe8e8267ea9167805379060a03a919391ca69e56be74aa1d2bc08dcd96",
+      "sha256": "4f52af3750fdefdd4626c7ecf4b6d9b95eaf1ad0e4069eefeed17b999642e088",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-      "sha256": "d2e4e8b8ce22a906e1850c264e3d21406e74df61ce78ee28d64a9551cd03efb6",
+      "sha256": "06dc0457c008f0bf4fe44a90da081806ab53f99d7805bda08f1ef7f1b2c82cf8",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-config-profile.json",
       "profile_id": "flashdb-real-fdb-calc-crc32-real-source",
-      "sha256": "6f1f6694c79d68d019ad661f98492957b24737e6228c4473f7f73707e64f499b",
+      "sha256": "6f092c07f0ee582c5adfaa7c2f4259af6a534d24e21ef8bf7552cb9e3705d467",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-context-pack.json",
-      "sha256": "ca2651a98e7d7761298e2d0592c0b14bd4cb4dd6bacc99db32a646ff10c028e3",
+      "sha256": "972caed74760a3ab92d13b8a77d229ccacfa4e28d48fcb5fcbf34dfaae3716a0",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json",
-      "sha256": "e62fc6394346bd7afb2da8e72d1e8fc2c537f2b568a2357f8b049628b7ff3ee6",
+      "sha256": "1bf73b73647d16c7a0772a3dde0314f46bfb0ea3018dda5a3798a04734ba67e7",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-negative-diff.json",
-      "sha256": "5433d82337420d4175c4dc0c339f973e861c00929105103ad1ea4906685d60ec",
+      "sha256": "90c557c53cb866783f2cd0e439911939f4c6381409f108948249aea4ff9b9044",
       "status": "expected_failed"
     },
     "performance_smoke": {
@@ -89,71 +177,70 @@
       "status": "recorded"
     },
     "pointer_dependency_graph": {
-      "not_applicable_reason": "slice has no pointer surface",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "21ade496f466445e8f669b4829f53c0297897304d66004f7426bbe9b99d066f6",
-      "status": "not_applicable"
+      "sha256": "ad6a4a1a0947fdab99cf32ad57588a59ff17d0aef1434c11bf51b483f8ce1ff4",
+      "status": "recorded"
     },
     "route_decision": {
       "level": "L4",
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-      "sha256": "9c30243ec48a8c16027ad80e29fd0a061ddadca9b4b81b7417e1a2872d0ba601",
+      "sha256": "6033fb12976c9765b77228a579f15f9160137419d0220f22322bd6d1062777b3",
       "status": "refused"
     },
     "rust_check": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json",
-      "sha256": "2c74cb8b5e4e37313d66db1d2d95c0cd7a83af1eda3cea6e86e394a902d64b55",
+      "sha256": "d0c89e189fa5fbe4048fa1d031b70c9b84f2e7aa18140f120d542def8b9539eb",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-report.json",
-      "sha256": "801fd8af15b769d4f1429053aad140f2e27a08d7553e79809cba0276989d55a3",
+      "sha256": "a59a579a833b1be090602c986a1b3003500ac4199e56807f45aedd76d3820a5d",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-diff.json",
-      "sha256": "d2517dc9bb7c199068f573e816c768b182a92dc4cd33f7bc67e0262222d2cd89",
+      "sha256": "ef2147625f7acc935c08cedb42ba0c84e58e6d265bd68f976c649e188887720f",
       "status": "passed"
     },
     "slice_contract": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-slice-contract.json",
-      "sha256": "cb54ce28fded08eefed0a6935e8d0ffba21855ff9cad1acbba1d9ef2eb2b6a61",
+      "sha256": "267aebf809dcdae60ee56455983a34ebf1a2ea877bddd2d460db18f3b99e65e9",
       "status": "recorded"
     },
     "summary": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-summary.json",
-      "sha256": "41dbf90e414144f9903f364c1b9d2daec76b052ff4ecfb826486eef1e5daae57",
+      "sha256": "ef00f88892c2609c894c95b5ef2b660160f74fde88637e74e531fd605b0adb0e",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-test-translation-generated.json",
-      "sha256": "22ab252161b066864f07d0736d3f514c64d969b4fc71c9b1846afb38110479ee",
+      "sha256": "79fde10c450418f3aa4f98e11be0a8dee163931a4bf6078b1326390959ee9c4f",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
-      "sha256": "83a8e0e17738f9df2184371a70655d83cd313c390ecc95f03b3f6fe8d9916130",
+      "sha256": "9824d6a52076c9053468197bec85057d766ddd8836b13b7040fdf8efab6c101a",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
-      "sha256": "6239c2274397d8f40aa154c2de33f21547fa184dd20f942cca0fce7010db3a11",
+      "sha256": "091ad3c697ee20a7a698bf98c92f148d0500be3dc928b7e93eec3dac490b739b",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
       "profile": "L4-accepted-evidence",
-      "sha256": "beb64447b6a1239da6ea4c9c241f6ee0a9579f5cf691c55f3d610f2585525b51",
+      "sha256": "abf3c47340f81152f4207303877ac7a11f1ae89b93f0890e940fa017e7dbb30a",
       "status": "passed"
     },
     "verified_unsafe_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-verified-unsafe-baseline.json",
-      "sha256": "2d29aee47e621353d743cd86a849d145b7affedfce31051fa108152f62873e9e",
+      "sha256": "0a62e2a4944b366086ce516fd2270c6c352f71c159bdb950969bf41fd48750df",
       "status": "passed"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-version-manifest.json",
-      "sha256": "e801bf6e70f90d027df4ce5de4e33d5730e7d8a73a67af11767d33de8073caef",
+      "sha256": "230600bc75725eb4d3791a7ab707f3c977d6b92cf5d819d913e787b5965a9a87",
       "status": "recorded"
     }
   },
@@ -163,7 +250,7 @@
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json"
   },
   "level": "L3",
-  "repo_commit": "ea92d53551fb2fd243163c054d8e3345ac8acb73",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",

@@ -8,10 +8,15 @@
     "risk_count": 1,
     "risk_level": "unknown_alias"
   },
-  "build_profile_hash": "32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+  "build_profile_hash": "bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
   "c2rust_baseline_identity": {
-    "sha256": "9ad2670977127b310fd5b4cec8edfc95bd703df0bcfef31bb470db8c6553ff5e",
+    "sha256": "fa70e36e2b6f2650416f7fb1fc7a9919191e6e49b4879f43f6dfd634784ced26",
     "status": "skipped"
+  },
+  "c_oracle_harness_identity": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c-oracle-harness-draft.c",
+    "sha256": "cecb181a69ab7689c85b4483889b04c5304068f91371dbdc675c8e13cab00b37",
+    "status": "draft"
   },
   "cache_input_fields": [
     "source_commit",
@@ -19,6 +24,7 @@
     "slice_spec_sha256",
     "fixture_hash",
     "build_profile_hash",
+    "competition_environment_identity",
     "cargo_lock_hash",
     "tool_versions",
     "schema_versions",
@@ -26,42 +32,98 @@
     "translator_manifest_sha256",
     "command_arguments",
     "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
     "c2rust_baseline_identity",
     "route_decision_identity",
-    "validation_profile_identity"
+    "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
   ],
   "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "clang_lowering_identity": {
+    "clang_path": "",
+    "clang_path_status": "not_configured",
+    "clang_version": "not_configured",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
   "command_arguments": [
     "auto_migrate.py",
     "--slice-spec",
     "validation/slice-specs/demo-copy-i32-ptr-arith.json",
-    "--accept-existing-evidence"
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report"
   ],
+  "competition_environment_identity": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
   "dependent_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+      "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
       "status": "skipped"
     },
     "route_decision": {
-      "level": "L2",
+      "level": "L1",
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-      "sha256": "9fc022231ddebca3356fa86709a4a1d2a73994e60d7de9816c2f53d82a657984",
+      "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
       "status": "recorded"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
-      "profile": "L2-dev",
-      "sha256": "a6128f934dedb7ed71bb846282e1c0da5a846ebb70d69d6affda506df47860a7",
+      "profile": "L1-dev",
+      "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
       "status": "passed"
     }
   },
+  "effect_graph_identity": {
+    "alias_gate_decision": "requires_noalias_contract",
+    "alias_sensitive": true,
+    "read_effect_count": 2,
+    "read_nodes": [
+      "values"
+    ],
+    "schema_version": 2,
+    "sha256": "f9c6fcb47dcbb660748dbbed808037581820b32f2fdf5f9d0927ffab233d3ee4",
+    "write_effect_count": 2,
+    "write_nodes": [
+      "out"
+    ]
+  },
   "fixture_hash": "copy-i32-ptr-arith-fixture",
+  "global_dependency_identity": {
+    "count": 0,
+    "names": [],
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
   "invalidates": [
     "context_pack",
     "type_map",
     "cfg",
     "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
     "rust_draft",
     "patch_plan",
     "ai_candidate",
@@ -71,13 +133,19 @@
     "negative_diff",
     "unsafe_ledger",
     "final_verification",
-    "summary",
-    "c2rust_baseline",
-    "route_decision",
-    "validation_profile"
+    "auto_translation_manifest",
+    "summary"
   ],
+  "oracle_boundary_contract_identity": {
+    "sha256": "59e9e42a6ab7fecce5a1eebe5817d5094f1a4803556a2a9135d081e8e038d45b",
+    "status": "sufficient_for_semantic_pass"
+  },
   "route_decision_identity": {
-    "sha256": "4b49de4248bab898604df66fdced943d2bbffa0e7a037123e7010234e4ed6daa",
+    "sha256": "d14e42201992a0357c607d40456e69ba32943a18d1b9f1e931649fbeecda3aff",
+    "status": "recorded"
+  },
+  "scalar_ub_contract_identity": {
+    "sha256": "497d63fae20cb606bbd8bfe98a45860c99a9243b0e9f6447827eaefc60fadc7a",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -86,15 +154,15 @@
     "auto_translation_plan": 1,
     "cfg": 1,
     "evidence_manifest": 1,
-    "pointer_graph": 1,
+    "pointer_graph": 2,
     "type_map": 1
   },
   "slice_id": "copy-i32-ptr-arith",
-  "slice_spec_sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+  "slice_spec_sha256": "c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
   "source_commit": "demo-copy-i32-ptr-arith-20260625",
   "source_file_hashes": {
-    "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json": "31fb2903c83e4056cb843f8b604ba74b22c1ec4adb4490c43cafffb40a9cd83f",
-    "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py": "301321a8d3963b739f2e399eec6358737a18cc240a3f769d9e4ce91d4b240847"
+    "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+    "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
   },
   "target_id": "demo",
   "tool_versions": {
@@ -103,10 +171,13 @@
     "python": "Python 3.14.2",
     "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
   },
-  "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
   "translator_version": "0.1.0",
   "validation_profile_identity": {
-    "sha256": "d7af9d258a4343540abca392a03925ffd928138407e947771a1848ef95a7125f",
+    "sha256": "00d8f65c6d0f17e476fdbda5e97c7a3dcb2115f8ed67fe33dcde89e7888363ea",
     "status": "passed"
   }
 }

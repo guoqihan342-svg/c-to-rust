@@ -1,16 +1,86 @@
 {
   "build_profile": {
     "abi": "x86_64-unknown-linux-gnu",
-    "clang_available": false,
-    "compiler_command_source": "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/copy_i32_ptr_arith_ast.json",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
     "defines": [],
     "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
     "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_boundary": {
+    "pointer_contract": {
+      "aliasing_proven": false,
+      "input_buffers": [
+        {
+          "c_type": "const int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "values",
+          "read_effects": [
+            "*(values + i)",
+            "values[i]"
+          ],
+          "translation_rule_id": "bounded-pointer-arithmetic-input-read"
+        }
+      ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
+      "output_pointers": [
+        {
+          "c_type": "int*",
+          "length_companion": "len",
+          "loop_bound": "0 <= i < len",
+          "name": "out",
+          "translation_rule_id": "bounded-pointer-arithmetic-output-write",
+          "write_effects": [
+            "*(out + i)",
+            "out[i]"
+          ]
+        }
+      ]
+    }
   },
   "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
   "fixture_hash": "copy-i32-ptr-arith-fixture",
   "function_name": "copy_i32_ptr_arith",
+  "function_source_span": {
+    "byte_end": 136,
+    "byte_start": 0,
+    "file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+    "line_end": 1,
+    "line_start": 1,
+    "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+  },
   "slice_id": "copy-i32-ptr-arith",
   "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "source_file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+    "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+      "role": "source",
+      "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+    },
+    {
+      "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+      "role": "fixture"
+    }
+  ],
+  "source_root": ".",
   "target_id": "demo"
 }

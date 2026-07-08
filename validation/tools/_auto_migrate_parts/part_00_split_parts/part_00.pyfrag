@@ -145,12 +145,13 @@ def main() -> int:
     rust_check, patch = run_rust_check(evidence_dir, args.skip_rust_check, spec)
     accepted = resolve_accepted_evidence(spec) if args.accept_existing_evidence else None
     if accepted is not None:
+        replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
         oracle = promote_accepted_oracle(spec, evidence_dir, oracle, accepted)
-        replay = promote_accepted_test_translation(spec, evidence_dir, replay, accepted, route_decision)
         mark_accepted_evidence_authoritative_route(spec, evidence_dir, route_decision, accepted)
+        replay = promote_accepted_test_translation(spec, evidence_dir, replay, rust_check, accepted, route_decision)
     else:
         replay = run_generated_rust_replay(spec, evidence_dir, replay, rust_check)
-    validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted)
+    validation_profile = emit_validation_profile(spec, evidence_dir, route_decision, oracle, rust_check, accepted, replay)
     emit_scalar_refusal_evidence(spec, evidence_dir, route_decision, validation_profile)
     if route_decision.get("level") == "L4":
         patch = write_route_refused_patch(spec, evidence_dir, route_decision)
@@ -239,11 +240,15 @@ def write_translator_spec(spec: dict[str, Any], original_spec: Path, evidence_di
         translator_spec["source_file_hashes"] = resolved_source_file_hashes
     if source_span:
         translator_spec["function_source_span"] = source_span
+    c_boundary: dict[str, Any] = {}
     scalar_contract = spec.get("c_boundary", {}).get("scalar_arithmetic_contract", {})
     if scalar_contract:
-        translator_spec["c_boundary"] = {
-            "scalar_arithmetic_contract": scalar_contract,
-        }
+        c_boundary["scalar_arithmetic_contract"] = scalar_contract
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if pointer_contract:
+        c_boundary["pointer_contract"] = pointer_contract
+    if c_boundary:
+        translator_spec["c_boundary"] = c_boundary
     compile_commands = build_profile.get("compile_commands") or build_profile.get("compile_commands_path")
     if compile_commands:
         translator_spec["compile_commands"] = compile_commands

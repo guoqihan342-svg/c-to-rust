@@ -1,0 +1,72 @@
+{
+  "active_frontend": {
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "kind": "clang_ast_dump_json",
+    "required_env": [
+      "CLANG_PATH"
+    ],
+    "uses_libclang": false
+  },
+  "artifact_kind": "clang-dry-run",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "dry_run": {
+    "active_frontend": {
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "kind": "clang_ast_dump_json",
+      "required_env": [
+        "CLANG_PATH"
+      ],
+      "uses_libclang": false
+    },
+    "arguments": [],
+    "claim_boundary": {
+      "affects_manifest_status": false,
+      "affects_semantic_pass": false,
+      "authoritative_evidence": false,
+      "role": "diagnostic_only"
+    },
+    "compile_commands": null,
+    "diagnostics": [
+      "LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "function_name": "copy_i32_ptr_arith",
+    "source_file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+    "source_root": ".",
+    "status": "diagnostic_only"
+  },
+  "errors": [],
+  "frontend": "clang",
+  "metadata": {
+    "function_source_span": {
+      "byte_end": 136,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+      "line_end": 1,
+      "line_start": 1,
+      "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+    },
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "status": "diagnostic_only",
+  "target_id": "demo"
+}

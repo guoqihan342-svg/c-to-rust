@@ -1,9 +1,9 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-call-expression-20260625",
-    "slice_spec_sha256=a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277",
+    "slice_spec_sha256=964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
     "fixture_hash=call-expression-fixture",
-    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "build_profile_hash=05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -22,32 +22,32 @@
   ],
   "callee_sources": [],
   "direct_c_files": [
-    "validation/l2_slices/tools/generate_call_expression_oracle.py",
+    "validation/l2_slices/fixtures/call-expression-chain.c",
     "validation/l2_slices/fixtures/call-expression-c-oracle.json"
   ],
   "direct_call_edges": [
     {
       "arguments": [
-        "value - 1"
+        "(value - 1)"
       ],
       "callee": "call_expression_chain",
-      "source_expression": "call_expression_chain(value - 1)",
+      "source_expression": "call_expression_chain((value - 1))",
       "statement_context": "declaration_initializer"
     },
     {
       "arguments": [
-        "first - 1"
+        "(first - 1)"
       ],
       "callee": "call_expression_chain",
-      "source_expression": "call_expression_chain(first - 1)",
+      "source_expression": "call_expression_chain((first - 1))",
       "statement_context": "assignment"
     },
     {
       "arguments": [
-        "value - 1"
+        "(value - 1)"
       ],
       "callee": "call_expression_chain",
-      "source_expression": "call_expression_chain(value - 1)",
+      "source_expression": "call_expression_chain((value - 1))",
       "statement_context": "return"
     }
   ],
@@ -55,22 +55,23 @@
     "validation/l2_slices/src/call_expression_chain.rs"
   ],
   "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
   "external_direct_callees": [],
   "fixture": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
   "global_dependencies": [],
   "level": "L3",
-  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "signature_bindings": [],
   "slice_id": "call-expression",
   "slice_spec": {
     "path": "validation/slice-specs/demo-call-expression.json",
-    "sha256": "a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277"
+    "sha256": "964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc"
   },
   "source_boundary": {
     "direct_call_edges": [],
     "files": [
-      "validation/l2_slices/tools/generate_call_expression_oracle.py",
+      "validation/l2_slices/fixtures/call-expression-chain.c",
       "validation/l2_slices/fixtures/call-expression-c-oracle.json"
     ],
     "functions": [

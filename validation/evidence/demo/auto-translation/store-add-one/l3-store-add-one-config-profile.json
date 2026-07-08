@@ -2,7 +2,7 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-    "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "fixture_sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
@@ -37,16 +37,16 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "compile_profile": {
     "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
     "command_args": [
-      "validation/l2_slices/tools/generate_store_add_one_oracle.py"
+      "validation/l2_slices/fixtures/store-add-one.c"
     ],
     "config_header_included": true,
     "include_paths": []
@@ -54,7 +54,7 @@
   "config_header": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "7465c7e7c4eb83ed3ba1a8aa087323ae69ca6ad0d8571b1d3da9ba4f180e9dec"
+    "sha256": "5e0c165abd4c856c5884439cf0a683ed1f286020d8bf0f4222ff27d5b7c81d89"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -72,7 +72,7 @@
     "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
   ],
   "profile_id": "demo-store-add-one-wsl-gcc",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

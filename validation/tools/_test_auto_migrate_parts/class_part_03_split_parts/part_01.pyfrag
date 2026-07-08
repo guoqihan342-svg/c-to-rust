@@ -264,7 +264,7 @@
             self.assertEqual(blob_make_binding["slice_id"], "real-fdb-blob-make")
             self.assertTrue(blob_make_binding["semantic_pass"])
             self.assertTrue(blob_make_binding["accepted_evidence_authoritative"])
-            self.assertFalse(blob_make_binding["generated_draft_semantic_pass"])
+            self.assertTrue(blob_make_binding["generated_draft_semantic_pass"])
             self.assertTrue(
                 blob_make_binding["final_verification_path"].endswith(
                     "flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-final-verification.json"

@@ -51,6 +51,80 @@ def pointer_node_kind(node: dict[str, Any]) -> str:
     return "raw_pointer"
 
 
+def pointer_contract_nodes_by_name(spec: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    pointer_contract = spec.get("c_boundary", {}).get("pointer_contract", {})
+    if not isinstance(pointer_contract, dict):
+        return {}
+    nodes: dict[str, dict[str, Any]] = {}
+    for section, role, default_decision in [
+        ("input_buffers", "borrowed_input", "bounded_input_buffer"),
+        ("output_pointers", "out_param", ""),
+        ("inout_pointers", "inout_param", ""),
+    ]:
+        for item in pointer_contract.get(section, []):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            node = nodes.setdefault(
+                name,
+                {
+                    "id": name,
+                    "role": role,
+                    "read_effects": [],
+                    "write_effects": [],
+                    "boundary_decisions": [],
+                },
+            )
+            if item.get("c_type") and not node.get("c_type"):
+                node["c_type"] = item["c_type"]
+            if item.get("length_companion") and not node.get("length_companion"):
+                node["length_companion"] = item["length_companion"]
+            node["read_effects"] = stable_unique_strings(
+                node.get("read_effects", []) + list_of_strings(item.get("read_effects"))
+            )
+            node["write_effects"] = stable_unique_strings(
+                node.get("write_effects", []) + list_of_strings(item.get("write_effects"))
+            )
+            decisions = list(node.get("boundary_decisions", []))
+            if default_decision:
+                decisions.append(default_decision)
+            translation_rule_id = str(item.get("translation_rule_id") or "").strip()
+            if translation_rule_id:
+                decisions.append(translation_rule_id.replace("-", "_"))
+            node["boundary_decisions"] = stable_unique_strings(decisions)
+    return nodes
+
+
+def merge_pointer_node_contract(
+    node: dict[str, Any], contract_node: dict[str, Any]
+) -> dict[str, Any]:
+    if not contract_node:
+        return node
+    merged = dict(node)
+    for key in ["c_type", "role", "length_companion"]:
+        if not merged.get(key) and contract_node.get(key):
+            merged[key] = contract_node[key]
+    for key in ["read_effects", "write_effects", "boundary_decisions"]:
+        merged[key] = stable_unique_strings(
+            list_of_strings(merged.get(key)) + list_of_strings(contract_node.get(key))
+        )
+    return merged
+
+
+def stable_unique_strings(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = str(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
 def pointer_buffer_role(node: dict[str, Any]) -> str:
     if node.get("role") == "out_param":
         return "output"

@@ -2,12 +2,12 @@
   "ai_required_for_default_pipeline": false,
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+    "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
     "status": "generated"
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
+    "slice_spec_sha256=ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
     "fixture_hash=real-fdb-calc-crc32-fixture",
     "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
@@ -17,7 +17,7 @@
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "9c30243ec48a8c16027ad80e29fd0a061ddadca9b4b81b7417e1a2872d0ba601",
+    "sha256": "6033fb12976c9765b77228a579f15f9160137419d0220f22322bd6d1062777b3",
     "status": "refused"
   },
   "schema_version": 1,
@@ -28,7 +28,7 @@
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "beb64447b6a1239da6ea4c9c241f6ee0a9579f5cf691c55f3d610f2585525b51",
+    "sha256": "abf3c47340f81152f4207303877ac7a11f1ae89b93f0890e940fa017e7dbb30a",
     "status": "passed"
   }
 }

@@ -1,0 +1,92 @@
+{
+  "accepted_evidence_binding": {
+    "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+    "fixture_path": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+    "fixture_sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+    "generated_draft_semantic_pass": false,
+    "path_sha256": {
+      "c_oracle": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+      "diff": "c756e299e0f1ffd6d6e23954132153391caf6ba3739674067e7d9e3b770d9615",
+      "final_verification": "0bd7b0b79a29a1c052ef92e80a91518771bee6e88ed83b41c6bdcb66532ec1b3",
+      "negative_diff": "dc616ed64185afc8f9e824a1756d7e3c3aee38937d683bab373b0450ad5313c7",
+      "performance_smoke": "322546e0e07bef5df148d5f730235df71d25567075ee1369f512f02224806e31",
+      "rust_report": "37107f4791d7a964115ee759b0f48b279d03dcd388e15605496f5afd27c070c3",
+      "unsafe_ledger": "12f15d583ee5e7cad2d9414d2d633b79c401acf85675fe2c153ee04cb1c6a989",
+      "unsafe_scan": "5469c50a3b4bd4d576556f605cd75bf7c72927075da4ec8f2ebec3110f8fc683",
+      "version_manifest": "57ea955677385a3c14725e89e2001c5c287df981ea79e1816ec21a35da1cfd1a"
+    },
+    "paths": {
+      "c_oracle": "validation/evidence/demo/l3-add-one-c-oracle.json",
+      "diff": "validation/evidence/demo/l3-add-one-diff.json",
+      "final_verification": "validation/evidence/demo/l3-add-one-final-verification.json",
+      "negative_diff": "validation/evidence/demo/l3-add-one-negative-diff.json",
+      "performance_smoke": "validation/evidence/demo/l3-add-one-performance-smoke.json",
+      "rust_report": "validation/evidence/demo/l3-add-one-rust-report.json",
+      "unsafe_ledger": "validation/evidence/demo/l3-add-one-unsafe-ledger.json",
+      "unsafe_scan": "validation/evidence/demo/l3-add-one-unsafe-scan.json",
+      "version_manifest": "validation/evidence/demo/l3-add-one-version-manifest.json"
+    },
+    "slice_id": "add-one",
+    "source_commit": "demo-add-one-20260708",
+    "status": "accepted",
+    "target_id": "demo",
+    "toolchain_status": "C_ORACLE_GENERATED"
+  },
+  "c_defines": {
+    "none": true
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-one-20260708",
+    "slice_spec_sha256=c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "fixture_hash=add-one-fixture",
+    "build_profile_hash=89bcc6246ca4f7b2303fbf074bf38f5ca71b78e7e96b2e7d74c45af575dbed6e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "compile_profile": {
+    "c_oracle_command": "review and compile generated C oracle harness in WSL/Linux/CI",
+    "command_args": [
+      "validation/l2_slices/fixtures/add-one.c"
+    ],
+    "config_header_included": true,
+    "include_paths": []
+  },
+  "config_header": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-translator-input.json",
+    "role": "normalized translator input and build profile",
+    "sha256": "ac3570678a624169dd57e67303aebb90bc4148341de17f1dea5fbfc4bafb60cb"
+  },
+  "feature_matrix": {
+    "auto_translation_candidate": true
+  },
+  "fixture": {
+    "hash": "add-one-fixture",
+    "operation_count": 3,
+    "path": "validation/l2_slices/fixtures/add-one-c-oracle.json"
+  },
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No support for INT_MAX because signed C overflow is undefined behavior.",
+    "No pointer, aliasing, struct, or external callee behavior."
+  ],
+  "profile_id": "demo-add-one-wsl-gcc",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "rust_profile": {
+    "backend": "generated-draft",
+    "cargo_features": [],
+    "feature_env": "none",
+    "package": "validation/l2_slices"
+  },
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "toolchain": {
+    "cargo_version": "captured_by_validation",
+    "openspec_version": "captured_by_validation",
+    "rustc_version": "captured_by_rust_check",
+    "target_triple_or_abi": "x86_64-unknown-linux-gnu"
+  }
+}

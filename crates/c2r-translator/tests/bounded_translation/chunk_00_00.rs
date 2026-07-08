@@ -404,6 +404,42 @@ fn clang_ast_fixture_replays_direct_call_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_call_expression_chain_without_clang() {
+    let ast: Value =
+        serde_json::from_str(include_str!("../../fixtures/clang_ast/call_expression_chain_ast.json"))
+            .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "call_expression_chain")
+            .expect("lower recursive direct call fixture without invoking clang");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from recursive call fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn call_expression_chain(mut value: i32) -> i32"),
+        "{rust}"
+    );
+    assert!(rust.contains("if (value <= 0i32)"), "{rust}");
+    assert!(rust.contains("return (-value);"), "{rust}");
+    assert!(
+        rust.contains("let mut first: i32 = call_expression_chain(value.checked_sub(1i32)"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-call-expression-chain",
+        rust,
+        "\
+        assert_eq!(call_expression_chain(-2), 2);\n\
+        assert_eq!(call_expression_chain(0), 0);\n\
+        assert_eq!(call_expression_chain(1), 0);\n\
+        assert_eq!(call_expression_chain(3), 0);\n\
+        ",
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_abs_int_model_without_clang() {
     let ast: Value = serde_json::from_str(include_str!("../../fixtures/clang_ast/abs_call_ast.json"))
         .expect("fixture JSON");

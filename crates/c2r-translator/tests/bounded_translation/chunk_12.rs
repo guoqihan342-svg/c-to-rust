@@ -409,6 +409,80 @@ fn clang_lowering_report_artifact_sanitizes_absolute_host_paths() {
         .starts_with("<host>"));
 }
 
+#[cfg(feature = "clang-lowering-report")]
+#[test]
+fn clang_lowering_report_uses_slice_spec_noalias_contract_for_copy_slice() {
+    let spec: SliceSpec = serde_json::from_value(serde_json::json!({
+        "target_id": "demo",
+        "slice_id": "copy-i32-ptr-arith-policy",
+        "source_commit": "demo-copy-i32-ptr-arith-20260625",
+        "function_name": "copy_i32_ptr_arith",
+        "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+        "fixture_hash": "copy-i32-ptr-arith-fixture",
+        "source_root": ".",
+        "source_file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+        "source_file_hashes": {
+            "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+        },
+        "function_source_span": {
+            "file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+            "line_start": 1,
+            "line_end": 1,
+            "byte_start": 0,
+            "byte_end": 136,
+            "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+        },
+        "c_boundary": {
+            "pointer_contract": {
+                "input_buffers": [
+                    {"name": "values"}
+                ],
+                "output_pointers": [
+                    {"name": "out"}
+                ],
+                "noalias_required": [
+                    ["values", "out"]
+                ]
+            }
+        },
+        "build_profile": {
+            "include_paths": [],
+            "defines": [],
+            "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/copy_i32_ptr_arith_ast.json",
+            "target_triple": "x86_64-unknown-linux-gnu",
+            "abi": "linux-gnu",
+            "compiler_command_source": "clang",
+            "clang_available": true
+        }
+    }))
+    .unwrap();
+    let out_dir = unique_out_dir("copy-i32-ptr-arith-noalias-policy");
+
+    let manifest = write_translation_artifacts(&spec, &out_dir).unwrap();
+    let report = json_file(out_dir.join(
+        "l3-copy-i32-ptr-arith-policy-clang-lowering-report.json",
+    ));
+    let plan = json_file(out_dir.join(
+        "l3-copy-i32-ptr-arith-policy-auto-translation-plan.json",
+    ));
+    let rust_draft = fs::read_to_string(
+        out_dir.join("l3-copy-i32-ptr-arith-policy-rust-draft.rs"),
+    )
+    .unwrap();
+
+    assert_eq!(manifest.status, "generated");
+    assert_eq!(plan["status"], "generated");
+    assert_eq!(report["typed_ir_candidate"]["status"], "generated");
+    assert_eq!(
+        report["typed_ir_candidate"]["candidate_route"]["route"],
+        "GenericTypedIr"
+    );
+    assert!(rust_draft.contains(
+        "pub fn copy_i32_ptr_arith(values: &[i32], len: i32, mut out: &mut [i32]) -> i32"
+    ));
+    assert!(rust_draft.contains("out[i as usize] = values[i as usize];"));
+}
+
 #[test]
 fn blocked_translation_marks_pointer_graph_artifact_not_evaluated() {
     let spec = SliceSpec {

@@ -1,0 +1,178 @@
+{
+  "alias_gate_identity": {
+    "alias_set_count": 0,
+    "aliasing_proven": false,
+    "decision": "not_applicable",
+    "precondition_count": 0,
+    "requires_noalias": false,
+    "risk_count": 0,
+    "risk_level": "none"
+  },
+  "build_profile_hash": "89bcc6246ca4f7b2303fbf074bf38f5ca71b78e7e96b2e7d74c45af575dbed6e",
+  "c2rust_baseline_identity": {
+    "sha256": "cd30ccede4c833f992176820f4397287e575cffb564d8a44379d324b542fafb6",
+    "status": "skipped"
+  },
+  "c_oracle_harness_identity": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c-oracle-harness-draft.c",
+    "sha256": "26c000567b520343555d9be2f6ad39a46d73f785b4f8681e239ee96393c4fffe",
+    "status": "draft"
+  },
+  "cache_input_fields": [
+    "source_commit",
+    "source_file_hashes",
+    "slice_spec_sha256",
+    "fixture_hash",
+    "build_profile_hash",
+    "competition_environment_identity",
+    "cargo_lock_hash",
+    "tool_versions",
+    "schema_versions",
+    "translator_version",
+    "translator_manifest_sha256",
+    "command_arguments",
+    "alias_gate_identity",
+    "effect_graph_identity",
+    "scalar_ub_contract_identity",
+    "oracle_boundary_contract_identity",
+    "c2rust_baseline_identity",
+    "route_decision_identity",
+    "validation_profile_identity",
+    "global_dependency_identity",
+    "c_oracle_harness_identity",
+    "translator_feature_set",
+    "clang_lowering_identity"
+  ],
+  "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+  "clang_lowering_identity": {
+    "clang_path": "",
+    "clang_path_status": "not_configured",
+    "clang_version": "not_configured",
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "enabled": true,
+    "features": [
+      "clang-lowering-report"
+    ],
+    "frontend": "clang_ast_dump_json",
+    "ignored_env_for_ast_dump": {
+      "LIBCLANG_PATH": {
+        "reason": "ignored_for_ast_dump",
+        "status": "not_configured",
+        "value": ""
+      }
+    },
+    "requires_env": [
+      "CLANG_PATH"
+    ]
+  },
+  "command_arguments": [
+    "auto_migrate.py",
+    "--slice-spec",
+    "validation/slice-specs/demo-add-one.json",
+    "--accept-existing-evidence",
+    "--emit-clang-lowering-report"
+  ],
+  "competition_environment_identity": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "dependent_artifacts": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-baseline-manifest.json",
+      "sha256": "f6e61378f583283a932032a5af87210a3ce52eb226eed41f51af256c5571eabf",
+      "status": "skipped"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-route-decision.json",
+      "sha256": "674e73ec6b35a8e9592965a9d91d69771f24cad25326c62e5055c220b2cc4afb",
+      "status": "recorded"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "0b2b68ec221d6538626b1e389a0a219a595322728cb1272ff50ec7dcb20542da",
+      "status": "passed"
+    }
+  },
+  "effect_graph_identity": {
+    "alias_gate_decision": "not_applicable",
+    "alias_sensitive": false,
+    "read_effect_count": 0,
+    "read_nodes": [],
+    "schema_version": 2,
+    "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+    "write_effect_count": 0,
+    "write_nodes": []
+  },
+  "fixture_hash": "add-one-fixture",
+  "global_dependency_identity": {
+    "count": 0,
+    "names": [],
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "invalidates": [
+    "context_pack",
+    "type_map",
+    "cfg",
+    "pointer_graph",
+    "c2rust_baseline",
+    "route_decision",
+    "validation_profile",
+    "rust_draft",
+    "patch_plan",
+    "ai_candidate",
+    "c_oracle",
+    "rust_replay",
+    "diff",
+    "negative_diff",
+    "unsafe_ledger",
+    "final_verification",
+    "auto_translation_manifest",
+    "summary"
+  ],
+  "oracle_boundary_contract_identity": {
+    "sha256": "3c396a076dea57df58c818e802012d05b809a4ba0ee4d130d6319619b5ce73e5",
+    "status": "sufficient_for_semantic_pass"
+  },
+  "route_decision_identity": {
+    "sha256": "f29158df7e538cc48f96abb3dcc277907a77727c3e276bbfa97a0f82462110e0",
+    "status": "recorded"
+  },
+  "scalar_ub_contract_identity": {
+    "sha256": "4ce5424320b4b23cdd7420258c3448694269b60b3401a0d8b773314df9c0d896",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "schema_versions": {
+    "auto_cache_metadata": 1,
+    "auto_translation_plan": 1,
+    "cfg": 1,
+    "evidence_manifest": 1,
+    "pointer_graph": 2,
+    "type_map": 1
+  },
+  "slice_id": "add-one",
+  "slice_spec_sha256": "c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+  "source_commit": "demo-add-one-20260708",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/add-one.c": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+  },
+  "target_id": "demo",
+  "tool_versions": {
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "openspec": "1.4.1",
+    "python": "Python 3.14.2",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "translator_feature_set": [
+    "clang-lowering-report"
+  ],
+  "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
+  "translator_version": "0.1.0",
+  "validation_profile_identity": {
+    "sha256": "84c812a211648bfcd1ae1f9c4bc02ceb73d0465913779eed3548fe4692400d87",
+    "status": "passed"
+  }
+}

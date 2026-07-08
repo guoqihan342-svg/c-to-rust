@@ -431,6 +431,9 @@ class _ValidateAutoTranslationEvidenceTestsPart00:
             evidence_dir = Path(tmp)
             prefix = "l3-real-fdb-calc-crc32"
             report_path = evidence_dir / f"{prefix}-clang-lowering-report.json"
+            draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+            draft_path.write_text("pub fn fdb_calc_crc32() {}\n", encoding="utf-8")
+            rust_draft_sha = module.sha256(draft_path)
             report_candidate = {
                 "status": "generated",
                 "candidate_route": {
@@ -462,7 +465,7 @@ class _ValidateAutoTranslationEvidenceTestsPart00:
                 ],
                 "rust_draft_generated": True,
                 "typed_ir_sha256": "typed-ir-sha",
-                "rust_draft_sha256": "rust-draft-sha",
+                "rust_draft_sha256": rust_draft_sha,
                 "semantic_pass": False,
             }
             self._write_json(

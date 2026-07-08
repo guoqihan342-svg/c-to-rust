@@ -1,4 +1,261 @@
 {
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+        "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
+          "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L0",
+        "status": "not_refused"
+      },
+      "route_level": "L0",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "signed_negation_no_overflow",
+          "detail": "C signed negation must not evaluate -MIN (C11 6.5) unless the slice contract models that UB boundary",
+          "ir_node": "IrExpr::Unary.Neg",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "signed_sub_no_overflow",
+          "detail": "C signed subtraction must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Sub",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "signed_sub_no_overflow",
+          "detail": "C signed subtraction must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Sub",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        },
+        {
+          "code": "signed_sub_no_overflow",
+          "detail": "C signed subtraction must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Sub",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "432b1f7c02ea9ec337cb29807ebce0d9165ce517cc86e817d19edc74e624d394",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [
+          {
+            "code": "signed_negation_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_negation",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          },
+          {
+            "code": "signed_sub_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          },
+          {
+            "code": "signed_sub_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          },
+          {
+            "code": "signed_sub_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          }
+        ],
+        "precondition_count": 4,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "covered",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-clang-lowering-report.json",
+        "sha256": "0f6207278225a582bc57fd708781246dc9e584e0f35fcd3eb033296191ac6bc2",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "9ad20d0629fc7146656e6cedd2e4ca73f198ffda13caeed48dc40a807963c70f"
+    }
+  },
   "level": "L0",
   "misroute": null,
   "policy": {
@@ -8,26 +265,69 @@
   },
   "rationale": [
     {
-      "feature": "scalar_only",
-      "weight": "low"
+      "feature": "typed_ir_zero_token_deterministic",
+      "route": "GenericTypedIr",
+      "token_cost": 0,
+      "weight": "deterministic_typed_ir"
     }
   ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "runtime_precondition_no_overflow",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program call graph semantic proof",
+        "external callee semantic equivalence",
+        "function pointer or nested call expression support",
+        "signed overflow equivalence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": false,
+      "parameters": [
+        {
+          "name": "value",
+          "range": [
+            -2,
+            4
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "call-expression",
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-      "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+      "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-cfg.json",
-      "sha256": "64068809069cefcbd7d0f9e72d0ca3f9cdc352ceafcaa8c61f14f02c1900e904",
+      "sha256": "aff77727f695aecbd0b2d2c81e7bb8e2ac667d754deccb0b146e927d7da1a26b",
       "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-clang-lowering-report.json",
+      "sha256": "0f6207278225a582bc57fd708781246dc9e584e0f35fcd3eb033296191ac6bc2",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
-      "sha256": "fda47cef7500657c9a110d3f5d046711093a0136584bc5b30255967507ee3e7e",
+      "sha256": "420c6c652ab3cbbce9fc41d739f5bf3fdb76016fda6d244a3fec9b5b065eec79",
       "status": "not_applicable"
     },
     "translation_plan": {
@@ -36,9 +336,18 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-type-map.json",
-      "sha256": "92697a933a0caf6a8b0ad41b19f217be8ec2d0d0c5008fc29d13079058ae906a",
+      "sha256": "c517ffee2dcbd9250aed6304c2aba619630290584b1522cd6dc30505af29af95",
       "status": "recorded"
     }
+  },
+  "source_commit": "demo-call-expression-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-call-expression-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/call-expression-chain.c": "9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864"
+    },
+    "source_root": "."
   },
   "status": "recorded",
   "target_id": "demo",

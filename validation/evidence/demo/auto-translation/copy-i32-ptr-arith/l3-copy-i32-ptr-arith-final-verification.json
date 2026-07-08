@@ -1,19 +1,20 @@
 {
+  "accepted_evidence_authoritative": false,
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
-    "fixture_sha256": "31fb2903c83e4056cb843f8b604ba74b22c1ec4adb4490c43cafffb40a9cd83f",
+    "fixture_sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
       "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
-      "final_verification": "69e04090ae42a2b0b5159cbe9e98ee5acd90fa5f8a5f45ac21c45e01239b19d6",
+      "final_verification": "fc4e92f3d7d2686c538777c4114f002a5755a9c849717e8d9960e8fe7f275871",
       "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
       "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
       "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
       "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
       "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
-      "version_manifest": "04642cf61fb33ed0dd82ac159a3633456df2d2bd02de3b5894ef53fb35daaa05"
+      "version_manifest": "94f71e2c12d9cacbd8b00a88607e8440ccdc9bf1cc9f4bc06f3b9fb3fe3b916a"
     },
     "paths": {
       "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
@@ -53,20 +54,201 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
     "status": "skipped"
   },
   "c_oracle_status": "C_ORACLE_GENERATED",
+  "external_callee_scope": {
+    "blocked_count": 0,
+    "declared_count": 0,
+    "declared_spec_count": 0,
+    "declared_spec_names": [],
+    "semantics_verified": false,
+    "status": "not_applicable",
+    "stub_kind": "none"
+  },
   "fixture": {
     "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
-    "sha256": "31fb2903c83e4056cb843f8b604ba74b22c1ec4adb4490c43cafffb40a9cd83f"
+    "sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585"
   },
-  "generated_draft_semantic_pass": false,
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+      "fixture_sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+        "diff": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
+        "final_verification": "fc4e92f3d7d2686c538777c4114f002a5755a9c849717e8d9960e8fe7f275871",
+        "negative_diff": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
+        "performance_smoke": "e4fcb41585026c19f0781d2ff25c8219819a4e4d2e3dff0f87b6da75e02fc887",
+        "rust_report": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
+        "unsafe_ledger": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
+        "unsafe_scan": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
+        "version_manifest": "94f71e2c12d9cacbd8b00a88607e8440ccdc9bf1cc9f4bc06f3b9fb3fe3b916a"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
+        "diff": "validation/evidence/demo/l3-copy-i32-ptr-arith-diff.json",
+        "final_verification": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-final-verification.json",
+        "negative_diff": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
+        "performance_smoke": "validation/evidence/demo/l3-copy-i32-ptr-arith-performance-smoke.json",
+        "rust_report": "validation/evidence/demo/l3-copy-i32-ptr-arith-rust-report.json",
+        "unsafe_ledger": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-scan.json",
+        "version_manifest": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-version-manifest.json"
+      },
+      "slice_id": "copy-i32-ptr-arith",
+      "source_commit": "demo-copy-i32-ptr-arith-20260625",
+      "status": "accepted",
+      "target_id": "demo",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-c-oracle.json",
+        "sha256": "5fc1a6eedf7772d80b2283078133b1c3281a29fabf4b67ab9bfeaf9b24628585",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-negative-diff.json",
+        "sha256": "2ae4f879166a400db0c3ffbdcc87a5ccf6bf66c32b1edd324aa4e085f8f39762",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-rust-report.json",
+        "sha256": "27a83dfb7029f7d9ca160aa2c307b584498507cd6c9a627c9f0fea48c1715910",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-diff.json",
+        "sha256": "782a8ff94e21677c4525ea8c047b4ed622aab2ee8c79ea636f7b0bc731c37c69",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-ledger.json",
+        "sha256": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/demo/l3-copy-i32-ptr-arith-unsafe-scan.json",
+        "sha256": "e2ba4f62a0e3e80108dbab95c4d812679055b7a12daea8cc45312707aa1354eb",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-74vfbgt8\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-rust-draft.rs",
+      "sha256": "2f3dd7a1e6a488679de030887ced8bd695f8aff8dd2a31f613f9b91b530df09d",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "copy-i32-ptr-arith",
+    "source_commit": "demo-copy-i32-ptr-arith-20260625",
+    "status": "passed",
+    "target_id": "demo"
+  },
+  "generated_draft_semantic_pass": true,
   "negative_diff_mutation_detected": true,
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 6,
+      "case_source": "fixture_contract",
+      "declared_case_count": 4,
+      "fixture_hash": "copy-i32-ptr-arith-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_code",
+      "status",
+      "len",
+      "values",
+      "out_values",
+      "source_reads",
+      "canonical_reads",
+      "source_writes",
+      "canonical_writes",
+      "write_count"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
+      "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {}
+    }
+  },
   "route_decision": {
-    "level": "L2",
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "9fc022231ddebca3356fa86709a4a1d2a73994e60d7de9816c2f53d82a657984",
+    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
     "status": "recorded"
   },
   "rust_check_status": "passed",
@@ -83,10 +265,15 @@
   "unsafe_status": "passed",
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
-    "profile": "L2-dev",
-    "sha256": "a6128f934dedb7ed71bb846282e1c0da5a846ebb70d69d6affda506df47860a7",
+    "profile": "L1-dev",
+    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
     "status": "passed"
   },
   "validation_profile_status": "passed",
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-verified-unsafe-baseline.json",
+    "sha256": "bf7aab1ab1f15e7b087a82416c3d661548245cad76984061e6c594c190677c50",
+    "status": "blocked"
+  },
   "version_config_status": "recorded"
 }

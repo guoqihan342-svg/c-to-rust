@@ -1,0 +1,46 @@
+{
+  "accepted_diff": {
+    "path": "validation/evidence/demo/l3-add-one-diff.json",
+    "sha256": "c756e299e0f1ffd6d6e23954132153391caf6ba3739674067e7d9e3b770d9615",
+    "status": "passed"
+  },
+  "accepted_diff_required": true,
+  "blocked_by": [],
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-baseline-manifest.json",
+    "sha256": "f6e61378f583283a932032a5af87210a3ce52eb226eed41f51af256c5571eabf",
+    "status": "skipped"
+  },
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "diff_gate": "schema_aware_c_rust_diff",
+  "first_mismatch": null,
+  "required_inputs": {
+    "c_oracle_actual_status": "C_ORACLE_GENERATED",
+    "c_oracle_actual_toolchain_status": "C_ORACLE_GENERATED",
+    "c_oracle_required_status": "C_ORACLE_GENERATED",
+    "rust_replay_actual_status": "recorded",
+    "rust_report_actual_status": "passed",
+    "rust_report_required_status": "passed",
+    "schema_diff_actual_status": "passed"
+  },
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-route-decision.json",
+    "sha256": "674e73ec6b35a8e9592965a9d91d69771f24cad25326c62e5055c220b2cc4afb",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "add-one",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "0b2b68ec221d6538626b1e389a0a219a595322728cb1272ff50ec7dcb20542da",
+    "status": "passed"
+  }
+}

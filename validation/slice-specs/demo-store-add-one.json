@@ -14,18 +14,19 @@
     "accepted": true
   },
   "source": {
-    "source_root": "<demo-slice>",
+    "source_root": ".",
     "source_commit": "demo-store-add-one-20260625",
     "repo_commit": "workspace",
     "source_file_hashes": {
-      "validation/l2_slices/tools/generate_store_add_one_oracle.py": "generated-at-validation"
+      "validation/l2_slices/fixtures/store-add-one.c": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
     }
   },
   "c_boundary": {
     "files": [
       {
-        "path": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
-        "role": "source"
+        "path": "validation/l2_slices/fixtures/store-add-one.c",
+        "role": "source",
+        "sha256": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
       },
       {
         "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
@@ -51,7 +52,15 @@
             "direction": "output"
           }
         ],
-        "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }"
+        "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/store-add-one.c",
+          "line_start": 1,
+          "line_end": 1,
+          "byte_start": 0,
+          "byte_end": 73,
+          "sha256": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+        }
       }
     ],
     "direct_dependencies": [
@@ -60,11 +69,19 @@
         "name": "int",
         "source": "C99"
       }
-    ]
+    ],
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "not_declared",
+      "signed_right_shift": "not_declared"
+    }
   },
   "build_profile": {
     "profile_id": "demo-store-add-one-wsl-gcc",
-    "compiler_command_source": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
+    "compiler_command_source": "validation/l2_slices/fixtures/store-add-one.c",
     "include_paths": [],
     "defines": [],
     "target": {
@@ -74,15 +91,16 @@
       "long_width": 64,
       "pointer_width": 64
     },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/store_add_one_ast.json",
     "preprocessing_mode": "generated_stub",
     "tool_versions": {
       "gcc": "captured_by_wsl_oracle",
       "rustc": "captured_at_validation"
     },
     "clang_type_extraction": {
-      "available": false,
+      "available": true,
       "diagnostics": [
-        "demo slice uses explicit C source and no external headers"
+        "repo-local C fixture is available for optional clang AST lowering"
       ]
     }
   },
@@ -91,6 +109,20 @@
     "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
     "input": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
     "hash": "store-add-one-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "int",
+          "range": [
+            -2147483648,
+            2147483646
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": false
+    },
     "cases": [
       {
         "id": "int-min",
@@ -173,6 +205,8 @@
     "source.source_commit",
     "source.repo_commit",
     "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.scalar_arithmetic_contract",
     "build_profile.profile_id",
     "rust_boundary.module",
     "translator_version"

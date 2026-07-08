@@ -1,0 +1,41 @@
+{
+  "applicability": {
+    "has_pointer_surface": false,
+    "triggers": [
+      "none"
+    ]
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-one-20260708",
+    "slice_spec_sha256=c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "fixture_hash=add-one-fixture",
+    "build_profile_hash=89bcc6246ca4f7b2303fbf074bf38f5ca71b78e7e96b2e7d74c45af575dbed6e",
+    "translator_version=0.1.0",
+    "schema_version=1",
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+  ],
+  "context_pack_ref": "validation/evidence/demo/auto-translation/add-one/l3-add-one-context-pack.json",
+  "level": "L3",
+  "not_applicable_reason": "slice has no pointer surface",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "schema_version": 2,
+  "slice_id": "add-one",
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/add-one.c"
+    ],
+    "functions": [
+      "add_one"
+    ],
+    "globals": [],
+    "structs": [
+      "int"
+    ]
+  },
+  "source_commit": "demo-add-one-20260708",
+  "status": "not_applicable",
+  "target_id": "demo"
+}

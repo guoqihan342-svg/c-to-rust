@@ -1,7 +1,7 @@
 {
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
+    "slice_spec_sha256=ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
     "fixture_hash=real-fdb-calc-crc32-fixture",
     "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
@@ -13,24 +13,8 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [
-            {
-              "decision": "value_assignment",
-              "lvalue_kind": "simple_identifier",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "p = (const uint8_t *)buf",
-              "statement_index": 1,
-              "translation_rule_id": "assignment"
-            }
-          ],
-          "lvalue_kinds": [
-            "none",
-            "simple_identifier"
-          ],
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -43,11 +27,11 @@
             "return"
           ],
           "statements": [
-            "const uint8_t *p",
-            "p = (const uint8_t *)buf",
-            "crc = crc ^ ~0U",
-            "while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }",
-            "return crc ^ ~0U"
+            "decl p",
+            "assign p",
+            "assign crc",
+            "while",
+            "return"
           ],
           "terminator": "return"
         }
@@ -83,7 +67,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "crc ^ ~0U",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -111,12 +95,12 @@
     }
   ],
   "level": "L3",
-  "repo_commit": "ea92d53551fb2fd243163c054d8e3345ac8acb73",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec_ref": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
+    "sha256": "ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
     "status": "ready"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",

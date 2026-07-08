@@ -5,7 +5,14 @@
             str(evidence_dir),
         ]
     )
-    result = subprocess.run(cmd, cwd=REPO_ROOT, text=True, capture_output=True)
+    result = subprocess.run(
+        cmd,
+        cwd=REPO_ROOT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+    )
     write_log_text(evidence_dir / "translator-command.stdout.log", result.stdout)
     write_log_text(evidence_dir / "translator-command.stderr.log", result.stderr)
     if result.returncode != 0:
@@ -221,24 +228,49 @@ def normalize_translation_artifacts(spec: dict[str, Any], slice_spec_path: Path,
 
     raw_pointer = read_json(evidence_dir / f"{prefix}-pointer-graph.json")
     raw_nodes = raw_pointer.get("pointer_graph", {}).get("nodes", [])
+    contract_nodes = pointer_contract_nodes_by_name(spec)
     pointer_nodes = []
     for idx, node in enumerate(raw_nodes):
-        kind = pointer_node_kind(node)
+        node_id = str(node.get("id", f"ptr-{idx + 1}"))
+        contract_node = contract_nodes.get(node_id, {})
+        merged_node = merge_pointer_node_contract(node, contract_node)
+        kind = pointer_node_kind(merged_node)
         pointer_node = {
-            "id": node.get("id", f"ptr-{idx + 1}"),
-            "symbol": node.get("id", f"ptr-{idx + 1}"),
+            "id": node_id,
+            "symbol": node_id,
             "kind": kind,
-            "c_type": node.get("c_type", ""),
-            "mutability": "write_only" if node.get("role") == "out_param" else "read_only",
+            "c_type": merged_node.get("c_type", ""),
+            "mutability": "write_only" if merged_node.get("role") == "out_param" else "read_only",
             "nullability": "unknown",
-            "ownership_role": pointer_ownership_role(node),
-            "read_effects": node.get("read_effects", []),
-            "write_effects": node.get("write_effects", []),
-            "boundary_decisions": node.get("boundary_decisions", []),
+            "ownership_role": pointer_ownership_role(merged_node),
+            "read_effects": merged_node.get("read_effects", []),
+            "write_effects": merged_node.get("write_effects", []),
+            "boundary_decisions": merged_node.get("boundary_decisions", []),
         }
         if kind == "buffer":
             pointer_node["buffer_role"] = pointer_buffer_role(node)
             pointer_node["length_companion"] = input_buffer_length_companion(spec, str(pointer_node["id"]))
+        pointer_nodes.append(pointer_node)
+    seen_pointer_ids = {str(node.get("id", "")) for node in pointer_nodes}
+    for node_id, contract_node in contract_nodes.items():
+        if node_id in seen_pointer_ids:
+            continue
+        kind = pointer_node_kind(contract_node)
+        pointer_node = {
+            "id": node_id,
+            "symbol": node_id,
+            "kind": kind,
+            "c_type": contract_node.get("c_type", ""),
+            "mutability": "write_only" if contract_node.get("role") == "out_param" else "read_only",
+            "nullability": "unknown",
+            "ownership_role": pointer_ownership_role(contract_node),
+            "read_effects": contract_node.get("read_effects", []),
+            "write_effects": contract_node.get("write_effects", []),
+            "boundary_decisions": contract_node.get("boundary_decisions", []),
+        }
+        if kind == "buffer":
+            pointer_node["buffer_role"] = pointer_buffer_role(contract_node)
+            pointer_node["length_companion"] = input_buffer_length_companion(spec, node_id)
         pointer_nodes.append(pointer_node)
     dependency_edges = [
         {

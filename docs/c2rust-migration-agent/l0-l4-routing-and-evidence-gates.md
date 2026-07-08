@@ -57,6 +57,7 @@ FlashDB showcase 中的 `flashDB_rust` 是 handwritten implementation / validati
 **L4**：两种形态：
 1. **refused**：route decision 决定 L4/refused。translator.kind=refuse。candidate_generation_allowed=false。例如函数签名不匹配、pointer graph 不可解、环境不支持。
 2. **accepted evidence authoritative**：slice spec 显式声明 `claim_boundary.accepted_evidence_authoritative=true`。route 仍是 L4/refused，但语义通过绑定到外部 accepted C oracle / Rust report / diff / negative diff / unsafe evidence，不是 generated draft。
+3. **generated draft accepted after gates**：route 可仍是 L4/refused，但 validation profile / final / manifest / test translation 必须一致声明 `generated_draft_acceptance.status=passed`，并绑定 exact Rust draft sha、rustc check、generated replay、C oracle、schema diff、negative diff 和 unsafe scan/ledger。只有这种路径可把 exact generated draft 计入 translator-generated semantic pass。
 
 ## 3. 路由决策逻辑
 
@@ -136,6 +137,7 @@ Validation profile 决定本次运行必须通过的 gates。核心字段：
 4. L4/refused 默认不通过，除非 slice spec 声明 `accepted_evidence_authoritative=true`
 5. `generated_draft_semantic_pass` 必须是 false（generated draft 本身不直接 claim 语义）
 6. 当 L4/refused 通过 `accepted_evidence_authoritative=true` 绑定外部证据时，报告必须绑定 `accepted_evidence_binding`，并保持 `generated_draft_semantic_pass=false`。
+7. 当 L4/refused 通过 `generated_draft_acceptance.status=passed` 接受 exact generated draft 时，validator 必须校验 profile、manifest、final、test translation 的 acceptance object 完全一致；route policy / candidate_generation 仍不能把 raw candidate 自己标成 accepted。
 
 ### 4.3 Profile 与 Route 的关系
 

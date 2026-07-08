@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-        "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+        "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
         "status": "generated"
       },
       "candidate_id": "c2rust-baseline",
@@ -22,11 +22,9 @@
     },
     "candidate_set": [
       {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "kind": "legacy-string-translator",
-        "role": "compatibility_rust_draft",
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
         "semantic_pass": false,
         "status": "generated"
       },
@@ -41,7 +39,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-          "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+          "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
           "status": "generated"
         },
         "candidate_id": "c2rust-baseline",
@@ -59,16 +57,7 @@
         "status": "generated"
       }
     ],
-    "compatibility_sources": [
-      {
-        "candidate_id": "compat:legacy-string-translator",
-        "compatibility_only": true,
-        "correctness_role": "compatibility_only",
-        "fallback": false,
-        "selected": "legacy-string-translator",
-        "semantic_pass": false
-      }
-    ],
+    "compatibility_sources": [],
     "generated_draft_semantic_pass": false,
     "governance_summary": {
       "candidate_generation_allowed": false,
@@ -80,10 +69,8 @@
       ],
       "fallback_summary": {
         "legacy_string_translator": {
-          "candidate_id": "compat:legacy-string-translator",
-          "fallback": false,
           "selected_as_primary": false,
-          "status": "compatibility_only"
+          "status": "not_used"
         }
       },
       "full_router": false,
@@ -127,12 +114,12 @@
       }
     },
     "primary_candidate": {
-      "candidate_id": "primary:unknown",
+      "candidate_id": "primary:clang-lowered-typed-ir",
       "fallback": false,
-      "selected": "unknown",
+      "selected": "clang-lowered-typed-ir",
       "semantic_pass": false
     },
-    "selected_candidate_id": null,
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
     "selection_policy": {
       "full_router": false,
       "selection_basis": "translator_artifact_primary_candidate",
@@ -196,33 +183,33 @@
       "rust_draft_sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
       "scalar_admission": {
         "contract_status": "recorded",
-        "covered": [],
+        "covered": [
+          {
+            "code": "shift_count_in_range",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.shift_count",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          }
+        ],
         "precondition_count": 1,
         "source_fields": [
           "c_boundary.scalar_arithmetic_contract",
           "fixture_contract.scalar_input_domain",
           "claim_boundary.must_not_claim"
         ],
-        "status": "unresolved",
-        "unresolved": [
-          {
-            "code": "shift_count_in_range",
-            "missing": [
-              "c_boundary.scalar_arithmetic_contract.shift_count",
-              "fixture_contract.scalar_input_domain"
-            ],
-            "status": "unresolved"
-          }
-        ]
+        "status": "covered",
+        "unresolved": []
       },
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-        "sha256": "d2e4e8b8ce22a906e1850c264e3d21406e74df61ce78ee28d64a9551cd03efb6",
+        "sha256": "06dc0457c008f0bf4fe44a90da081806ab53f99d7805bda08f1ef7f1b2c82cf8",
         "status": "lowered"
       },
       "status": "generated",
-      "typed_ir_sha256": "9c75816a055a0ad6e81fa9742721d967305dc9b8ab623ef8ed29b4703192d078"
+      "typed_ir_sha256": "d7ce9365fe23d9ddacc5714ce92bf224b3cb642984fbc38baebee06bd9503215"
     }
   },
   "level": "L4",
@@ -236,14 +223,9 @@
   },
   "rationale": [
     {
-      "feature": "blocked_artifact",
-      "values": {
-        "cfg": "recorded",
-        "plan": "blocked",
-        "translator": "blocked",
-        "type_map": "recorded"
-      },
-      "weight": "hard_refuse"
+      "feature": "typed_ir_candidate_generated",
+      "route": "GenericTypedIr",
+      "weight": "generic_typed_ir"
     },
     {
       "feature": "accepted_evidence_authoritative",
@@ -253,8 +235,10 @@
   "scalar_ub_contract": {
     "c_boundary": {
       "division_by_zero": "not_declared",
-      "shift_count": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
       "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
       "signed_overflow": "not_declared",
       "signed_right_shift": "not_declared",
       "wrapping_profile": "not_declared"
@@ -267,9 +251,28 @@
       ]
     },
     "fixture_contract": {
-      "case_source": "not_declared",
+      "case_source": "fixture_cases",
       "covers_overflow_boundaries": false,
-      "parameters": []
+      "parameters": [
+        {
+          "excludes": [],
+          "name": "crc",
+          "range": [
+            0,
+            0
+          ],
+          "type": "uint32_t"
+        },
+        {
+          "excludes": [],
+          "name": "size",
+          "range": [
+            0,
+            9
+          ],
+          "type": "size_t"
+        }
+      ]
     },
     "status": "recorded"
   },
@@ -278,31 +281,31 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-      "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+      "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
       "status": "generated"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-cfg.json",
-      "sha256": "78255d436bec9803e962bf2488ff73b7921760a38436623fa99b0e4f030e0895",
+      "sha256": "c3fb1799135f63cd172c97060e1e868cb3da15201a1fcd0b275d58510f9859d6",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json",
-      "sha256": "d2e4e8b8ce22a906e1850c264e3d21406e74df61ce78ee28d64a9551cd03efb6",
+      "sha256": "06dc0457c008f0bf4fe44a90da081806ab53f99d7805bda08f1ef7f1b2c82cf8",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "sha256": "21ade496f466445e8f669b4829f53c0297897304d66004f7426bbe9b99d066f6",
-      "status": "not_applicable"
+      "sha256": "ad6a4a1a0947fdab99cf32ad57588a59ff17d0aef1434c11bf51b483f8ce1ff4",
+      "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-auto-translation-plan.json",
-      "status": "blocked"
+      "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json",
-      "sha256": "3b1e304f722e0541d5250d388146797efa77a42fe51db71a258cc7af7b0263fd",
+      "sha256": "508f31f7201d5fdf4fa1bb8375b8005dc0bfd8d6c6f5e6108a2f3ff6684a097b",
       "status": "recorded"
     }
   },

@@ -140,11 +140,21 @@ fn ir_inc_dec_op_source(op: &typed_ir::IrIncDecOp) -> &'static str {
 fn record_ir_type_mapping(
     symbol: &str,
     ty: &typed_ir::IrType,
+    profile: &BuildProfile,
+    result: &mut TranslationResult,
+) {
+    record_ir_type_mapping_with_rust_type_override(symbol, ty, profile, None, result);
+}
+
+fn record_ir_type_mapping_with_rust_type_override(
+    symbol: &str,
+    ty: &typed_ir::IrType,
     _profile: &BuildProfile,
+    rust_type_override: Option<String>,
     result: &mut TranslationResult,
 ) {
     let c_type = ir_c_type(ty);
-    let Some(rust_type) = ir_rust_type(ty) else {
+    let Some(rust_type) = rust_type_override.or_else(|| ir_rust_type(ty)) else {
         let reason = format!(
             "clang-lowered typed IR type {} is outside the current evidence mapping subset",
             type_label_for_evidence(ty)

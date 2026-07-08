@@ -1,0 +1,75 @@
+{
+  "kind": "TranslationUnitDecl",
+  "inner": [
+    {
+      "kind": "FunctionDecl",
+      "name": "adler32_step",
+      "type": {
+        "qualType": "uint32_t (uint32_t)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "s1",
+          "type": {
+            "qualType": "uint32_t"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "BinaryOperator",
+                  "opcode": "+",
+                  "type": {
+                    "qualType": "uint32_t"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "uint32_t"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "uint32_t"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "s1"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "IntegralCast",
+                      "type": {
+                        "qualType": "uint32_t"
+                      },
+                      "inner": [
+                        {
+                          "kind": "IntegerLiteral",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "value": "1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

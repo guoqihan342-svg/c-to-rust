@@ -32,7 +32,7 @@ python3 -B -m validation.tools.run_judge_entrypoints --config config/competition
 
 启用 `--require-local-artifacts` 时，`validate_judge_entrypoints` 还会通过 `validate_competition_run_summary.py` 深校验非 smoke `competition_summary`，覆盖 workflow metrics、before/after refs、repair history、unsafe 账本、final-gate 规则和 slice counts。
 
-同一 public packet 现在还会把 C2Rust baseline manifest 状态纳入 route-governance 与 milestone scorecard：`raw_c2rust.c2rust_baseline_rollup` 按 evidence root 去重，展示 manifest/source/compile-pass 数，但保持 `semantic_gate=false` 和 `translation_coverage_numerator=0`。
+同一 public packet 现在还会把 C2Rust baseline manifest 状态纳入 route-governance 与 milestone scorecard：`raw_c2rust.c2rust_baseline_rollup` 按 evidence root 去重，展示 manifest/source/compile-pass 数，但保持 raw C2Rust `semantic_gate=false` 和 `translation_coverage_numerator=0`；独立的 typed-IR generated-draft acceptance 另行计数，当前 `real-fdb-calc-crc32`、`real-fdb-blob-make`、`zlib-ng/adler32-step`、`demo/signed-rshift-contract`、`demo/call-expression`、`demo/store-add-one`、`demo/add-one` 和 `demo/copy-i32-ptr-arith` 贡献 8 个 translator-generated semantic pass。
 
 首选真实 FlashDB 运行路径：
 
@@ -103,4 +103,4 @@ python3 -B validation/tools/milestone_release_report.py --competition-summary ta
 - `target/competition-out-demo-before-after-exhibit/summary/judge-demo-report.json`
 - `target/competition-out-demo-before-after-exhibit/summary/milestone-release-report.json`
 
-边界：真实 FlashDB exhibit 为 `real-fdb-calc-crc32` 绑定 accepted-evidence before/after artifacts，展示 unsafe 2 -> 0。`judge-demo-report.json.repair_summary` 只汇总已绑定 workflow metrics / before-after exhibit 中的 repair/retry/rollback 字段，不替代 validator 或 oracle。C2Rust baseline 现在已有 generated + compile-only + direct replay observable-passed evidence，但仍是 `candidate_context_only` / `semantic_pass=false`；该 exhibit 不增加 `translation_coverage_numerator`。
+边界：真实 FlashDB exhibit 为 `real-fdb-calc-crc32` 绑定 accepted-evidence before/after artifacts，展示 unsafe 2 -> 0。`judge-demo-report.json.repair_summary` 只汇总已绑定 workflow metrics / before-after exhibit 中的 repair/retry/rollback 字段，不替代 validator 或 oracle。C2Rust baseline 现在已有 generated + compile-only + direct replay observable-passed evidence，但仍是 `candidate_context_only` / `semantic_pass=false`；typed-IR generated Rust draft 只有在 exact draft 的 `generated_draft_acceptance.status=passed` 时计入 translator-generated semantic pass，当前 numerator 为 8。

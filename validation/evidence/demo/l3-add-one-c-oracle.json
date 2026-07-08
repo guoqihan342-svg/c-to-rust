@@ -1,0 +1,72 @@
+{
+  "case_count": 6,
+  "cases": [
+    {
+      "coverage_kind": "boundary_low",
+      "id": "int-min",
+      "return_value": -2147483647,
+      "status": "ok",
+      "value": -2147483648
+    },
+    {
+      "coverage_kind": "negative",
+      "id": "negative",
+      "return_value": -1,
+      "status": "ok",
+      "value": -2
+    },
+    {
+      "coverage_kind": "zero_crossing",
+      "id": "minus-one",
+      "return_value": 0,
+      "status": "ok",
+      "value": -1
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 1,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 2,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "int-max-minus-one",
+      "return_value": 2147483647,
+      "status": "ok",
+      "value": 2147483646
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No signed overflow cases.",
+    "No INT_MAX execution because signed C overflow is undefined behavior.",
+    "No pointer, aliasing, struct, or external callee behavior."
+  ],
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/tools/generate_add_one_oracle.py"
+    ],
+    "functions": [
+      "add_one"
+    ],
+    "signature": "int add_one(int value)"
+  },
+  "source_commit": "demo-add-one-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

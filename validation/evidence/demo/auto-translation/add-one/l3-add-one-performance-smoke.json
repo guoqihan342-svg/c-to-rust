@@ -1,0 +1,13 @@
+{
+  "accepted_performance_smoke": {
+    "path": "validation/evidence/demo/l3-add-one-performance-smoke.json",
+    "sha256": "322546e0e07bef5df148d5f730235df71d25567075ee1369f512f02224806e31",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "secondary_only": true,
+  "semantic_pass": true,
+  "slice_id": "add-one",
+  "status": "recorded",
+  "target_id": "demo"
+}

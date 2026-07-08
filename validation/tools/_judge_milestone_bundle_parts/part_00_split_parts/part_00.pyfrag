@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from validation.tools import validate_judge_entrypoints as validator
+from validation.tools.validate_project_agnostic_acceptance import validate_acceptance_report
 
 
 DEFAULT_RUN_REPORT = Path("target/competition-out-flashdb-judge-entrypoints/summary/judge-entrypoints-run-report.json")
@@ -128,6 +129,10 @@ def build_judge_milestone_bundle(
         before_after_repair_exhibit=before_after_repair_exhibit,
     )
     semantic_evidence = build_semantic_evidence_rollup(run_report)
+    project_agnostic_acceptance = build_project_agnostic_acceptance_gate(
+        run_report,
+        repo_root=repo_root,
+    )
     blockers = milestone_blockers(
         run_report,
         readiness,
@@ -147,6 +152,7 @@ def build_judge_milestone_bundle(
     blockers.extend(c2rust_baseline_manifest_ref_blockers(route_governance_sources, repo_root=repo_root))
     blockers.extend(validated_artifact_contract_errors)
     blockers.extend(publication_artifact_ref_blockers(entrypoint_reports))
+    blockers.extend(project_agnostic_acceptance_blockers(project_agnostic_acceptance))
     status = "passed" if not blockers else "blocked"
     claim_scope = build_claim_scope(status=status, proof_classes=proof_classes, semantic_evidence=semantic_evidence)
     publishability = build_publishability(
@@ -165,7 +171,10 @@ def build_judge_milestone_bundle(
         run_report_path=run_report_path,
         repo_root=repo_root,
     )
-    must_not_claim = build_must_not_claim(opencode_runtime)
+    must_not_claim = build_must_not_claim(
+        opencode_runtime,
+        project_agnostic_acceptance=project_agnostic_acceptance,
+    )
     known_gaps = build_known_gaps(
         proof_classes=proof_classes,
         opencode_runtime=opencode_runtime,
@@ -204,6 +213,7 @@ def build_judge_milestone_bundle(
         "exact_host_revalidation": exact_host_revalidation,
         "publishability": publishability,
         "competition_host_readiness": competition_host_readiness,
+        "project_agnostic_acceptance": project_agnostic_acceptance,
         "semantic_evidence_rollup": semantic_evidence,
         "core_translation_quality": core_translation_quality,
         "before_after_repair_exhibit": before_after_repair_exhibit,
@@ -234,6 +244,7 @@ def build_judge_milestone_bundle(
             harness_architecture_summary=harness_architecture_summary,
             before_after_repair_exhibit=before_after_repair_exhibit,
             opencode_runtime=opencode_runtime,
+            project_agnostic_acceptance=project_agnostic_acceptance,
             reproduction_commands=reproduction_commands,
             must_not_claim=must_not_claim,
             known_gaps=known_gaps,
@@ -244,6 +255,87 @@ def build_judge_milestone_bundle(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return report
+
+
+def build_project_agnostic_acceptance_gate(
+    run_report: dict[str, Any],
+    *,
+    repo_root: Path,
+) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "report_kind": "project-agnostic-full-conversion-acceptance-gate",
+        "claim_scope": "project_agnostic_full_conversion",
+        "status": "blocked",
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "sample_case_only": True,
+        "boundary": (
+            "Full project C-to-Rust conversion acceptance must come from an input-project-derived "
+            "project-agnostic acceptance report. FlashDB sample evidence alone cannot satisfy this gate."
+        ),
+    }
+    validation = run_report.get("validation") if isinstance(run_report.get("validation"), dict) else {}
+    raw_ref = validation.get("project_agnostic_acceptance_report")
+    if raw_ref is None:
+        raw_ref = run_report.get("project_agnostic_acceptance_report")
+    if raw_ref is None:
+        return {
+            **base,
+            "blocker": "project_agnostic_full_conversion_report_missing",
+            "reason": "run_report.validation.project_agnostic_acceptance_report is required",
+        }
+
+    ref = artifact_ref_from_existing(raw_ref, repo_root=repo_root)
+    if ref is None:
+        return {
+            **base,
+            "blocker": "project_agnostic_full_conversion_report_ref_invalid",
+            "reason": "project_agnostic_acceptance_report must be an artifact ref or repo-relative path",
+        }
+    base["artifact"] = ref
+    if ref.get("status") != "present":
+        return {
+            **base,
+            "blocker": "project_agnostic_full_conversion_report_unavailable",
+            "reason": f"project_agnostic_acceptance_report artifact status is {ref.get('status', 'unknown')}",
+        }
+
+    payload = load_present_json_artifact(ref, repo_root=repo_root)
+    if payload is None:
+        return {
+            **base,
+            "blocker": "project_agnostic_full_conversion_report_unreadable",
+            "reason": "project_agnostic_acceptance_report is not readable JSON",
+        }
+
+    try:
+        validated = validate_acceptance_report(payload)
+    except SystemExit as error:
+        return {
+            **base,
+            "blocker": "project_agnostic_full_conversion_report_invalid",
+            "reason": str(error),
+        }
+
+    return {
+        **base,
+        "status": "passed",
+        "sample_case_only": False,
+        "validated": validated,
+        "project_id": validated.get("project_id"),
+        "source_files_total": validated.get("source_files_total"),
+        "source_functions_total": validated.get("source_functions_total"),
+        "accepted_functions_total": validated.get("accepted_functions_total"),
+    }
+
+
+def project_agnostic_acceptance_blockers(project_agnostic_acceptance: dict[str, Any]) -> list[str]:
+    if project_agnostic_acceptance.get("status") == "passed":
+        return []
+    blocker = project_agnostic_acceptance.get("blocker")
+    if isinstance(blocker, str) and blocker:
+        return [blocker]
+    return ["project_agnostic_full_conversion_report_invalid"]
 
 
 def summarize_entrypoint(
@@ -457,8 +549,15 @@ def milestone_blockers(
         if isinstance(route_governance_metrics.get("rollup"), dict)
         else {}
     )
-    if int_or_zero(route_rollup.get("translation_coverage_numerator")) != 0:
-        blockers.append("route_governance_translation_coverage_numerator_must_be_zero")
+    route_capability_delta = (
+        route_rollup.get("capability_vs_governance_delta", {})
+        if isinstance(route_rollup.get("capability_vs_governance_delta"), dict)
+        else {}
+    )
+    if int_or_zero(route_rollup.get("translation_coverage_numerator")) != int_or_zero(
+        route_capability_delta.get("translator_generated_semantic_pass_count")
+    ):
+        blockers.append("route_governance_translation_coverage_numerator_must_match_translator_generated_count")
     if int_or_zero(route_rollup.get("source_count")) > 0 and not route_rollup.get("all_retention_policies_present"):
         blockers.append("route_governance_metrics_retention_policy_missing")
     if int_or_zero(route_rollup.get("source_count")) > 0 and not route_rollup.get("all_target_artifacts_reproducible"):

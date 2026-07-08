@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-add-one-c-oracle.json",
+    "sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 6,
+  "fixture": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+  "fixture_sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+  "harness_draft": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c-oracle-harness-draft.c",
+    "sha256": "26c000567b520343555d9be2f6ad39a46d73f785b4f8681e239ee96393c4fffe",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "source_slice_id": "add-one",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

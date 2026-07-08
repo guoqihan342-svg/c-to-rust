@@ -1,5 +1,5 @@
 {
-  "build_profile_hash": "50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+  "build_profile_hash": "df0671deb7b92d9016732a0f3ecd92853d26fa2c3f3af72354618987ccd51935",
   "commands": [
     {
       "available": false,
@@ -46,7 +46,7 @@
   "slice_id": "adler32-step",
   "slice_spec": {
     "path": "validation/slice-specs/zlib-adler32-step.json",
-    "sha256": "de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702"
+    "sha256": "de7ffd6008c1630bef4824f664c32c45ea6bd8d55303d20d47ebcb8bfc5c774c"
   },
   "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
   "status": "skipped",
@@ -64,7 +64,7 @@
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-04T10:01:51Z"
+    "probed_at": "2026-07-07T18:04:51Z"
   },
   "toolchain_repair": {
     "competition_environment": {

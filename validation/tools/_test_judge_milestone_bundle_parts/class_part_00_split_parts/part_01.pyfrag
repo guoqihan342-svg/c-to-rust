@@ -11,6 +11,8 @@
 
         self.assertEqual(report["report_kind"], "judge-milestone-bundle")
         self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["project_agnostic_acceptance"]["status"], "passed")
+        self.assertFalse(report["project_agnostic_acceptance"]["sample_case_only"])
         self.assertFalse(report["claim_boundary"]["semantic_gate"])
         self.assertFalse(report["claim_boundary"]["generated_draft_semantic_pass"])
         self.assertEqual(report["claim_boundary"]["translation_coverage_numerator"], 0)
@@ -31,7 +33,7 @@
         self.assertIn("semantic gate", report["workflow_metrics"]["rollup"]["repair_activity"]["boundary"])
         self.assertEqual(report["route_governance_metrics"]["report_kind"], "route-governance-metrics-rollup")
         self.assertEqual(report["route_governance_metrics"]["rollup"]["source_count"], 2)
-        self.assertEqual(report["route_governance_metrics"]["rollup"]["translation_coverage_numerator"], 0)
+        self.assertEqual(report["route_governance_metrics"]["rollup"]["translation_coverage_numerator"], 1)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["accepted_evidence_semantic_pass_count"], 3)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_route_decision_artifacts"], 4)
         self.assertEqual(report["route_governance_metrics"]["rollup"]["tracked_slice_gate_contexts"], 3)
@@ -239,6 +241,7 @@
             "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
         )
         self.assertEqual(publication_manifest["judge_config"]["path"], "unknown")
+        self.assertEqual(publication_manifest["project_agnostic_acceptance"], report["project_agnostic_acceptance"])
         self.assertEqual(publication_manifest["judge_entrypoints_run_report"], report["judge_entrypoints_run_report"])
         self.assertEqual(publication_manifest["readiness_report"], report["readiness_report"])
         self.assertEqual(publication_manifest["judge_milestone_bundle"]["path"], repo_relative(out_path))
@@ -282,7 +285,7 @@
         self.assertEqual(quantitative_evaluation["project_slice_counts"]["workflow_units_converged"], 3)
         self.assertEqual(quantitative_evaluation["project_slice_counts"]["before_after_bound_unit_count"], 1)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["accepted_evidence_semantic_pass_count"], 3)
-        self.assertEqual(quantitative_evaluation["outcome_counts"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(quantitative_evaluation["outcome_counts"]["translator_generated_semantic_pass_count"], 1)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["blocked_repair_count"], 0)
         self.assertEqual(quantitative_evaluation["outcome_counts"]["human_interventions"], 0)
         self_heal_classification = quantitative_evaluation["self_heal_classification"]
@@ -301,7 +304,7 @@
         self.assertEqual(progress_delta["translation_coverage_numerator"], 0)
         self.assertEqual(progress_delta["capability_delta"]["ledger_count"], 2)
         self.assertEqual(progress_delta["capability_delta"]["delta_count"], 2)
-        self.assertEqual(progress_delta["capability_delta"]["translator_generated_semantic_pass_count"], 0)
+        self.assertEqual(progress_delta["capability_delta"]["translator_generated_semantic_pass_count"], 1)
         self.assertEqual(progress_delta["capability_delta"]["accepted_evidence_semantic_pass_count"], 3)
         self.assertEqual(progress_delta["governance_delta"]["delta_count"], 4)
         self.assertEqual(progress_delta["governance_delta"]["verification_command_count"], 6)

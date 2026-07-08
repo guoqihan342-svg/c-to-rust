@@ -149,9 +149,11 @@ fn validate_mutable_pointer_write_alias_boundary(
         &mutable_pointer_params,
         &mut write_params,
     )?;
-    if write_params.len() > 1 {
+    if write_params.len() > 1
+        && !mutable_pointer_writes_noalias_proven(&write_params, params, policy)
+    {
         return Err(
-            "mutable pointer write requires exactly one pointer param for alias proof".to_string(),
+            "mutable pointer write requires exactly one pointer param for alias proof unless all written mutable pointer params have restrict/noalias proof".to_string(),
         );
     }
     // Safe Rust cannot express a potentially aliased `&[T]` read beside an
@@ -186,18 +188,46 @@ fn readonly_mutable_pointer_noalias_proven(
     params: &[IrParam],
     policy: &EmitPolicy,
 ) -> bool {
-    let Some(mutable_param) = mutable_params.iter().next() else {
+    if mutable_params.is_empty() {
         return false;
-    };
+    }
     let params_by_name = params
         .iter()
         .map(|param| (param.name.as_str(), param))
         .collect::<HashMap<_, _>>();
 
     readonly_params.iter().all(|readonly_param| {
-        explicit_noalias_pair(policy, readonly_param, mutable_param)
-            || params_have_restrict_noalias(&params_by_name, readonly_param, mutable_param)
+        mutable_params.iter().all(|mutable_param| {
+            explicit_noalias_pair(policy, readonly_param, mutable_param)
+                || params_have_restrict_noalias(&params_by_name, readonly_param, mutable_param)
+        })
     })
+}
+
+fn mutable_pointer_writes_noalias_proven(
+    write_params: &HashSet<String>,
+    params: &[IrParam],
+    policy: &EmitPolicy,
+) -> bool {
+    if write_params.len() <= 1 {
+        return true;
+    }
+    let params_by_name = params
+        .iter()
+        .map(|param| (param.name.as_str(), param))
+        .collect::<HashMap<_, _>>();
+    let write_params = write_params.iter().collect::<Vec<_>>();
+
+    for (index, left_param) in write_params.iter().enumerate() {
+        for right_param in write_params.iter().skip(index + 1) {
+            if !explicit_noalias_between(policy, left_param, right_param)
+                && !params_have_restrict_noalias(&params_by_name, left_param, right_param)
+            {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn explicit_noalias_pair(policy: &EmitPolicy, readonly_param: &str, mutable_param: &str) -> bool {
@@ -205,6 +235,11 @@ fn explicit_noalias_pair(policy: &EmitPolicy, readonly_param: &str, mutable_para
         .noalias_param_pairs
         .iter()
         .any(|pair| pair.readonly_param == readonly_param && pair.mutable_param == mutable_param)
+}
+
+fn explicit_noalias_between(policy: &EmitPolicy, left_param: &str, right_param: &str) -> bool {
+    explicit_noalias_pair(policy, left_param, right_param)
+        || explicit_noalias_pair(policy, right_param, left_param)
 }
 
 fn params_have_restrict_noalias(

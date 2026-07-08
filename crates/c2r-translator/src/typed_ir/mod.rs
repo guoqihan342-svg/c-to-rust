@@ -36,7 +36,8 @@
 //! narrow-subset generic Rust emitter. Key boundaries:
 //!
 //! - Only integer scalar types are fully supported (i8/u8/i16/u16/i32/u32/i64/u64/usize).
-//! - Floating-point, enum, union, function pointer, and general pointer types fail closed.
+//! - Floating-point, enum, union, and general pointer types fail closed.
+//! - Function pointers are admitted only for narrow direct-call, local-initializer, local-assignment, and return shapes.
 //! - Control flow: `if`/`while`/`for`/`do-while`/`break`/`continue` with narrow conditions.
 //!   `switch`/`goto` fail closed.
 //! - Declarations: scalar locals with optional init; local fixed arrays; multi-decl.

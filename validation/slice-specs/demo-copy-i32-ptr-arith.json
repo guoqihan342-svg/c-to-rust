@@ -14,18 +14,19 @@
     "accepted": true
   },
   "source": {
-    "source_root": "<demo-slice>",
+    "source_root": ".",
     "source_commit": "demo-copy-i32-ptr-arith-20260625",
     "repo_commit": "workspace",
     "source_file_hashes": {
-      "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py": "generated-at-validation"
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
     }
   },
   "c_boundary": {
     "files": [
       {
-        "path": "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
-        "role": "source"
+        "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+        "role": "source",
+        "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
       },
       {
         "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
@@ -62,7 +63,15 @@
             "buffer_length_parameter": "len"
           }
         ],
-        "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }"
+        "c_source": "int copy_i32_ptr_arith(const int* values, int len, int* out) { for (int i = 0; i < len; i++) { *(out + i) = *(values + i); } return 0; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+          "line_start": 1,
+          "line_end": 1,
+          "byte_start": 0,
+          "byte_end": 136,
+          "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+        }
       }
     ],
     "direct_dependencies": [
@@ -99,12 +108,18 @@
           "translation_rule_id": "bounded-pointer-arithmetic-output-write"
         }
       ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
+      ],
       "aliasing_proven": false
     }
   },
   "build_profile": {
     "profile_id": "demo-copy-i32-ptr-arith-wsl-gcc",
-    "compiler_command_source": "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
+    "compiler_command_source": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
     "include_paths": [],
     "defines": [],
     "target": {
@@ -114,15 +129,16 @@
       "long_width": 64,
       "pointer_width": 64
     },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/copy_i32_ptr_arith_ast.json",
     "preprocessing_mode": "generated_stub",
     "tool_versions": {
       "gcc": "captured_by_wsl_oracle",
       "rustc": "captured_at_validation"
     },
     "clang_type_extraction": {
-      "available": false,
+      "available": true,
       "diagnostics": [
-        "demo slice uses explicit C source and no external headers"
+        "repo-local C fixture is available for optional clang AST lowering"
       ]
     }
   },

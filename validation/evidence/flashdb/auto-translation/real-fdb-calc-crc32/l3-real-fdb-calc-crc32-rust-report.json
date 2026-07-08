@@ -11,8 +11,8 @@
   },
   "generated_draft": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "status": "blocked"
+    "sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
+    "status": "accepted_after_gates"
   },
   "generated_draft_semantic_pass": false,
   "replay": {
@@ -21,7 +21,7 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-      "slice_spec_sha256=c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
+      "slice_spec_sha256=ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
       "fixture_hash=real-fdb-calc-crc32-fixture",
       "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
       "translator_version=0.1.0",
@@ -49,7 +49,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
-        "status": "blocked"
+        "status": "accepted_after_gates"
       },
       "rust_report": {
         "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
@@ -63,13 +63,109 @@
       }
     },
     "fixture": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
-    "generated_draft_semantic_pass": false,
-    "known_gaps": [
-      "Generated replay draft is not itself the accepted replay implementation.",
-      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
-    ],
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
+        "fixture_sha256": "46a8ed298a38c60390b473df62a3c8e28a37c4d17a46ddd0714bb81ced1561a7",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+          "diff": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+          "negative_diff": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+          "rust_report": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+          "unsafe_ledger": "f62deeece7aae093e662d0128b3e8c8d528717af7484fd96d77610e3cf48d2a1",
+          "unsafe_scan": "40fd7828b4f069d8eee8d3c9b493829425fe6de659b996fd0572350add437d2d"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+          "diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+          "negative_diff": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+          "rust_report": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+          "unsafe_ledger": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
+        },
+        "slice_id": "real-fdb-calc-crc32",
+        "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+        "status": "accepted",
+        "target_id": "flashdb",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json",
+          "sha256": "8d2572f0c83fe99484d23d8d70af776eb6206f74c8660e37afd4866cb5b7478b",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json",
+          "sha256": "b69f455f5b099a59fcbcda76c735e83f934fc9709a80e2335296e221967f4f05",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-rust-report.json",
+          "sha256": "b2220f34c50f878478a0b834efcc700f74feb7887e2872203ec7b2dc92fb7fc2",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json",
+          "sha256": "4cadd2d64f0a0d4057c96214a83b08b8b5ef48969a1fc753ae4baa1854b2b2b1",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-j77_qcut/generated_replay.rs -o /tmp/c2r-generated-replay-j77_qcut/generated_replay.exe",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "/tmp/c2r-generated-replay-j77_qcut/generated_replay.exe --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs",
+        "sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "real-fdb-calc-crc32",
+      "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+      "status": "passed",
+      "target_id": "flashdb"
+    },
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [],
     "level": "L3",
-    "repo_commit": "ea92d53551fb2fd243163c054d8e3345ac8acb73",
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json /tmp/c2r-generated-replay-j77_qcut/generated_replay.rs -o /tmp/c2r-generated-replay-j77_qcut/generated_replay.exe",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "/tmp/c2r-generated-replay-j77_qcut/generated_replay.exe --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/generated-rust-replay.stdout.log"
+    },
+    "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml real_fdb_calc_crc32",
@@ -114,7 +210,7 @@
           "status": "passed"
         }
       ],
-      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; this exact generated replay draft is accepted by generated_draft_acceptance."
     },
     "status": "recorded",
     "target_id": "flashdb",

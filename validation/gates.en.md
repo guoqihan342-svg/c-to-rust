@@ -18,6 +18,7 @@ The Chinese source currently contains these major headings:
 - `## L2: Bounded Migration Slice`
 - `## L3: Semantic and Performance Evidence`
 - `## Full Regression Evidence Gates`
+- `## Project-Agnostic Full Conversion Acceptance Gate`
 - `## Reporting Rules`
 
 ## Maintenance Notes

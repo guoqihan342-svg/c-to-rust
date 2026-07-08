@@ -9,8 +9,9 @@
     ],
     "files": [
       {
-        "path": "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
-        "role": "source"
+        "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+        "role": "source",
+        "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
       },
       {
         "path": "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json",
@@ -34,6 +35,12 @@
           ],
           "translation_rule_id": "bounded-pointer-arithmetic-input-read"
         }
+      ],
+      "noalias_required": [
+        [
+          "values",
+          "out"
+        ]
       ],
       "output_pointers": [
         {
@@ -76,7 +83,15 @@
             "name": "out"
           }
         ],
-        "return_type": "int"
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 136,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+        }
       }
     ]
   },

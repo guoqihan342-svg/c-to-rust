@@ -111,7 +111,7 @@
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-before-after.json",
       "role": "planned-batch-profile",
-      "sha256": "37c071b806cbb77738eceba891b9a04441a0b5d92f11ae63c59fa0a063d67eaa"
+      "sha256": "22ba7b78a01a9f4c47db06086915e0caf18f3e6ffc8810f3798301c696481679"
     },
     {
       "path": "config/competition-env/planned-batches/flashdb-fdb-utils-explicit-workers.json",
@@ -136,7 +136,7 @@
     {
       "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",
       "role": "judge-entrypoint-index",
-      "sha256": "b453c3d5208d55e5b54ed4c6ab4ac307ddb567f2f41a9350010cf800bf44ad13"
+      "sha256": "50103f2881495f5b7195d6e6155832b5b3de17c203d4d4bbc4eb11ae018874a5"
     },
     {
       "path": "config/competition-env/review-checklists/flashdb-harness-internal-review.json",
@@ -161,12 +161,12 @@
     {
       "path": "config/competition-env/README.md",
       "role": "competition-env-readme",
-      "sha256": "fc7fac817c7b4cd0bd95847fad4ac61f1817ceeb5c03b0e51ef9fab836b8cee0"
+      "sha256": "176a065bf3ee9d3f6ab8696ce1097c2f0ddaf94654bb4cdc3fb69e76b464cc6e"
     },
     {
       "path": "config/competition-env/README.en.md",
       "role": "competition-env-readme",
-      "sha256": "49811c58efc39cb67577a14ceb73526d94709c1637a8a45818c436407bc7feb5"
+      "sha256": "d1620e27fe4c43578c7cc6c5075ad96e800406bd027a1468d175c172468b284f"
     }
   ],
   "report_kind": "competition-env-bundle",

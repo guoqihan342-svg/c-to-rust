@@ -1,0 +1,12 @@
+{
+  "blocked_repairs": [],
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-one-20260708",
+    "fixture_hash=add-one-fixture",
+    "patch_plan_schema=1"
+  ],
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "status": "none",
+  "target_id": "demo"
+}

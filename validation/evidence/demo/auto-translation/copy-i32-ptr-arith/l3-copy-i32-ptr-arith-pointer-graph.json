@@ -17,14 +17,14 @@
         "out"
       ],
       "read_effects": [
-        "values[i]",
-        "*(values + i)"
+        "*(values + i)",
+        "values[i]"
       ],
       "requires_noalias": true,
       "risk_level": "unknown_alias",
       "write_effects": [
-        "out[i]",
-        "*(out + i)"
+        "*(out + i)",
+        "out[i]"
       ]
     }
   ],
@@ -49,24 +49,90 @@
   },
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
-    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "fixture_hash=copy-i32-ptr-arith-fixture",
-    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "build_profile_hash=bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=requires_noalias_contract",
     "alias_risk_count=1",
-    "aliasing_proven=false"
+    "aliasing_proven=false",
+    "effect_graph",
+    "effect_graph_sha256=f9c6fcb47dcbb660748dbbed808037581820b32f2fdf5f9d0927ffab233d3ee4"
   ],
   "context_pack_ref": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-context-pack.json",
-  "dependency_edges": [
-    {
-      "evidence": "input_influences_output",
-      "from": "values",
-      "relationship": "writes_through",
-      "to": "out"
+  "dependency_edges": [],
+  "effect_graph": {
+    "edges": [
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-1",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-3"
+      },
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-1",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-4"
+      },
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-2",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-3"
+      },
+      {
+        "evidence": "alias-risk-1 covers values/out",
+        "from_effect": "effect-2",
+        "relationship": "requires_noalias",
+        "to_effect": "effect-4"
+      }
+    ],
+    "effects": [
+      {
+        "expression": "*(values + i)",
+        "id": "effect-1",
+        "kind": "read",
+        "pointer_node": "values",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "values[i]",
+        "id": "effect-2",
+        "kind": "read",
+        "pointer_node": "values",
+        "source": "pointer_nodes.read_effects"
+      },
+      {
+        "expression": "*(out + i)",
+        "id": "effect-3",
+        "kind": "write",
+        "pointer_node": "out",
+        "source": "pointer_nodes.write_effects"
+      },
+      {
+        "expression": "out[i]",
+        "id": "effect-4",
+        "kind": "write",
+        "pointer_node": "out",
+        "source": "pointer_nodes.write_effects"
+      }
+    ],
+    "summary": {
+      "alias_gate_decision": "requires_noalias_contract",
+      "alias_sensitive": true,
+      "external_state": [],
+      "read_count": 2,
+      "reads": [
+        "values"
+      ],
+      "write_count": 2,
+      "writes": [
+        "out"
+      ]
     }
-  ],
+  },
   "level": "L3",
   "pointer_decisions": [
     {
@@ -80,7 +146,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "values[i]",
+      "source_statement": "*(values + i)",
       "translation_rule_id": "bounded-input-buffer-read",
       "unsafe_expected": false
     },
@@ -95,7 +161,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "values[i]",
+      "source_statement": "*(values + i)",
       "translation_rule_id": "bounded-pointer-arithmetic-input-read",
       "unsafe_expected": false
     },
@@ -110,7 +176,7 @@
         "line_end": 1,
         "line_start": 1
       },
-      "source_statement": "out[i]",
+      "source_statement": "*(out + i)",
       "translation_rule_id": "bounded-pointer-arithmetic-output-write",
       "unsafe_expected": false
     }
@@ -121,17 +187,15 @@
         "bounded_input_buffer",
         "bounded_pointer_arithmetic_input_read"
       ],
-      "buffer_role": "input",
-      "c_type": "const int*",
+      "c_type": "const int *",
       "id": "values",
-      "kind": "buffer",
-      "length_companion": "len",
+      "kind": "raw_pointer",
       "mutability": "read_only",
       "nullability": "unknown",
       "ownership_role": "borrowed",
       "read_effects": [
-        "values[i]",
-        "*(values + i)"
+        "*(values + i)",
+        "values[i]"
       ],
       "symbol": "values",
       "write_effects": []
@@ -141,7 +205,7 @@
         "bounded_pointer_arithmetic_output_write"
       ],
       "buffer_role": "output",
-      "c_type": "int*",
+      "c_type": "int *",
       "id": "out",
       "kind": "buffer",
       "length_companion": "len",
@@ -151,12 +215,12 @@
       "read_effects": [],
       "symbol": "out",
       "write_effects": [
-        "out[i]",
-        "*(out + i)"
+        "*(out + i)",
+        "out[i]"
       ]
     }
   ],
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "risk_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -205,12 +269,12 @@
       "required": true
     }
   ],
-  "schema_version": 1,
+  "schema_version": 2,
   "slice_id": "copy-i32-ptr-arith",
   "source_boundary": {
     "direct_call_edges": [],
     "files": [
-      "validation/l2_slices/tools/generate_copy_i32_ptr_arith_oracle.py",
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c",
       "validation/l2_slices/fixtures/copy-i32-ptr-arith-c-oracle.json"
     ],
     "functions": [

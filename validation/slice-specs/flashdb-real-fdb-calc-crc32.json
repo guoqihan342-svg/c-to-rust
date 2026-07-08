@@ -103,6 +103,14 @@
       "extractor": "validation/tools/extract_source_slice.py",
       "frontend": "bounded-c-source-scanner",
       "semantic_status": "syntax-indexed; compile-profile evidence required before accepted translation"
+    },
+    "scalar_arithmetic_contract": {
+      "wrapping_profile": "not_declared",
+      "signed_overflow": "not_declared",
+      "division_by_zero": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_right_shift": "not_declared"
     }
   },
   "build_profile": {
@@ -156,6 +164,30 @@
     "fixture_id": "real-fdb-calc-crc32-fixture",
     "path": "validation/l2_slices/fixtures/real-fdb-calc-crc32.json",
     "hash": "real-fdb-calc-crc32-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "crc",
+          "type": "uint32_t",
+          "range": [
+            0,
+            0
+          ],
+          "excludes": []
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "range": [
+            0,
+            9
+          ],
+          "excludes": []
+        }
+      ],
+      "covers_overflow_boundaries": false
+    },
     "cases": [
       {
         "id": "empty-crc-zero",
@@ -221,6 +253,8 @@
     "source.source_commit",
     "source.source_file_hashes",
     "c_boundary.signatures[0].source_span.sha256",
+    "c_boundary.scalar_arithmetic_contract",
+    "fixture_contract.scalar_input_domain",
     "build_profile.profile_id",
     "build_profile.target",
     "translator_version"

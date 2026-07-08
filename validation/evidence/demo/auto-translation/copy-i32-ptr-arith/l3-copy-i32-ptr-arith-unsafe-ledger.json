@@ -4,11 +4,28 @@
     "sha256": "3d1467cf416ac4f402a1f3455d5725de027be17464acaac04a7496fd80f8bdea",
     "status": "passed"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
+    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+    "status": "skipped"
+  },
   "entries": [],
   "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
+    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
+    "status": "passed"
+  }
 }

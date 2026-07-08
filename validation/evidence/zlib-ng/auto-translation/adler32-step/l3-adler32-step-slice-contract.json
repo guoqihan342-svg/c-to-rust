@@ -10,7 +10,8 @@
     "files": [
       {
         "path": "adler32.c",
-        "role": "source"
+        "role": "source",
+        "sha256": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"
       },
       {
         "path": "validation/l2_slices/fixtures/zlib-adler32-c-oracle.json",
@@ -31,7 +32,15 @@
             "name": "s1"
           }
         ],
-        "return_type": "uint32_t"
+        "return_type": "uint32_t",
+        "source_span": {
+          "byte_end": 53,
+          "byte_start": 0,
+          "file": "adler32.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"
+        }
       }
     ]
   },

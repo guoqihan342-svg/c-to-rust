@@ -1,0 +1,457 @@
+{
+  "accepted_evidence_authoritative": false,
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-baseline-manifest.json",
+        "sha256": "f6e61378f583283a932032a5af87210a3ce52eb226eed41f51af256c5571eabf",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-baseline-manifest.json",
+          "sha256": "f6e61378f583283a932032a5af87210a3ce52eb226eed41f51af256c5571eabf",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L0",
+        "status": "not_refused"
+      },
+      "route_level": "L0",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "signed_add_no_overflow",
+          "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Add",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "65c118c3fe0f75545048b6c5f95970970ab10ba311145fdf27748826d6c598ce",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [
+          {
+            "code": "signed_add_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          }
+        ],
+        "precondition_count": 1,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "covered",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-clang-lowering-report.json",
+        "sha256": "4cbdc0ad30d7268f66420aa04a024298f57f0bfa1a09525b7ee7f19b2df19b99",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "97d1801c43c1ce471866f996d08dcc83a79d6864703252a38d9ea7fae037f5c3"
+    }
+  },
+  "competition_environment": {
+    "path": "config/competition-env/environment.json",
+    "profile_id": "huawei-competition-ubuntu-24.04",
+    "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+  },
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+      "fixture_sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+        "diff": "c756e299e0f1ffd6d6e23954132153391caf6ba3739674067e7d9e3b770d9615",
+        "final_verification": "0bd7b0b79a29a1c052ef92e80a91518771bee6e88ed83b41c6bdcb66532ec1b3",
+        "negative_diff": "dc616ed64185afc8f9e824a1756d7e3c3aee38937d683bab373b0450ad5313c7",
+        "performance_smoke": "322546e0e07bef5df148d5f730235df71d25567075ee1369f512f02224806e31",
+        "rust_report": "37107f4791d7a964115ee759b0f48b279d03dcd388e15605496f5afd27c070c3",
+        "unsafe_ledger": "12f15d583ee5e7cad2d9414d2d633b79c401acf85675fe2c153ee04cb1c6a989",
+        "unsafe_scan": "5469c50a3b4bd4d576556f605cd75bf7c72927075da4ec8f2ebec3110f8fc683",
+        "version_manifest": "57ea955677385a3c14725e89e2001c5c287df981ea79e1816ec21a35da1cfd1a"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/demo/l3-add-one-c-oracle.json",
+        "diff": "validation/evidence/demo/l3-add-one-diff.json",
+        "final_verification": "validation/evidence/demo/l3-add-one-final-verification.json",
+        "negative_diff": "validation/evidence/demo/l3-add-one-negative-diff.json",
+        "performance_smoke": "validation/evidence/demo/l3-add-one-performance-smoke.json",
+        "rust_report": "validation/evidence/demo/l3-add-one-rust-report.json",
+        "unsafe_ledger": "validation/evidence/demo/l3-add-one-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/demo/l3-add-one-unsafe-scan.json",
+        "version_manifest": "validation/evidence/demo/l3-add-one-version-manifest.json"
+      },
+      "slice_id": "add-one",
+      "source_commit": "demo-add-one-20260708",
+      "status": "accepted",
+      "target_id": "demo",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-add-one-c-oracle.json",
+        "sha256": "46b52aa019dd08dbe7a0ed342bed23bb19bf211a1d67bad44cce36eb16f60d0f",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-add-one-negative-diff.json",
+        "sha256": "dc616ed64185afc8f9e824a1756d7e3c3aee38937d683bab373b0450ad5313c7",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-add-one-rust-report.json",
+        "sha256": "37107f4791d7a964115ee759b0f48b279d03dcd388e15605496f5afd27c070c3",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-add-one-diff.json",
+        "sha256": "c756e299e0f1ffd6d6e23954132153391caf6ba3739674067e7d9e3b770d9615",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/demo/l3-add-one-unsafe-ledger.json",
+        "sha256": "12f15d583ee5e7cad2d9414d2d633b79c401acf85675fe2c153ee04cb1c6a989",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/demo/l3-add-one-unsafe-scan.json",
+        "sha256": "5469c50a3b4bd4d576556f605cd75bf7c72927075da4ec8f2ebec3110f8fc683",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-6h73po_s\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-6h73po_s\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-6h73po_s\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/add-one/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/add-one/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/add-one/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-rust-draft.rs",
+      "sha256": "65c118c3fe0f75545048b6c5f95970970ab10ba311145fdf27748826d6c598ce",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "add-one",
+    "source_commit": "demo-add-one-20260708",
+    "status": "passed",
+    "target_id": "demo"
+  },
+  "generated_draft_semantic_pass": true,
+  "goal": "dev",
+  "loop_policy": {
+    "fixed_project_loop_count_required": false,
+    "source": "run_policy",
+    "stress_loops": null
+  },
+  "optional_gates": [
+    "negative_diff",
+    "evidence_cleanliness",
+    "fuzz_property",
+    "miri",
+    "kani"
+  ],
+  "oracle_boundary_contract": {
+    "compiler": {
+      "command_source": "validation/l2_slices/fixtures/add-one.c",
+      "compile_commands": null,
+      "defines": [],
+      "flags": [],
+      "include_paths": [],
+      "tool_versions": {
+        "gcc": "captured_by_wsl_oracle",
+        "rustc": "captured_at_validation"
+      }
+    },
+    "fixture_representativeness": {
+      "accepted_oracle_case_count": 6,
+      "case_source": "fixture_contract",
+      "declared_case_count": 3,
+      "fixture_hash": "add-one-fixture",
+      "fixture_path": "validation/l2_slices/fixtures/add-one-c-oracle.json",
+      "limitations": [],
+      "representativeness": "bounded_fixture_contract"
+    },
+    "insufficient_reasons": [],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "platform_model": {
+      "hardware_dependencies": [],
+      "hardware_dependency_status": "not_applicable",
+      "rtos_dependencies": [],
+      "rtos_dependency_status": "not_applicable",
+      "volatile_dependencies": [],
+      "volatile_dependency_status": "not_applicable"
+    },
+    "sanitizer_diagnostics": {
+      "clang_type_extraction_available": true,
+      "diagnostic_status": "recorded",
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering"
+      ],
+      "sanitizer_status": "not_run"
+    },
+    "schema_version": 1,
+    "status": "sufficient_for_semantic_pass",
+    "target": {
+      "char_align": "unknown",
+      "char_width": "unknown",
+      "endianness": "little",
+      "int_align": "unknown",
+      "int_width": 32,
+      "long_align": "unknown",
+      "long_long_align": "unknown",
+      "long_long_width": "unknown",
+      "long_width": 64,
+      "plain_char_signed": "unknown",
+      "pointer_align": "unknown",
+      "pointer_width": 64,
+      "short_align": "unknown",
+      "short_width": "unknown",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "word_size_bits": 64
+    },
+    "ub_and_implementation_defined": {
+      "implementation_defined_behavior": [],
+      "known_ub": [],
+      "scalar_arithmetic_contract": {
+        "division_by_zero": "not_declared",
+        "shift_count": "not_declared",
+        "signed_division_overflow": "not_declared",
+        "signed_overflow": "runtime_precondition_no_overflow",
+        "signed_right_shift": "not_declared",
+        "wrapping_profile": "not_declared"
+      }
+    }
+  },
+  "profile": "L0-dev",
+  "required_gate_status": {
+    "c_oracle_diff": "C_ORACLE_GENERATED",
+    "compile": "passed"
+  },
+  "required_gates": [
+    "compile",
+    "c_oracle_diff"
+  ],
+  "route_level": "L0",
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program alias safety",
+        "signed overflow equivalence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": false,
+      "parameters": [
+        {
+          "name": "value",
+          "range": [
+            -2147483648,
+            2147483646
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_gates": [],
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-add-one-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/add-one.c": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+    },
+    "source_root": "."
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "tool_boundaries": {
+    "c_ub": [
+      "clang_diagnostics",
+      "sanitizer_oracle",
+      "unsupported_evidence"
+    ],
+    "rust_ub": [
+      "miri",
+      "unsafe_ledger",
+      "rust_verification_tools"
+    ]
+  }
+}

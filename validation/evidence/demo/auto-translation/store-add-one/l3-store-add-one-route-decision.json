@@ -1,4 +1,198 @@
 {
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+        "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+          "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L1",
+        "status": "not_refused"
+      },
+      "route_level": "L1",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "signed_add_no_overflow",
+          "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Add",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "48c5db9e63b8a209326718eaaf964712c5ff08ec4e202fdfe330f77197b1c42f",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [
+          {
+            "code": "signed_add_no_overflow",
+            "covered_by": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "covered"
+          }
+        ],
+        "precondition_count": 1,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "covered",
+        "unresolved": []
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-clang-lowering-report.json",
+        "sha256": "2b626c01fe41194b49a75a692b6dc079fa797556bf9e5bcfc248ee45996c1180",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "637895e7e97066b3f3e366fd703d2ac13e8f8adcad920286a7cac151cd48514b"
+    }
+  },
   "level": "L1",
   "misroute": null,
   "policy": {
@@ -8,38 +202,87 @@
   },
   "rationale": [
     {
-      "feature": "bounded_pointer_surface",
-      "weight": "low"
+      "feature": "typed_ir_candidate_generated",
+      "route": "GenericTypedIr",
+      "weight": "generic_typed_ir"
     }
   ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program alias safety",
+        "NULL pointer equivalence",
+        "signed overflow equivalence"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "fixture_cases",
+      "covers_overflow_boundaries": false,
+      "parameters": [
+        {
+          "name": "value",
+          "range": [
+            -2147483648,
+            2147483646
+          ],
+          "type": "int"
+        }
+      ]
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "store-add-one",
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-      "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
+      "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-cfg.json",
-      "sha256": "151022d6afb1356b577faab08c4c670d1ad2caa18358eff9d436c233b79c088c",
+      "sha256": "2bb734e38079fa8e216f5def27ee2755268c81bcf4c80f96b2203293d93a3ba2",
       "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-clang-lowering-report.json",
+      "sha256": "2b626c01fe41194b49a75a692b6dc079fa797556bf9e5bcfc248ee45996c1180",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
-      "sha256": "2000233a77aec8dcc1be2f1d6b81b860b226e31aabd46d235819246484026ef1",
+      "sha256": "5d7b5a14867495e5dd9fc47e764b56fcb2952c9827cdef3697e756bef5e3af02",
       "status": "recorded"
     },
     "translation_plan": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-auto-translation-plan.json",
-      "sha256": "cc5737d4642eb78e587adea975a89c259dc474bad01474a0f49b1980abcab89a",
       "status": "draft_generated"
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-type-map.json",
-      "sha256": "ba2f532aec3bbf49bb6f10ea89f70fa98ddc09d034c9da9d3dd9ab0c54851882",
+      "sha256": "50c197bfc4d1ed78cc608aca08a2971ddcf9899b173f4dd709c6ae724f5f0fa5",
       "status": "recorded"
     }
+  },
+  "source_commit": "demo-store-add-one-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-store-add-one-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/store-add-one.c": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+    },
+    "source_root": "."
   },
   "status": "recorded",
   "target_id": "demo",

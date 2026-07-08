@@ -79,6 +79,7 @@ def build_publication_manifest(
     harness_architecture_summary: dict[str, Any],
     before_after_repair_exhibit: dict[str, Any],
     opencode_runtime: dict[str, Any],
+    project_agnostic_acceptance: dict[str, Any],
     reproduction_commands: dict[str, Any],
     must_not_claim: list[str],
     known_gaps: list[dict[str, Any]],
@@ -100,6 +101,14 @@ def build_publication_manifest(
             }
         )
     repo_commit = source_commit_ref(repo_root=repo_root)
+    known_non_goals = [
+        "semantic acceptance",
+        "competition-exact proof without competition host attestation",
+        "translator-generated coverage increase",
+        "OpenCode chat output as semantic evidence",
+    ]
+    if project_agnostic_acceptance.get("status") != "passed":
+        known_non_goals.append("project-agnostic full conversion without acceptance report")
     return {
         "report_kind": "publication-manifest",
         "bundle_version": 1,
@@ -115,6 +124,7 @@ def build_publication_manifest(
         "judge_entrypoints_run_report": judge_entrypoints_run_report,
         "readiness_report": artifact_ref_from_existing(run_report.get("readiness_report"), repo_root=repo_root)
         or {"path": "unknown", "status": "absent"},
+        "project_agnostic_acceptance": project_agnostic_acceptance,
         "judge_milestone_bundle": {
             "path": validator.repo_relative(out_path, repo_root),
             "status": "self",
@@ -161,13 +171,7 @@ def build_publication_manifest(
         },
         "reproduction_commands": reproduction_commands,
         "known_gaps": known_gaps,
-        "known_non_goals": [
-            "semantic acceptance",
-            "competition-exact proof without competition host attestation",
-            "translator-generated coverage increase",
-            "project-level C-to-Rust completeness",
-            "OpenCode chat output as semantic evidence",
-        ],
+        "known_non_goals": known_non_goals,
         "must_not_claim": must_not_claim,
     }
 

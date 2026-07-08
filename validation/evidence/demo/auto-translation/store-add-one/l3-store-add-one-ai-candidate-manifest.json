@@ -1,17 +1,34 @@
 {
   "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+    "status": "skipped"
+  },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
   "candidates": [],
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
   "slice_id": "store-add-one",
   "status": "not_used",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
+    "status": "passed"
+  }
 }

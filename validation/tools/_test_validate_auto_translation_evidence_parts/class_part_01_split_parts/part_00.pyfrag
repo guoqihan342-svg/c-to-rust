@@ -65,7 +65,7 @@ class _ValidateAutoTranslationEvidenceTestsPart01:
         self.assertIs(baseline["compile"]["semantic_pass"], False)
         self.assertEqual(
             baseline["compile"]["artifact"]["sha256"],
-            "4d0d490231ca443d76b759346557a2fc319f167092cdd37e6bde83705d7b73bf",
+            "3e8c1c3fdece2138fffffc706d546ff6f07b5e4b1dcdbca80f9bea75b078fda8",
         )
         self.assertEqual(
             self._sha256(REPO_ROOT / baseline["compile"]["artifact"]["path"]),
@@ -79,6 +79,90 @@ class _ValidateAutoTranslationEvidenceTestsPart01:
         self.assertEqual(route_candidate["output_ref"], module.c2rust_baseline_expected_output_ref(baseline))
         self.assertIs(route_candidate["semantic_pass"], False)
         self.assertIs(route_candidate["generated_draft_semantic_pass"], False)
+
+    def test_rejects_generated_draft_acceptance_status_drift(self) -> None:
+        module = load_validator_module()
+        with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:
+            evidence_dir = Path(tmp)
+            prefix = "l3-demo-generated"
+            source_commit = "abcdef1"
+            draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+            draft_path.write_text("pub fn demo_generated() -> i32 { 1 }\n", encoding="utf-8")
+            rust_check_path = evidence_dir / "rust-check.json"
+            self._write_json(rust_check_path, {"status": "passed"})
+
+            accepted_refs = {}
+            for key, status in {
+                "c_oracle": "passed",
+                "rust_report": "passed",
+                "schema_diff": "passed",
+                "negative_diff": "expected_failed",
+                "unsafe_scan": "passed",
+                "unsafe_ledger": "passed",
+            }.items():
+                path = evidence_dir / f"{key}.json"
+                payload = {"status": status, "source_commit": source_commit}
+                if key == "negative_diff":
+                    payload["mutation_detected"] = True
+                self._write_json(path, payload)
+                accepted_refs[key] = self._ref(path, status)
+
+            route = {
+                "policy": {
+                    "accepted_evidence_authoritative": True,
+                    "generated_draft_semantic_pass": False,
+                },
+                "candidate_generation": {
+                    "generated_draft_semantic_pass": False,
+                    "typed_ir": {
+                        "status": "generated",
+                        "rust_draft_generated": True,
+                        "rust_draft_sha256": self._sha256(draft_path),
+                    },
+                },
+            }
+            acceptance = {
+                "schema_version": 1,
+                "status": "blocked",
+                "target_id": "demo",
+                "slice_id": "demo-generated",
+                "source_commit": source_commit,
+                "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+                "generated_draft_semantic_pass": True,
+                "generated_draft_replay_pass": True,
+                "rust_draft": self._ref(draft_path, "accepted_after_gates"),
+                "rust_check": self._ref(rust_check_path, "passed"),
+                "replay_execution": {"status": "passed"},
+                "accepted_evidence_refs": accepted_refs,
+            }
+            profile = {
+                "generated_draft_semantic_pass": True,
+                "generated_draft_acceptance": acceptance,
+            }
+            final = dict(profile)
+            auto_manifest = {"claim_boundary": dict(profile)}
+            l3_manifest = {"claim_boundary": dict(profile)}
+            test_translation = dict(profile)
+            slice_spec = {
+                "target_id": "demo",
+                "slice_id": "demo-generated",
+                "source_commit": source_commit,
+                "fixture_contract": {"path": "fixtures/demo.json"},
+            }
+
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_generated_draft_acceptance_gate(
+                    evidence_dir,
+                    prefix,
+                    slice_spec,
+                    route,
+                    profile,
+                    auto_manifest,
+                    l3_manifest,
+                    final,
+                    test_translation,
+                )
+            self.assertIn("generated_draft_acceptance.status", str(raised.exception))
 
     def test_rejects_c2rust_candidate_status_reason_drift_from_baseline_manifest(self) -> None:
         module = load_validator_module()

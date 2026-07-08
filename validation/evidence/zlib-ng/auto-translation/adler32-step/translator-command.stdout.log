@@ -1,7 +1,7 @@
 {
   "target_id": "zlib-ng",
   "slice_id": "adler32-step",
-  "status": "blocked",
+  "status": "generated",
   "artifact_paths": [
     "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-auto-translation-plan.json",
     "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-auto-translation-events.jsonl",
@@ -10,6 +10,8 @@
     "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-pointer-graph.json",
     "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-ai-candidate-manifest.json",
     "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-blocked-repairs.json",
-    "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs"
+    "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-rust-draft.rs",
+    "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-clang-dry-run.json",
+    "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-clang-lowering-report.json"
   ]
 }

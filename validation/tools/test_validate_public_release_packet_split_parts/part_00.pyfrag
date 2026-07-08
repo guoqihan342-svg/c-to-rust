@@ -11,6 +11,7 @@ from validation.tools import milestone_release_notes
 from validation.tools import test_validate_judge_entrypoints as judge_entrypoint_fixtures
 from validation.tools import validate_judge_entrypoints as judge_validator
 from validation.tools import validate_public_release_packet as packet_validator
+from validation.tools.validate_project_agnostic_acceptance import validate_acceptance_report
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +42,97 @@ def write_text_artifact(path: Path, text: str) -> dict:
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def artifact_ref(path: Path) -> dict:
+    return {
+        "path": repo_relative(path),
+        "status": "present",
+        "sha256": judge_validator.sha256_file(path),
+    }
+
+
+def project_agnostic_acceptance_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "claim_scope": "project_agnostic_full_conversion",
+        "input_project": {
+            "project_id": "arbitrary-c-project",
+            "source_root": "inputs/arbitrary-c-project",
+            "source_files": ["src/a.c"],
+            "compile_commands": ["compile_commands.json"],
+            "generated_from_input_project": True,
+        },
+        "project_discovery": {
+            "status": "passed",
+            "method": "compile_commands_and_ast",
+            "source_files_total": 1,
+            "functions_total": 2,
+        },
+        "hardcoded_target_references": {
+            "status": "passed",
+            "occurrences": [],
+        },
+        "translation_coverage": {
+            "status": "passed",
+            "source_functions_total": 2,
+            "translated_functions_total": 2,
+            "accepted_functions_total": 2,
+            "blocked": [],
+            "untranslated": [],
+        },
+        "rust_build": {
+            "status": "passed",
+        },
+        "oracle": {
+            "status": "passed",
+            "producer_generated_from_input_project": True,
+            "project_specific_template": False,
+        },
+        "diff": {
+            "status": "passed",
+            "first_mismatch": None,
+            "accepted_differences": [],
+        },
+        "negative_diff": {
+            "status": "passed",
+            "detected": True,
+        },
+        "unsafe_ledger": {
+            "status": "passed",
+            "unsafe_reduction": {
+                "status": "measured",
+            },
+        },
+    }
+
+
+def write_project_agnostic_acceptance_gate(root: Path) -> tuple[dict, dict]:
+    payload = project_agnostic_acceptance_payload()
+    path = root / "summary" / "project-agnostic-acceptance.json"
+    write_json(path, payload)
+    ref = artifact_ref(path)
+    validated = validate_acceptance_report(payload)
+    gate = {
+        "report_kind": "project-agnostic-full-conversion-acceptance-gate",
+        "claim_scope": "project_agnostic_full_conversion",
+        "status": "passed",
+        "semantic_gate": False,
+        "translation_coverage_numerator": 0,
+        "sample_case_only": False,
+        "artifact": ref,
+        "validated": validated,
+        "project_id": validated["project_id"],
+        "source_files_total": validated["source_files_total"],
+        "source_functions_total": validated["source_functions_total"],
+        "accepted_functions_total": validated["accepted_functions_total"],
+        "boundary": (
+            "Full project C-to-Rust conversion acceptance must come from an input-project-derived "
+            "project-agnostic acceptance report. FlashDB sample evidence alone cannot satisfy this gate."
+        ),
+    }
+    return gate, ref
 
 
 def bind_json_ref(ref: dict, path: Path, payload: dict) -> None:

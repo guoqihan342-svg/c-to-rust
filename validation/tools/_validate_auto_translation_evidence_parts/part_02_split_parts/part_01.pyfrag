@@ -152,6 +152,7 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "unsafe_scan": load_ref(evidence, "unsafe_scan"),
         "unsafe_ledger": load_ref(evidence, "unsafe_ledger"),
         "final_verification": load_ref(evidence, "final_verification"),
+        "test_translation": load_ref(evidence, "test_translation"),
         "version_or_config_binding": load_ref(evidence, "version_or_config_binding"),
     }
 
@@ -190,6 +191,9 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         reports["final_verification"].get("oracle_boundary_contract"),
         slice_spec,
     )
+    generated_draft_semantic_pass = generated_draft_acceptance_passed(
+        reports["validation_profile"].get("generated_draft_acceptance")
+    )
 
     expected_commit = source_commit(slice_spec)
     for label, report in reports.items():
@@ -211,7 +215,7 @@ def validate_semantic_pass(evidence_dir: Path, prefix: str, slice_spec_path: Pat
         "status": "passed",
         "semantic_pass": True,
         "semantic_claim_source": "accepted_evidence_binding",
-        "generated_draft_semantic_pass": False,
+        "generated_draft_semantic_pass": generated_draft_semantic_pass,
         "manifest": rel(manifest_path),
         "source_commit": expected_commit,
         "fixture_path": fixture_path,

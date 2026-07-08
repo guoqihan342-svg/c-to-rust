@@ -110,6 +110,49 @@ fn clang_ast_fixture_replays_record_field_subset_without_clang() {
     );
     assert!(rust.contains("p.x = value;"), "{rust}");
     assert_rust_snippet_compiles("typed-ir-clang-ast-fixture-record-arrow-write", rust);
+
+    let bump_point_x_for_step =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "bump_point_x_for_step")
+            .expect("lower mutable record pointer field for-step fixture without invoking clang");
+    let [IrStmt::For { step, .. }] = bump_point_x_for_step.function_ir.body.as_slice() else {
+        panic!(
+            "expected for-loop with record pointer field step, got {:?}",
+            bump_point_x_for_step.function_ir.body
+        );
+    };
+    assert!(
+        matches!(
+            step.as_deref(),
+            Some(IrStmt::Assign {
+                target: IrExpr::Member {
+                    field,
+                    is_arrow: true,
+                    ..
+                },
+                ..
+            }) if field == "x"
+        ),
+        "expected arrow member step assignment, got {step:?}"
+    );
+    let emitted = emit_rust_from_ir_with_globals(
+        &bump_point_x_for_step.function_ir,
+        &bump_point_x_for_step.globals,
+    )
+    .expect("emit Rust from mutable record pointer field for-step fixture");
+    let rust = &emitted.rust;
+    assert!(
+        rust.contains("pub fn bump_point_x_for_step(mut p: &mut Point, limit: i32)"),
+        "{rust}"
+    );
+    assert!(
+        rust.contains("p.x = p.x.checked_add(1i32).expect(\"signed addition overflow\");"),
+        "{rust}"
+    );
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-fixture-record-arrow-for-step",
+        rust,
+        "let mut p = Point { x: 2i32, y: 0i32 };\nbump_point_x_for_step(&mut p, 3i32);\nassert_eq!(p.x, 5i32);",
+    );
 }
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]

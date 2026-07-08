@@ -132,6 +132,22 @@ def validate_typed_ir_candidate_binding(
         actual["rust_draft_sha256"] = typed_ir.get("rust_draft_sha256")
     if actual != expected:
         raise SystemExit("route_decision.candidate_generation.typed_ir drifted from clang-lowering-report")
+    if actual.get("rust_draft_generated"):
+        expected_sha = actual.get("rust_draft_sha256")
+        if not expected_sha:
+            raise SystemExit(
+                "route_decision.candidate_generation.typed_ir.rust_draft_sha256 missing"
+            )
+        rust_draft_path = evidence_dir / f"{prefix}-rust-draft.rs"
+        if not rust_draft_path.exists():
+            raise SystemExit(
+                "route_decision.candidate_generation.typed_ir rust draft artifact missing"
+            )
+        actual_sha = sha256(rust_draft_path)
+        if actual_sha != expected_sha:
+            raise SystemExit(
+                "route_decision.candidate_generation.typed_ir.rust_draft_sha256 drifted from rust draft artifact"
+            )
     if runtime_preconditions and "scalar_admission" not in typed_ir:
         raise SystemExit("route_decision.candidate_generation.typed_ir.scalar_admission missing")
     if "scalar_admission" in typed_ir:

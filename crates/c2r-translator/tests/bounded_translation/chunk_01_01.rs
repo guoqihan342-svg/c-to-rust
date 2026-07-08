@@ -613,6 +613,58 @@ fn clang_ast_fixture_replays_readonly_mutable_restrict_noalias_without_clang() {
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_multiple_restrict_mutable_out_pointers_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/restrict_pointer_params_ast.json"
+    ))
+    .expect("fixture JSON");
+
+    let lowered =
+        lower_function_and_globals_from_clang_ast_json_value(&ast, "store_pair_restrict")
+            .expect("multiple restrict-qualified output pointer params should lower");
+    let left_param = lowered
+        .function_ir
+        .params
+        .iter()
+        .find(|param| param.name == "left")
+        .expect("left param");
+    let right_param = lowered
+        .function_ir
+        .params
+        .iter()
+        .find(|param| param.name == "right")
+        .expect("right param");
+    assert!(left_param.ty.spelled.contains("restrict"));
+    assert!(left_param.ty.canonical.contains("restrict"));
+    assert!(right_param.ty.spelled.contains("restrict"));
+    assert!(right_param.ty.canonical.contains("restrict"));
+
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("restrict-qualified mutable outputs should emit");
+    let rust = &emitted.rust;
+
+    assert_eq!(emitted.route.route, CandidateRoute::GenericTypedIr);
+    assert!(lowered.globals.is_empty());
+    assert!(rust.contains(
+        "pub fn store_pair_restrict(mut left: &mut [i32], mut right: &mut [i32], first: i32, second: i32)"
+    ));
+    assert!(rust.contains("left[0i32 as usize] = first;"));
+    assert!(rust.contains("right[0i32 as usize] = second;"));
+    assert_rust_snippet_runs(
+        "typed-ir-clang-ast-multiple-restrict-mutable-out-pointers",
+        rust,
+        r#"
+    let mut left = [0i32];
+    let mut right = [0i32];
+    store_pair_restrict(&mut left, &mut right, 3, 5);
+    assert_eq!(left[0], 3);
+    assert_eq!(right[0], 5);
+"#,
+    );
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed() {
     let ast: Value = serde_json::from_str(include_str!(
         "../../fixtures/clang_ast/readonly_mutable_noalias_missing_ast.json"

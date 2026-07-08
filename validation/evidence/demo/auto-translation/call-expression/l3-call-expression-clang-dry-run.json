@@ -1,0 +1,72 @@
+{
+  "active_frontend": {
+    "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+    "kind": "clang_ast_dump_json",
+    "required_env": [
+      "CLANG_PATH"
+    ],
+    "uses_libclang": false
+  },
+  "artifact_kind": "clang-dry-run",
+  "claim_boundary": {
+    "affects_manifest_status": false,
+    "affects_semantic_pass": false,
+    "authoritative_evidence": false,
+    "role": "diagnostic_only"
+  },
+  "dry_run": {
+    "active_frontend": {
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "kind": "clang_ast_dump_json",
+      "required_env": [
+        "CLANG_PATH"
+      ],
+      "uses_libclang": false
+    },
+    "arguments": [],
+    "claim_boundary": {
+      "affects_manifest_status": false,
+      "affects_semantic_pass": false,
+      "authoritative_evidence": false,
+      "role": "diagnostic_only"
+    },
+    "compile_commands": null,
+    "diagnostics": [
+      "LIBCLANG_PATH is observed only as ignored legacy metadata; active lowering uses clang AST dump JSON via CLANG_PATH"
+    ],
+    "environment": {
+      "diagnostics": [
+        "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
+      ],
+      "observed_libclang_path": null,
+      "role": "diagnostic_only",
+      "source": null,
+      "status": "not_configured"
+    },
+    "function_name": "call_expression_chain",
+    "source_file": "validation/l2_slices/fixtures/call-expression-chain.c",
+    "source_root": ".",
+    "status": "diagnostic_only"
+  },
+  "errors": [],
+  "frontend": "clang",
+  "metadata": {
+    "function_source_span": {
+      "byte_end": 233,
+      "byte_start": 0,
+      "file": "validation/l2_slices/fixtures/call-expression-chain.c",
+      "line_end": 8,
+      "line_start": 1,
+      "sha256": "9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864"
+    },
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/call-expression-c-oracle.json": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+      "validation/l2_slices/fixtures/call-expression-chain.c": "9e824f82f94f00b95905cf367f42cdd80cb2e1a8a8089913841a127e54862864"
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "call-expression",
+  "source_commit": "demo-call-expression-20260625",
+  "status": "diagnostic_only",
+  "target_id": "demo"
+}

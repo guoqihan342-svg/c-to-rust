@@ -31,7 +31,7 @@
   "compile": {
     "artifact": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-output.rlib",
-      "sha256": "4d0d490231ca443d76b759346557a2fc319f167092cdd37e6bde83705d7b73bf",
+      "sha256": "3e8c1c3fdece2138fffffc706d546ff6f07b5e4b1dcdbca80f9bea75b078fda8",
       "status": "compiled"
     },
     "attempted": true,
@@ -156,7 +156,7 @@
   "slice_id": "real-fdb-calc-crc32",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-    "sha256": "c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70"
+    "sha256": "ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4"
   },
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "status": "generated",
@@ -168,13 +168,13 @@
       "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
     },
     "diagnostic_only": true,
-    "environment_profile_hash": "b759439d184420f8daa21ac4a0569db598393c8c5f7d49ee6560f5ac9944713c",
+    "environment_profile_hash": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160",
     "os_name": "posix",
     "path_search": [
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-07-03T04:51:14Z"
+    "probed_at": "2026-07-07T17:24:36Z"
   },
   "toolchain_repair": null,
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"

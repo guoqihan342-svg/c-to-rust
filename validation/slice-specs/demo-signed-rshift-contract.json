@@ -98,6 +98,7 @@
       "long_width": 64,
       "pointer_width": 64
     },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/signed_rshift_contract_ast.json",
     "preprocessing_mode": "generated_stub",
     "tool_versions": {
       "gcc": "competition-profile-or-local-oracle",

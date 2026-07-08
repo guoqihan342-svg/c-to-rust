@@ -142,6 +142,7 @@ def valid_packet(root: Path) -> dict:
     run_report_path = root / "summary" / "judge-entrypoints-run-report.json"
     readiness = write_text_artifact(root / "summary" / "judge-entrypoints-readiness.json", "{}\n")
     bundle_path = root / "summary" / "judge-milestone-bundle.json"
+    project_agnostic_acceptance, project_agnostic_acceptance_ref = write_project_agnostic_acceptance_gate(root)
     opencode_preflight_proof = write_opencode_preflight_fixture(root)
     config_bundle_manifest = REPO_ROOT / "config" / "competition-env" / "bundle-manifest.json"
     config_bundle_payload = json.loads(config_bundle_manifest.read_text(encoding="utf-8"))
@@ -218,6 +219,7 @@ def valid_packet(root: Path) -> dict:
         ],
         "validation": {
             "status": "passed",
+            "project_agnostic_acceptance_report": project_agnostic_acceptance_ref,
             "proof_class_contract": {
                 "status": "passed",
                 "entrypoints": {
@@ -276,6 +278,7 @@ def valid_packet(root: Path) -> dict:
         },
         "judge_entrypoints_run_report": run_report,
         "readiness_report": readiness,
+        "project_agnostic_acceptance": project_agnostic_acceptance,
         "judge_milestone_bundle": bundle_self_ref,
         "judge_config": {
             "path": "config/competition-env/judge-entrypoints/flashdb-harness.json",

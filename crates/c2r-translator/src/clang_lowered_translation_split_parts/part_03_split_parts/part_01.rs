@@ -72,4 +72,11 @@
             "{:?}",
             buf.boundary_decisions
         );
+        let buf_mapping = result
+            .type_map
+            .mappings
+            .iter()
+            .find(|mapping| mapping.symbol == "buf")
+            .expect("buf type mapping");
+        assert_eq!(buf_mapping.rust_type, "&[u8]");
     }

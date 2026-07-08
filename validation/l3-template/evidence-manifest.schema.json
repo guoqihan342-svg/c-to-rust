@@ -263,6 +263,12 @@
             "type": "string"
           }
         },
+        "generated_draft_semantic_pass": {
+          "type": "boolean"
+        },
+        "generated_draft_acceptance": {
+          "$ref": "#/definitions/generatedDraftAcceptance"
+        },
         "alias_gate": {
           "$ref": "#/definitions/aliasGateSummary"
         }
@@ -299,6 +305,29 @@
     }
   ],
   "definitions": {
+    "generatedDraftAcceptance": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "generated_draft_semantic_pass"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "passed",
+            "blocked"
+          ]
+        },
+        "generated_draft_semantic_pass": {
+          "type": "boolean"
+        },
+        "claim_source": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "evidenceRef": {
       "type": "object",
       "required": [

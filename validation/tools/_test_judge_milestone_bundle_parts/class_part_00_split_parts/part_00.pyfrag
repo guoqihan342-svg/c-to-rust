@@ -137,6 +137,7 @@ class _JudgeMilestoneBundleTestsPart00:
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-bundle-", dir=REPO_ROOT / "target"))
         readiness_path = temp_dir / "summary" / "judge-entrypoints-readiness.json"
         run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        project_acceptance_path = temp_dir / "summary" / "project-agnostic-acceptance.json"
         out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
         before_metrics_path = temp_dir / "before-after" / "summary" / "workflow-metrics.json"
         before_route_metrics_path = temp_dir / "before-after" / "summary" / "route-governance-metrics-report.json"
@@ -149,6 +150,7 @@ class _JudgeMilestoneBundleTestsPart00:
         c2rust_baseline = c2rust_baseline_rollup_fixture(temp_dir / "c2rust-baseline")
 
         write_json(readiness_path, {"report_kind": "judge-entrypoints-readiness", "status": "passed"})
+        project_acceptance_ref = write_project_agnostic_acceptance_report(project_acceptance_path)
         preflight_fixture = write_opencode_preflight_fixture(temp_dir / "opencode", run_id="opencode")
         opencode_preflight_path = Path(preflight_fixture["preflight_path"])
         opencode_models_stdout_path = Path(preflight_fixture["model_stdout_path"])
@@ -204,6 +206,7 @@ class _JudgeMilestoneBundleTestsPart00:
                 s2_workflow_run_count=1,
                 s2_reduced_by=2,
                 c2rust_baseline=c2rust_baseline,
+                translator_generated_semantic_pass_count=1,
             ),
         )
         write_json(evidence_governance_path, evidence_governance_payload())
@@ -473,6 +476,7 @@ class _JudgeMilestoneBundleTestsPart00:
                 ],
                 "validation": {
                     "status": "passed",
+                    "project_agnostic_acceptance_report": project_acceptance_ref,
                     "source_pin_contract": {
                         "status": "passed",
                         "target_id": "flashdb",

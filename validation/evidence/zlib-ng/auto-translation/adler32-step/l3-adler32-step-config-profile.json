@@ -9,7 +9,7 @@
       "diff": "241e5f7ad6da760281d859542d6ab96eb30b41b5c7a93dfa471449d886f96f02",
       "negative_diff": "601b79c2325e7ccaa455a56442d253bf143ddab9316e60ded91fbdcd9408d24a",
       "rust_report": "b9a38918ae00c5765e2b4a47168724561ae4dbe13befd72d8d524b5386b26966",
-      "unsafe_ledger": "8ff91c6e3f5382a78fe3522e84b0a0c3c5560d3f8fa1818788342916bdf41201",
+      "unsafe_ledger": "e6dbe6df40abd9750aee481c321e6c96cc81c56fb88374bf1a6d626c9ba84593",
       "unsafe_scan": "bcb004bfbdf0e342901c02c32ce0ad7e4e2c84af3fbff5022ea4a45580a6b611"
     },
     "paths": {
@@ -31,9 +31,9 @@
   },
   "cache_invalidation_keys": [
     "source_commit=d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
-    "slice_spec_sha256=de4144e6b5b6f51846de4c54937a48e9b4a883a9cbd9fe1801dfb04c3ce32702",
+    "slice_spec_sha256=de7ffd6008c1630bef4824f664c32c45ea6bd8d55303d20d47ebcb8bfc5c774c",
     "fixture_hash=zlib-adler32-fixture",
-    "build_profile_hash=50d6cf46c61cec6133579572715e97792488b44bd4f55dd70344e93a07975fb2",
+    "build_profile_hash=df0671deb7b92d9016732a0f3ecd92853d26fa2c3f3af72354618987ccd51935",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -50,7 +50,7 @@
   "config_header": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-translator-input.json",
     "role": "normalized translator input and build profile",
-    "sha256": "19c9046f17905d8ac6a07f22a3cf4189c19d7ed589cb361bf2c6fc10b16c5448"
+    "sha256": "45698fbe50ac81910811393f9e14db1076060c13a0bd222ae0240fb440436940"
   },
   "feature_matrix": {
     "auto_translation_candidate": true
@@ -66,7 +66,7 @@
     "No pointer/buffer ownership proof."
   ],
   "profile_id": "zlib-adler32-step-linux-gnu",
-  "repo_commit": "175f2f469aff806548c705aa851065811a9d9559",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "rust_profile": {
     "backend": "generated-draft",
     "cargo_features": [],

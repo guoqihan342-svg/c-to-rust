@@ -1,5 +1,199 @@
 {
-  "level": "L2",
+  "candidate_generation": {
+    "c2rust_baseline": {
+      "baseline_manifest": {
+        "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
+        "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+        "status": "skipped"
+      },
+      "candidate_id": "c2rust-baseline",
+      "correctness_role": "candidate_context_only",
+      "generated_draft_semantic_pass": false,
+      "kind": "c2rust-baseline",
+      "output_ref": null,
+      "reason": "blocked_by_missing_tools",
+      "role": "baseline_or_repair_candidate_context",
+      "semantic_pass": false,
+      "status": "skipped"
+    },
+    "candidate_set": [
+      {
+        "candidate_id": "primary:clang-lowered-typed-ir",
+        "kind": "clang-lowered-typed-ir",
+        "role": "primary_rust_draft",
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "candidate_id": "typed-ir:clang-lowered",
+        "kind": "typed-ir",
+        "role": "typed_ir_candidate_signal",
+        "rust_draft_generated": true,
+        "semantic_pass": false,
+        "status": "generated"
+      },
+      {
+        "baseline_manifest": {
+          "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
+          "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
+          "status": "skipped"
+        },
+        "candidate_id": "c2rust-baseline",
+        "correctness_role": "candidate_context_only",
+        "generated_draft_semantic_pass": false,
+        "kind": "c2rust-baseline",
+        "output_ref": null,
+        "reason": "blocked_by_missing_tools",
+        "role": "baseline_or_repair_candidate_context",
+        "semantic_pass": false,
+        "status": "skipped"
+      }
+    ],
+    "compatibility_sources": [],
+    "generated_draft_semantic_pass": false,
+    "governance_summary": {
+      "candidate_generation_allowed": true,
+      "drift_inputs": [
+        "route_decision.candidate_generation",
+        "validation_profile.candidate_generation",
+        "c2rust_baseline_manifest",
+        "auto_cache_metadata.dependent_artifacts"
+      ],
+      "fallback_summary": {
+        "legacy_string_translator": {
+          "selected_as_primary": false,
+          "status": "not_used"
+        }
+      },
+      "full_router": false,
+      "hard_gates": [
+        {
+          "gate_id": "generated_candidate_semantic_acceptance",
+          "reason": "generated candidates require accepted validation evidence",
+          "status": "deferred"
+        },
+        {
+          "gate_id": "legacy_string_translator_primary_selection",
+          "reason": "legacy string translator is compatibility-only",
+          "status": "forbidden"
+        },
+        {
+          "gate_id": "c2rust_baseline_semantic_source",
+          "reason": "C2Rust baseline remains candidate_context_only",
+          "status": "forbidden"
+        }
+      ],
+      "refusal_summary": {
+        "route_level": "L1",
+        "status": "not_refused"
+      },
+      "route_level": "L1",
+      "route_status": "recorded",
+      "schema_version": 1,
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance",
+      "validation_gate_summary": {
+        "generated_draft_semantic_pass": false,
+        "required_acceptance_gates": [
+          "c_oracle",
+          "rust_replay",
+          "schema_diff",
+          "negative_diff",
+          "unsafe_ledger",
+          "final_verification"
+        ],
+        "semantic_claim_source": "accepted_evidence_binding_or_common_validation_pipeline"
+      }
+    },
+    "primary_candidate": {
+      "candidate_id": "primary:clang-lowered-typed-ir",
+      "fallback": false,
+      "selected": "clang-lowered-typed-ir",
+      "semantic_pass": false
+    },
+    "selected_candidate_id": "primary:clang-lowered-typed-ir",
+    "selection_policy": {
+      "full_router": false,
+      "selection_basis": "translator_artifact_primary_candidate",
+      "semantic_acceptance": false,
+      "stage": "p0_route_governance"
+    },
+    "typed_ir": {
+      "candidate_route": {
+        "candidate_generator": "GenericTypedIrEmitter",
+        "delete_when": [],
+        "deprecated": false,
+        "fallback": null,
+        "reasons": [
+          {
+            "code": "generic_typed_ir_subset",
+            "detail": "typed IR matched the current generic emitter subset"
+          }
+        ],
+        "replacement": null,
+        "route": "GenericTypedIr",
+        "route_id": "generic-typed-ir",
+        "suggested_required_gates": [
+          "rustc_smoke",
+          "typed_ir_contract_tests"
+        ],
+        "token_cost": 0
+      },
+      "readonly_globals": [],
+      "readonly_globals_identity": {
+        "count": 0,
+        "names": [],
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "runtime_preconditions": [
+        {
+          "code": "signed_add_no_overflow",
+          "detail": "C signed addition must not overflow unless the slice contract declares a wrapping profile",
+          "ir_node": "IrExpr::Binary.Add",
+          "source_span": null,
+          "type": {
+            "canonical": "int",
+            "kind": "integer",
+            "signed": true,
+            "spelled": "int",
+            "width": 32
+          }
+        }
+      ],
+      "rust_draft_generated": true,
+      "rust_draft_sha256": "2f3dd7a1e6a488679de030887ced8bd695f8aff8dd2a31f613f9b91b530df09d",
+      "scalar_admission": {
+        "contract_status": "recorded",
+        "covered": [],
+        "precondition_count": 1,
+        "source_fields": [
+          "c_boundary.scalar_arithmetic_contract",
+          "fixture_contract.scalar_input_domain",
+          "claim_boundary.must_not_claim"
+        ],
+        "status": "unresolved",
+        "unresolved": [
+          {
+            "code": "signed_add_no_overflow",
+            "missing": [
+              "c_boundary.scalar_arithmetic_contract.signed_overflow",
+              "fixture_contract.scalar_input_domain"
+            ],
+            "status": "unresolved"
+          }
+        ]
+      },
+      "semantic_pass": false,
+      "source_artifact": {
+        "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-clang-lowering-report.json",
+        "sha256": "c2c85f104dd07b93cbc4f7be9817bb59064e559a3b72b7f1066751cdbfd87b75",
+        "status": "lowered"
+      },
+      "status": "generated",
+      "typed_ir_sha256": "ab7b8fceeee674b79ea8b404ed78e67fb77106dd3ca85788365a03796cff81e9"
+    }
+  },
+  "level": "L1",
   "misroute": null,
   "policy": {
     "fixed_loop_count_required": false,
@@ -10,25 +204,63 @@
     {
       "feature": "alias_requires_noalias_contract",
       "risk_count": 1,
-      "weight": "medium"
+      "weight": "explicit_precondition"
+    },
+    {
+      "feature": "typed_ir_scalar_admission_unresolved",
+      "route": "GenericTypedIr",
+      "unresolved_count": 1,
+      "weight": "requires_contract_or_domain_evidence"
     }
   ],
+  "scalar_ub_contract": {
+    "c_boundary": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
+    "claim_boundary": {
+      "must_not_claim": [
+        "full automatic C99/C11 translation",
+        "whole-program alias safety",
+        "NULL pointer equivalence",
+        "signed overflow equivalence",
+        "arbitrary output buffer capacity proof"
+      ]
+    },
+    "fixture_contract": {
+      "case_source": "not_declared",
+      "covers_overflow_boundaries": false,
+      "parameters": []
+    },
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-      "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+      "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-cfg.json",
-      "sha256": "36aec66cdc945654b2881503d652fe23ccecb4aabe86bbbd4c6b9d26e7f7d60b",
+      "sha256": "2046d7ad1f6dfe16599ffc07a5abb370aadcc4bda2aa2a48218127347e535d97",
       "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-clang-lowering-report.json",
+      "sha256": "c2c85f104dd07b93cbc4f7be9817bb59064e559a3b72b7f1066751cdbfd87b75",
+      "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
-      "sha256": "205ae1b77cefbb227ec616a9071838520dabd6891068732a0e0f0469d8ad1c41",
+      "sha256": "67e9fdaf41091a003b7a222121bb17f4c2623e06b7250d41cb42c388233a805b",
       "status": "recorded"
     },
     "translation_plan": {
@@ -37,9 +269,18 @@
     },
     "type_map": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-type-map.json",
-      "sha256": "7a255b5eb0bed0330599496c61769c3009f1bf71171d138028ddc99aff6431b0",
+      "sha256": "d5426010e9c321e8a315e9c8ba06fcdf246de25df68fa4615d177dea9fd43b3c",
       "status": "recorded"
     }
+  },
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-copy-i32-ptr-arith-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+    },
+    "source_root": "."
   },
   "status": "recorded",
   "target_id": "demo",
@@ -47,5 +288,5 @@
     "candidate_generation_allowed": true,
     "kind": "tier1"
   },
-  "verification_profile": "L2-dev"
+  "verification_profile": "L1-dev"
 }

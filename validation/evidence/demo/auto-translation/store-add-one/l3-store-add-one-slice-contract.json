@@ -9,8 +9,9 @@
     ],
     "files": [
       {
-        "path": "validation/l2_slices/tools/generate_store_add_one_oracle.py",
-        "role": "source"
+        "path": "validation/l2_slices/fixtures/store-add-one.c",
+        "role": "source",
+        "sha256": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
       },
       {
         "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
@@ -20,6 +21,14 @@
     "functions": [
       "store_add_one"
     ],
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "not_declared",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "runtime_precondition_no_overflow",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    },
     "signatures": [
       {
         "c_source": "int store_add_one(int value, int* out) { out[0] = value + 1; return 0; }",
@@ -36,7 +45,15 @@
             "name": "out"
           }
         ],
-        "return_type": "int"
+        "return_type": "int",
+        "source_span": {
+          "byte_end": 73,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/store-add-one.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
+        }
       }
     ]
   },

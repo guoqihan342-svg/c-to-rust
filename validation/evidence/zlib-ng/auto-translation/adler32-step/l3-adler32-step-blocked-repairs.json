@@ -1,13 +1,7 @@
 {
-  "blocked": [
-    {
-      "kind": "legacy_direct_retired",
-      "reason": "legacy string translator direct artifact generation is retained only as diagnostic compatibility evidence; it no longer produces a generated candidate",
-      "source_span": null
-    }
-  ],
+  "blocked": [],
   "schema_version": 1,
   "slice_id": "adler32-step",
-  "status": "blocked",
+  "status": "none",
   "target_id": "zlib-ng"
 }

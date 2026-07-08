@@ -31,6 +31,37 @@ fn emit_stmt(
                 symbols.insert(name.clone());
                 return Ok(format!("{indent}let mut {decl_name}: usize = 0;\n"));
             }
+            if let Some(decl_ty) = emit_function_pointer_param_type(ty)
+                .map_err(|detail| format!("decl {name} has {detail}"))?
+            {
+                let Some(init) = init else {
+                    symbols.insert(name.clone());
+                    return Ok(format!("{indent}let mut {decl_name}: {decl_ty};\n"));
+                };
+                let IrExpr::FunctionToPointerDecay { target, expr, .. } = init else {
+                    return Err(format!(
+                        "decl {name} function pointer initializer must be a direct function-to-pointer decay"
+                    ));
+                };
+                if target != ty {
+                    return Err(format!(
+                        "decl {name} function pointer initializer target {} does not match declared type {}",
+                        type_label(target),
+                        type_label(ty)
+                    ));
+                }
+                let init = emit_function_pointer_decay_call_arg(target, expr)
+                    .map_err(|detail| format!("decl {name} initializer {detail}"))?;
+                symbols.insert(name.clone());
+                let mut_prefix = if context.is_assigned_var(name) {
+                    "mut "
+                } else {
+                    ""
+                };
+                return Ok(format!(
+                    "{indent}let {mut_prefix}{decl_name}: {decl_ty} = {init};\n"
+                ));
+            }
             if matches!(ty.kind, IrTypeKind::Array { .. }) {
                 let decl_ty = emit_fixed_array_type(ty)
                     .map_err(|detail| format!("decl {name} has {detail}"))?;
@@ -146,6 +177,11 @@ fn emit_stmt(
                     emitted.prelude, emitted.expr
                 ));
             }
+            if let Some(line) =
+                emit_function_pointer_decay_assignment(target, value, &target_name, target_ty)?
+            {
+                return Ok(format!("{indent}{line}\n"));
+            }
             validate_expr_matches_type(value, target_ty, "assign value")?;
             let emitted =
                 emit_expr_with_prelude(value, symbols, context, indent_level, "assign value")?;
@@ -175,6 +211,11 @@ fn emit_stmt(
                     symbols,
                     context,
                 )? {
+                    return Ok(line);
+                }
+                if let Some(line) =
+                    emit_function_pointer_decay_return(value, return_type, indent_level)?
+                {
                     return Ok(line);
                 }
                 if count_post_increment_byte_reads(value) > 1 {

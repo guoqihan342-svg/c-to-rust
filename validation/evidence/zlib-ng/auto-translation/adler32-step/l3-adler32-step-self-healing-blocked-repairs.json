@@ -1,7 +1,7 @@
 {
   "blocked_repairs": [
     {
-      "blocked_reason": "Route decision refused candidate generation for unsupported C semantics.",
+      "blocked_reason": "Route governance deferred semantic acceptance for a generated candidate; the generated Rust remains candidate evidence.",
       "candidate_patch_id": "patch-route-refused-1",
       "candidate_routes": [
         {
@@ -27,16 +27,16 @@
       ],
       "forbidden_change": "unsupported_control_flow",
       "human_action_required": true,
-      "human_intervention_point": "Add the missing typed-IR lowering/emitter support or provide an explicit slice contract, then rerun auto_migrate before promoting any candidate.",
+      "human_intervention_point": "Bind the generated candidate to the required oracle, diff, negative, unsafe, and final verification gates before promoting it.",
       "ir_feature_gap": {
         "evidence_refs": [
           "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json"
         ],
-        "kind": "blocked_artifact",
+        "kind": "typed_ir_zero_token_deterministic",
         "source": "route_decision.rationale"
       },
       "oracle_fixture_gap": {
-        "reason": "The route refused candidate generation before semantic acceptance; oracle evidence still gates any later candidate.",
+        "reason": "Generated candidate evidence exists, but oracle/diff/negative/unsafe gates still control semantic acceptance.",
         "status": "not_blocking"
       },
       "repair_id": "repair-route-refused-1",

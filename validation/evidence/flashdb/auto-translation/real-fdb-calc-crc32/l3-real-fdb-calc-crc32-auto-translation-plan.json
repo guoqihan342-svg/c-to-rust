@@ -1,19 +1,19 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-c2rust-baseline-manifest.json",
-    "sha256": "ee9e1b105561e4da69309208fb145f9db2f8fa883da377e2aba7919f278db27a",
+    "sha256": "52dcad1d09841470e49812c28c17d12c020a7e851d2baac919868920e356652b",
     "status": "generated"
   },
   "cache_invalidation_keys": [
     "source_commit=f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-    "slice_spec_sha256=c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
+    "slice_spec_sha256=ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
     "fixture_hash=real-fdb-calc-crc32-fixture",
     "build_profile_hash=4a2a78e62f01b8bfc7fae1faf9ac690ade99f87453b95c4d3b596feed432a524",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=not_applicable",
     "effect_graph",
-    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
+    "effect_graph_sha256=613dc2a7f3fc0a77a329c0ea62ea8f43d8e278a3bb7154fbd217a6d036fba678"
   ],
   "generated_artifacts": [
     {
@@ -37,7 +37,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -60,7 +60,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     },
     {
       "generated_spans": [
@@ -83,7 +83,7 @@
           "line_start": 1
         }
       ],
-      "status": "blocked"
+      "status": "candidate"
     }
   ],
   "inputs": {
@@ -101,11 +101,11 @@
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-pointer-graph.json",
-      "status": "not_applicable"
+      "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/flashdb-real-fdb-calc-crc32.json",
-      "sha256": "c9d296f2e8b9d6e3299a1ea3442f0959e73100d01c1b5bd944cefa276096ff70",
+      "sha256": "ed62c5026b7d6af134271d9aafa4e2b6e7a4056fb61c4ced149b5aff869a17a4",
       "status": "ready"
     },
     "type_map": {
@@ -114,20 +114,20 @@
     }
   },
   "level": "L3",
-  "repo_commit": "ea92d53551fb2fd243163c054d8e3345ac8acb73",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "route_decision": {
     "level": "L4",
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json",
-    "sha256": "1bde2ce0a68d1fac0acc79f8be918360e5727421c5814a2a74a84bee16ce703f",
+    "sha256": "6033fb12976c9765b77228a579f15f9160137419d0220f22322bd6d1062777b3",
     "status": "refused"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
-  "status": "blocked",
+  "status": "draft_generated",
   "target_id": "flashdb",
   "translation_source": {
-    "selected": "legacy-string-translator"
+    "selected": "clang-lowered-typed-ir"
   },
   "translation_summary": {
     "alias_gate": {
@@ -141,20 +141,27 @@
     "external_direct_callee_blocks": [],
     "external_direct_callee_declarations": [],
     "external_direct_callees": [],
-    "lvalue_decision_counts": {
-      "value_assignment": 1
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {
+      "byte_cursor_post_increment_read": 1
     },
-    "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
-    "translation_rule_ids": [],
+    "translation_rule_ids": [
+      "clang-lowered-typed-ir",
+      "const-void-byte-slice",
+      "byte-cursor-post-increment-read",
+      "byte-cursor-loop",
+      "structured-while",
+      "structured-return-expression"
+    ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
-    "unsupported_node_count": 2
+    "unsupported_node_count": 0
   },
   "validation_profile": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json",
     "profile": "L4-accepted-evidence",
-    "sha256": "beb64447b6a1239da6ea4c9c241f6ee0a9579f5cf691c55f3d610f2585525b51",
+    "sha256": "abf3c47340f81152f4207303877ac7a11f1ae89b93f0890e940fa017e7dbb30a",
     "status": "passed"
   },
   "verification_plan": [

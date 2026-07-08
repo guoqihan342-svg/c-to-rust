@@ -279,7 +279,7 @@
     }
 
     #[test]
-    fn for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step() {
+    fn for_step_stmt_skeleton_from_ast_accepts_record_pointer_field_inc_dec_step_as_assignment() {
         let stmt = serde_json::json!({
             "kind": "UnaryOperator",
             "opcode": "++",
@@ -305,10 +305,60 @@
         let skeleton =
             inc_dec_for_step_skeleton_from_ast(&stmt).expect("record pointer field for step");
 
-        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
-            panic!("expected record pointer field inc/dec for step to be unsupported, got {skeleton:?}");
+        let ClangStmtSkeleton::Assign { target, value } = skeleton else {
+            panic!(
+                "expected record pointer field inc/dec for step assignment, got {skeleton:?}"
+            );
         };
-        assert!(reason.contains("unsupported outside standalone statements"));
+        assert!(
+            matches!(&target, ClangExprSkeleton::Member { field, is_arrow: true, .. } if field == "x"),
+            "expected arrow-field step assignment target, got {target:?}"
+        );
+        let ClangExprSkeleton::Binary { op, lhs, rhs, .. } = value else {
+            panic!("expected binary step assignment value, got {value:?}");
+        };
+        assert_eq!(op, ClangBinaryOperator::Add);
+        assert!(
+            matches!(lhs.as_ref(), ClangExprSkeleton::Member { field, is_arrow: true, .. } if field == "x"),
+            "expected arrow-field binary lhs, got {lhs:?}"
+        );
+        assert!(matches!(
+            rhs.as_ref(),
+            ClangExprSkeleton::IntegerLiteral { value: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn for_step_stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_step() {
+        let stmt = serde_json::json!({
+            "kind": "UnaryOperator",
+            "opcode": "++",
+            "isPostfix": true,
+            "type": { "qualType": "int" },
+            "inner": [
+                {
+                    "kind": "MemberExpr",
+                    "name": "x",
+                    "isArrow": true,
+                    "type": { "qualType": "int" },
+                    "inner": [
+                        {
+                            "kind": "DeclRefExpr",
+                            "type": { "qualType": "const struct point *" },
+                            "referencedDecl": { "name": "p" }
+                        }
+                    ]
+                }
+            ]
+        });
+
+        let skeleton =
+            inc_dec_for_step_skeleton_from_ast(&stmt).expect("const record pointer field for step");
+
+        let ClangStmtSkeleton::Unsupported { reason } = skeleton else {
+            panic!("expected const record pointer field inc/dec step to be unsupported, got {skeleton:?}");
+        };
+        assert!(reason.contains("non-const record pointer variable"));
     }
 
     #[test]

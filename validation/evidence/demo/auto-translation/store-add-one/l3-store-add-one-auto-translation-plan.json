@@ -1,17 +1,19 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-    "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
+    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1",
-    "alias_gate=not_applicable"
+    "alias_gate=not_applicable",
+    "effect_graph",
+    "effect_graph_sha256=896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63"
   ],
   "generated_artifacts": [
     {
@@ -89,13 +91,21 @@
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-cfg.json",
       "status": "recorded"
     },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-context-pack.json",
+      "status": "not_applicable"
+    },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
       "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/demo-store-add-one.json",
-      "sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+      "sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
       "status": "ready"
     },
     "type_map": {
@@ -104,11 +114,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-    "sha256": "01fe17868b949983b1168be32752e5919647f866e714274a953278397371c0f9",
+    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -116,6 +126,9 @@
   "source_commit": "demo-store-add-one-20260625",
   "status": "draft_generated",
   "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
   "translation_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -124,18 +137,15 @@
       "requires_noalias": false,
       "risk_level": "none"
     },
-    "lvalue_decision_counts": {
-      "bounded_pointer_index": 1
-    },
-    "pointer_boundary_decision_counts": {
-      "bounded_pointer_index": 1
-    },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
+    "lvalue_decision_counts": {},
+    "pointer_boundary_decision_counts": {},
     "safe_public_api": true,
     "translation_rule_ids": [
-      "safe-wrapper-for-pointer-out-param",
-      "pointer-write-recorded",
-      "bounded-pointer-index-write",
-      "structured-return-expression"
+      "clang-lowered-typed-ir"
     ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
@@ -144,7 +154,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
+    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
     "status": "passed"
   },
   "verification_plan": [

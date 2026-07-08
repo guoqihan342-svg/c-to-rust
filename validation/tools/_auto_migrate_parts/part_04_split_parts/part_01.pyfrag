@@ -470,9 +470,10 @@ def route_level(
     if alias_floor is not None:
         level, alias_rationale = alias_floor
         rationale.append(alias_rationale)
-        if typed_ir_signal is not None:
-            rationale.append(typed_ir_signal[1])
-        return level, rationale
+        if level != "L1":
+            if typed_ir_signal is not None:
+                rationale.append(typed_ir_signal[1])
+            return level, rationale
     if any(node.get("ownership_role") == "unknown" for node in pointer_nodes):
         rationale.append({"feature": "unknown_pointer_role", "weight": "medium"})
         if typed_ir_signal is not None:

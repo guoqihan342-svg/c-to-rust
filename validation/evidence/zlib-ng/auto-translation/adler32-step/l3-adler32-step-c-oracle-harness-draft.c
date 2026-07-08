@@ -11,7 +11,7 @@
 /* fixture cases: 1 */
 /* observable outputs: value */
 /* fixture case: empty input_ref=cases[0] expected_ref=validation/evidence/l2-slices/zlib-adler32-oracle.json expected_outputs={"value": 1} */
-/* source file: adler32.c (sha256: unknown) */
+/* source file: adler32.c (sha256: 640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086) */
 /* source file: validation/l2_slices/fixtures/zlib-adler32-c-oracle.json (sha256: unknown) */
 uint32_t adler32_step(uint32_t s1);
 

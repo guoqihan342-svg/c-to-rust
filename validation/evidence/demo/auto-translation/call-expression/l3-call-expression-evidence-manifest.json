@@ -1,5 +1,6 @@
 {
   "claim_boundary": {
+    "accepted_evidence_authoritative": false,
     "accepted_metadata_differences": [],
     "alias_gate": {
       "complete_alias_safety": false,
@@ -19,17 +20,116 @@
     "external_callee_scope": {
       "blocked_count": 0,
       "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
       "semantics_verified": false,
       "status": "not_applicable",
       "stub_kind": "none"
     },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/call-expression-c-oracle.json",
+        "fixture_sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+          "diff": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+          "final_verification": "42b90752cd933cc87cbef992d9202f808b4c554566052e4576ef68727bbb8647",
+          "negative_diff": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+          "performance_smoke": "76a50abac231902646f0cdb2d8dba59a0a1814f247e37172768fa4efc2548f9e",
+          "rust_report": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+          "unsafe_ledger": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+          "unsafe_scan": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
+          "version_manifest": "8ad11660cf15d396a47c8819823eb3433aebf28946db54d465e9ebf5906adcc7"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-call-expression-diff.json",
+          "final_verification": "validation/evidence/demo/l3-call-expression-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-call-expression-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-call-expression-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-call-expression-version-manifest.json"
+        },
+        "slice_id": "call-expression",
+        "source_commit": "demo-call-expression-20260625",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-call-expression-c-oracle.json",
+          "sha256": "6c232d43d5cda926cfe8c20b82bbcebcbe0549670c9473c104e95d6e72c1e6e4",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-call-expression-negative-diff.json",
+          "sha256": "4e2eb6f5b75e59c9ab49af18becf23a5f1f5abda51fbdd8bc8149d3016d00860",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-call-expression-rust-report.json",
+          "sha256": "5c632d222ac3aced346b4298ca7316ce1762673c5326781b5a583903f9723fb1",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-call-expression-diff.json",
+          "sha256": "54e7ea433c24739d1fba61dbec60d9d15e838026b9f428f3216069e5ff8590a2",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-call-expression-unsafe-ledger.json",
+          "sha256": "d8cff6fe591f03d41e4a619191b4aefe33fb43e0aff10771bf9f95c3631f659b",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-call-expression-unsafe-scan.json",
+          "sha256": "3746850af2c68dc03f1a84615bf8e4afb02ef71acc92b1bff41cb74c8c98923b",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-hnsklfb_\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/call-expression/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/call-expression/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-draft.rs",
+        "sha256": "432b1f7c02ea9ec337cb29807ebce0d9165ce517cc86e817d19edc74e624d394",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "call-expression",
+      "source_commit": "demo-call-expression-20260625",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
     "known_gaps": [
       "No full project migration claim.",
       "No external callee semantic proof.",
       "No function pointer, member call, variadic call, macro call, or nested call support claim.",
       "No large recursion depth or performance claim.",
       "No signed overflow equivalence beyond the committed safe fixture domain.",
-      "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence."
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
     ],
     "must_not_claim": [
       "full automatic C99/C11 translation",
@@ -40,114 +140,124 @@
       "semantic equivalence for this auto-generated Rust draft",
       "full C99/C11 automatic translation"
     ],
-    "scope": "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft."
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
   },
   "evidence": {
     "c2rust_baseline": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-      "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+      "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
       "status": "skipped"
     },
     "c_oracle": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c-oracle-status.json",
-      "sha256": "05bbebd36c91e3feaeb7b535f85b68b2bedcf1fc88d49edea8644133dbb0458a",
+      "sha256": "a372d516884effbdba7266a192720d333fd67be9ee6d5e7efe5df5c1b28373a7",
       "status": "C_ORACLE_GENERATED"
     },
     "cache_metadata": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-auto-cache-metadata.json",
-      "sha256": "a4c777b4dff0c5558d28fd89c8fbb9c301c8a3057a540794371d3c21fd0e7c41",
+      "sha256": "19e16698cf92f024316ce029a71896ccd3407271661af43da41c56bef54d2f75",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-clang-lowering-report.json",
+      "sha256": "0f6207278225a582bc57fd708781246dc9e584e0f35fcd3eb033296191ac6bc2",
       "status": "recorded"
     },
     "config_profile": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-config-profile.json",
       "profile_id": "demo-call-expression-wsl-gcc",
-      "sha256": "e903007a639b061c30394aea532aa5cfb24605de9d92b38e384a1d6fadbd427d",
+      "sha256": "2895eed0b5554aae3d393211aaaf363be959c6ff5cbabeee992a7a36d46ea55a",
       "status": "recorded"
     },
     "context_pack": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-context-pack.json",
-      "sha256": "3df52f1d48fc3ebb731bb9a7c1c4521c1c43ba576ae9fd67e1581a1fe41c180e",
+      "sha256": "c7e1133dd21a858d6995b01a148fece46c45a29508ef3274f4d53db424ff0a6f",
       "status": "recorded"
     },
     "final_verification": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-final-verification.json",
-      "sha256": "a3dd92fb8b9255072a1da52f0a2dc2f96ceb029a51e27f73e3ae1f8cb9d1febf",
+      "sha256": "b576216bb20032f4084657d4b6806a7bc30e8bb2eb563f21efa0ba819a3ef0bb",
       "status": "passed"
     },
     "negative_diff": {
       "expected_failure": true,
       "mutation_detected": true,
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-negative-diff.json",
-      "sha256": "f03ae90efa3f0207a9fc2c63130d2c8b038f740e9f01766f7a2a8d72d91b4651",
+      "sha256": "dcfea1a6fb10b09500fec35810146f94d54ba479bbba7fb8363f87ab0217a985",
       "status": "expected_failed"
     },
     "performance_smoke": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-performance-smoke.json",
       "secondary_only": true,
-      "sha256": "2352deffd4b528cff48f75ad0fd604c21d42fb2813c6e02aa48bbdaf9eff709b",
+      "sha256": "5ace8eb8c4982cc8016aa05cf4b2245e934e52bf607165b9fcf393a6ac425da7",
       "status": "recorded"
     },
     "pointer_dependency_graph": {
       "not_applicable_reason": "slice has no pointer surface",
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-pointer-graph.json",
-      "sha256": "fda47cef7500657c9a110d3f5d046711093a0136584bc5b30255967507ee3e7e",
+      "sha256": "420c6c652ab3cbbce9fc41d739f5bf3fdb76016fda6d244a3fec9b5b065eec79",
       "status": "not_applicable"
     },
     "route_decision": {
       "level": "L0",
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
-      "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+      "sha256": "fc8cb9dcf7312fdecbc1aa73acc28222d1d2a172f378e9085b0b5a61d3885cef",
       "status": "recorded"
     },
     "rust_check": {
       "path": "validation/evidence/demo/auto-translation/call-expression/rust-check.json",
-      "sha256": "9674033f7272ad48426edd1dbbf4e033732e6f74dcec75db44f218b1ff6f06dd",
+      "sha256": "0be011d20071725ad7696dcd90b2c81544b7e9862e9fc19b2932e480dde02b3d",
       "status": "passed"
     },
     "rust_report": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-rust-report.json",
-      "sha256": "70d7cb3216acf4c32b19aa673fdd4483c4668a5af610b93f376a98894181f8b3",
+      "sha256": "cc1f0cbc22a4009a3ebf6bc93d8167003e9d436dba6f069775a83fd0530cc73d",
       "status": "passed"
     },
     "schema_diff": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-diff.json",
-      "sha256": "2385c7c92d225e87173335d6ebd701917958728bbdca76ce4f2aa935def5d6f6",
+      "sha256": "80d43c90bf0742f69fbd85fcd3fe725b0ac57ef80e8cb0e863d78061247e94f2",
       "status": "passed"
     },
     "slice_contract": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-slice-contract.json",
-      "sha256": "7939dfa9497f5c23cbd8a50a7354d05c86951ae3203275f6bd6eab6e079284db",
+      "sha256": "75eae7f4d46561cb4498e1ddd27cfb713ce75ac2a08b076c79f6545b3ce6f8db",
       "status": "recorded"
     },
     "summary": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-summary.json",
-      "sha256": "8c3ed0f2dcdaccb8c6f68d6bb4323f9538a5865a4377283d0fc097d1cbc20d5b",
+      "sha256": "cd59c43b8bbe2880ae7ed59e1038266b8e425262f83117d850cd7c0b1c8d1e5e",
       "status": "passed"
     },
     "test_translation": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-test-translation-generated.json",
-      "sha256": "bf17abd85d4b7c3461f60510fb32ea809975e3d824f33e6f457af0d815a517b2",
+      "sha256": "a0e672ad8f3ff1d3c836cc38814d5b1de781887f871c05a28891bc1b257f63cd",
       "status": "recorded"
     },
     "unsafe_ledger": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-unsafe-ledger.json",
-      "sha256": "c08f9b5a1e6fb6500edbd402bf000fb74e0e6c7e210f2a148aa96ead55b8eb6d",
+      "sha256": "2527329f0698cb0fe20449689715e121e6f4356554cca6bb7d27d6dc1682f4a5",
       "status": "passed"
     },
     "unsafe_scan": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-unsafe-scan.json",
-      "sha256": "6bc6f30abbf5428460b958cc9e6d918286df70673e136da23495c1c656839ae7",
+      "sha256": "8d2b6cb612cc93676e3688ef63c6b569013554566d93d7bd9be68752bcf055b0",
       "status": "passed"
     },
     "validation_profile": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
       "profile": "L0-dev",
-      "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+      "sha256": "0deeeb52e923379b5750eef43b552073f5449c679917366a2601cff18aafd887",
       "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-verified-unsafe-baseline.json",
+      "sha256": "9069eccbb1011d759989747224c6b96c6fbbc8152a878e5b093dc8b282f9d594",
+      "status": "blocked"
     },
     "version_or_config_binding": {
       "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-version-manifest.json",
-      "sha256": "5691a1924ebb6e61521591afb9145191b0fa337ab4b33fab3b3a1d780dc9b1bc",
+      "sha256": "51085d57959decab42ce4124a25b0376aba95975bb7edc7d268a4429d6eeb57a",
       "status": "recorded"
     }
   },
@@ -157,7 +267,7 @@
     "path": "validation/l2_slices/fixtures/call-expression-c-oracle.json"
   },
   "level": "L3",
-  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "call-expression",
   "source_commit": "demo-call-expression-20260625",

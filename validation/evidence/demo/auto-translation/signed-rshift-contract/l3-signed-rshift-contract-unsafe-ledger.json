@@ -6,7 +6,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-c2rust-baseline-manifest.json",
-    "sha256": "47c793ac3f932da8eafeaa59cceca2e4534f52c9a2d921227fb324ee17ebe62d",
+    "sha256": "abdb9d8b4e7c3f18e9aad3f8ed67945754592f03ba571c107294608a1cf5f052",
     "status": "skipped"
   },
   "entries": [],
@@ -15,7 +15,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-route-decision.json",
-    "sha256": "b203ad35e1b1031391e37865b10ebcca2329602055849ae1ab73a4ce45dfc3b7",
+    "sha256": "74d3312e6d98eed7b7d5851f3ce139fa495208bfac966d4f21879c8c9cf53c47",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -25,7 +25,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/signed-rshift-contract/l3-signed-rshift-contract-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "ffa033fd1887e73828d83c995d0c8cdeb3edaa5707b76b58ccb021d7a28d282b",
+    "sha256": "be66663b476c05a2e61c182c377980a688dfa26fa083c9392f8383e2261dc612",
     "status": "passed"
   }
 }

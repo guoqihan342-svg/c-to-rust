@@ -1,16 +1,16 @@
 {
-  "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
   "capability_delta": [
     {
       "blocked_callees": [],
-      "construct_id": "blocked_artifact",
-      "delta_id": "cap-adler32-step-blocked_artifact",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "cap-adler32-step-typed_ir_zero_token_deterministic",
       "evidence_refs": [
         "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
         "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json"
       ],
-      "generated_candidate_status": "refused",
-      "kind": "refusal_classification",
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
       "negative_coverage": [
         {
           "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
@@ -18,14 +18,14 @@
         }
       ],
       "real_c_slice": "adler32-step",
-      "semantic_pass": false
+      "semantic_pass": true
     }
   ],
   "governance_delta": [
     {
       "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
-      "construct_id": "blocked_artifact",
-      "delta_id": "gov-adler32-step-blocked_artifact-evidence",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "gov-adler32-step-typed_ir_zero_token_deterministic-evidence",
       "evidence_refs": [
         "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-route-decision.json",
         "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-validation-profile.json"
@@ -41,6 +41,9 @@
   "source_identity": {
     "repo_commit": "7e93c58ab3acbbd482ecc10cbc5c6ab893b22023",
     "source_commit": "d40f29fd42ed9158e3eb3e221dca50e4b627f7a8",
+    "source_file_hashes": {
+      "adler32.c": "640b9db11570656f3ddc0917f8ba29fb2541766fdd1e966e95333072bf7a9086"
+    },
     "source_root": "<pinned-zlib-ng-root>"
   },
   "status": "recorded",

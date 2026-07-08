@@ -39,8 +39,21 @@ def require_nonnegative_int(value: Any, message: str) -> int:
     return value
 
 
+def generated_draft_semantic_pass_count_from_ledgers(ledgers: list[Any]) -> int:
+    return sum(
+        1
+        for item in ledgers
+        if isinstance(item, dict) and item.get("generated_draft_semantic_pass") is True
+    )
+
+
 def is_l4_refused(item: Any) -> bool:
-    return isinstance(item, dict) and item.get("route_level") == "L4" and item.get("route_status") == "refused"
+    return (
+        isinstance(item, dict)
+        and item.get("route_level") == "L4"
+        and item.get("route_status") == "refused"
+        and item.get("generated_draft_semantic_pass") is not True
+    )
 
 
 def require(condition: Any, message: str) -> None:

@@ -8,8 +8,8 @@
   },
   "diagnostics": [],
   "durable_evidence": {
-    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
-    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "clang_path": "/usr/bin/clang",
+    "clang_version": "Ubuntu clang version 18.1.3 (1ubuntu1)",
     "competition_environment": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
@@ -18,7 +18,7 @@
     "frontend": "clang_ast_dump_json",
     "hash_algorithm": "sha256",
     "rust_draft_sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
-    "typed_ir_sha256": "9c75816a055a0ad6e81fa9742721d967305dc9b8ab623ef8ed29b4703192d078"
+    "typed_ir_sha256": "d7ce9365fe23d9ddacc5714ce92bf224b3cb642984fbc38baebee06bd9503215"
   },
   "errors": [],
   "fixture_hash": "real-fdb-calc-crc32-fixture",
@@ -29,11 +29,11 @@
       "-Xclang",
       "-ast-dump=json",
       "-fsyntax-only",
-      "-IC:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/inc",
-      "-IC:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/tests",
-      "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB\\src/fdb_utils.c"
+      "-Isources/FlashDB/inc",
+      "-Isources/FlashDB/tests",
+      "sources/FlashDB/src/fdb_utils.c"
     ],
-    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
+    "clang_path": "<host>/clang",
     "diagnostics": [],
     "environment": {
       "diagnostics": [
@@ -194,10 +194,28 @@
             "value": {
               "Binary": {
                 "lhs": {
-                  "Var": {
-                    "name": "crc",
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "crc",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "uint32_t",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": false,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "uint32_t",
+                          "width_bits": 32
+                        }
+                      }
+                    },
                     "source_span": null,
-                    "ty": {
+                    "target": {
                       "canonical": "uint32_t",
                       "is_const": false,
                       "kind": {
@@ -221,7 +239,7 @@
                         "source_span": null,
                         "spelling": "0",
                         "ty": {
-                          "canonical": "uint32_t",
+                          "canonical": "unsigned int",
                           "is_const": false,
                           "kind": {
                             "Integer": {
@@ -238,7 +256,7 @@
                     },
                     "source_span": null,
                     "ty": {
-                      "canonical": "uint32_t",
+                      "canonical": "unsigned int",
                       "is_const": false,
                       "kind": {
                         "Integer": {
@@ -254,7 +272,7 @@
                 },
                 "source_span": null,
                 "ty": {
-                  "canonical": "uint32_t",
+                  "canonical": "unsigned int",
                   "is_const": false,
                   "kind": {
                     "Integer": {
@@ -298,45 +316,198 @@
                   "value": {
                     "Binary": {
                       "lhs": {
-                        "Index": {
-                          "base": {
-                            "Var": {
-                              "name": "crc32_table",
-                              "source_span": null,
-                              "ty": {
-                                "canonical": "uint32_t[256]",
-                                "is_const": true,
-                                "kind": {
-                                  "Array": {
-                                    "element": {
-                                      "canonical": "uint32_t",
-                                      "is_const": false,
-                                      "kind": {
-                                        "Integer": {
-                                          "signed": false,
-                                          "width": 32
-                                        }
-                                      },
-                                      "source_span": null,
-                                      "spelled": "uint32_t",
-                                      "width_bits": 32
+                        "LValueToRValue": {
+                          "expr": {
+                            "Index": {
+                              "base": {
+                                "Var": {
+                                  "name": "crc32_table",
+                                  "source_span": null,
+                                  "ty": {
+                                    "canonical": "uint32_t[256]",
+                                    "is_const": true,
+                                    "kind": {
+                                      "Array": {
+                                        "element": {
+                                          "canonical": "uint32_t",
+                                          "is_const": false,
+                                          "kind": {
+                                            "Integer": {
+                                              "signed": false,
+                                              "width": 32
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "spelled": "uint32_t",
+                                          "width_bits": 32
+                                        },
+                                        "len": 256
+                                      }
                                     },
-                                    "len": 256
+                                    "source_span": null,
+                                    "spelled": "const uint32_t[256]",
+                                    "width_bits": null
                                   }
-                                },
-                                "source_span": null,
-                                "spelled": "const uint32_t[256]",
-                                "width_bits": null
-                              }
-                            }
-                          },
-                          "index": {
-                            "Binary": {
-                              "lhs": {
+                                }
+                              },
+                              "index": {
                                 "Binary": {
                                   "lhs": {
-                                    "Var": {
-                                      "name": "crc",
+                                    "Binary": {
+                                      "lhs": {
+                                        "LValueToRValue": {
+                                          "expr": {
+                                            "Var": {
+                                              "name": "crc",
+                                              "source_span": null,
+                                              "ty": {
+                                                "canonical": "uint32_t",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Integer": {
+                                                    "signed": false,
+                                                    "width": 32
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "uint32_t",
+                                                "width_bits": 32
+                                              }
+                                            }
+                                          },
+                                          "source_span": null,
+                                          "target": {
+                                            "canonical": "uint32_t",
+                                            "is_const": false,
+                                            "kind": {
+                                              "Integer": {
+                                                "signed": false,
+                                                "width": 32
+                                              }
+                                            },
+                                            "source_span": null,
+                                            "spelled": "uint32_t",
+                                            "width_bits": 32
+                                          }
+                                        }
+                                      },
+                                      "op": "BitXor",
+                                      "rhs": {
+                                        "Cast": {
+                                          "expr": {
+                                            "LValueToRValue": {
+                                              "expr": {
+                                                "Deref": {
+                                                  "ptr": {
+                                                    "IncDec": {
+                                                      "op": "Inc",
+                                                      "prefix": false,
+                                                      "source_span": null,
+                                                      "target": {
+                                                        "Var": {
+                                                          "name": "p",
+                                                          "source_span": null,
+                                                          "ty": {
+                                                            "canonical": "uint8_t *",
+                                                            "is_const": false,
+                                                            "kind": {
+                                                              "Pointer": {
+                                                                "pointee": {
+                                                                  "canonical": "uint8_t",
+                                                                  "is_const": true,
+                                                                  "kind": {
+                                                                    "Integer": {
+                                                                      "signed": false,
+                                                                      "width": 8
+                                                                    }
+                                                                  },
+                                                                  "source_span": null,
+                                                                  "spelled": "const uint8_t",
+                                                                  "width_bits": 8
+                                                                }
+                                                              }
+                                                            },
+                                                            "source_span": null,
+                                                            "spelled": "const uint8_t *",
+                                                            "width_bits": null
+                                                          }
+                                                        }
+                                                      },
+                                                      "ty": {
+                                                        "canonical": "uint8_t *",
+                                                        "is_const": false,
+                                                        "kind": {
+                                                          "Pointer": {
+                                                            "pointee": {
+                                                              "canonical": "uint8_t",
+                                                              "is_const": true,
+                                                              "kind": {
+                                                                "Integer": {
+                                                                  "signed": false,
+                                                                  "width": 8
+                                                                }
+                                                              },
+                                                              "source_span": null,
+                                                              "spelled": "const uint8_t",
+                                                              "width_bits": 8
+                                                            }
+                                                          }
+                                                        },
+                                                        "source_span": null,
+                                                        "spelled": "const uint8_t *",
+                                                        "width_bits": null
+                                                      }
+                                                    }
+                                                  },
+                                                  "source_span": null,
+                                                  "ty": {
+                                                    "canonical": "uint8_t",
+                                                    "is_const": true,
+                                                    "kind": {
+                                                      "Integer": {
+                                                        "signed": false,
+                                                        "width": 8
+                                                      }
+                                                    },
+                                                    "source_span": null,
+                                                    "spelled": "const uint8_t",
+                                                    "width_bits": 8
+                                                  }
+                                                }
+                                              },
+                                              "source_span": null,
+                                              "target": {
+                                                "canonical": "uint8_t",
+                                                "is_const": false,
+                                                "kind": {
+                                                  "Integer": {
+                                                    "signed": false,
+                                                    "width": 8
+                                                  }
+                                                },
+                                                "source_span": null,
+                                                "spelled": "uint8_t",
+                                                "width_bits": 8
+                                              }
+                                            }
+                                          },
+                                          "implicit": true,
+                                          "source_span": null,
+                                          "target": {
+                                            "canonical": "uint32_t",
+                                            "is_const": false,
+                                            "kind": {
+                                              "Integer": {
+                                                "signed": false,
+                                                "width": 32
+                                              }
+                                            },
+                                            "source_span": null,
+                                            "spelled": "uint32_t",
+                                            "width_bits": 32
+                                          }
+                                        }
+                                      },
                                       "source_span": null,
                                       "ty": {
                                         "canonical": "uint32_t",
@@ -353,86 +524,27 @@
                                       }
                                     }
                                   },
-                                  "op": "BitXor",
+                                  "op": "BitAnd",
                                   "rhs": {
                                     "Cast": {
                                       "expr": {
-                                        "Deref": {
-                                          "ptr": {
-                                            "IncDec": {
-                                              "op": "Inc",
-                                              "prefix": false,
-                                              "source_span": null,
-                                              "target": {
-                                                "Var": {
-                                                  "name": "p",
-                                                  "source_span": null,
-                                                  "ty": {
-                                                    "canonical": "uint8_t *",
-                                                    "is_const": false,
-                                                    "kind": {
-                                                      "Pointer": {
-                                                        "pointee": {
-                                                          "canonical": "uint8_t",
-                                                          "is_const": true,
-                                                          "kind": {
-                                                            "Integer": {
-                                                              "signed": false,
-                                                              "width": 8
-                                                            }
-                                                          },
-                                                          "source_span": null,
-                                                          "spelled": "const uint8_t",
-                                                          "width_bits": 8
-                                                        }
-                                                      }
-                                                    },
-                                                    "source_span": null,
-                                                    "spelled": "const uint8_t *",
-                                                    "width_bits": null
-                                                  }
-                                                }
-                                              },
-                                              "ty": {
-                                                "canonical": "uint8_t *",
-                                                "is_const": false,
-                                                "kind": {
-                                                  "Pointer": {
-                                                    "pointee": {
-                                                      "canonical": "uint8_t",
-                                                      "is_const": true,
-                                                      "kind": {
-                                                        "Integer": {
-                                                          "signed": false,
-                                                          "width": 8
-                                                        }
-                                                      },
-                                                      "source_span": null,
-                                                      "spelled": "const uint8_t",
-                                                      "width_bits": 8
-                                                    }
-                                                  }
-                                                },
-                                                "source_span": null,
-                                                "spelled": "const uint8_t *",
-                                                "width_bits": null
-                                              }
-                                            }
-                                          },
+                                        "LitInt": {
                                           "source_span": null,
+                                          "spelling": "255",
                                           "ty": {
-                                            "canonical": "uint8_t",
-                                            "is_const": true,
+                                            "canonical": "int",
+                                            "is_const": false,
                                             "kind": {
                                               "Integer": {
-                                                "signed": false,
-                                                "width": 8
+                                                "signed": true,
+                                                "width": 32
                                               }
                                             },
                                             "source_span": null,
-                                            "spelled": "const uint8_t",
-                                            "width_bits": 8
-                                          }
+                                            "spelled": "int",
+                                            "width_bits": 32
+                                          },
+                                          "value": 255
                                         }
                                       },
                                       "implicit": true,
@@ -468,32 +580,48 @@
                                   }
                                 }
                               },
-                              "op": "BitAnd",
-                              "rhs": {
-                                "Cast": {
-                                  "expr": {
-                                    "LitInt": {
-                                      "source_span": null,
-                                      "spelling": "255",
-                                      "ty": {
-                                        "canonical": "int",
-                                        "is_const": false,
-                                        "kind": {
-                                          "Integer": {
-                                            "signed": true,
-                                            "width": 32
-                                          }
-                                        },
-                                        "source_span": null,
-                                        "spelled": "int",
-                                        "width_bits": 32
-                                      },
-                                      "value": 255
-                                    }
-                                  },
-                                  "implicit": true,
+                              "source_span": null,
+                              "ty": {
+                                "canonical": "uint32_t",
+                                "is_const": true,
+                                "kind": {
+                                  "Integer": {
+                                    "signed": false,
+                                    "width": 32
+                                  }
+                                },
+                                "source_span": null,
+                                "spelled": "const uint32_t",
+                                "width_bits": 32
+                              }
+                            }
+                          },
+                          "source_span": null,
+                          "target": {
+                            "canonical": "uint32_t",
+                            "is_const": false,
+                            "kind": {
+                              "Integer": {
+                                "signed": false,
+                                "width": 32
+                              }
+                            },
+                            "source_span": null,
+                            "spelled": "uint32_t",
+                            "width_bits": 32
+                          }
+                        }
+                      },
+                      "op": "BitXor",
+                      "rhs": {
+                        "Binary": {
+                          "lhs": {
+                            "LValueToRValue": {
+                              "expr": {
+                                "Var": {
+                                  "name": "crc",
                                   "source_span": null,
-                                  "target": {
+                                  "ty": {
                                     "canonical": "uint32_t",
                                     "is_const": false,
                                     "kind": {
@@ -509,45 +637,7 @@
                                 }
                               },
                               "source_span": null,
-                              "ty": {
-                                "canonical": "uint32_t",
-                                "is_const": false,
-                                "kind": {
-                                  "Integer": {
-                                    "signed": false,
-                                    "width": 32
-                                  }
-                                },
-                                "source_span": null,
-                                "spelled": "uint32_t",
-                                "width_bits": 32
-                              }
-                            }
-                          },
-                          "source_span": null,
-                          "ty": {
-                            "canonical": "uint32_t",
-                            "is_const": true,
-                            "kind": {
-                              "Integer": {
-                                "signed": false,
-                                "width": 32
-                              }
-                            },
-                            "source_span": null,
-                            "spelled": "const uint32_t",
-                            "width_bits": 32
-                          }
-                        }
-                      },
-                      "op": "BitXor",
-                      "rhs": {
-                        "Binary": {
-                          "lhs": {
-                            "Var": {
-                              "name": "crc",
-                              "source_span": null,
-                              "ty": {
+                              "target": {
                                 "canonical": "uint32_t",
                                 "is_const": false,
                                 "kind": {
@@ -666,10 +756,28 @@
             "value": {
               "Binary": {
                 "lhs": {
-                  "Var": {
-                    "name": "crc",
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "crc",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "uint32_t",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": false,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "uint32_t",
+                          "width_bits": 32
+                        }
+                      }
+                    },
                     "source_span": null,
-                    "ty": {
+                    "target": {
                       "canonical": "uint32_t",
                       "is_const": false,
                       "kind": {
@@ -693,7 +801,7 @@
                         "source_span": null,
                         "spelling": "0",
                         "ty": {
-                          "canonical": "uint32_t",
+                          "canonical": "unsigned int",
                           "is_const": false,
                           "kind": {
                             "Integer": {
@@ -710,7 +818,7 @@
                     },
                     "source_span": null,
                     "ty": {
-                      "canonical": "uint32_t",
+                      "canonical": "unsigned int",
                       "is_const": false,
                       "kind": {
                         "Integer": {
@@ -726,7 +834,7 @@
                 },
                 "source_span": null,
                 "ty": {
-                  "canonical": "uint32_t",
+                  "canonical": "unsigned int",
                   "is_const": false,
                   "kind": {
                     "Integer": {
@@ -1110,10 +1218,11 @@
         }
       }
     ],
-    "source_file": "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c",
+    "source_file": "sources/FlashDB/src/fdb_utils.c",
     "status": "lowered"
   },
   "metadata": {
+    "clang_ast_fixture": null,
     "compile_commands": null,
     "function_source_span": {
       "byte_end": 4075,
@@ -1125,14 +1234,14 @@
     },
     "logical_source_file": "src/fdb_utils.c",
     "source_file_hashes": {
-      "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+      "src/fdb_utils.c": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
     },
-    "source_root": "C:\\Users\\Administrator\\Documents\\c-to-rust\\sources\\FlashDB"
+    "source_root": "sources/FlashDB"
   },
   "schema_version": 1,
   "slice_id": "real-fdb-calc-crc32",
-  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
-  "source_file": "C:/Users/Administrator/Documents/c-to-rust/sources/FlashDB/src/fdb_utils.c",
+  "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
+  "source_file": "sources/FlashDB/src/fdb_utils.c",
   "status": "lowered",
   "target_id": "flashdb",
   "typed_ir_candidate": {
@@ -1185,6 +1294,6 @@
     "rust_draft_sha256": "70a15d513d2df753b483ef42961e97bd22b465e30c15e36d40b368f969760fea",
     "semantic_pass": false,
     "status": "generated",
-    "typed_ir_sha256": "9c75816a055a0ad6e81fa9742721d967305dc9b8ab623ef8ed29b4703192d078"
+    "typed_ir_sha256": "d7ce9365fe23d9ddacc5714ce92bf224b3cb642984fbc38baebee06bd9503215"
   }
 }

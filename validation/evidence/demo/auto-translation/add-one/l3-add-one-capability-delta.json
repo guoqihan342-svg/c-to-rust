@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "cap-add-one-typed_ir_zero_token_deterministic",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/add-one/l3-add-one-route-decision.json",
+        "validation/evidence/demo/auto-translation/add-one/l3-add-one-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "add-one",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "gov-add-one-typed_ir_zero_token_deterministic-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/add-one/l3-add-one-route-decision.json",
+        "validation/evidence/demo/auto-translation/add-one/l3-add-one-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L0",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "source_commit": "demo-add-one-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-add-one-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/add-one.c": "7a5ab0929c73c41027024fd707363adffcb1b5be924a7ee33ffe764a3ba59401"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

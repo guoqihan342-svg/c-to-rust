@@ -13,7 +13,7 @@
 /* fixture case: null-empty input_ref=cases[0] expected_ref=validation/l2_slices/fixtures/real-fdb-blob-make.json expected_outputs={"blob.buf": "value_buf", "blob.size": 0, "return_same_blob": true} */
 /* fixture case: nominal-bytes input_ref=cases[1] expected_ref=validation/l2_slices/fixtures/real-fdb-blob-make.json expected_outputs={"blob.buf": "value_buf", "blob.size": 3, "return_same_blob": true} */
 /* fixture case: shorter-length-than-buffer input_ref=cases[2] expected_ref=validation/l2_slices/fixtures/real-fdb-blob-make.json expected_outputs={"blob.buf": "value_buf", "blob.size": 2, "return_same_blob": true} */
-/* source file: src/fdb_utils.c (sha256: 207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc) */
+/* source file: src/fdb_utils.c (sha256: bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0) */
 struct fdb_blob {
   void *buf;
   size_t size;

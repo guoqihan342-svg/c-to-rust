@@ -6,19 +6,22 @@
     "authoritative_evidence": false,
     "role": "diagnostic_only"
   },
-  "diagnostics": [],
+  "diagnostics": [
+    "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
+    "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/signed_rshift_contract_ast.json"
+  ],
   "durable_evidence": {
-    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
-    "clang_version": "clang version 22.1.8 (https://github.com/llvm/llvm-project ca7933e47d3a3451d81e72ac174dcb5aa28b59d1)",
+    "clang_path": "",
+    "clang_version": "not_configured",
     "competition_environment": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "30bb0da0906b6d574905471f8830e9ff01520f43c00f25102a07de9bdb206985"
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
     },
     "frontend": "clang_ast_dump_json",
     "hash_algorithm": "sha256",
     "rust_draft_sha256": "e27d23307f48b293ec9d6f0cc5a33f92fa318be78bbf4ce815c893ea200146ad",
-    "typed_ir_sha256": "51d49ba1d0377a83deaf74e56b01053c34616d73bf64a1152fcf2475f4c7e84d"
+    "typed_ir_sha256": "193fc49265c90fda886c4b6b3490bc5357c9d2f2df5ea82deec715e84126f53a"
   },
   "errors": [],
   "fixture_hash": "signed-rshift-contract-fixture",
@@ -26,13 +29,15 @@
   "function_name": "signed_rshift_contract",
   "lowering_report": {
     "arguments": [
-      "-Xclang",
-      "-ast-dump=json",
-      "-fsyntax-only",
-      ".\\validation/l2_slices/fixtures/signed-rshift-contract.c"
+      "--ast-json-fixture",
+      "crates/c2r-translator/fixtures/clang_ast/signed_rshift_contract_ast.json",
+      "validation/l2_slices/fixtures/signed-rshift-contract.c"
     ],
-    "clang_path": "C:\\Program Files\\LLVM\\bin\\clang.exe",
-    "diagnostics": [],
+    "clang_path": null,
+    "diagnostics": [
+      "CLANG_PATH is not set and no vendored clang binary found in tools/llvm/bin/ or tools/clang/bin/; clang AST lowering is unavailable",
+      "clang AST JSON fixture replay used after clang AST dump was unavailable: crates/c2r-translator/fixtures/clang_ast/signed_rshift_contract_ast.json"
+    ],
     "environment": {
       "diagnostics": [
         "LIBCLANG_PATH is not set and is ignored for clang AST dump lowering"
@@ -43,7 +48,7 @@
       "status": "not_configured"
     },
     "errors": [],
-    "frontend": "clang",
+    "frontend": "clang_ast_json_fixture",
     "function_ir": {
       "body": [
         {
@@ -52,10 +57,28 @@
             "value": {
               "Binary": {
                 "lhs": {
-                  "Var": {
-                    "name": "value",
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "value",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
                     "source_span": null,
-                    "ty": {
+                    "target": {
                       "canonical": "int",
                       "is_const": false,
                       "kind": {
@@ -72,10 +95,28 @@
                 },
                 "op": "Shr",
                 "rhs": {
-                  "Var": {
-                    "name": "count",
+                  "LValueToRValue": {
+                    "expr": {
+                      "Var": {
+                        "name": "count",
+                        "source_span": null,
+                        "ty": {
+                          "canonical": "int",
+                          "is_const": false,
+                          "kind": {
+                            "Integer": {
+                              "signed": true,
+                              "width": 32
+                            }
+                          },
+                          "source_span": null,
+                          "spelled": "int",
+                          "width_bits": 32
+                        }
+                      }
+                    },
                     "source_span": null,
-                    "ty": {
+                    "target": {
                       "canonical": "int",
                       "is_const": false,
                       "kind": {
@@ -167,6 +208,7 @@
     "status": "lowered"
   },
   "metadata": {
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/signed_rshift_contract_ast.json",
     "compile_commands": null,
     "function_source_span": {
       "byte_end": 76,
@@ -243,6 +285,6 @@
     "rust_draft_sha256": "e27d23307f48b293ec9d6f0cc5a33f92fa318be78bbf4ce815c893ea200146ad",
     "semantic_pass": false,
     "status": "generated",
-    "typed_ir_sha256": "51d49ba1d0377a83deaf74e56b01053c34616d73bf64a1152fcf2475f4c7e84d"
+    "typed_ir_sha256": "193fc49265c90fda886c4b6b3490bc5357c9d2f2df5ea82deec715e84126f53a"
   }
 }

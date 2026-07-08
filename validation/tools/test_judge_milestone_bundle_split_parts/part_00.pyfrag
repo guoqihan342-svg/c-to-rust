@@ -285,9 +285,15 @@ def route_metrics_payload(
     blocked_repair_count: int = 0,
     blocked_repairs_status: str | None = None,
     c2rust_baseline: dict | None = None,
+    translator_generated_semantic_pass_count: int = 0,
 ) -> dict:
     resolved_blocked_repairs_status = blocked_repairs_status or ("observed" if blocked_repair_count else "none")
     resolved_c2rust_baseline = c2rust_baseline or empty_c2rust_baseline_rollup()
+    generated_candidate_status = {"accepted_evidence_authoritative": accepted_evidence_semantic_pass_count}
+    route_statuses = {"accepted": accepted_evidence_semantic_pass_count}
+    if translator_generated_semantic_pass_count:
+        generated_candidate_status["semantic_pass"] = translator_generated_semantic_pass_count
+        route_statuses["refused"] = translator_generated_semantic_pass_count
     return {
         "schema_version": 1,
         "status": "passed",
@@ -305,7 +311,7 @@ def route_metrics_payload(
             },
         },
         "metrics": {
-            "translation_coverage_numerator": 0,
+            "translation_coverage_numerator": translator_generated_semantic_pass_count,
             "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
             "tracked_capability_delta_ledgers": 1,
             "tracked_capability_delta_count": 1,
@@ -316,12 +322,14 @@ def route_metrics_payload(
                 "delta_count": 1,
                 "governance_delta_count": 2,
                 "verification_command_count": 3,
-                "translator_generated_semantic_pass_count": 0,
-                "semantic_pass_count": accepted_evidence_semantic_pass_count,
+                "translator_generated_semantic_pass_count": translator_generated_semantic_pass_count,
+                "semantic_pass_count": translator_generated_semantic_pass_count,
                 "accepted_evidence_semantic_pass_count": accepted_evidence_semantic_pass_count,
-                "generated_candidate_status": {"accepted_evidence_authoritative": accepted_evidence_semantic_pass_count},
-                "route_levels": {"L4": accepted_evidence_semantic_pass_count},
-                "route_statuses": {"accepted": accepted_evidence_semantic_pass_count},
+                "generated_candidate_status": generated_candidate_status,
+                "route_levels": {
+                    "L4": accepted_evidence_semantic_pass_count + translator_generated_semantic_pass_count
+                },
+                "route_statuses": route_statuses,
                 "by_construct": {"function_call": 1},
                 "blocked_callee_count": blocked_repair_count,
             },

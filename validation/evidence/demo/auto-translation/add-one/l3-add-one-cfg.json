@@ -1,0 +1,93 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-one-20260708",
+    "slice_spec_sha256=c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "fixture_hash=add-one-fixture",
+    "build_profile_hash=89bcc6246ca4f7b2303fbf074bf38f5ca71b78e7e96b2e7d74c45af575dbed6e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "functions": [
+    {
+      "basic_blocks": [
+        {
+          "id": "entry",
+          "kind": "entry",
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "statement_kinds": [
+            "return"
+          ],
+          "statements": [
+            "return"
+          ],
+          "terminator": "return"
+        }
+      ],
+      "branches": [],
+      "edges": [
+        {
+          "from": "entry",
+          "kind": "return",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "return-0"
+        }
+      ],
+      "entry_block": "entry",
+      "exit_blocks": [
+        "return"
+      ],
+      "name": "add_one",
+      "returns": [
+        {
+          "block": "entry",
+          "expression": "",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          }
+        }
+      ],
+      "signature": "int add_one(int value)",
+      "source_span": {
+        "file": "slice-spec",
+        "line_end": 1,
+        "line_start": 1
+      },
+      "structured_control_flow": {
+        "has_goto": false,
+        "has_switch": false,
+        "if_count": 0,
+        "loop_count": 0,
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
+      }
+    }
+  ],
+  "level": "L3",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
+  "schema_version": 1,
+  "slice_id": "add-one",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-add-one.json",
+    "sha256": "c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "status": "ready"
+  },
+  "source_commit": "demo-add-one-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "unsupported_control_flow": []
+}

@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/zlib-ng/auto-translation/adler32-step/l3-adler32-step-c-oracle-harness-draft.c",
-    "sha256": "3f9409d64006b1f1611bbcad8f21c633f606f59d068009a01ee561424375ce34",
+    "sha256": "eaa5eabe207119d385a1a615b0626c6f05d970db3218d4db89179c99578cb505",
     "status": "draft"
   },
   "schema_version": 1,

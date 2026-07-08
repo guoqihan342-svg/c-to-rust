@@ -1,19 +1,21 @@
 {
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-c2rust-baseline-manifest.json",
-    "sha256": "7ffee58e0f68ce07aa8e6817b9859f4af893c628e2ded692631c725a2326c0c2",
+    "sha256": "cc96c58ea961186220f8a9a584a77871efb4a00f98f7f1822064f57b119eb03f",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
-    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "fixture_hash=copy-i32-ptr-arith-fixture",
-    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "build_profile_hash=bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
     "translator_version=0.1.0",
     "schema_version=1",
     "alias_gate=requires_noalias_contract",
     "alias_risk_count=1",
-    "aliasing_proven=false"
+    "aliasing_proven=false",
+    "effect_graph",
+    "effect_graph_sha256=f9c6fcb47dcbb660748dbbed808037581820b32f2fdf5f9d0927ffab233d3ee4"
   ],
   "generated_artifacts": [
     {
@@ -91,13 +93,21 @@
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-cfg.json",
       "status": "recorded"
     },
+    "external_callee_context": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-context-pack.json",
+      "status": "not_applicable"
+    },
     "pointer_graph": {
       "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-pointer-graph.json",
       "status": "recorded"
     },
     "slice_spec": {
       "path": "validation/slice-specs/demo-copy-i32-ptr-arith.json",
-      "sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+      "sha256": "c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
       "status": "ready"
     },
     "type_map": {
@@ -106,11 +116,11 @@
     }
   },
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "route_decision": {
-    "level": "L2",
+    "level": "L1",
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
-    "sha256": "9fc022231ddebca3356fa86709a4a1d2a73994e60d7de9816c2f53d82a657984",
+    "sha256": "1eb65b237d3ff5948284f434debf9e0ef43bd063b98e670c1bfa28c666f3497d",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -118,6 +128,9 @@
   "source_commit": "demo-copy-i32-ptr-arith-20260625",
   "status": "draft_generated",
   "target_id": "demo",
+  "translation_source": {
+    "selected": "clang-lowered-typed-ir"
+  },
   "translation_summary": {
     "alias_gate": {
       "complete_alias_safety": false,
@@ -127,11 +140,11 @@
       "risk_count": 1,
       "risk_level": "unknown_alias"
     },
-    "lvalue_decision_counts": {
-      "bounded_input_buffer": 1,
-      "bounded_pointer_arithmetic_input_read": 1,
-      "bounded_pointer_arithmetic_output_write": 1
-    },
+    "call_expressions": [],
+    "external_direct_callee_blocks": [],
+    "external_direct_callee_declarations": [],
+    "external_direct_callees": [],
+    "lvalue_decision_counts": {},
     "pointer_boundary_decision_counts": {
       "bounded_input_buffer": 1,
       "bounded_pointer_arithmetic_input_read": 1,
@@ -139,12 +152,7 @@
     },
     "safe_public_api": true,
     "translation_rule_ids": [
-      "safe-wrapper-for-pointer-out-param",
-      "bounded-input-buffer-read",
-      "bounded-pointer-arithmetic-input-read",
-      "bounded-pointer-arithmetic-output-write",
-      "structured-for",
-      "structured-return-expression"
+      "clang-lowered-typed-ir"
     ],
     "unsafe_candidate_count": 0,
     "unsupported_lvalue_count": 0,
@@ -152,8 +160,8 @@
   },
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json",
-    "profile": "L2-dev",
-    "sha256": "a6128f934dedb7ed71bb846282e1c0da5a846ebb70d69d6affda506df47860a7",
+    "profile": "L1-dev",
+    "sha256": "edec5dd2ef7e3e4b4b001a77b73ef0516b40e771b1f163dee76d8b3784ce6eff",
     "status": "passed"
   },
   "verification_plan": [

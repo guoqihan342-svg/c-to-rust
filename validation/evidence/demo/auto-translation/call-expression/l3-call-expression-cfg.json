@@ -1,9 +1,9 @@
 {
   "cache_invalidation_keys": [
     "source_commit=demo-call-expression-20260625",
-    "slice_spec_sha256=a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277",
+    "slice_spec_sha256=964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
     "fixture_hash=call-expression-fixture",
-    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "build_profile_hash=05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -13,24 +13,8 @@
         {
           "id": "entry",
           "kind": "entry",
-          "lvalue_decisions": [
-            {
-              "decision": "value_assignment",
-              "lvalue_kind": "simple_identifier",
-              "source_span": {
-                "file": "slice-spec",
-                "line_end": 1,
-                "line_start": 1
-              },
-              "source_statement": "int first = call_expression_chain(value - 1)",
-              "statement_index": 1,
-              "translation_rule_id": "assignment"
-            }
-          ],
-          "lvalue_kinds": [
-            "none",
-            "simple_identifier"
-          ],
+          "lvalue_decisions": [],
+          "lvalue_kinds": [],
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -39,20 +23,30 @@
           "statement_kinds": [
             "if",
             "primitive_declaration",
-            "call_expression",
             "assignment",
             "return"
           ],
           "statements": [
-            "if (value <= 0) { return -value; }",
-            "int first = call_expression_chain(value - 1)",
-            "value = call_expression_chain(first - 1)",
-            "return call_expression_chain(value - 1)"
-          ]
+            "if",
+            "decl first",
+            "assign value",
+            "return"
+          ],
+          "terminator": "return"
         }
       ],
       "branches": [],
       "edges": [
+        {
+          "from": "entry",
+          "kind": "unsupported",
+          "source_span": {
+            "file": "slice-spec",
+            "line_end": 1,
+            "line_start": 1
+          },
+          "to": "if-0"
+        },
         {
           "from": "entry",
           "kind": "return",
@@ -61,7 +55,7 @@
             "line_end": 1,
             "line_start": 1
           },
-          "to": "return"
+          "to": "return-3"
         }
       ],
       "entry_block": "entry",
@@ -72,7 +66,7 @@
       "returns": [
         {
           "block": "entry",
-          "expression": "call_expression_chain(value - 1)",
+          "expression": "",
           "source_span": {
             "file": "slice-spec",
             "line_end": 1,
@@ -91,17 +85,21 @@
         "has_switch": false,
         "if_count": 1,
         "loop_count": 0,
-        "relooper_required": false
+        "recovery_status": "structured",
+        "relooper_preconditions": [],
+        "relooper_refusals": [],
+        "relooper_required": false,
+        "scope_note": "structured control flow does not require relooper recovery"
       }
     }
   ],
   "level": "L3",
-  "repo_commit": "63c51c80671cb448347fd541389fcc6832882ef6",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "call-expression",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-call-expression.json",
-    "sha256": "a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277",
+    "sha256": "964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
     "status": "ready"
   },
   "source_commit": "demo-call-expression-20260625",

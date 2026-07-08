@@ -190,9 +190,9 @@ fn inc_dec_assignment_target_type<'a>(
             is_arrow: true,
             ..
         } => {
-            if context != "statement" {
+            if context != "statement" && context != "ForStmt step" {
                 return Err(format!(
-                    "{context} inc/dec record pointer field targets are unsupported outside standalone statements"
+                    "{context} inc/dec record pointer field targets are unsupported outside standalone statements or for-loop steps"
                 ));
             }
             match base.as_ref() {

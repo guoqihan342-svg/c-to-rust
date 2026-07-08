@@ -10,6 +10,9 @@ use crate::TargetAbiProfile;
 pub(super) fn function_return_type(
     qual_type: &str,
 ) -> Result<ClangTypeSkeleton, ClangFrontendError> {
+    if let Some(return_type) = function_pointer_return_qual_type(qual_type) {
+        return type_from_qual_type(&return_type);
+    }
     let Some((return_type, _)) = split_function_qual_type(qual_type) else {
         if qual_type.contains("(*") {
             return Err(ClangFrontendError {
@@ -25,6 +28,27 @@ pub(super) fn function_return_type(
         });
     };
     type_from_qual_type(return_type.trim())
+}
+
+#[cfg(feature = "typed-ir")]
+fn function_pointer_return_qual_type(qual_type: &str) -> Option<String> {
+    let trimmed = qual_type.trim();
+    let marker = "(*(";
+    let marker_index = trimmed.find(marker)?;
+    let return_type = trimmed[..marker_index].trim();
+    if return_type.is_empty() || return_type.contains(['(', ')', '*']) {
+        return None;
+    }
+    let outer_params_open = marker_index + 2;
+    let outer_params_close = matching_close_paren(trimmed, outer_params_open)?;
+    if trimmed.as_bytes().get(outer_params_close + 1) != Some(&b')') {
+        return None;
+    }
+    let function_params = trimmed[outer_params_close + 2..].trim();
+    if !function_params.starts_with('(') || !function_params.ends_with(')') {
+        return None;
+    }
+    Some(format!("{return_type} (*){function_params}"))
 }
 
 #[cfg(feature = "typed-ir")]

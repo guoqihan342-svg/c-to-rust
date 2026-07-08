@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "alias_requires_noalias_contract",
+      "delta_id": "cap-copy-i32-ptr-arith-alias_requires_noalias_contract",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
+        "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "copy-i32-ptr-arith",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "alias_requires_noalias_contract",
+      "delta_id": "gov-copy-i32-ptr-arith-alias_requires_noalias_contract-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-route-decision.json",
+        "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L1",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "copy-i32-ptr-arith",
+  "source_commit": "demo-copy-i32-ptr-arith-20260625",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-copy-i32-ptr-arith-20260625",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/copy-i32-ptr-arith.c": "91e829b92a6b5fe4f2872e9b27660e5914c56e301234a6fc0d525641dbf79c75"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

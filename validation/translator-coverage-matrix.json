@@ -162,6 +162,210 @@
       ]
     },
     {
+      "id": "real-clang-crc32-typed-ir-candidate",
+      "status": "covered",
+      "scope_limitations": [
+        "real clang lowering now generates a non-empty Rust draft for the FlashDB fdb_calc_crc32 slice",
+        "the exact typed-IR generated Rust draft is accepted only through generated_draft_acceptance after rustc, replay, C oracle, schema diff, negative diff, and unsafe evidence gates pass",
+        "shift-count scalar admission is now covered by the slice scalar_arithmetic_contract plus scalar_input_domain",
+        "raw C2Rust baseline evidence remains candidate_context_only and does not contribute to translator-generated semantic acceptance"
+      ],
+      "ir_constructs": [
+        "real clang AST dump to typed IR for FlashDB fdb_calc_crc32",
+        "known target_triple/abi metadata resolves to TargetAbiProfile",
+        "readonly global crc32_table inventory from real source",
+        "post-increment readonly byte cursor read with clang LValueToRValue wrapper",
+        "byte cursor parameter lowered to Rust &[u8] boundary in type-map evidence",
+        "hash-bound non-empty typed-IR Rust draft artifact"
+      ],
+      "dimension_status": {
+        "clang_fixture_replay": {
+          "status": "covered",
+          "scope_note": "Covered by an opt-in real clang AST dump smoke test and committed real-clang lowering report, not by a no-clang reduced fixture.",
+          "evidence": [
+            {
+              "name": "clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_12.rs"
+            },
+            {
+              "name": "real-fdb-calc-crc32 clang lowering report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-clang-lowering-report.json"
+            }
+          ]
+        },
+        "handwritten_ir": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_parse_spec_resolves_known_target_abi_profile_from_build_metadata",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_03.rs"
+            },
+            {
+              "name": "typed_ir_emits_clang_lvalue_wrapped_post_increment_read_in_binary_expr",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_01.rs"
+            },
+            {
+              "name": "clang_lowered_pointer_graph_records_post_increment_deref_inside_member_base",
+              "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_01.rs"
+            }
+          ]
+        },
+        "negative_case": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "validator rejects rust_draft_sha256 drift from rust draft artifact",
+              "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_01.pyfrag"
+            },
+            {
+              "name": "validator rejects missing generated rust draft artifact",
+              "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_01.pyfrag"
+            },
+            {
+              "name": "type_from_qual_type_with_unrecognized_target_abi_stays_fail_closed",
+              "path": "crates/c2r-translator/src/clang_frontend.rs"
+            }
+          ]
+        },
+        "runtime_emitted_rust": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_12.rs"
+            },
+            {
+              "name": "real-fdb-calc-crc32 rust draft artifact",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-rust-draft.rs"
+            },
+            {
+              "name": "real-fdb-calc-crc32 rust check report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/rust-check.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 generated draft replay report",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-test-translation-generated.json"
+            }
+          ]
+        },
+        "c_rust_diff": {
+          "status": "covered",
+          "scope_note": "Covered only for the exact real-fdb-calc-crc32 typed-IR generated draft through generated_draft_acceptance; this does not promote raw C2Rust baseline output or any other generated draft.",
+          "evidence": [
+            {
+              "name": "real-fdb-calc-crc32 generated draft acceptance gate",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 final verification generated draft acceptance",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-final-verification.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 generated test translation accepted after gates",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-test-translation-generated.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 schema-aware C/Rust diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-diff.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 C oracle",
+              "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-c-oracle.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 negative diff",
+              "path": "validation/evidence/flashdb/l3-real-fdb-calc-crc32-negative-diff.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 unsafe scan",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-scan.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 unsafe ledger",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-unsafe-ledger.json"
+            }
+          ]
+        },
+        "legacy_fallback": {
+          "status": "not_applicable",
+          "reason": "this row covers the real clang lowered typed-IR candidate path and does not use the legacy string translator"
+        },
+        "route_evidence": {
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "real-fdb-calc-crc32 route decision typed_ir generated candidate",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-route-decision.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 validation profile typed_ir generated candidate",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-validation-profile.json"
+            },
+            {
+              "name": "real-fdb-calc-crc32 type map records buf as &[u8]",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json"
+            },
+            {
+              "name": "test_validates_typed_ir_candidate_binding_against_clang_lowering_report",
+              "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_00.pyfrag"
+            }
+          ]
+        }
+      },
+      "positive_cases": [
+        {
+          "name": "clang_lowering_report_feature_can_drive_rust_draft_from_clang_lowered_ir_when_enabled",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_12.rs"
+        },
+        {
+          "name": "clang_parse_spec_resolves_known_target_abi_profile_from_build_metadata",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_03.rs"
+        },
+        {
+          "name": "typed_ir_emits_clang_lvalue_wrapped_post_increment_read_in_binary_expr",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_01.rs"
+        },
+        {
+          "name": "clang_lowered_pointer_graph_records_post_increment_deref_inside_member_base",
+          "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_01.rs"
+        },
+        {
+          "name": "test_validates_typed_ir_candidate_binding_against_clang_lowering_report",
+          "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_00.pyfrag"
+        },
+        {
+          "name": "test_real_fdb_calc_crc32_generated_replay_executes_candidate_fixture",
+          "path": "validation/tools/_test_auto_migrate_parts/class_part_07_split_parts/part_00.pyfrag"
+        },
+        {
+          "name": "validate_auto_translation_evidence_accepts_generated_draft_after_gates",
+          "path": "validation/tools/_validate_auto_translation_evidence_parts/part_02_split_parts/part_00.pyfrag"
+        }
+      ],
+      "negative_cases": [
+        {
+          "name": "validator rejects rust_draft_sha256 drift from rust draft artifact",
+          "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_01.pyfrag",
+          "fail_closed_reason": "a typed_ir generated candidate cannot bind a rust_draft_sha256 that differs from the committed rust draft artifact"
+        },
+        {
+          "name": "validator rejects missing generated rust draft artifact",
+          "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_00_split_parts/part_01.pyfrag",
+          "fail_closed_reason": "rust_draft_generated=true must have a matching l3-*-rust-draft.rs artifact on disk"
+        },
+        {
+          "name": "type_from_qual_type_with_unrecognized_target_abi_stays_fail_closed",
+          "path": "crates/c2r-translator/src/clang_frontend.rs",
+          "fail_closed_reason": "unknown target triples or ABI labels must not be guessed into an integer-width profile"
+        },
+        {
+          "name": "test_rejects_generated_draft_acceptance_status_drift",
+          "path": "validation/tools/_test_validate_auto_translation_evidence_parts/class_part_01_split_parts/part_00.pyfrag",
+          "fail_closed_reason": "generated draft acceptance must fail closed when the acceptance status or bound artifacts drift"
+        }
+      ]
+    },
+    {
       "id": "scalar-arithmetic-ub-contract-subset",
       "status": "partial",
       "ir_constructs": [
@@ -687,7 +891,8 @@
       "status": "partial",
       "scope_limitations": [
         "pointer-width evidence only proves sizeof(pointer) byte size under the target ABI profile",
-        "does not prove pointer provenance, aliasing, FFI ABI, dereference validity, object representation beyond explicit scalar width/alignment fields, struct layout, packing, or record/object alignment"
+        "does not prove pointer provenance, aliasing, FFI ABI, dereference validity, object representation beyond explicit scalar width/alignment fields, struct layout, packing, or record/object alignment",
+        "known target_triple/abi resolution is limited to explicit built-in 64-bit LP64/LLP64 profiles; unknown triples remain fail-closed"
       ],
       "ir_constructs": [
         "target ABI integer width provenance",
@@ -709,7 +914,8 @@
         "profile-bound _Alignof typedef-backed size_t lowering from clang-proven desugared/canonical spelling",
         "alignment trait fail-closed without explicit alignment/layout profile",
         "fail_closed_without_abi_profile",
-        "translator input target ABI profile preservation"
+        "translator input target ABI profile preservation",
+        "known target_triple/abi metadata resolves to TargetAbiProfile"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -775,6 +981,10 @@
             {
               "name": "alignof_typedef_uses_clang_desugared_alignment_spelling",
               "path": "crates/c2r-translator/src/clang_frontend/tests/chunk_04_split_parts/part_01.rs"
+            },
+            {
+              "name": "clang_parse_spec_resolves_known_target_abi_profile_from_build_metadata",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_03.rs"
             }
           ]
         },
@@ -933,6 +1143,10 @@
         {
           "name": "test_translator_input_preserves_target_abi_profile",
           "path": "validation/tools/test_auto_migrate.py"
+        },
+        {
+          "name": "clang_parse_spec_resolves_known_target_abi_profile_from_build_metadata",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_03.rs"
         }
       ],
       "negative_cases": [
@@ -1183,10 +1397,13 @@
         "nullable readonly pointer value position remains fail-closed outside condition/non-null branch use",
         "readonly pointer parameter without read-access evidence fail-closed",
         "readonly input pointer plus mutable output pointer with explicit restrict/noalias proof",
+        "multiple restrict-qualified mutable output pointer writes with pairwise noalias proof",
         "restrict-qualified pointer parameters from clang AST no-clang fixture replay",
         "readonly input plus mutable output noalias lowering reachable from clang AST replay",
         "readonly input plus mutable output without restrict/noalias from clang AST replay fail-closed",
-        "slice boundary"
+        "slice boundary",
+        "post-increment readonly byte cursor read with clang LValueToRValue wrapper",
+        "clang-lowered byte cursor parameter type-map records emitted Rust slice boundary"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1225,6 +1442,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "clang_ast_fixture_replays_multiple_restrict_mutable_out_pointers_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "readonly mutable without restrict/noalias no-clang AST fixture",
               "path": "crates/c2r-translator/fixtures/clang_ast/readonly_mutable_noalias_missing_ast.json"
             },
@@ -1254,6 +1475,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_emits_multiple_restrict_mutable_out_pointer_writes",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1264,6 +1489,10 @@
             {
               "name": "typed_ir_emits_readonly_global_fixed_array_decay_as_direct_call_argument",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_clang_lvalue_wrapped_post_increment_read_in_binary_expr",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_01.rs"
             }
           ]
         },
@@ -1284,6 +1513,10 @@
             },
             {
               "name": "typed_ir_rejects_readonly_deref_and_mutable_output_assignment_without_noalias_proof",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_rejects_multiple_mutable_pointer_index_assignments_without_alias_proof",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1328,6 +1561,14 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "multiple restrict mutable output pointer emitted Rust runtime checks",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "multiple restrict mutable output pointer emitted Rust runtime check from clang AST replay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1350,6 +1591,10 @@
             {
               "name": "clang_ast_fixture_lowers_array_decay_direct_call_argument_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_clang_lvalue_wrapped_post_increment_read_in_binary_expr",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_01.rs"
             }
           ]
         },
@@ -1376,6 +1621,14 @@
             {
               "name": "sum_i32_ptr_arith route decision",
               "path": "validation/evidence/demo/auto-translation/sum-i32-ptr-arith/l3-sum-i32-ptr-arith-route-decision.json"
+            },
+            {
+              "name": "clang_lowered_pointer_graph_records_post_increment_deref_inside_member_base",
+              "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_01.rs"
+            },
+            {
+              "name": "real-fdb-calc-crc32 type map records buf as &[u8]",
+              "path": "validation/evidence/flashdb/auto-translation/real-fdb-calc-crc32/l3-real-fdb-calc-crc32-type-map.json"
             }
           ]
         }
@@ -1422,6 +1675,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_replays_multiple_restrict_mutable_out_pointers_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "typed_ir_emits_readonly_input_and_mutable_output_index_assignment_with_restrict_noalias_proof",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -1434,8 +1691,20 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "typed_ir_emits_multiple_restrict_mutable_out_pointer_writes",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "typed_ir_emits_readonly_pointer_truthiness_condition_with_strlen_in_nonnull_branch",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_clang_lvalue_wrapped_post_increment_read_in_binary_expr",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_05_01.rs"
+        },
+        {
+          "name": "clang_lowered_pointer_graph_records_post_increment_deref_inside_member_base",
+          "path": "crates/c2r-translator/src/clang_lowered_translation_split_parts/part_03_split_parts/part_01.rs"
         }
       ],
       "negative_cases": [
@@ -1493,6 +1762,11 @@
           "name": "typed_ir_rejects_readonly_deref_and_mutable_output_assignment_without_noalias_proof",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "readonly pointer deref plus mutable output write requires explicit restrict/noalias proof"
+        },
+        {
+          "name": "typed_ir_rejects_multiple_mutable_pointer_index_assignments_without_alias_proof",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "multiple mutable output pointer writes require pairwise restrict/noalias proof before lowering to multiple &mut slices"
         },
         {
           "name": "clang_ast_fixture_replays_readonly_mutable_without_noalias_fails_closed",
@@ -1732,7 +2006,8 @@
         "anonymous nested integer record field inventory for complete local record zero initializers",
         "recursive nested record zero initializer for address-taken direct-call candidates",
         "embedded slice source C oracle harness diagnostic execution",
-        "record value field inc/dec for ForStmt step"
+        "record value field inc/dec for ForStmt step",
+        "mutable record pointer field inc/dec for ForStmt step"
       ],
       "dimension_status": {
         "clang_fixture_replay": {
@@ -1752,6 +2027,10 @@
             },
             {
               "name": "clang_ast_fixture_replays_record_field_subset_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_mutable_record_pointer_field_inc_dec_for_step_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -1818,6 +2097,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "clang_ast_fixture_replays_mutable_record_pointer_field_inc_dec_for_step_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_emits_local_record_address_passed_to_direct_call",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -1827,6 +2110,10 @@
             },
             {
               "name": "typed_ir_for_emits_record_field_inc_dec_step_assignment",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_for_emits_mutable_record_pointer_field_inc_dec_step_assignment",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1863,7 +2150,7 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
-              "name": "for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step",
+              "name": "for_step_stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_step",
               "path": "crates/c2r-translator/src/clang_frontend.rs"
             }
           ]
@@ -1914,6 +2201,10 @@
             },
             {
               "name": "typed_ir_for_emits_record_field_inc_dec_step_assignment",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_for_emits_mutable_record_pointer_field_inc_dec_step_assignment",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1997,6 +2288,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_replays_mutable_record_pointer_field_inc_dec_for_step_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
           "name": "clang_ast_fixture_replays_mutable_record_pointer_opaque_pointer_field_cast_write_without_clang",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
@@ -2046,7 +2341,15 @@
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
         {
+          "name": "for_step_stmt_skeleton_from_ast_accepts_record_pointer_field_inc_dec_step_as_assignment",
+          "path": "crates/c2r-translator/src/clang_frontend.rs"
+        },
+        {
           "name": "typed_ir_for_emits_record_field_inc_dec_step_assignment",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_for_emits_mutable_record_pointer_field_inc_dec_step_assignment",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -2097,9 +2400,9 @@
           "fail_closed_reason": "uninitialized local records are only zero-initialized when every use is a direct-call address argument; field reads still require an initializer"
         },
         {
-          "name": "for_step_stmt_skeleton_from_ast_rejects_record_pointer_field_inc_dec_step",
+          "name": "for_step_stmt_skeleton_from_ast_rejects_const_record_pointer_field_inc_dec_step",
           "path": "crates/c2r-translator/src/clang_frontend.rs",
-          "fail_closed_reason": "ForStmt step record pointer arrow-field inc/dec still lacks pointer sequencing and alias proof"
+          "fail_closed_reason": "ForStmt step record pointer arrow-field inc/dec still requires a non-const direct mutable record pointer variable base"
         }
       ]
     },
@@ -2129,7 +2432,10 @@
         "local fixed integer array decay as a readonly direct-call argument candidate",
         "simple scalar function pointer parameter type emitted as Rust fn pointer",
         "direct function-name decay as simple function pointer call argument",
-        "ordinary FunctionToPointerDecay outside direct callees and direct function-name call arguments lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
+        "direct function-name decay as simple local function pointer initializer",
+        "direct function-name decay as simple local function pointer assignment",
+        "direct function-name decay as simple function pointer return value",
+        "ordinary FunctionToPointerDecay outside direct callees, direct function-name call arguments, local direct function pointer initializers, local direct function pointer assignments, and simple function pointer returns lowers to explicit typed IR and remains fail-closed at Rust emission or bounded-call validation without lowering evidence",
         "pointer value call argument/return fail-closed",
         "local complete record address-of direct-call argument candidate",
         "discarded pointer-return direct-call statement with opaque void pointer argument candidate",
@@ -2151,8 +2457,16 @@
               "path": "crates/c2r-translator/fixtures/clang_ast/direct_call_ast.json"
             },
             {
+              "name": "call expression chain no-clang AST fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/call_expression_chain_ast.json"
+            },
+            {
               "name": "direct call no-clang fixture replay test",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_call_expression_chain_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_00.rs"
             },
             {
               "name": "pointer value call/return no-clang AST fixture",
@@ -2164,6 +2478,18 @@
             },
             {
               "name": "clang_ast_fixture_replays_function_name_decay_argument_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_local_function_pointer_initialized_from_direct_decay_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_function_pointer_return_from_direct_decay_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "clang_ast_fixture_replays_assigned_function_pointer_from_direct_decay_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2249,6 +2575,18 @@
             },
             {
               "name": "typed_ir_emits_direct_call_argument_integral_cast",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_function_pointer_initialized_from_direct_function_decay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_function_pointer_return_from_direct_function_decay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_function_pointer_assignment_from_direct_function_decay",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2437,6 +2775,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "typed_ir_rejects_unassigned_function_pointer_local_call",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
               "name": "typed_ir_rejects_memcpy_without_noalias_proof",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2490,6 +2832,10 @@
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
+              "name": "clang_ast_fixture_replays_call_expression_chain_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_00.rs"
+            },
+            {
               "name": "typed_ir_emits_direct_call_argument_integral_cast",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
@@ -2499,6 +2845,18 @@
             },
             {
               "name": "clang_ast_fixture_replays_function_name_decay_argument_without_clang",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_local_function_pointer_initialized_from_direct_function_decay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_function_pointer_return_from_direct_function_decay",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "typed_ir_emits_function_pointer_assignment_from_direct_function_decay",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             },
             {
@@ -2646,6 +3004,10 @@
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
+          "name": "clang_ast_fixture_replays_call_expression_chain_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation/chunk_00_00.rs"
+        },
+        {
           "name": "stmt_skeleton_from_ast_preserves_direct_call_arg_integral_cast",
           "path": "crates/c2r-translator/src/clang_frontend.rs"
         },
@@ -2687,6 +3049,14 @@
         },
         {
           "name": "clang_ast_fixture_replays_function_name_decay_argument_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_local_function_pointer_initialized_from_direct_function_decay",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "typed_ir_emits_function_pointer_assignment_from_direct_function_decay",
           "path": "crates/c2r-translator/tests/bounded_translation.rs"
         },
         {
@@ -2906,6 +3276,11 @@
           "name": "typed_ir_rejects_function_to_pointer_decay_without_lowering_evidence",
           "path": "crates/c2r-translator/tests/bounded_translation.rs",
           "fail_closed_reason": "FunctionToPointerDecay in ordinary expression position creates a function pointer value and requires explicit function-pointer lowering evidence"
+        },
+        {
+          "name": "typed_ir_rejects_unassigned_function_pointer_local_call",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs",
+          "fail_closed_reason": "local function pointer variables must be definitely assigned before they can act as callees"
         },
         {
           "name": "typed_ir_rejects_memset_calls_outside_minimal_statement_model",

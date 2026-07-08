@@ -150,6 +150,22 @@ Boundary:
 - Performance smoke remains secondary evidence and never replaces C/Rust behavior diff or negative controls.
 - Evidence cleanliness is an explicit reproducibility gate for committed evidence. It is not enabled by default during local development, it treats staged tracked evidence changes as not-yet-committed drift, and it does not inspect per-round reports under `target/full-regression/**`.
 
+## Project-Agnostic Full Conversion Acceptance Gate
+
+Purpose: prevent FlashDB sample or slice evidence from being published as arbitrary-project C-to-Rust conversion success.
+
+Pass criteria:
+
+- The judge run report binds `validation.project_agnostic_acceptance_report` to a repo-local artifact with a verified `sha256`.
+- `validate_project_agnostic_acceptance.py` accepts that artifact with `claim_scope=project_agnostic_full_conversion`.
+- The report proves input-project-derived discovery, non-empty source files and compile commands, zero hardcoded target references, full function translation and acceptance counts, Rust build pass, input-project-derived oracle, positive diff, negative diff, and unsafe ledger measurement.
+
+Boundary:
+
+- Missing or invalid project-agnostic acceptance evidence blocks `judge-milestone-bundle` publication with `project_agnostic_full_conversion_report_*`.
+- FlashDB oracle/replay evidence remains sample evidence only until a project-agnostic full-conversion acceptance report is bound.
+- A passed milestone bundle still does not turn OpenCode chat output, C2Rust candidates, or review packets into translator-generated semantic coverage.
+
 ## Reporting Rules
 
 - L0 passed: catalog target is eligible for deeper validation.

@@ -91,6 +91,272 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "call_local_function_pointer",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "fp",
+                  "type": {
+                    "qualType": "int (*)(int)"
+                  },
+                  "init": "c",
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "FunctionToPointerDecay",
+                      "type": {
+                        "qualType": "int (*)(int)"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int (int)"
+                          },
+                          "referencedDecl": {
+                            "kind": "FunctionDecl",
+                            "name": "helper"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "CallExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "FunctionToPointerDecay",
+                      "type": {
+                        "qualType": "int (*)(int)"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int (*)(int)"
+                          },
+                          "referencedDecl": {
+                            "kind": "VarDecl",
+                            "name": "fp"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "return_function_pointer",
+      "type": {
+        "qualType": "int (*(void))(int)"
+      },
+      "inner": [
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": {
+                    "qualType": "int (*)(int)"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int (int)"
+                      },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "helper"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "call_assigned_function_pointer",
+      "type": {
+        "qualType": "int (int)"
+      },
+      "inner": [
+        {
+          "kind": "ParmVarDecl",
+          "name": "value",
+          "type": {
+            "qualType": "int"
+          }
+        },
+        {
+          "kind": "CompoundStmt",
+          "inner": [
+            {
+              "kind": "DeclStmt",
+              "inner": [
+                {
+                  "kind": "VarDecl",
+                  "name": "fp",
+                  "type": {
+                    "qualType": "int (*)(int)"
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "BinaryOperator",
+              "opcode": "=",
+              "type": {
+                "qualType": "int (*)(int)"
+              },
+              "inner": [
+                {
+                  "kind": "DeclRefExpr",
+                  "type": {
+                    "qualType": "int (*)(int)"
+                  },
+                  "referencedDecl": {
+                    "kind": "VarDecl",
+                    "name": "fp"
+                  }
+                },
+                {
+                  "kind": "ImplicitCastExpr",
+                  "castKind": "FunctionToPointerDecay",
+                  "type": {
+                    "qualType": "int (*)(int)"
+                  },
+                  "inner": [
+                    {
+                      "kind": "DeclRefExpr",
+                      "type": {
+                        "qualType": "int (int)"
+                      },
+                      "referencedDecl": {
+                        "kind": "FunctionDecl",
+                        "name": "helper"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "ReturnStmt",
+              "inner": [
+                {
+                  "kind": "CallExpr",
+                  "type": {
+                    "qualType": "int"
+                  },
+                  "inner": [
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "FunctionToPointerDecay",
+                      "type": {
+                        "qualType": "int (*)(int)"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int (*)(int)"
+                          },
+                          "referencedDecl": {
+                            "kind": "VarDecl",
+                            "name": "fp"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "ImplicitCastExpr",
+                      "castKind": "LValueToRValue",
+                      "type": {
+                        "qualType": "int"
+                      },
+                      "inner": [
+                        {
+                          "kind": "DeclRefExpr",
+                          "type": {
+                            "qualType": "int"
+                          },
+                          "referencedDecl": {
+                            "kind": "ParmVarDecl",
+                            "name": "value"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ]
 }

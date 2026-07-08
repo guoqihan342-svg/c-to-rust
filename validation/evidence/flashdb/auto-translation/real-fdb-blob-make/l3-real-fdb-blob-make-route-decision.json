@@ -3,7 +3,7 @@
     "c2rust_baseline": {
       "baseline_manifest": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-        "sha256": "4e63837342bd3457c238c68b802035c74b22d3ba8c7392bead4865a5f58d22d5",
+        "sha256": "3be4d924cfff530d244b73915685d08457c40b639116f27bc73e033535a279f9",
         "status": "skipped"
       },
       "candidate_id": "c2rust-baseline",
@@ -35,7 +35,7 @@
       {
         "baseline_manifest": {
           "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-          "sha256": "4e63837342bd3457c238c68b802035c74b22d3ba8c7392bead4865a5f58d22d5",
+          "sha256": "3be4d924cfff530d244b73915685d08457c40b639116f27bc73e033535a279f9",
           "status": "skipped"
         },
         "candidate_id": "c2rust-baseline",
@@ -158,7 +158,7 @@
       "semantic_pass": false,
       "source_artifact": {
         "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-        "sha256": "86ca772ca88b4a068ee84e6f172c51a3acfe0eb835fd33ea1830cbbb0aa8d3d5",
+        "sha256": "678d0f8c29725d075eaea1cce32a379334c31d5641744cd91be85fd3a1c8a02c",
         "status": "lowered"
       },
       "status": "generated",
@@ -190,6 +190,8 @@
       "division_by_zero": "not_declared",
       "shift_count": "not_declared",
       "signed_division_overflow": "not_declared",
+      "signed_left_shift": "not_declared",
+      "signed_negation": "not_declared",
       "signed_overflow": "not_declared",
       "signed_right_shift": "not_declared",
       "wrapping_profile": "not_declared"
@@ -214,22 +216,22 @@
   "source_artifacts": {
     "c2rust_baseline": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c2rust-baseline-manifest.json",
-      "sha256": "4e63837342bd3457c238c68b802035c74b22d3ba8c7392bead4865a5f58d22d5",
+      "sha256": "3be4d924cfff530d244b73915685d08457c40b639116f27bc73e033535a279f9",
       "status": "skipped"
     },
     "cfg": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-cfg.json",
-      "sha256": "e024d8ee8ce4e88b689d455879d56ac78b96719b6489ecf0bc936f9f8128c269",
+      "sha256": "70b82ffde66b0bbc4f4b131108423e8868caa917350ed1c5da82d7f054948c9c",
       "status": "recorded"
     },
     "clang_lowering_report": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-clang-lowering-report.json",
-      "sha256": "86ca772ca88b4a068ee84e6f172c51a3acfe0eb835fd33ea1830cbbb0aa8d3d5",
+      "sha256": "678d0f8c29725d075eaea1cce32a379334c31d5641744cd91be85fd3a1c8a02c",
       "status": "lowered"
     },
     "pointer_graph": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-pointer-graph.json",
-      "sha256": "05c98469ddedcf0bb138bd0588f2f0c718d293a8067b2e970bc4e746460cfd8e",
+      "sha256": "25a564319ab7e911a5dfa46b22fdbcedfbeedf3267c82990486bb4daae468b20",
       "status": "recorded"
     },
     "translation_plan": {
@@ -238,9 +240,21 @@
     },
     "type_map": {
       "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-type-map.json",
-      "sha256": "f0b8dc0ecd2d87773eda00259a07e5634af5c847363272f5bdb773b9871b323e",
+      "sha256": "451782096f1b5d94b732c116bcbddb56b4d5b7b2ad339d79deb55cd13ad2dba3",
       "status": "recorded"
     }
+  },
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_identity": {
+    "repo_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb_utils.c": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829"
   },
   "status": "refused",
   "target_id": "flashdb",

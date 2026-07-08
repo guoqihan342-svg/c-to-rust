@@ -128,8 +128,10 @@ class _JudgeMilestoneBundleTestsPart03:
 
         temp_dir = Path(tempfile.mkdtemp(prefix="judge-milestone-blocked-repairs-", dir=REPO_ROOT / "target"))
         run_report_path = temp_dir / "summary" / "judge-entrypoints-run-report.json"
+        project_acceptance_path = temp_dir / "summary" / "project-agnostic-acceptance.json"
         out_path = temp_dir / "summary" / "judge-milestone-bundle.json"
         route_metrics_path = temp_dir / "summary" / "route-governance-metrics-report.json"
+        project_acceptance_ref = write_project_agnostic_acceptance_report(project_acceptance_path)
         write_json(
             route_metrics_path,
             route_metrics_payload(
@@ -173,6 +175,7 @@ class _JudgeMilestoneBundleTestsPart03:
                 ],
                 "validation": {
                     "status": "passed",
+                    "project_agnostic_acceptance_report": project_acceptance_ref,
                     "entrypoints": [
                         {
                             "id": "before_after_judge_demo",

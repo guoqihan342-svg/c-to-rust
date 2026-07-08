@@ -116,6 +116,16 @@
                 )
             self.assertIn("scalar_admission", str(raised.exception))
 
+            draft_path.write_text("pub fn fdb_calc_crc32_drifted() {}\n", encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+            self.assertIn("rust_draft_sha256", str(raised.exception))
+
+            draft_path.unlink()
+            with self.assertRaises(SystemExit) as raised:
+                module.validate_typed_ir_candidate_binding(evidence_dir, prefix, route, profile)
+            self.assertIn("rust draft artifact", str(raised.exception))
+
     def test_rejects_unsupported_typed_ir_candidate_reason_drift(self) -> None:
         module = load_validator_module()
         with tempfile.TemporaryDirectory(prefix="auto-validator-test-") as tmp:

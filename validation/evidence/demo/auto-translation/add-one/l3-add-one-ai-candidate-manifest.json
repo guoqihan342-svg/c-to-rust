@@ -1,0 +1,34 @@
+{
+  "ai_required_for_default_pipeline": false,
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-c2rust-baseline-manifest.json",
+    "sha256": "f6e61378f583283a932032a5af87210a3ce52eb226eed41f51af256c5571eabf",
+    "status": "skipped"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-add-one-20260708",
+    "slice_spec_sha256=c553f0a2ed4677e25055ba73bf09770b4dc3f93d2e32dc824ebffa6d8ab89796",
+    "fixture_hash=add-one-fixture",
+    "build_profile_hash=89bcc6246ca4f7b2303fbf074bf38f5ca71b78e7e96b2e7d74c45af575dbed6e",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "candidates": [],
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-route-decision.json",
+    "sha256": "674e73ec6b35a8e9592965a9d91d69771f24cad25326c62e5055c220b2cc4afb",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "skipped_reason": "AI_SKIPPED: default local pipeline does not require an online provider",
+  "slice_id": "add-one",
+  "status": "not_used",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/add-one/l3-add-one-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "0b2b68ec221d6538626b1e389a0a219a595322728cb1272ff50ec7dcb20542da",
+    "status": "passed"
+  }
+}

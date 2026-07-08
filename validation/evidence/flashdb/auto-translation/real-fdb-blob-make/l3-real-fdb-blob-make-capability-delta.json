@@ -1,5 +1,5 @@
 {
-  "boundary": "This ledger records P0 capability/refusal deltas only; it does not accept generated Rust semantics.",
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
   "capability_delta": [
     {
       "blocked_callees": [],
@@ -9,8 +9,8 @@
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-route-decision.json",
         "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-validation-profile.json"
       ],
-      "generated_candidate_status": "refused",
-      "kind": "refusal_classification",
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
       "negative_coverage": [
         {
           "command": "python -B -m unittest validation.tools.test_auto_migrate.AutoMigrateTests.test_unsupported_lvalue_blocks_auto_migrate_candidate_generation",
@@ -18,7 +18,7 @@
         }
       ],
       "real_c_slice": "real-fdb-blob-make",
-      "semantic_pass": false
+      "semantic_pass": true
     }
   ],
   "governance_delta": [
@@ -37,6 +37,18 @@
   "route_status": "refused",
   "schema_version": 1,
   "slice_id": "real-fdb-blob-make",
+  "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+  "source_identity": {
+    "repo_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
+    "source_file_hashes": {
+      "inc/fdb_def.h": "2a7e753ebc364be1523b2accb1e0dad9c4e5d4566fc63beb6e100a20fa95d320",
+      "inc/flashdb.h": "a500c4748ed5fc15246a4f7bd0a35d291839bb207c396bef7d07a210150bae52",
+      "src/fdb_utils.c": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
+    },
+    "source_repository": "https://gitcode.com/xwxf/FlashDB.git",
+    "source_root": "external/gitcode.com/xwxf/FlashDB/93d175549da579b8abac07bd175ce4c3f9dde829"
+  },
   "status": "recorded",
   "target_id": "flashdb",
   "verification_commands": [

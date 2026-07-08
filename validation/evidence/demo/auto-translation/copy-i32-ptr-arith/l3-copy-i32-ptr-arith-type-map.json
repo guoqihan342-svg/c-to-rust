@@ -1,17 +1,18 @@
 {
   "build_profile_ref": {
     "path": "validation/evidence/demo/auto-translation/copy-i32-ptr-arith/l3-copy-i32-ptr-arith-translator-input.json",
-    "sha256": "3f970916833b589d9a83af5caa43d77b18ac6882d93d9b989748cbeaa06c9250",
+    "sha256": "c15eb7145a05752cff9cf668bef6f5c03658857234758167d2aaee773df99679",
     "status": "recorded"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-copy-i32-ptr-arith-20260625",
-    "slice_spec_sha256=2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "slice_spec_sha256=c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "fixture_hash=copy-i32-ptr-arith-fixture",
-    "build_profile_hash=32ac0e2e20b090a7064b3503c8d37659ca58d830222cbbb1e3b4e0c8b8a5185c",
+    "build_profile_hash=bbf11aeeaa75221e633e8d13d10532fc612ad5c88ff87b6198f836a504bc293b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
+  "global_dependencies": [],
   "level": "L3",
   "mappings": [
     {
@@ -22,17 +23,17 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "values",
-      "c_type": "const int*",
+      "c_type": "const int *",
       "confidence": "proven",
       "id": "type-2",
       "kind": "pointer",
-      "rust_type": "&[i32]",
+      "rust_type": "*const i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "len",
@@ -42,25 +43,35 @@
       "kind": "primitive",
       "rust_type": "i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
     },
     {
       "c_name": "out",
-      "c_type": "int*",
+      "c_type": "int *",
       "confidence": "proven",
       "id": "type-4",
       "kind": "pointer",
-      "rust_type": "IntOutReport",
+      "rust_type": "*mut i32",
       "source": "translator_rule",
-      "translation_rule_id": "supported MVP C subset mapping"
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "i",
+      "c_type": "int",
+      "confidence": "proven",
+      "id": "type-5",
+      "kind": "primitive",
+      "rust_type": "i32",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
     }
   ],
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "schema_version": 1,
   "slice_id": "copy-i32-ptr-arith",
   "slice_spec_ref": {
     "path": "validation/slice-specs/demo-copy-i32-ptr-arith.json",
-    "sha256": "2c86e72972f1a4d2f81ee82bbd344950016656ce9430b0586153eafe08f33d8b",
+    "sha256": "c27b44d8a292374dff9040398708c7c005df2c5d3053be072114567ffa5f58ec",
     "status": "ready"
   },
   "source_commit": "demo-copy-i32-ptr-arith-20260625",

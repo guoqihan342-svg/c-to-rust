@@ -16,11 +16,19 @@
       "version_status": "NOT_FOUND"
     }
   ],
+  "compile": null,
   "correctness_role": "candidate_context_only",
   "diagnostics": [
     "no executable c2rust-transpile or c2rust command found on PATH"
   ],
   "fallback_oracle": "original_c_oracle_required",
+  "generation": {
+    "command": null,
+    "compile_commands": null,
+    "enabled": false,
+    "enabled_by": "",
+    "generated_files": []
+  },
   "must_not_claim": [
     "C2Rust output proves semantic equivalence",
     "C2Rust baseline was generated"
@@ -38,7 +46,7 @@
   "slice_id": "real-fdb-blob-make",
   "slice_spec": {
     "path": "validation/slice-specs/flashdb-real-fdb-blob-make.json",
-    "sha256": "d28e299ff8f52f065780ba071096bd2b381510d33a2dca6c40adcb2cec778646"
+    "sha256": "b93b8f807f597a44ebc10fba7ea2d2f25631fea5614795b77c1c2c74ed8bde5b"
   },
   "source_commit": "93d175549da579b8abac07bd175ce4c3f9dde829",
   "status": "skipped",
@@ -47,16 +55,53 @@
     "competition_environment_identity": {
       "path": "config/competition-env/environment.json",
       "profile_id": "huawei-competition-ubuntu-24.04",
-      "sha256": "23193a2c356b2c566557b0024d48956f8bddd379de518258d569ab75365de9f0"
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
     },
     "diagnostic_only": true,
-    "environment_profile_hash": "3d7aa64330e421426f677f4fa01d8f952f2740d97d5ce5be2d5b280a4d39a9bb",
+    "environment_profile_hash": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160",
     "os_name": "nt",
     "path_search": [
       "c2rust-transpile",
       "c2rust"
     ],
-    "probed_at": "2026-06-29T22:50:39Z"
+    "probed_at": "2026-07-07T18:04:44Z"
+  },
+  "toolchain_repair": {
+    "competition_environment": {
+      "profile": "config/competition-env/environment.json",
+      "proof_class": "local_or_wsl_until_competition_run",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
+    "correctness_role": "candidate_context_only",
+    "must_not_claim": [
+      "toolchain repair proves C2Rust generated output",
+      "compile-only C2Rust output proves semantic equivalence"
+    ],
+    "reason": "blocked_by_missing_tools",
+    "required_commands": [
+      "c2rust-transpile",
+      "c2rust"
+    ],
+    "required_dependencies": [
+      "rustc",
+      "cargo",
+      "clang",
+      "libclang"
+    ],
+    "rerun_command": [
+      "python3",
+      "-B",
+      "-m",
+      "validation.tools.auto_migrate",
+      "--slice-spec",
+      "validation/slice-specs/flashdb-real-fdb-blob-make.json",
+      "--out-root",
+      "validation/evidence"
+    ],
+    "rerun_env": {
+      "C2RUST_BASELINE_GENERATION": "1"
+    },
+    "status": "required"
   },
   "validation_impact": "baseline_unavailable_does_not_accept_or_reject_candidate; selected validation profile still owns acceptance"
 }

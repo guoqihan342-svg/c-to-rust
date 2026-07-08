@@ -414,17 +414,19 @@ def oracle_fixture_case_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
             binding_status = "expected_ref_only"
         else:
             binding_status = "missing_expected_outputs"
-        bindings.append(
-            {
-                "id": str(case.get("id") or f"case-{index}"),
-                "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
-                "expected_ref": str(case.get("expected_ref") or "missing"),
-                "expected_outputs": normalized_expected,
-                "observable_outputs": fields,
-                "missing_observable_outputs": missing_outputs,
-                "binding_status": binding_status,
-            }
-        )
+        binding = {
+            "id": str(case.get("id") or f"case-{index}"),
+            "input_ref": str(case.get("input_ref") or f"cases[{index}]"),
+            "expected_ref": str(case.get("expected_ref") or "missing"),
+            "expected_outputs": normalized_expected,
+            "observable_outputs": fields,
+            "missing_observable_outputs": missing_outputs,
+            "binding_status": binding_status,
+        }
+        input_payload = case.get("inputs")
+        if isinstance(input_payload, dict) and input_payload:
+            binding["input_payload"] = input_payload
+        bindings.append(binding)
     return bindings
 
 

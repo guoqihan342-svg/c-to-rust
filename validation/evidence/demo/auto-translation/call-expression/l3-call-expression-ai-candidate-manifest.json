@@ -2,14 +2,14 @@
   "ai_required_for_default_pipeline": false,
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-c2rust-baseline-manifest.json",
-    "sha256": "aa170bc45ac953e9258f813eca5cfc9b97e583f5c2d219c4bb737d13f479fc13",
+    "sha256": "c27c1cdf302f3e12b8be67b5e54e441c20054fba68e3d5777f9d62516ff315bc",
     "status": "skipped"
   },
   "cache_invalidation_keys": [
     "source_commit=demo-call-expression-20260625",
-    "slice_spec_sha256=a0334873a4003ede2f1f6759aa84a41e03dc28dc5084220c136bfac48271b277",
+    "slice_spec_sha256=964ed8c30ac0e9f6d3241338b3e6160f67f3af7ce0fbfc5582bcb0cdc58c47bc",
     "fixture_hash=call-expression-fixture",
-    "build_profile_hash=7433aa27a75eb8b51802e7d31fa4c2619310758b555641e8787e526db06207ab",
+    "build_profile_hash=05410efef254acecefcf4bbda52bc0eec37b7602eca1b175b97b531e8858265c",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -17,7 +17,7 @@
   "route_decision": {
     "level": "L0",
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-route-decision.json",
-    "sha256": "2ca80d36e033a2944245739398765e62153b3230de21504b1c276589c5212556",
+    "sha256": "fc8cb9dcf7312fdecbc1aa73acc28222d1d2a172f378e9085b0b5a61d3885cef",
     "status": "recorded"
   },
   "schema_version": 1,
@@ -28,7 +28,7 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/call-expression/l3-call-expression-validation-profile.json",
     "profile": "L0-dev",
-    "sha256": "207632b5fdf90f59c69c3255e3ec2fe5076a1bbcf20cadac55fb8ca1f621dff4",
+    "sha256": "0deeeb52e923379b5750eef43b552073f5449c679917366a2601cff18aafd887",
     "status": "passed"
   }
 }

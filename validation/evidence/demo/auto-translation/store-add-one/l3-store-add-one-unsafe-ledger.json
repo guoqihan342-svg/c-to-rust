@@ -4,11 +4,28 @@
     "sha256": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
     "status": "passed"
   },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
+    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
+    "status": "skipped"
+  },
   "entries": [],
   "first_party_non_test_unsafe_count": 0,
   "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L1",
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
+    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
+    "status": "recorded"
+  },
   "schema_version": 1,
   "slice_id": "store-add-one",
   "status": "passed",
-  "target_id": "demo"
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
+    "profile": "L1-dev",
+    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
+    "status": "passed"
+  }
 }

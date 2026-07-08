@@ -2,7 +2,7 @@
   "accepted_evidence_binding": {
     "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
     "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-    "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "fixture_sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
     "generated_draft_semantic_pass": false,
     "path_sha256": {
       "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
@@ -34,7 +34,7 @@
   },
   "c2rust_baseline": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-    "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
+    "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
     "status": "skipped"
   },
   "cache": {
@@ -47,10 +47,15 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "build_profile_hash": "a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash": "ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "c2rust_baseline_identity": {
-      "sha256": "8918d9896e63262a76e50dbc5b575a16b12a43a62a298af0585e9f4bcf7da566",
+      "sha256": "d0bbe6d4f521fcc2694249f2ea0c6d09ec8a29e3966863cbd421025c4a6df5cc",
       "status": "skipped"
+    },
+    "c_oracle_harness_identity": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
+      "sha256": "34930cea1c35e9c618c8ed7b045127d90dfc696e1e7d4fb0efc0901c6d8e9193",
+      "status": "draft"
     },
     "cache_input_fields": [
       "source_commit",
@@ -58,6 +63,7 @@
       "slice_spec_sha256",
       "fixture_hash",
       "build_profile_hash",
+      "competition_environment_identity",
       "cargo_lock_hash",
       "tool_versions",
       "schema_versions",
@@ -65,43 +71,94 @@
       "translator_manifest_sha256",
       "command_arguments",
       "alias_gate_identity",
+      "effect_graph_identity",
+      "scalar_ub_contract_identity",
+      "oracle_boundary_contract_identity",
       "c2rust_baseline_identity",
       "route_decision_identity",
       "validation_profile_identity",
-      "oracle_boundary_contract_identity"
+      "global_dependency_identity",
+      "c_oracle_harness_identity",
+      "translator_feature_set",
+      "clang_lowering_identity"
     ],
     "cargo_lock_hash": "ecf0a4dcf9850314728b56bf9d947e6305cbbf4dc5381421d5eeacc471bc0117",
+    "clang_lowering_identity": {
+      "clang_path": "",
+      "clang_path_status": "not_configured",
+      "clang_version": "not_configured",
+      "command": "clang -Xclang -ast-dump=json -fsyntax-only",
+      "enabled": true,
+      "features": [
+        "clang-lowering-report"
+      ],
+      "frontend": "clang_ast_dump_json",
+      "ignored_env_for_ast_dump": {
+        "LIBCLANG_PATH": {
+          "reason": "ignored_for_ast_dump",
+          "status": "not_configured",
+          "value": ""
+        }
+      },
+      "requires_env": [
+        "CLANG_PATH"
+      ]
+    },
     "command_arguments": [
       "auto_migrate.py",
       "--slice-spec",
       "validation/slice-specs/demo-store-add-one.json",
-      "--accept-existing-evidence"
+      "--accept-existing-evidence",
+      "--emit-clang-lowering-report"
     ],
+    "competition_environment_identity": {
+      "path": "config/competition-env/environment.json",
+      "profile_id": "huawei-competition-ubuntu-24.04",
+      "sha256": "8f2233e9c8c4e7676524a72bf8db919b83e89366ec3cc76d3673d07f32488160"
+    },
     "dependent_artifacts": {
       "c2rust_baseline": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-baseline-manifest.json",
-        "sha256": "970f20b959697890f003f4ad3aaf91b76b10de50a9743c30c7b01ff60a232d82",
+        "sha256": "c08e24bfcc020d63e6f3a9730117c05ce9e6ee5be0dd129a9b9dd1db4bdc79a3",
         "status": "skipped"
       },
       "route_decision": {
         "level": "L1",
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-        "sha256": "0ce195cc3f8815329a9377bff4510370c5ca4b30a64952b7a0d95d5d8ddc98b5",
+        "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
         "status": "recorded"
       },
       "validation_profile": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
         "profile": "L1-dev",
-        "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
+        "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
         "status": "passed"
       }
     },
+    "effect_graph_identity": {
+      "alias_gate_decision": "not_applicable",
+      "alias_sensitive": false,
+      "read_effect_count": 0,
+      "read_nodes": [],
+      "schema_version": 2,
+      "sha256": "896ab200d50926fa7004f2575f6d6e69843b53f51520158194b9aeeab1710e63",
+      "write_effect_count": 0,
+      "write_nodes": []
+    },
     "fixture_hash": "store-add-one-fixture",
+    "global_dependency_identity": {
+      "count": 0,
+      "names": [],
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
     "invalidates": [
       "context_pack",
       "type_map",
       "cfg",
       "pointer_graph",
+      "c2rust_baseline",
+      "route_decision",
+      "validation_profile",
       "rust_draft",
       "patch_plan",
       "ai_candidate",
@@ -111,17 +168,19 @@
       "negative_diff",
       "unsafe_ledger",
       "final_verification",
-      "summary",
-      "c2rust_baseline",
-      "route_decision",
-      "validation_profile"
+      "auto_translation_manifest",
+      "summary"
     ],
     "oracle_boundary_contract_identity": {
-      "sha256": "7b688f45d45d95295d75a2d6b584fe507c30c16da08a212198f9f61d9f83dff6",
+      "sha256": "b0ad8daf477453913e440d2522ef2ca07dff75684ae7ef82f35320ab2baa6fe5",
       "status": "sufficient_for_semantic_pass"
     },
     "route_decision_identity": {
-      "sha256": "6201eaf22ab70241a6330b9599e8e1bd88a9b3f3cfb2bd913796d2176273f368",
+      "sha256": "26a4c2d690865eed37de1f9040529839f34a533d1ef79543670dcf00d3b6ac69",
+      "status": "recorded"
+    },
+    "scalar_ub_contract_identity": {
+      "sha256": "29c1833d6196b591b0f5ca669fca67643f8f554c5c2a9a5d0fef3f34807bd8f1",
       "status": "recorded"
     },
     "schema_version": 1,
@@ -130,15 +189,15 @@
       "auto_translation_plan": 1,
       "cfg": 1,
       "evidence_manifest": 1,
-      "pointer_graph": 1,
+      "pointer_graph": 2,
       "type_map": 1
     },
     "slice_id": "store-add-one",
-    "slice_spec_sha256": "6579830e6928f670aa59398c76f2e236b317e78587f80aa537a1cf9c0bd8d084",
+    "slice_spec_sha256": "00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "source_commit": "demo-store-add-one-20260625",
     "source_file_hashes": {
-      "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
-      "validation/l2_slices/tools/generate_store_add_one_oracle.py": "37a053e53bea8bb00c59a243b3c7f76b7d6c09fabbcac9e95039703f943f8bf4"
+      "validation/l2_slices/fixtures/store-add-one-c-oracle.json": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+      "validation/l2_slices/fixtures/store-add-one.c": "60eb9506b984e9ba4580598d8d818358dbb25269edb56d854c340f3e9ebbd140"
     },
     "target_id": "demo",
     "tool_versions": {
@@ -147,14 +206,18 @@
       "python": "Python 3.14.2",
       "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
     },
-    "translator_manifest_sha256": "cf098b11bb5555bb5c0f27a34b0f1a70a647161ce9331c4494c854f6a026b7df",
+    "translator_feature_set": [
+      "clang-lowering-report"
+    ],
+    "translator_manifest_sha256": "4fa66d5ccaa594ae05ad9c2eba6a38ac13e1fcd571ef1be4db7539464a03cdc2",
     "translator_version": "0.1.0",
     "validation_profile_identity": {
-      "sha256": "ab194dd21797594f4971b1b298a8edd7983d6a243fb5b5c296034382760bbbb1",
+      "sha256": "c791e2b50a396060572207c15e44933067d4962974a06704ed2c96ee2285f071",
       "status": "passed"
     }
   },
   "claim_boundary": {
+    "accepted_evidence_authoritative": false,
     "alias_gate": {
       "complete_alias_safety": false,
       "decision": "not_applicable",
@@ -163,7 +226,112 @@
       "risk_count": 0,
       "risk_level": "none"
     },
-    "generated_draft_semantic_pass": false,
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+        "fixture_sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+          "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+          "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
+          "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+          "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+          "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+          "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+          "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+          "version_manifest": "4e3f1f90e868b49a15b1d779c0287e030454d9a13d04e445429b69837038d7e8"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-store-add-one-diff.json",
+          "final_verification": "validation/evidence/demo/l3-store-add-one-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-store-add-one-version-manifest.json"
+        },
+        "slice_id": "store-add-one",
+        "source_commit": "demo-store-add-one-20260625",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+          "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+          "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+          "sha256": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+          "sha256": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+          "sha256": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+          "sha256": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
+        "sha256": "48c5db9e63b8a209326718eaaf964712c5ff08ec4e202fdfe330f77197b1c42f",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "store-add-one",
+      "source_commit": "demo-store-add-one-20260625",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
     "must_still_pass": [],
     "non_goals": [
       "No full project migration claim.",
@@ -171,7 +339,7 @@
       "No support for INT_MAX because signed C overflow is undefined behavior.",
       "No support for out[i], pointer arithmetic, aliasing, or struct field writes."
     ],
-    "scope": "auto-translation run with accepted evidence binding; generated Rust draft remains a candidate unless generated_draft_semantic_pass is true",
+    "scope": "auto-translation run bound to accepted_evidence_binding plus generated_draft_acceptance for this exact Rust draft; route candidate_generation and C2Rust baseline remain candidate/provenance.",
     "semantic_pass": true
   },
   "fixture": {
@@ -193,8 +361,13 @@
     "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
     "case_count": 6,
     "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-    "fixture_sha256": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+    "fixture_sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
     "harness_draft": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
+    "harness_draft_ref": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c-oracle-harness-draft.c",
+      "sha256": "34930cea1c35e9c618c8ed7b045127d90dfc696e1e7d4fb0efc0901c6d8e9193",
+      "status": "draft"
+    },
     "schema_version": 1,
     "semantic_pass": true,
     "slice_id": "store-add-one",
@@ -221,9 +394,9 @@
     ],
     "cache_invalidation_keys": [
       "source_commit=demo-store-add-one-20260625",
-      "slice_spec_sha256=2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099",
+      "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
       "fixture_hash=store-add-one-fixture",
-      "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+      "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
       "translator_version=0.1.0",
       "schema_version=1"
     ],
@@ -251,7 +424,7 @@
       },
       "rust_draft": {
         "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
-        "status": "candidate"
+        "status": "accepted_after_gates"
       },
       "rust_report": {
         "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
@@ -265,12 +438,117 @@
       }
     },
     "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-    "known_gaps": [
-      "Generated replay draft is not itself the accepted replay implementation.",
-      "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
-    ],
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+        "fixture_sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+          "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+          "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
+          "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+          "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+          "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+          "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+          "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+          "version_manifest": "4e3f1f90e868b49a15b1d779c0287e030454d9a13d04e445429b69837038d7e8"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-store-add-one-diff.json",
+          "final_verification": "validation/evidence/demo/l3-store-add-one-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-store-add-one-version-manifest.json"
+        },
+        "slice_id": "store-add-one",
+        "source_commit": "demo-store-add-one-20260625",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+          "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+          "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+          "sha256": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+          "sha256": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+          "sha256": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+          "sha256": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
+        "sha256": "48c5db9e63b8a209326718eaaf964712c5ff08ec4e202fdfe330f77197b1c42f",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "store-add-one",
+      "source_commit": "demo-store-add-one-20260625",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [],
     "level": "L3",
-    "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
+    },
+    "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
     "rust_tests": [
       {
         "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml store_add_one",
@@ -297,7 +575,7 @@
     "source_test_inputs": {
       "fixtures": [
         {
-          "hash": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+          "hash": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
           "operation_count": 3,
           "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
           "source_kind": "fixture"
@@ -315,7 +593,7 @@
           "status": "passed"
         }
       ],
-      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+      "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; this exact generated replay draft is accepted by generated_draft_acceptance."
     },
     "status": "recorded",
     "target_id": "demo",
@@ -372,13 +650,28 @@
   "route_decision": {
     "level": "L1",
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-route-decision.json",
-    "sha256": "0ce195cc3f8815329a9377bff4510370c5ca4b30a64952b7a0d95d5d8ddc98b5",
+    "sha256": "4600babf58a579381b3e75237fa498d4b51ec64153072e84d26f3ca503696e3e",
     "status": "recorded"
   },
   "rust_check": {
-    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-7gywe84k C:\\Users\\Administrator\\Documents\\c-to-rust-flashdb\\validation\\evidence\\demo\\auto-translation\\store-add-one\\l3-store-add-one-rust-draft.rs",
+    "command": "rustc --edition=2021 --crate-type=lib --error-format=json --out-dir C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-rust-check-b7r453gr validation\\evidence\\demo\\auto-translation\\store-add-one\\l3-store-add-one-rust-draft.rs",
     "error_count": 0,
     "errors": [],
+    "external_callee_context": {
+      "blocked_callees": [],
+      "blocked_count": 0,
+      "declared_callees": [],
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "status": "not_applicable"
+    },
+    "rust_check_harness_only_bindings": {
+      "allowed_use": "rustc_compile_only",
+      "bindings": [],
+      "semantics_verified": false,
+      "status": "none"
+    },
     "schema_version": 1,
     "self_healing": {
       "blocked_repairs": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-self-healing-blocked-repairs.json",
@@ -388,6 +681,7 @@
     "status": "passed"
   },
   "schema_version": 1,
+  "semantic_pass": true,
   "slice_id": "store-add-one",
   "source_commit": "demo-store-add-one-20260625",
   "status": "accepted_evidence_bound",
@@ -401,7 +695,9 @@
       "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-pointer-graph.json",
       "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-ai-candidate-manifest.json",
       "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-blocked-repairs.json",
-      "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs"
+      "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
+      "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-clang-dry-run.json",
+      "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-clang-lowering-report.json"
     ],
     "slice_id": "store-add-one",
     "status": "generated",
@@ -410,7 +706,12 @@
   "validation_profile": {
     "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-validation-profile.json",
     "profile": "L1-dev",
-    "sha256": "63034609b56e9fc176aab36b55d9f5a36ca5ae562edefde22b4b70830a0677b9",
+    "sha256": "8057145f63880562b2005ce0d7bc03203a8045e6ba493bc1020fff726d8926a6",
     "status": "passed"
+  },
+  "verified_unsafe_baseline": {
+    "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-c2rust-verified-unsafe-baseline.json",
+    "sha256": "ffd26b21624273c7161575414e252a1e20a252897f5ba673f555f91a6bea3269",
+    "status": "blocked"
   }
 }

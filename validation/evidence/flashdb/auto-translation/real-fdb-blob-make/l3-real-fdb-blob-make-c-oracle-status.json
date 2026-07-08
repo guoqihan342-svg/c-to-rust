@@ -11,7 +11,7 @@
   "harness_draft": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
   "harness_draft_ref": {
     "path": "validation/evidence/flashdb/auto-translation/real-fdb-blob-make/l3-real-fdb-blob-make-c-oracle-harness-draft.c",
-    "sha256": "5df9ac625310fe1b98d57777b5574c3cc8c1494f637513464b1313f849c928f0",
+    "sha256": "bb9b88d01c4f5e4d97e200a0bb207e5b603177fc18b390cfd36d74b3419457cb",
     "status": "draft"
   },
   "schema_version": 1,

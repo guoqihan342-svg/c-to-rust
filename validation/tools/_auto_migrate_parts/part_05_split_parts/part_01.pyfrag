@@ -16,14 +16,21 @@
         "claim_boundary": {
             "scope": "Automatic translation candidate only; semantic acceptance is blocked until the C oracle, Rust replay, diff, negative diff, unsafe, and version/cache gates pass."
             if not semantic_pass
+            else "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+            if generated_draft_semantic_pass
             else "Automatic translation run completed with accepted evidence binding; the generated Rust draft is provenance evidence and remains a candidate unless a later gate explicitly accepts that exact draft.",
             "accepted_evidence_authoritative": accepted_evidence_authoritative_route(route_decision),
-            "generated_draft_semantic_pass": False,
+            "generated_draft_semantic_pass": generated_draft_semantic_pass,
+            **({"generated_draft_acceptance": generated_draft_acceptance} if generated_draft_semantic_pass else {}),
             "behavior_fields_checked": behavior_fields(spec),
             "accepted_metadata_differences": accepted_metadata_differences(spec),
             "known_gaps": non_goals(spec)
             + (
                 [
+                    "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha.",
+                ]
+                if generated_draft_semantic_pass
+                else [
                     "Auto-generated Rust draft remains a candidate; accepted semantics are bound to the referenced Rust replay evidence.",
                 ]
                 if semantic_pass
@@ -474,21 +481,36 @@ def promote_accepted_test_translation(
     spec: dict[str, Any],
     evidence_dir: Path,
     replay: dict[str, Any],
+    rust_check: dict[str, Any],
     accepted: dict[str, Any],
     route_decision: dict[str, Any],
 ) -> dict[str, Any]:
     slice_id = required_str(spec, "slice_id")
     path = evidence_dir / f"l3-{slice_id}-test-translation-generated.json"
     payload = read_json(path)
-    draft_status = generated_rust_draft_status(route_decision)
+    generated_draft_acceptance = generated_draft_acceptance_binding(
+        spec,
+        evidence_dir,
+        route_decision,
+        rust_check,
+        replay,
+        accepted,
+    )
+    generated_draft_semantic_pass = generated_draft_acceptance_passed(generated_draft_acceptance)
+    draft_status = "accepted_after_gates" if generated_draft_semantic_pass else generated_rust_draft_status(route_decision)
     test_file = spec.get("rust_boundary", {}).get("test_file") or replay.get("test_draft")
     test_name = f"accepted_{safe_ident(slice_id)}_replay"
     payload.update(
         {
             "status": "recorded",
             "source_commit": source_commit(spec),
+            "generated_draft_replay_pass": replay.get("generated_draft_replay_pass") is True,
+            "generated_draft_semantic_pass": generated_draft_semantic_pass,
+            "generated_draft_acceptance": generated_draft_acceptance,
             "source_test_inputs": {
-                "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance.",
+                "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; this exact generated replay draft is accepted by generated_draft_acceptance."
+                if generated_draft_semantic_pass
+                else "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance.",
                 "fixtures": [
                     {
                         "path": fixture_path(spec),

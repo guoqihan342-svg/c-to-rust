@@ -17,6 +17,16 @@
     },
     "target_triple": "x86_64-unknown-linux-gnu"
   },
+  "c_boundary": {
+    "scalar_arithmetic_contract": {
+      "division_by_zero": "not_declared",
+      "shift_count": "runtime_precondition_in_range",
+      "signed_division_overflow": "not_declared",
+      "signed_overflow": "not_declared",
+      "signed_right_shift": "not_declared",
+      "wrapping_profile": "not_declared"
+    }
+  },
   "c_source": "uint32_t fdb_calc_crc32(uint32_t crc, const void *buf, size_t size)\n{\n    const uint8_t *p;\n\n    p = (const uint8_t *)buf;\n    crc = crc ^ ~0U;\n\n    while (size--) {\n        crc = crc32_table[(crc ^ *p++) & 0xFF] ^ (crc >> 8);\n    }\n\n    return crc ^ ~0U;\n}",
   "fixture_hash": "real-fdb-calc-crc32-fixture",
   "function_name": "fdb_calc_crc32",
@@ -32,7 +42,7 @@
   "source_commit": "f9d0421315c564fb890a1b14eee77b290e0d7bbe",
   "source_file": "src/fdb_utils.c",
   "source_file_hashes": {
-    "src/fdb_utils.c": "207e1af49b7ee5cb26d31e66a0d8334bb3566b85bc727844be3c52fdbcf577cc"
+    "src/fdb_utils.c": "bb6d6bdf60d5176be307273f61bf1040b2bad668b018af612e026a58637d49c0"
   },
   "source_files": [
     {

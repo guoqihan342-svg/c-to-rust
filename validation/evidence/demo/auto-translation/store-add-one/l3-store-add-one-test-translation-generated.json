@@ -6,9 +6,9 @@
   ],
   "cache_invalidation_keys": [
     "source_commit=demo-store-add-one-20260625",
-    "slice_spec_sha256=2854596b05d406844e377bd82730819b03cf5d6f2b7936e9274140deea21a099",
+    "slice_spec_sha256=00651454b9eddd375b771b0b8265c2583648966079de1996c468f938855151a4",
     "fixture_hash=store-add-one-fixture",
-    "build_profile_hash=a243cb029919439bd7403cfd7a2f8e6ca03a0caf650a52f8ed56fb74a66d1a35",
+    "build_profile_hash=ed7190795884c8782c347e863b3f5bcfc2df8075848f37a479a2a396c524959b",
     "translator_version=0.1.0",
     "schema_version=1"
   ],
@@ -36,7 +36,7 @@
     },
     "rust_draft": {
       "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
-      "status": "candidate"
+      "status": "accepted_after_gates"
     },
     "rust_report": {
       "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
@@ -50,12 +50,117 @@
     }
   },
   "fixture": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
-  "known_gaps": [
-    "Generated replay draft is not itself the accepted replay implementation.",
-    "Generated Rust draft remains a candidate until that exact draft is promoted by later gates."
-  ],
+  "generated_draft_acceptance": {
+    "accepted_evidence_binding": {
+      "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+      "fixture_path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
+      "fixture_sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+      "generated_draft_semantic_pass": false,
+      "path_sha256": {
+        "c_oracle": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+        "diff": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+        "final_verification": "194b6067cb07c98dc5bd1dcff6ba400aa7dbb804f1f7736be67e323511a6ae94",
+        "negative_diff": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+        "performance_smoke": "cb94e1fd0d30da049fd2b94ecdadfa6982861693af06aefac81469b52cbcd932",
+        "rust_report": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+        "unsafe_ledger": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+        "unsafe_scan": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+        "version_manifest": "4e3f1f90e868b49a15b1d779c0287e030454d9a13d04e445429b69837038d7e8"
+      },
+      "paths": {
+        "c_oracle": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+        "diff": "validation/evidence/demo/l3-store-add-one-diff.json",
+        "final_verification": "validation/evidence/demo/l3-store-add-one-final-verification.json",
+        "negative_diff": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+        "performance_smoke": "validation/evidence/demo/l3-store-add-one-performance-smoke.json",
+        "rust_report": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+        "unsafe_ledger": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+        "unsafe_scan": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+        "version_manifest": "validation/evidence/demo/l3-store-add-one-version-manifest.json"
+      },
+      "slice_id": "store-add-one",
+      "source_commit": "demo-store-add-one-20260625",
+      "status": "accepted",
+      "target_id": "demo",
+      "toolchain_status": "C_ORACLE_GENERATED"
+    },
+    "accepted_evidence_refs": {
+      "c_oracle": {
+        "path": "validation/evidence/demo/l3-store-add-one-c-oracle.json",
+        "sha256": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
+        "status": "passed"
+      },
+      "negative_diff": {
+        "path": "validation/evidence/demo/l3-store-add-one-negative-diff.json",
+        "sha256": "cfd8961e8947a4b79d59006d6fd365c1804236bcbcbe53c7725a46e7afec4b1b",
+        "status": "expected_failed"
+      },
+      "rust_report": {
+        "path": "validation/evidence/demo/l3-store-add-one-rust-report.json",
+        "sha256": "f7c7f894d929e374da238d42d7442ccb3e1058326f8da7c5038be752a5e45407",
+        "status": "passed"
+      },
+      "schema_diff": {
+        "path": "validation/evidence/demo/l3-store-add-one-diff.json",
+        "sha256": "52d015f18fcd4b6c881199b067dd86174af97c2f4d896f8be2834a08a5a15bd5",
+        "status": "passed"
+      },
+      "unsafe_ledger": {
+        "path": "validation/evidence/demo/l3-store-add-one-unsafe-ledger.json",
+        "sha256": "d16d97745c29e66f55279c24518b32cd4a961c2b38d0d90220d49d2493796d17",
+        "status": "passed"
+      },
+      "unsafe_scan": {
+        "path": "validation/evidence/demo/l3-store-add-one-unsafe-scan.json",
+        "sha256": "3f511263725f047351e0adbdd577a9e88a8730e118ade9b4397727eab4df718e",
+        "status": "passed"
+      }
+    },
+    "blocked_reasons": [],
+    "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+    "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+    "generated_draft_replay_pass": true,
+    "generated_draft_semantic_pass": true,
+    "replay_execution": {
+      "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+      "compile_returncode": 0,
+      "phase": "run",
+      "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+      "run_returncode": 0,
+      "status": "passed",
+      "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
+      "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/rust-check.json",
+      "status": "passed"
+    },
+    "rust_draft": {
+      "path": "validation/evidence/demo/auto-translation/store-add-one/l3-store-add-one-rust-draft.rs",
+      "sha256": "48c5db9e63b8a209326718eaaf964712c5ff08ec4e202fdfe330f77197b1c42f",
+      "status": "accepted_after_gates"
+    },
+    "schema_version": 1,
+    "slice_id": "store-add-one",
+    "source_commit": "demo-store-add-one-20260625",
+    "status": "passed",
+    "target_id": "demo"
+  },
+  "generated_draft_replay_pass": true,
+  "generated_draft_semantic_pass": true,
+  "known_gaps": [],
   "level": "L3",
-  "repo_commit": "ad29b3ff86fa0dd2e80da364f78d88a70d5df526",
+  "replay_execution": {
+    "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe'",
+    "compile_returncode": 0,
+    "phase": "run",
+    "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-gsywdy01\\generated_replay.exe' --nocapture",
+    "run_returncode": 0,
+    "status": "passed",
+    "stderr_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stderr.log",
+    "stdout_log": "validation/evidence/demo/auto-translation/store-add-one/generated-rust-replay.stdout.log"
+  },
+  "repo_commit": "438206f314e43f5eeb77754aaaa67ed071b659ff",
   "rust_tests": [
     {
       "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml store_add_one",
@@ -82,7 +187,7 @@
   "source_test_inputs": {
     "fixtures": [
       {
-        "hash": "7d3e98886ba22854fa66ff754fac6eced346160e97278030c715e70a5e2a6eb2",
+        "hash": "ffaba13ae09257e39f1f29b451bb5784584dcc8acc1f0b0d83cfc527d0fa8592",
         "operation_count": 3,
         "path": "validation/l2_slices/fixtures/store-add-one-c-oracle.json",
         "source_kind": "fixture"
@@ -100,7 +205,7 @@
         "status": "passed"
       }
     ],
-    "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; generated replay draft remains provenance."
+    "oracle_strategy": "Accepted C oracle and Rust replay evidence are bound from the slice spec; this exact generated replay draft is accepted by generated_draft_acceptance."
   },
   "status": "recorded",
   "target_id": "demo",
