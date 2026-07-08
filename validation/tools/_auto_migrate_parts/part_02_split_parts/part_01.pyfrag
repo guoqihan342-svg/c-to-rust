@@ -110,6 +110,8 @@ def rust_replay_fixture_cases_source(spec: dict[str, Any], fixture_binding: dict
             return rust_replay_signed_i32_return_value_cases_source(spec, fixture_binding)
         if single_i32_return_value_replay_supported(spec):
             return rust_replay_single_i32_return_value_cases_source(spec, fixture_binding)
+        if single_u64_return_value_replay_supported(spec):
+            return rust_replay_single_u64_return_value_cases_source(spec, fixture_binding)
         if single_i32_out0_report_replay_supported(spec):
             return rust_replay_single_i32_out0_report_cases_source(spec, fixture_binding)
         if i32_slice_output_report_replay_supported(spec):
@@ -440,6 +442,104 @@ def rust_replay_single_i32_return_value_case_literal(
         f"status: {rust_string_literal(status)} "
         "},\n"
     )
+
+
+def single_u64_return_value_replay_supported(spec: dict[str, Any]) -> bool:
+    if behavior_fields(spec) != ["return_value", "status"]:
+        return False
+    signature = c_function_signature(spec)
+    if normalize_c_type(str(signature.get("return_type") or "")) != "unsigned long":
+        return False
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    if len(parameters) != 1:
+        return False
+    parameter = parameters[0]
+    return (
+        parameter.get("direction") == "input"
+        and normalize_c_type(str(parameter.get("c_type") or "")) == "unsigned long"
+    )
+
+
+def rust_replay_single_u64_return_value_cases_source(
+    spec: dict[str, Any], fixture_binding: dict[str, Any]
+) -> str:
+    function_name = safe_ident(required_str(spec, "function_name"))
+    parameter_name = single_u64_parameter_name(spec)
+    case_literals: list[str] = []
+    unsupported_comments: list[str] = []
+    for case_binding in fixture_binding.get("case_bindings", []):
+        if not isinstance(case_binding, dict):
+            continue
+        case_literal = rust_replay_single_u64_return_value_case_literal(spec, case_binding)
+        if case_literal is None:
+            case_id = str(case_binding.get("id") or "unknown-case")
+            unsupported_comments.append(
+                f"    // TODO: fixture case {case_id} is not supported by this u64 return replay generator.\n"
+            )
+            continue
+        case_literals.append(case_literal)
+
+    if not case_literals and not unsupported_comments:
+        return "    // TODO: bind fixture cases to generated Rust API assertions.\n"
+
+    expected_case_count = fixture_binding.get("case_count", len(case_literals))
+    lines = [
+        "    struct FixtureCase {\n",
+        "        id: &'static str,\n",
+        f"        {safe_ident(parameter_name)}: u64,\n",
+        "        return_value: u64,\n",
+        "        status: &'static str,\n",
+        "    }\n",
+        "\n",
+        "    let fixture_cases: &[FixtureCase] = &[\n",
+    ]
+    lines.extend(case_literals)
+    lines.extend(
+        [
+            "    ];\n",
+            f"    assert_eq!(fixture_cases.len(), {expected_case_count}usize, \"fixture case count drifted\");\n",
+            "    for case in fixture_cases {\n",
+            f"        let actual = {function_name}(case.{safe_ident(parameter_name)});\n",
+            '        assert_eq!(actual, case.return_value, "{} return_value drifted", case.id);\n',
+            '        assert_eq!(case.status, "ok", "{} fixture status drifted", case.id);\n',
+            "    }\n",
+        ]
+    )
+    lines.extend(unsupported_comments)
+    return "".join(lines)
+
+
+def rust_replay_single_u64_return_value_case_literal(
+    spec: dict[str, Any], case_binding: dict[str, Any]
+) -> str | None:
+    case_payload = oracle_fixture_input_payload(spec, case_binding)
+    if not isinstance(case_payload, dict):
+        return None
+    expected_outputs = case_binding.get("expected_outputs")
+    if not isinstance(expected_outputs, dict):
+        return None
+    parameter_name = single_u64_parameter_name(spec)
+    input_value = case_payload.get(parameter_name)
+    expected_return = expected_outputs.get("return_value")
+    status = expected_outputs.get("status")
+    if not is_u64_value(input_value) or not is_u64_value(expected_return):
+        return None
+    if status != "ok":
+        return None
+    return (
+        "        FixtureCase { "
+        f"id: {rust_string_literal(case_binding.get('id') or 'case')}, "
+        f"{safe_ident(parameter_name)}: {rust_u64_literal(int(input_value))}, "
+        f"return_value: {rust_u64_literal(int(expected_return))}, "
+        f"status: {rust_string_literal(status)} "
+        "},\n"
+    )
+
+
+def single_u64_parameter_name(spec: dict[str, Any]) -> str:
+    signature = c_function_signature(spec)
+    parameters = [item for item in signature.get("parameters", []) if isinstance(item, dict)]
+    return safe_ident(str(parameters[0].get("name") or "value")) if parameters else "value"
 
 
 def single_i32_out0_report_replay_supported(spec: dict[str, Any]) -> bool:
@@ -1045,6 +1145,12 @@ def rust_i32_literal(value: int) -> str:
     return f"{int(value)}i32"
 
 
+def rust_u64_literal(value: int) -> str:
+    if value == 2**64 - 1:
+        return "u64::MAX"
+    return f"{int(value)}u64"
+
+
 def rust_string_slice_literal(values: list[str]) -> str:
     if not values:
         return "&[]"
@@ -1125,6 +1231,7 @@ def generated_rust_replay_supported(spec: dict[str, Any], evidence_dir: Path) ->
         and not pure_uint32_value_replay_supported(spec)
         and not signed_i32_return_value_replay_supported(spec)
         and not single_i32_return_value_replay_supported(spec)
+        and not single_u64_return_value_replay_supported(spec)
         and not single_i32_out0_report_replay_supported(spec)
         and not i32_slice_output_report_replay_supported(spec)
         and not single_i32_call_metadata_replay_supported(spec)
@@ -1240,6 +1347,14 @@ def generated_rust_report_cases(spec: dict[str, Any]) -> list[dict[str, Any]]:
             }
         elif single_i32_return_value_replay_supported(spec):
             parameter_name = single_i32_parameter_name(spec)
+            case = {
+                "id": case_binding.get("id"),
+                parameter_name: case_payload.get(parameter_name),
+                "return_value": expected_outputs.get("return_value"),
+                "status": expected_outputs.get("status"),
+            }
+        elif single_u64_return_value_replay_supported(spec):
+            parameter_name = single_u64_parameter_name(spec)
             case = {
                 "id": case_binding.get("id"),
                 parameter_name: case_payload.get(parameter_name),

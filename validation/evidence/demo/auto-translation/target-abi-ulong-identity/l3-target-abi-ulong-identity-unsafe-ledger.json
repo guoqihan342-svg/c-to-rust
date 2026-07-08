@@ -1,0 +1,31 @@
+{
+  "accepted_unsafe_ledger": {
+    "path": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-ledger.json",
+    "sha256": "cbfa2bdbe622649e0cc8ce668fc45217d3f9c42076926028a55685502b5483a1",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c2rust-baseline-manifest.json",
+    "sha256": "592384379bd565d7417dd0c42e1a5cd4d97ec827caa6fe8b05b6af3fa754989a",
+    "status": "skipped"
+  },
+  "entries": [],
+  "first_party_non_test_unsafe_count": 0,
+  "policy": "Every first-party non-test unsafe use must be ledgered before acceptance.",
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-route-decision.json",
+    "sha256": "87b9250b3f6a6c0dbbc56f4a9d1721d38b786c7579d6121296f812f165e12c3c",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "ba00224300be1d4f382619b5af767538781d8a1ff348cd0913d7cd05c7ad3eac",
+    "status": "passed"
+  }
+}

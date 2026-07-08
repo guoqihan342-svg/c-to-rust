@@ -1,0 +1,26 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit",
+    "fixture.hash",
+    "build_profile.target",
+    "rust_boundary.module",
+    "translator_version"
+  ],
+  "fixture": {
+    "hash": "target-abi-ulong-identity-fixture",
+    "path": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json"
+  },
+  "level": "L3",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "recorded",
+  "target_abi": {
+    "long_width": 64,
+    "pointer_width": 64,
+    "triple_or_abi": "x86_64-unknown-linux-gnu"
+  },
+  "target_id": "demo",
+  "translator_version": "0.1.0"
+}

@@ -1,0 +1,52 @@
+{
+  "build_profile_ref": {
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-translator-input.json",
+    "sha256": "7a21af173e3bb984bce35caf1f4d038e3700d5f96db5dd993eedc9a561083e5b",
+    "status": "recorded"
+  },
+  "cache_invalidation_keys": [
+    "source_commit=demo-target-abi-ulong-identity-20260708",
+    "slice_spec_sha256=8984e96ff70a803447116f25ac67d07188b4880ce89099b49580fe7190e3537d",
+    "fixture_hash=target-abi-ulong-identity-fixture",
+    "build_profile_hash=b0330d12eed85cd57bda4f5fc400390bc81b0b8f2c67ad00203dd29c3e9ecc74",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "global_dependencies": [],
+  "level": "L3",
+  "mappings": [
+    {
+      "c_name": "return",
+      "c_type": "unsigned long",
+      "confidence": "proven",
+      "id": "type-1",
+      "kind": "unsupported",
+      "rust_type": "u64",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    },
+    {
+      "c_name": "value",
+      "c_type": "unsigned long",
+      "confidence": "proven",
+      "id": "type-2",
+      "kind": "unsupported",
+      "rust_type": "u64",
+      "source": "translator_rule",
+      "translation_rule_id": "clang-lowered typed IR mapping"
+    }
+  ],
+  "repo_commit": "8e11561355d4ff2c674f395db1b6a2475c27478c",
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "slice_spec_ref": {
+    "path": "validation/slice-specs/demo-target-abi-ulong-identity.json",
+    "sha256": "8984e96ff70a803447116f25ac67d07188b4880ce89099b49580fe7190e3537d",
+    "status": "ready"
+  },
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "recorded",
+  "target_id": "demo",
+  "uncertainties": [],
+  "unsupported_nodes": []
+}

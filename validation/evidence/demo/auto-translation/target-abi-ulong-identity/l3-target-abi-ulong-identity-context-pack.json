@@ -1,0 +1,57 @@
+{
+  "cache_invalidation_keys": [
+    "source_commit=demo-target-abi-ulong-identity-20260708",
+    "slice_spec_sha256=8984e96ff70a803447116f25ac67d07188b4880ce89099b49580fe7190e3537d",
+    "fixture_hash=target-abi-ulong-identity-fixture",
+    "build_profile_hash=b0330d12eed85cd57bda4f5fc400390bc81b0b8f2c67ad00203dd29c3e9ecc74",
+    "translator_version=0.1.0",
+    "schema_version=1"
+  ],
+  "call_edge_to_callee_binding": [],
+  "call_edges": [
+    {
+      "kind": "type",
+      "name": "unsigned long",
+      "source": "C99"
+    }
+  ],
+  "callee_sources": [],
+  "direct_c_files": [
+    "validation/l2_slices/fixtures/target-abi-ulong-identity.c"
+  ],
+  "direct_call_edges": [],
+  "direct_rust_files": [
+    "validation/l2_slices/src/target_abi_ulong_identity.rs"
+  ],
+  "external_direct_callee_blocks": [],
+  "external_direct_callee_declarations": [],
+  "external_direct_callees": [],
+  "fixture": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+  "global_dependencies": [],
+  "level": "L3",
+  "repo_commit": "8e11561355d4ff2c674f395db1b6a2475c27478c",
+  "schema_version": 1,
+  "signature_bindings": [],
+  "slice_id": "target-abi-ulong-identity",
+  "slice_spec": {
+    "path": "validation/slice-specs/demo-target-abi-ulong-identity.json",
+    "sha256": "8984e96ff70a803447116f25ac67d07188b4880ce89099b49580fe7190e3537d"
+  },
+  "source_boundary": {
+    "direct_call_edges": [],
+    "files": [
+      "validation/l2_slices/fixtures/target-abi-ulong-identity.c"
+    ],
+    "functions": [
+      "target_abi_ulong_identity"
+    ],
+    "globals": [],
+    "structs": [
+      "unsigned long"
+    ]
+  },
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "recorded",
+  "stub_boundaries": [],
+  "target_id": "demo"
+}

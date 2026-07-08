@@ -1,0 +1,54 @@
+{
+  "boundary": "This ledger records P0 capability/refusal deltas; semantic_pass=true only when validation_profile.generated_draft_acceptance accepts the exact generated Rust draft.",
+  "capability_delta": [
+    {
+      "blocked_callees": [],
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "cap-target-abi-ulong-identity-typed_ir_zero_token_deterministic",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-route-decision.json",
+        "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-validation-profile.json"
+      ],
+      "generated_candidate_status": "candidate",
+      "kind": "candidate_status",
+      "negative_coverage": [
+        {
+          "command": "python -B validation/tools/validate_auto_translation_evidence.py",
+          "kind": "validation_regression"
+        }
+      ],
+      "real_c_slice": "target-abi-ulong-identity",
+      "semantic_pass": true
+    }
+  ],
+  "governance_delta": [
+    {
+      "bound_to": "P0 capability delta; governance changes only record evidence/repair provenance for this construct.",
+      "construct_id": "typed_ir_zero_token_deterministic",
+      "delta_id": "gov-target-abi-ulong-identity-typed_ir_zero_token_deterministic-evidence",
+      "evidence_refs": [
+        "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-route-decision.json",
+        "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-validation-profile.json"
+      ],
+      "kind": "evidence_contract"
+    }
+  ],
+  "route_level": "L0",
+  "route_status": "recorded",
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "source_identity": {
+    "repo_commit": "workspace",
+    "source_commit": "demo-target-abi-ulong-identity-20260708",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/target-abi-ulong-identity.c": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+    },
+    "source_root": "."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "verification_commands": [
+    "python -B validation/tools/validate_auto_translation_evidence.py"
+  ]
+}

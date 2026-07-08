@@ -1,0 +1,98 @@
+{
+  "c_boundary": {
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "unsigned long",
+        "source": "C99"
+      }
+    ],
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+        "role": "source",
+        "sha256": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+      }
+    ],
+    "functions": [
+      "target_abi_ulong_identity"
+    ],
+    "signatures": [
+      {
+        "c_source": "unsigned long target_abi_ulong_identity(unsigned long value) { return value; }",
+        "function": "target_abi_ulong_identity",
+        "parameters": [
+          {
+            "bounds": {
+              "maximum": 18446744073709551615,
+              "minimum": 0
+            },
+            "c_type": "unsigned long",
+            "direction": "input",
+            "name": "value"
+          }
+        ],
+        "return_type": "unsigned long",
+        "source_span": {
+          "byte_end": 79,
+          "byte_start": 0,
+          "file": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+          "line_end": 1,
+          "line_start": 1,
+          "sha256": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+        }
+      }
+    ],
+    "target_abi_contract": {
+      "endianness": "little",
+      "pointer_width": 64,
+      "requires_profile_bound_width": true,
+      "rust_type": "u64",
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "unsigned_long_width": 64
+    }
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "portable unsigned long mapping without target ABI profile",
+      "whole-program target ABI or FFI correctness",
+      "record layout, alignment, packing, or pointer provenance support"
+    ],
+    "non_goals": [
+      "No full project migration claim.",
+      "No LLP64 or non-LP64 target ABI claim.",
+      "No struct layout, pointer provenance, aliasing, or FFI ABI claim.",
+      "No arithmetic overflow behavior beyond unsigned long identity."
+    ]
+  },
+  "fixture": {
+    "hash": "target-abi-ulong-identity-fixture",
+    "path": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json"
+  },
+  "rust_boundary": {
+    "api_name": "target_abi_ulong_identity",
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/target_abi_ulong_identity.rs",
+    "module_path": "validation/l2_slices/src/target_abi_ulong_identity.rs",
+    "public_api": [
+      {
+        "boundary_kind": "safe_wrapper",
+        "name": "target_abi_ulong_identity",
+        "visibility": "public"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "test_file": "validation/l2_slices/tests/target_abi_ulong_identity.rs",
+    "unsafe_policy": {
+      "ledger_required": true,
+      "max_first_party_non_test_ratio": 0.1
+    }
+  },
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

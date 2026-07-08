@@ -1,0 +1,271 @@
+{
+  "claim_boundary": {
+    "accepted_evidence_authoritative": false,
+    "accepted_metadata_differences": [],
+    "alias_gate": {
+      "complete_alias_safety": false,
+      "decision": "not_applicable",
+      "preconditions": [],
+      "requires_noalias": false,
+      "risk_count": 0,
+      "risk_level": "none"
+    },
+    "behavior_fields_checked": [
+      "return_value",
+      "status"
+    ],
+    "external_callee_scope": {
+      "blocked_count": 0,
+      "declared_count": 0,
+      "declared_spec_count": 0,
+      "declared_spec_names": [],
+      "semantics_verified": false,
+      "status": "not_applicable",
+      "stub_kind": "none"
+    },
+    "generated_draft_acceptance": {
+      "accepted_evidence_binding": {
+        "binding_boundary": "Accepted semantics are bound to referenced oracle/replay/diff/unsafe evidence; the generated Rust draft remains candidate evidence.",
+        "fixture_path": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+        "fixture_sha256": "c45cf65c6d997e0c62f09be85c0254b58b2c4189256f5cd15d7a0a2f94cc80c6",
+        "generated_draft_semantic_pass": false,
+        "path_sha256": {
+          "c_oracle": "c45cf65c6d997e0c62f09be85c0254b58b2c4189256f5cd15d7a0a2f94cc80c6",
+          "diff": "ec3d37ca62d65a0fbd6cec9d7e054a9738b9681b2c3cc940c5b2ff877fe6364f",
+          "final_verification": "e1c2fe818e366e7082a9027f39e4b115f8c8610d8e95651716847f67d182a4e5",
+          "negative_diff": "88950e67d7d0b936856bec058e3f528e154c5a5495b18fd244cb124eb596b12c",
+          "performance_smoke": "7a22d8351d8a3d967857196623a2eb3154389349ba53b9ffe32dbd26f2b9f4c2",
+          "rust_report": "ac63cfaeec3c353d397e737375f879b147fe639d8f17c3d0bdae8b6876633fa4",
+          "unsafe_ledger": "cbfa2bdbe622649e0cc8ce668fc45217d3f9c42076926028a55685502b5483a1",
+          "unsafe_scan": "d4c269f82959565b13e54a6e38c3683fc564524ae25ab40c980a9df69edb70ba",
+          "version_manifest": "63cce1ec01917f4508614df6cb45c70b195b4502027a7a8859954ac9d172fbbd"
+        },
+        "paths": {
+          "c_oracle": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+          "diff": "validation/evidence/demo/l3-target-abi-ulong-identity-diff.json",
+          "final_verification": "validation/evidence/demo/l3-target-abi-ulong-identity-final-verification.json",
+          "negative_diff": "validation/evidence/demo/l3-target-abi-ulong-identity-negative-diff.json",
+          "performance_smoke": "validation/evidence/demo/l3-target-abi-ulong-identity-performance-smoke.json",
+          "rust_report": "validation/evidence/demo/l3-target-abi-ulong-identity-rust-report.json",
+          "unsafe_ledger": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-ledger.json",
+          "unsafe_scan": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-scan.json",
+          "version_manifest": "validation/evidence/demo/l3-target-abi-ulong-identity-version-manifest.json"
+        },
+        "slice_id": "target-abi-ulong-identity",
+        "source_commit": "demo-target-abi-ulong-identity-20260708",
+        "status": "accepted",
+        "target_id": "demo",
+        "toolchain_status": "C_ORACLE_GENERATED"
+      },
+      "accepted_evidence_refs": {
+        "c_oracle": {
+          "path": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+          "sha256": "c45cf65c6d997e0c62f09be85c0254b58b2c4189256f5cd15d7a0a2f94cc80c6",
+          "status": "passed"
+        },
+        "negative_diff": {
+          "path": "validation/evidence/demo/l3-target-abi-ulong-identity-negative-diff.json",
+          "sha256": "88950e67d7d0b936856bec058e3f528e154c5a5495b18fd244cb124eb596b12c",
+          "status": "expected_failed"
+        },
+        "rust_report": {
+          "path": "validation/evidence/demo/l3-target-abi-ulong-identity-rust-report.json",
+          "sha256": "ac63cfaeec3c353d397e737375f879b147fe639d8f17c3d0bdae8b6876633fa4",
+          "status": "passed"
+        },
+        "schema_diff": {
+          "path": "validation/evidence/demo/l3-target-abi-ulong-identity-diff.json",
+          "sha256": "ec3d37ca62d65a0fbd6cec9d7e054a9738b9681b2c3cc940c5b2ff877fe6364f",
+          "status": "passed"
+        },
+        "unsafe_ledger": {
+          "path": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-ledger.json",
+          "sha256": "cbfa2bdbe622649e0cc8ce668fc45217d3f9c42076926028a55685502b5483a1",
+          "status": "passed"
+        },
+        "unsafe_scan": {
+          "path": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-scan.json",
+          "sha256": "d4c269f82959565b13e54a6e38c3683fc564524ae25ab40c980a9df69edb70ba",
+          "status": "passed"
+        }
+      },
+      "blocked_reasons": [],
+      "boundary": "Exact generated Rust draft is accepted only when its sha256, rustc check, generated replay execution, accepted C oracle, schema diff, negative diff, and unsafe reports are all bound.",
+      "claim_source": "generated_draft_replay_with_accepted_oracle_binding",
+      "generated_draft_replay_pass": true,
+      "generated_draft_semantic_pass": true,
+      "replay_execution": {
+        "compile_command": "rustc --edition=2021 --test --error-format=json 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-kp15ogrr\\generated_replay.rs' -o 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-kp15ogrr\\generated_replay.exe'",
+        "compile_returncode": 0,
+        "phase": "run",
+        "run_command": "'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\c2r-generated-replay-kp15ogrr\\generated_replay.exe' --nocapture",
+        "run_returncode": 0,
+        "status": "passed",
+        "stderr_log": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/generated-rust-replay.stderr.log",
+        "stdout_log": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/generated-rust-replay.stdout.log"
+      },
+      "rust_check": {
+        "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/rust-check.json",
+        "status": "passed"
+      },
+      "rust_draft": {
+        "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-rust-draft.rs",
+        "sha256": "f8fffd14da925ca3f00309fa2628adb29a73734268aac50dff63d618e12384cb",
+        "status": "accepted_after_gates"
+      },
+      "schema_version": 1,
+      "slice_id": "target-abi-ulong-identity",
+      "source_commit": "demo-target-abi-ulong-identity-20260708",
+      "status": "passed",
+      "target_id": "demo"
+    },
+    "generated_draft_semantic_pass": true,
+    "known_gaps": [
+      "No full project migration claim.",
+      "No LLP64 or non-LP64 target ABI claim.",
+      "No struct layout, pointer provenance, aliasing, or FFI ABI claim.",
+      "No arithmetic overflow behavior beyond unsigned long identity.",
+      "Auto-generated Rust draft is accepted only by the generated_draft_acceptance binding for this exact draft sha."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "portable unsigned long mapping without target ABI profile",
+      "whole-program target ABI or FFI correctness",
+      "record layout, alignment, packing, or pointer provenance support",
+      "semantic equivalence for this auto-generated Rust draft",
+      "full C99/C11 automatic translation"
+    ],
+    "scope": "Automatic translation run completed with accepted evidence binding and generated_draft_acceptance for this exact Rust draft."
+  },
+  "evidence": {
+    "c2rust_baseline": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c2rust-baseline-manifest.json",
+      "sha256": "592384379bd565d7417dd0c42e1a5cd4d97ec827caa6fe8b05b6af3fa754989a",
+      "status": "skipped"
+    },
+    "c_oracle": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c-oracle-status.json",
+      "sha256": "7c4abcb82c37db8362f86fefe8aaa6d42f6d4409271289dec29e8bd0d007835e",
+      "status": "C_ORACLE_GENERATED"
+    },
+    "cache_metadata": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-auto-cache-metadata.json",
+      "sha256": "1e05744444a6e59cbb244903ae1cc7e129b0dfeac1c4cd2bd22d59c6b1a6b47e",
+      "status": "recorded"
+    },
+    "clang_lowering_report": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-clang-lowering-report.json",
+      "sha256": "750f8733e243231be4bf9b55ca314331aa8102591725a33011f687d6569e98db",
+      "status": "recorded"
+    },
+    "config_profile": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-config-profile.json",
+      "profile_id": "demo-target-abi-ulong-identity-wsl-gcc-lp64",
+      "sha256": "1c4e4430ca8e77e6c03e5afd2f79e0535bc21c25e2ce659fdddb632983be3b0d",
+      "status": "recorded"
+    },
+    "context_pack": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-context-pack.json",
+      "sha256": "cb7e3d96e88662c521bd0fd1f35f32310c7b75f35810c22356c093c7035ac674",
+      "status": "recorded"
+    },
+    "final_verification": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-final-verification.json",
+      "sha256": "c12ef32b3d9d8e68d1db1ecbb73c543f0a9885e88591320c3bbfdc1f4fcc4fe2",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "expected_failure": true,
+      "mutation_detected": true,
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-negative-diff.json",
+      "sha256": "a69f15f21e3fe701ec67c7b8db0daf3b5984fefa9819d3219932e8be908018bd",
+      "status": "expected_failed"
+    },
+    "performance_smoke": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-performance-smoke.json",
+      "secondary_only": true,
+      "sha256": "b630a352a0c833ab19a84dcaad5eafd7bd55e7e4e07f75faa4272ab1693ce84a",
+      "status": "recorded"
+    },
+    "pointer_dependency_graph": {
+      "not_applicable_reason": "slice has no pointer surface",
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-pointer-graph.json",
+      "sha256": "2d8dc02e22b00f2f8ece1368c16f5227629f649d4ddab41c82c5c846f6a0800d",
+      "status": "not_applicable"
+    },
+    "route_decision": {
+      "level": "L0",
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-route-decision.json",
+      "sha256": "87b9250b3f6a6c0dbbc56f4a9d1721d38b786c7579d6121296f812f165e12c3c",
+      "status": "recorded"
+    },
+    "rust_check": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/rust-check.json",
+      "sha256": "2d5b7c2b48eb3de776bd0d343af7fc7d34c3a5e0f0bcbb6278ce5693c1c3cbb9",
+      "status": "passed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-rust-report.json",
+      "sha256": "a54075446afc1801b0dca0f8ebf50111eabcbd3e9259293b41f45e7b3488671e",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-diff.json",
+      "sha256": "9990d81e7b435d904d500ffb27a9e5daa1d5ce07dc78cbdd7f57103e4c05e7fc",
+      "status": "passed"
+    },
+    "slice_contract": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-slice-contract.json",
+      "sha256": "127c7711bedb524512942180659407df9c17b8c098ea6c826df7c4e6a194acfb",
+      "status": "recorded"
+    },
+    "summary": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-summary.json",
+      "sha256": "a12a069ad729ee72b2b9fcf66925e1027fe5701e7a5c11d7acf23791e05d004a",
+      "status": "passed"
+    },
+    "test_translation": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-test-translation-generated.json",
+      "sha256": "205dacdce677f19f45cd825ce99e5385ede76b063e92cf01d0229e6d5b8e9a2a",
+      "status": "recorded"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-unsafe-ledger.json",
+      "sha256": "b198276075642813f2f6503c21722a05ce3323cf758eb1ca9d0c5f6b26036c12",
+      "status": "passed"
+    },
+    "unsafe_scan": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-unsafe-scan.json",
+      "sha256": "433bdab937ca0a515502fe8de465e8c9b543b88b25361cb0aa0492b5d30773d1",
+      "status": "passed"
+    },
+    "validation_profile": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-validation-profile.json",
+      "profile": "L0-dev",
+      "sha256": "ba00224300be1d4f382619b5af767538781d8a1ff348cd0913d7cd05c7ad3eac",
+      "status": "passed"
+    },
+    "verified_unsafe_baseline": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c2rust-verified-unsafe-baseline.json",
+      "sha256": "b5e6fe36cf88b698ff8916133ad8774e6bce5102143b8efcb9230ab87192e934",
+      "status": "blocked"
+    },
+    "version_or_config_binding": {
+      "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-version-manifest.json",
+      "sha256": "8fcd613538dd66905a1e33e9cea9c54a87b645f9f36a9e678a5ea3c7007d426f",
+      "status": "recorded"
+    }
+  },
+  "fixture": {
+    "hash": "target-abi-ulong-identity-fixture",
+    "operation_count": 4,
+    "path": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json"
+  },
+  "level": "L3",
+  "repo_commit": "8e11561355d4ff2c674f395db1b6a2475c27478c",
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

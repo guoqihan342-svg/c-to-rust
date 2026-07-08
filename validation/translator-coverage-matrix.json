@@ -945,7 +945,7 @@
     },
     {
       "id": "target-abi-integer-width-provenance",
-      "status": "partial",
+      "status": "covered",
       "scope_limitations": [
         "pointer-width evidence only proves sizeof(pointer) byte size under the target ABI profile",
         "does not prove pointer provenance, aliasing, FFI ABI, dereference validity, object representation beyond explicit scalar width/alignment fields, struct layout, packing, or record/object alignment",
@@ -1008,6 +1008,14 @@
             },
             {
               "name": "target ABI width fixture replay tests",
+              "path": "crates/c2r-translator/tests/bounded_translation.rs"
+            },
+            {
+              "name": "target ABI unsigned long identity AST JSON fixture",
+              "path": "crates/c2r-translator/fixtures/clang_ast/target_abi_ulong_identity_ast.json"
+            },
+            {
+              "name": "clang_ast_fixture_replays_target_abi_ulong_identity_without_clang",
               "path": "crates/c2r-translator/tests/bounded_translation.rs"
             }
           ]
@@ -1088,20 +1096,58 @@
             {
               "name": "clang_ast_fixture_replays_alignof_size_t_with_desugared_alignment_profile",
               "path": "crates/c2r-translator/tests/bounded_translation/chunk_01_00.rs"
+            },
+            {
+              "name": "target-abi-ulong-identity generated Rust replay",
+              "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-rust-draft.rs"
             }
           ]
         },
         "c_rust_diff": {
-          "status": "gap",
-          "reason": "no named-slice C/Rust diff is claimed for ABI-width refusal yet"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "target-abi-ulong-identity C oracle",
+              "path": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json"
+            },
+            {
+              "name": "target-abi-ulong-identity Rust replay report",
+              "path": "validation/evidence/demo/l3-target-abi-ulong-identity-rust-report.json"
+            },
+            {
+              "name": "target-abi-ulong-identity schema-aware diff",
+              "path": "validation/evidence/demo/l3-target-abi-ulong-identity-diff.json"
+            },
+            {
+              "name": "target-abi-ulong-identity negative diff",
+              "path": "validation/evidence/demo/l3-target-abi-ulong-identity-negative-diff.json"
+            },
+            {
+              "name": "target-abi-ulong-identity unsafe ledger",
+              "path": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-ledger.json"
+            },
+            {
+              "name": "target-abi-ulong-identity final verification",
+              "path": "validation/evidence/demo/l3-target-abi-ulong-identity-final-verification.json"
+            }
+          ]
         },
         "legacy_fallback": {
           "status": "not_applicable",
           "reason": "typed frontend type-provenance behavior, not legacy fallback"
         },
         "route_evidence": {
-          "status": "gap",
-          "reason": "no route-decision evidence currently records ABI-width refusal as a candidate-selection feature"
+          "status": "covered",
+          "evidence": [
+            {
+              "name": "target-abi-ulong-identity route decision",
+              "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-route-decision.json"
+            },
+            {
+              "name": "target-abi-ulong-identity validation profile",
+              "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-validation-profile.json"
+            }
+          ]
         }
       },
       "positive_cases": [
@@ -1204,6 +1250,22 @@
         {
           "name": "clang_parse_spec_resolves_known_target_abi_profile_from_build_metadata",
           "path": "crates/c2r-translator/tests/bounded_translation/chunk_07_03.rs"
+        },
+        {
+          "name": "clang_ast_fixture_replays_target_abi_ulong_identity_without_clang",
+          "path": "crates/c2r-translator/tests/bounded_translation.rs"
+        },
+        {
+          "name": "target-abi-ulong-identity generated draft replay accepts u64 fixture",
+          "path": "validation/tools/test_auto_migrate_u64_replay.py"
+        },
+        {
+          "name": "target-abi-ulong-identity named-slice L3 evidence validator",
+          "path": "validation/tools/test_target_abi_ulong_l3_evidence.py"
+        },
+        {
+          "name": "target-abi-ulong-identity L2 Rust replay",
+          "path": "validation/l2_slices/tests/target_abi_ulong_identity.rs"
         }
       ],
       "negative_cases": [

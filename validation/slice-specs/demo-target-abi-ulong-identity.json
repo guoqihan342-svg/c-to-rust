@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "target_id": "demo",
+  "slice_id": "target-abi-ulong-identity",
+  "level": "L3",
+  "status": "ready",
+  "function_name": "target_abi_ulong_identity",
+  "c_source": "unsigned long target_abi_ulong_identity(unsigned long value) { return value; }",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "fixture_hash": "target-abi-ulong-identity-fixture",
+  "l1_evidence": {
+    "path": "validation/evidence/demo/l1-native-build.json",
+    "status": "passed",
+    "accepted": true
+  },
+  "source": {
+    "source_root": ".",
+    "source_commit": "demo-target-abi-ulong-identity-20260708",
+    "repo_commit": "workspace",
+    "source_file_hashes": {
+      "validation/l2_slices/fixtures/target-abi-ulong-identity.c": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+    }
+  },
+  "c_boundary": {
+    "files": [
+      {
+        "path": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+        "role": "source",
+        "sha256": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+      }
+    ],
+    "functions": [
+      "target_abi_ulong_identity"
+    ],
+    "signatures": [
+      {
+        "function": "target_abi_ulong_identity",
+        "return_type": "unsigned long",
+        "parameters": [
+          {
+            "name": "value",
+            "c_type": "unsigned long",
+            "direction": "input",
+            "bounds": {
+              "minimum": 0,
+              "maximum": 18446744073709551615
+            }
+          }
+        ],
+        "c_source": "unsigned long target_abi_ulong_identity(unsigned long value) { return value; }",
+        "source_span": {
+          "file": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+          "line_start": 1,
+          "line_end": 1,
+          "byte_start": 0,
+          "byte_end": 79,
+          "sha256": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+        }
+      }
+    ],
+    "direct_dependencies": [
+      {
+        "kind": "type",
+        "name": "unsigned long",
+        "source": "C99"
+      }
+    ],
+    "target_abi_contract": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "unsigned_long_width": 64,
+      "pointer_width": 64,
+      "rust_type": "u64",
+      "requires_profile_bound_width": true
+    }
+  },
+  "build_profile": {
+    "profile_id": "demo-target-abi-ulong-identity-wsl-gcc-lp64",
+    "compiler_command_source": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+    "include_paths": [],
+    "defines": [],
+    "target": {
+      "triple_or_abi": "x86_64-unknown-linux-gnu",
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64
+    },
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/target_abi_ulong_identity_ast.json",
+    "preprocessing_mode": "generated_stub",
+    "tool_versions": {
+      "gcc": "captured_by_wsl_oracle",
+      "rustc": "captured_at_validation"
+    },
+    "clang_type_extraction": {
+      "available": true,
+      "diagnostics": [
+        "repo-local C fixture is available for optional clang AST lowering",
+        "target ABI profile binds unsigned long to u64 for this LP64 slice"
+      ]
+    }
+  },
+  "fixture_contract": {
+    "fixture_id": "target-abi-ulong-identity-fixture",
+    "path": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+    "input": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+    "hash": "target-abi-ulong-identity-fixture",
+    "scalar_input_domain": {
+      "case_source": "fixture_cases",
+      "parameters": [
+        {
+          "name": "value",
+          "type": "unsigned long",
+          "range": [
+            0,
+            18446744073709551615
+          ]
+        }
+      ],
+      "covers_overflow_boundaries": true
+    },
+    "cases": [
+      {
+        "id": "zero",
+        "input_ref": "cases[0]",
+        "expected_ref": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json"
+      },
+      {
+        "id": "uint32-max",
+        "input_ref": "cases[2]",
+        "expected_ref": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json"
+      },
+      {
+        "id": "uint32-plus-one",
+        "input_ref": "cases[3]",
+        "expected_ref": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json"
+      },
+      {
+        "id": "ulong-max",
+        "input_ref": "cases[4]",
+        "expected_ref": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json"
+      }
+    ],
+    "observable_outputs": [
+      "return_value",
+      "status"
+    ],
+    "c_oracle": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+    "rust_report": "validation/evidence/demo/l3-target-abi-ulong-identity-rust-report.json",
+    "diff": "validation/evidence/demo/l3-target-abi-ulong-identity-diff.json",
+    "negative_diff": "validation/evidence/demo/l3-target-abi-ulong-identity-negative-diff.json",
+    "unsafe_scan": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-scan.json",
+    "unsafe_ledger": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-ledger.json",
+    "performance_smoke": "validation/evidence/demo/l3-target-abi-ulong-identity-performance-smoke.json",
+    "final_verification": "validation/evidence/demo/l3-target-abi-ulong-identity-final-verification.json",
+    "version_manifest": "validation/evidence/demo/l3-target-abi-ulong-identity-version-manifest.json",
+    "behavior_fields": [
+      "return_value",
+      "status"
+    ]
+  },
+  "rust_boundary": {
+    "crate": "validation/l2_slices",
+    "module": "validation/l2_slices/src/target_abi_ulong_identity.rs",
+    "public_api": [
+      {
+        "name": "target_abi_ulong_identity",
+        "visibility": "public",
+        "boundary_kind": "safe_wrapper"
+      }
+    ],
+    "raw_pointer_policy": "internal_only",
+    "unsafe_policy": {
+      "max_first_party_non_test_ratio": 0.1,
+      "ledger_required": true
+    },
+    "module_path": "validation/l2_slices/src/target_abi_ulong_identity.rs",
+    "api_name": "target_abi_ulong_identity",
+    "test_file": "validation/l2_slices/tests/target_abi_ulong_identity.rs"
+  },
+  "claim_boundary": {
+    "accepted_metadata_differences": [],
+    "non_goals": [
+      "No full project migration claim.",
+      "No LLP64 or non-LP64 target ABI claim.",
+      "No struct layout, pointer provenance, aliasing, or FFI ABI claim.",
+      "No arithmetic overflow behavior beyond unsigned long identity."
+    ],
+    "must_not_claim": [
+      "full automatic C99/C11 translation",
+      "portable unsigned long mapping without target ABI profile",
+      "whole-program target ABI or FFI correctness",
+      "record layout, alignment, packing, or pointer provenance support"
+    ]
+  },
+  "accepted_metadata_differences": [],
+  "non_goals": [
+    "No full project migration claim.",
+    "No LLP64 or non-LP64 target ABI claim.",
+    "No struct layout, pointer provenance, aliasing, or FFI ABI claim.",
+    "No arithmetic overflow behavior beyond unsigned long identity."
+  ],
+  "cache_invalidation_keys": [
+    "source.source_commit",
+    "source.repo_commit",
+    "fixture_contract.hash",
+    "fixture_contract.scalar_input_domain",
+    "c_boundary.target_abi_contract",
+    "build_profile.target",
+    "build_profile.profile_id",
+    "rust_boundary.module",
+    "translator_version"
+  ]
+}

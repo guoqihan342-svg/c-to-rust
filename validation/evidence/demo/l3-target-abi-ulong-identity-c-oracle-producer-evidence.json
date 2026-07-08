@@ -1,0 +1,18 @@
+{
+  "compile_command": "wsl sh -lc gcc -std=c99 -Wall -Wextra -Werror target_abi_ulong_identity_oracle.c",
+  "evidence_output": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+  "fixture_output": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+  "helper_stdout_sha256": "9379c4ace70bf2e0ea26c76652883becea12b28e4f0e130b47f31f8af96cd361",
+  "level": "L3",
+  "run_command": "wsl sh -lc ./target_abi_ulong_identity_oracle",
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "source_hashes": {
+    "c_helper": "28b140534bc818b5de21d3315e9ccdad563c7c5540136312c7b57a1f835f364f",
+    "generator": "c6aa17b8d6d45304b43281d0a79dfc1111873690de9998144d9a3c7d6732597e"
+  },
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

@@ -1,0 +1,14 @@
+{
+  "case_count": 5,
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "first_mismatch": null,
+  "level": "L3",
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "passed",
+  "target_id": "demo"
+}

@@ -1,0 +1,44 @@
+{
+  "build_profile": {
+    "abi": "x86_64-unknown-linux-gnu",
+    "clang_ast_fixture": "crates/c2r-translator/fixtures/clang_ast/target_abi_ulong_identity_ast.json",
+    "clang_available": true,
+    "compiler_command_source": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+    "defines": [],
+    "include_paths": [],
+    "target": {
+      "endianness": "little",
+      "int_width": 32,
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    },
+    "target_triple": "x86_64-unknown-linux-gnu"
+  },
+  "c_source": "unsigned long target_abi_ulong_identity(unsigned long value) { return value; }",
+  "fixture_hash": "target-abi-ulong-identity-fixture",
+  "function_name": "target_abi_ulong_identity",
+  "function_source_span": {
+    "byte_end": 79,
+    "byte_start": 0,
+    "file": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+    "line_end": 1,
+    "line_start": 1,
+    "sha256": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+  },
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "source_file": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+  "source_file_hashes": {
+    "validation/l2_slices/fixtures/target-abi-ulong-identity.c": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+  },
+  "source_files": [
+    {
+      "path": "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+      "role": "source",
+      "sha256": "653aa5c56ea769b7363127bdf72de25f84ec4418da3728788fffdd46c6cef02f"
+    }
+  ],
+  "source_root": ".",
+  "target_id": "demo"
+}

@@ -1,0 +1,11 @@
+{
+  "case_count": 5,
+  "level": "L3",
+  "operation": "safe Rust target_abi_ulong_identity replay over fixture corpus",
+  "schema_version": 1,
+  "secondary_only": true,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "recorded",
+  "target_id": "demo"
+}

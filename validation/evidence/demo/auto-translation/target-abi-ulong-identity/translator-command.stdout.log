@@ -1,0 +1,17 @@
+{
+  "target_id": "demo",
+  "slice_id": "target-abi-ulong-identity",
+  "status": "generated",
+  "artifact_paths": [
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-auto-translation-plan.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-auto-translation-events.jsonl",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-type-map.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-cfg.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-pointer-graph.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-ai-candidate-manifest.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-blocked-repairs.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-rust-draft.rs",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-clang-dry-run.json",
+    "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-clang-lowering-report.json"
+  ]
+}

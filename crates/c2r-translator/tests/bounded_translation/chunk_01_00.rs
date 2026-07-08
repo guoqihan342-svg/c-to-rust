@@ -512,6 +512,44 @@ fn clang_ast_fixture_rejects_extended_target_abi_integer_widths_without_profile(
 
 #[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
 #[test]
+fn clang_ast_fixture_replays_target_abi_ulong_identity_without_clang() {
+    let ast: Value = serde_json::from_str(include_str!(
+        "../../fixtures/clang_ast/target_abi_ulong_identity_ast.json"
+    ))
+    .expect("fixture JSON");
+    let target_abi = TargetAbiProfile {
+        triple_or_abi: "x86_64-unknown-linux-gnu".to_string(),
+        endianness: Some("little".to_string()),
+        int_width: 32,
+        char_width: 8,
+        plain_char_signed: Some(true),
+        short_width: 16,
+        long_width: 64,
+        long_long_width: 64,
+        pointer_width: 64,
+        ..TargetAbiProfile::default()
+    };
+
+    let lowered = lower_function_and_globals_from_clang_ast_json_value_with_target_abi(
+        &ast,
+        "target_abi_ulong_identity",
+        Some(&target_abi),
+    )
+    .expect("lower unsigned long fixture with target ABI profile");
+    let emitted = emit_rust_from_ir_with_globals(&lowered.function_ir, &lowered.globals)
+        .expect("emit Rust from unsigned long fixture typed IR");
+    let rust = &emitted.rust;
+
+    assert!(
+        rust.contains("pub fn target_abi_ulong_identity(value: u64) -> u64"),
+        "{rust}"
+    );
+    assert!(rust.contains("return value;"), "{rust}");
+    assert_rust_snippet_compiles("typed-ir-target-abi-ulong-identity", rust);
+}
+
+#[cfg(all(feature = "clang-frontend", feature = "typed-ir"))]
+#[test]
 fn clang_ast_fixture_replays_scalar_runtime_preconditions_without_clang() {
     let ast: Value = serde_json::from_str(include_str!(
         "../../fixtures/clang_ast/scalar_runtime_preconditions_ast.json"

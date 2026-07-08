@@ -13,5 +13,6 @@ pub mod sqlite_varint;
 pub mod store_add_one;
 pub mod sum_i32_buffer;
 pub mod sum_i32_ptr_arith;
+pub mod target_abi_ulong_identity;
 pub mod zlib_adler32;
 pub mod zstd_xxh32;

@@ -1,0 +1,32 @@
+{
+  "accepted_unsafe_scan": {
+    "path": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-scan.json",
+    "sha256": "d4c269f82959565b13e54a6e38c3683fc564524ae25ab40c980a9df69edb70ba",
+    "status": "passed"
+  },
+  "c2rust_baseline": {
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c2rust-baseline-manifest.json",
+    "sha256": "592384379bd565d7417dd0c42e1a5cd4d97ec827caa6fe8b05b6af3fa754989a",
+    "status": "skipped"
+  },
+  "first_party_non_test_unsafe_count": 0,
+  "first_party_non_test_unsafe_ratio": 0.0,
+  "generated_draft_unsafe_count": 0,
+  "route_decision": {
+    "level": "L0",
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-route-decision.json",
+    "sha256": "87b9250b3f6a6c0dbbc56f4a9d1721d38b786c7579d6121296f812f165e12c3c",
+    "status": "recorded"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "target-abi-ulong-identity",
+  "status": "passed",
+  "target_id": "demo",
+  "validation_profile": {
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-validation-profile.json",
+    "profile": "L0-dev",
+    "sha256": "ba00224300be1d4f382619b5af767538781d8a1ff348cd0913d7cd05c7ad3eac",
+    "status": "passed"
+  }
+}

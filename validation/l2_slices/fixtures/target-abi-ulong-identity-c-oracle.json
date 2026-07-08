@@ -1,0 +1,73 @@
+{
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 1,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "lp64_boundary",
+      "id": "uint32-max",
+      "return_value": 4294967295,
+      "status": "ok",
+      "value": 4294967295
+    },
+    {
+      "coverage_kind": "lp64_boundary",
+      "id": "uint32-plus-one",
+      "return_value": 4294967296,
+      "status": "ok",
+      "value": 4294967296
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "ulong-max",
+      "return_value": 18446744073709551615,
+      "status": "ok",
+      "value": 18446744073709551615
+    }
+  ],
+  "compared_fields": [
+    "return_value",
+    "status"
+  ],
+  "level": "L3",
+  "non_goals": [
+    "No full project migration claim.",
+    "No LLP64 or non-LP64 target ABI claim.",
+    "No struct layout, pointer provenance, aliasing, or FFI ABI claim.",
+    "No arithmetic overflow behavior beyond unsigned long identity."
+  ],
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_boundary": {
+    "files": [
+      "validation/l2_slices/fixtures/target-abi-ulong-identity.c",
+      "validation/l2_slices/tools/generate_target_abi_ulong_identity_oracle.py"
+    ],
+    "functions": [
+      "target_abi_ulong_identity"
+    ],
+    "signature": "unsigned long target_abi_ulong_identity(unsigned long value)",
+    "target_abi": {
+      "endianness": "little",
+      "long_width": 64,
+      "pointer_width": 64,
+      "triple_or_abi": "x86_64-unknown-linux-gnu"
+    }
+  },
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "passed",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

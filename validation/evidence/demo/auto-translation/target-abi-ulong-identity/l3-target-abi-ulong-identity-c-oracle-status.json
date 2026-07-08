@@ -1,0 +1,26 @@
+{
+  "accepted_oracle": {
+    "path": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+    "sha256": "c45cf65c6d997e0c62f09be85c0254b58b2c4189256f5cd15d7a0a2f94cc80c6",
+    "status": "passed"
+  },
+  "boundary": "C oracle success comes from accepted Linux/WSL/CI evidence, not from the draft harness alone.",
+  "case_count": 5,
+  "fixture": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+  "fixture_sha256": "c45cf65c6d997e0c62f09be85c0254b58b2c4189256f5cd15d7a0a2f94cc80c6",
+  "harness_draft": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c-oracle-harness-draft.c",
+  "harness_draft_ref": {
+    "path": "validation/evidence/demo/auto-translation/target-abi-ulong-identity/l3-target-abi-ulong-identity-c-oracle-harness-draft.c",
+    "sha256": "eac89a9385932910290cd5ec659cfd4645b78468dec0f22715c88235788e5c38",
+    "status": "draft"
+  },
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "source_slice_id": "target-abi-ulong-identity",
+  "source_status": "passed",
+  "status": "C_ORACLE_GENERATED",
+  "target_id": "demo",
+  "toolchain_status": "C_ORACLE_GENERATED"
+}

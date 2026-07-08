@@ -1,0 +1,58 @@
+{
+  "c_source_boundary": "unsigned long target_abi_ulong_identity(unsigned long value) { return value; }",
+  "cargo_test_status": "passed",
+  "case_count": 5,
+  "cases": [
+    {
+      "coverage_kind": "nominal",
+      "id": "zero",
+      "return_value": 0,
+      "status": "ok",
+      "value": 0
+    },
+    {
+      "coverage_kind": "nominal",
+      "id": "one",
+      "return_value": 1,
+      "status": "ok",
+      "value": 1
+    },
+    {
+      "coverage_kind": "lp64_boundary",
+      "id": "uint32-max",
+      "return_value": 4294967295,
+      "status": "ok",
+      "value": 4294967295
+    },
+    {
+      "coverage_kind": "lp64_boundary",
+      "id": "uint32-plus-one",
+      "return_value": 4294967296,
+      "status": "ok",
+      "value": 4294967296
+    },
+    {
+      "coverage_kind": "boundary_high",
+      "id": "ulong-max",
+      "return_value": 18446744073709551615,
+      "status": "ok",
+      "value": 18446744073709551615
+    }
+  ],
+  "command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test target_abi_ulong_identity",
+  "fixture": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+  "generated_draft_semantic_pass": false,
+  "level": "L3",
+  "rust_module_path": "validation/l2_slices/src/target_abi_ulong_identity.rs",
+  "schema_version": 1,
+  "semantic_pass": true,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "status": "passed",
+  "target_abi": {
+    "long_width": 64,
+    "rust_unsigned_long_type": "u64",
+    "triple_or_abi": "x86_64-unknown-linux-gnu"
+  },
+  "target_id": "demo"
+}

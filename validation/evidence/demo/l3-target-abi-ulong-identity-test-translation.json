@@ -1,0 +1,85 @@
+{
+  "coverage": {
+    "error_paths": [],
+    "main_paths": [
+      "unsigned long identity",
+      "LP64 unsigned long width",
+      "values beyond 32-bit unsigned range",
+      "ULONG_MAX high boundary"
+    ],
+    "negative_cases": [
+      "return_value mutation rejected by negative diff"
+    ]
+  },
+  "evidence_links": {
+    "c_oracle": {
+      "path": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+      "status": "passed"
+    },
+    "negative_diff": {
+      "path": "validation/evidence/demo/l3-target-abi-ulong-identity-negative-diff.json",
+      "status": "expected_failed"
+    },
+    "rust_report": {
+      "path": "validation/evidence/demo/l3-target-abi-ulong-identity-rust-report.json",
+      "status": "passed"
+    },
+    "schema_diff": {
+      "path": "validation/evidence/demo/l3-target-abi-ulong-identity-diff.json",
+      "status": "passed"
+    },
+    "unsafe_ledger": {
+      "path": "validation/evidence/demo/l3-target-abi-ulong-identity-unsafe-ledger.json",
+      "status": "passed"
+    }
+  },
+  "level": "L3",
+  "rust_tests": [
+    {
+      "cargo_command": "cargo test --manifest-path validation/l2_slices/Cargo.toml --test target_abi_ulong_identity",
+      "file": "validation/l2_slices/tests/target_abi_ulong_identity.rs",
+      "framework": "cargo test",
+      "test_names": [
+        "target_abi_ulong_identity_matches_c_oracle_with_lp64_boundary"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "slice_id": "target-abi-ulong-identity",
+  "source_commit": "demo-target-abi-ulong-identity-20260708",
+  "source_test_inputs": {
+    "fixtures": [
+      {
+        "hash": "target-abi-ulong-identity-fixture",
+        "operation_count": 5,
+        "path": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+        "source_kind": "fixture"
+      }
+    ],
+    "oracle_reports": [
+      {
+        "path": "validation/evidence/demo/l3-target-abi-ulong-identity-c-oracle.json",
+        "status": "passed"
+      },
+      {
+        "path": "validation/evidence/demo/l3-target-abi-ulong-identity-rust-report.json",
+        "status": "passed"
+      }
+    ],
+    "oracle_strategy": "WSL gcc compiles and runs the unsigned long C helper under LP64, then Rust cargo tests replay the same fixture."
+  },
+  "status": "recorded",
+  "target_id": "demo",
+  "translation_mappings": [
+    {
+      "behavior_fields": [
+        "return_value",
+        "status"
+      ],
+      "coverage_kind": "main_path",
+      "rust_test": "validation/l2_slices/tests/target_abi_ulong_identity.rs::target_abi_ulong_identity_matches_c_oracle_with_lp64_boundary",
+      "source": "validation/l2_slices/fixtures/target-abi-ulong-identity-c-oracle.json",
+      "status": "mapped"
+    }
+  ]
+}
